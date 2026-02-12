@@ -139,7 +139,7 @@ Trusted Publishing removes the need for stored PyPI secrets in GitHub.
 
 In TestPyPI project settings, add a Trusted Publisher with:
 
-- Owner: `stacksats`
+- Owner: `hypertrial`
 - Repository: `stacksats`
 - Workflow filename: `publish-testpypi.yml`
 - Environment (recommended): `testpypi`
@@ -148,7 +148,7 @@ In TestPyPI project settings, add a Trusted Publisher with:
 
 In PyPI project settings, add a Trusted Publisher with:
 
-- Owner: `stacksats`
+- Owner: `hypertrial`
 - Repository: `stacksats`
 - Workflow filename: `publish-pypi.yml`
 - Environment (recommended): `pypi`

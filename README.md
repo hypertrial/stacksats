@@ -2,8 +2,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/stacksats.svg)](https://pypi.org/project/stacksats/)
 [![Python versions](https://img.shields.io/pypi/pyversions/stacksats.svg)](https://pypi.org/project/stacksats/)
-[![Package Check](https://github.com/stacksats/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/stacksats/stacksats/actions/workflows/package-check.yml)
-[![License: MIT](https://img.shields.io/github/license/stacksats/stacksats)](LICENSE)
+[![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
+[![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
 StackSats, developed by [Hypertrial](https://www.hypertrail.ai), is a Python package for developing and backtesting Bitcoin DCA ("stacking sats") allocation strategies.
 
@@ -39,7 +39,7 @@ pip install "stacksats[deploy]"
 
 ## Project Links and Support
 
-- Issues: <https://github.com/stacksats/stacksats/issues>
+- Issues: <https://github.com/hypertrial/stacksats/issues>
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Security Policy: [`SECURITY.md`](SECURITY.md)
 - Contributing Guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)

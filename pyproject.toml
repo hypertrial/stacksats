@@ -34,12 +34,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/stacksats/stacksats"
-Repository = "https://github.com/stacksats/stacksats"
-Documentation = "https://github.com/stacksats/stacksats/tree/main/docs"
-Issues = "https://github.com/stacksats/stacksats/issues"
-Changelog = "https://github.com/stacksats/stacksats/blob/main/CHANGELOG.md"
-Security = "https://github.com/stacksats/stacksats/security/policy"
+Homepage = "https://github.com/hypertrial/stacksats"
+Repository = "https://github.com/hypertrial/stacksats"
+Documentation = "https://github.com/hypertrial/stacksats/tree/main/docs"
+Issues = "https://github.com/hypertrial/stacksats/issues"
+Changelog = "https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md"
+Security = "https://github.com/hypertrial/stacksats/security/policy"
 
 [project.optional-dependencies]
 deploy = [
