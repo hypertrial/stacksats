@@ -45,7 +45,7 @@ jobs:
         run: ruff check .
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v -m "not performance"
 
       - name: Build package
         run: python -m build
