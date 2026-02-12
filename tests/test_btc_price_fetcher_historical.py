@@ -1,7 +1,7 @@
 """Comprehensive tests for historical BTC price fetching.
 
 Tests cover:
-- Historical API fetchers (CoinGecko, Binance)
+- Historical data fetchers (CoinMetrics, CoinGecko, Binance)
 - Robust historical wrapper with fallbacks
 - Date-specific fetching logic
 """
@@ -11,6 +11,7 @@ import pandas as pd
 import responses
 
 from stacksats.btc_price_fetcher import (
+    fetch_historical_price_coinmetrics,
     fetch_historical_price_coingecko,
     fetch_historical_price_binance,
     fetch_btc_price_historical,
@@ -20,8 +21,60 @@ from stacksats.btc_price_fetcher import (
 TEST_DATE = pd.Timestamp("2024-01-01")
 
 
+@pytest.fixture(autouse=True)
+def clear_coinmetrics_cache():
+    """Clear CoinMetrics cache before each test."""
+    from stacksats.btc_price_fetcher import _load_coinmetrics_data
+    _load_coinmetrics_data.cache_clear()
+    yield
+    _load_coinmetrics_data.cache_clear()
+
+
 class TestHistoricalFetchers:
     """Tests for individual historical API fetchers."""
+
+    @responses.activate
+    def test_coinmetrics_historical_success(self):
+        """Test successful historical price fetch from CoinMetrics."""
+        # Mock CoinMetrics CSV response (minimal valid CSV with required columns)
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-01,42500.0,2.5\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
+        price = fetch_historical_price_coinmetrics(TEST_DATE)
+        assert price == 42500.0
+
+    @responses.activate
+    def test_coinmetrics_historical_date_not_found(self):
+        """Test CoinMetrics historical with date not in data."""
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-02,43000.0,2.6\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
+        with pytest.raises(ValueError, match="not found in CoinMetrics data"):
+            fetch_historical_price_coinmetrics(TEST_DATE)
+
+    @responses.activate
+    def test_coinmetrics_historical_missing_price(self):
+        """Test CoinMetrics historical with missing price."""
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-01,,\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
+        with pytest.raises(ValueError, match="PriceUSD is missing"):
+            fetch_historical_price_coinmetrics(TEST_DATE)
 
     @responses.activate
     def test_coingecko_historical_success(self):
@@ -92,8 +145,36 @@ class TestRobustHistoricalFetcher:
     """Tests for the robust historical fetcher wrapper."""
 
     @responses.activate
+    def test_coinmetrics_primary_source(self):
+        """Test that CoinMetrics is used first."""
+        # CoinMetrics succeeds
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-01,42500.0,2.5\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
+        
+        price = fetch_btc_price_historical(TEST_DATE)
+        assert price == 42500.0
+        # Verify CoinGecko/Binance were not called
+        assert len([c for c in responses.calls if "coingecko" in c.request.url.lower()]) == 0
+        assert len([c for c in responses.calls if "binance" in c.request.url.lower()]) == 0
+
+    @responses.activate
     def test_fallback_logic(self):
-        """Test that Binance is used if CoinGecko fails."""
+        """Test that CoinGecko is used if CoinMetrics fails, then Binance."""
+        # CoinMetrics fails (date not found)
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-02,43000.0,2.6\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
         # CoinGecko fails
         responses.add(
             responses.GET,
@@ -114,6 +195,15 @@ class TestRobustHistoricalFetcher:
     @responses.activate
     def test_all_historical_fail_returns_none(self):
         """Test that None is returned if all historical sources fail."""
+        # CoinMetrics fails (date not found)
+        csv_content = "time,PriceUSD,CapMVRVCur\n2024-01-02,43000.0,2.6\n"
+        responses.add(
+            responses.GET,
+            "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv",
+            body=csv_content,
+            status=200,
+            content_type="text/csv",
+        )
         responses.add(
             responses.GET,
             "https://api.coingecko.com/api/v3/coins/bitcoin/history",

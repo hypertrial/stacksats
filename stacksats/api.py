@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .model_development import precompute_features
-from .prelude import WINDOW_OFFSET, backtest_dynamic_dca, load_data
+from .prelude import BACKTEST_START, WINDOW_OFFSET, backtest_dynamic_dca, load_data
 from .strategies.base import WindowStrategy
 from .strategies.mvrv import MVRVStrategy
 
@@ -211,7 +211,9 @@ def validate_strategy(
         btc_df = load_data()
 
     if start_date is None:
-        start_date = btc_df.index.min().strftime("%Y-%m-%d")
+        # Default validation window should match the project backtest regime
+        # instead of very early sparse-history periods.
+        start_date = BACKTEST_START
     if end_date is None:
         end_date = btc_df.index.max().strftime("%Y-%m-%d")
 

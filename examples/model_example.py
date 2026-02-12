@@ -43,21 +43,35 @@ class ExampleMVRVStrategy:
 
         window = features_df.loc[start_date:end_date]
         if window.empty:
-            return pd.Series(dtype=float)
+            full_index = pd.date_range(start=start_date, end=end_date, freq="D")
+            return pd.Series(np.full(len(full_index), 1.0 / len(full_index)), index=full_index)
 
-        z = window.get("mvrv_zscore", pd.Series(0.0, index=window.index)).to_numpy()
-        ma = window.get("price_vs_ma", pd.Series(0.0, index=window.index)).to_numpy()
-        pct = window.get("mvrv_percentile", pd.Series(0.5, index=window.index)).to_numpy()
+        z = (
+            window.get("mvrv_zscore", pd.Series(0.0, index=window.index))
+            .fillna(0.0)
+            .to_numpy()
+        )
+        ma = (
+            window.get("price_vs_ma", pd.Series(0.0, index=window.index))
+            .fillna(0.0)
+            .to_numpy()
+        )
+        pct = (
+            window.get("mvrv_percentile", pd.Series(0.5, index=window.index))
+            .fillna(0.5)
+            .to_numpy()
+        )
 
         # Lower MVRV and below-MA prices get more allocation; percentile adds cycle context.
         signal = (-1.25 * z) + (-0.75 * ma) + (0.6 * (0.5 - pct))
         signal = np.clip(signal, -8, 8)
 
         raw = np.exp(signal - signal.max())
-        if raw.sum() == 0:
+        raw_sum = raw.sum()
+        if not np.isfinite(raw_sum) or raw_sum <= 0:
             return pd.Series(np.full(len(window), 1.0 / len(window)), index=window.index)
 
-        weights = raw / raw.sum()
+        weights = raw / raw_sum
         return pd.Series(weights, index=window.index)
 
 

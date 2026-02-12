@@ -1,12 +1,12 @@
 import logging
-from pathlib import Path
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
 
-from .btc_price_fetcher import fetch_btc_price_robust, fetch_btc_price_historical
+from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
 from .model_development import precompute_features
 
 try:
@@ -35,6 +35,29 @@ PURCHASE_FREQ_TO_OFFSET = {"Daily": "1D"}
 WEIGHT_SUM_TOLERANCE = 1e-5
 
 
+def _is_cache_usable(csv_bytes: bytes, backtest_start: pd.Timestamp, today: pd.Timestamp) -> bool:
+    """Return True when cached CoinMetrics data appears complete and usable."""
+    try:
+        cached_df = pd.read_csv(BytesIO(csv_bytes), usecols=["time", "PriceUSD"])
+        if cached_df.empty:
+            return False
+
+        cached_df["time"] = pd.to_datetime(cached_df["time"], errors="coerce")
+        cached_df["PriceUSD"] = pd.to_numeric(cached_df["PriceUSD"], errors="coerce")
+        cached_df = cached_df.dropna(subset=["time"]).sort_values("time")
+        if cached_df.empty:
+            return False
+
+        latest_date = cached_df["time"].max().normalize()
+        if latest_date < (today - pd.Timedelta(days=3)):
+            return False
+
+        in_window = (cached_df["time"] >= backtest_start) & (cached_df["time"] <= today)
+        return bool(cached_df.loc[in_window, "PriceUSD"].notna().any())
+    except Exception:
+        return False
+
+
 def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: int = 24):
     """Load BTC data from CoinMetrics CSV with optional local caching."""
     url = "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv"
@@ -47,10 +70,26 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
     if use_cache:
         cache_path = Path(cache_dir).expanduser() / "coinmetrics_btc.csv"
         if cache_path.exists():
-            age_hours = (pd.Timestamp.now().timestamp() - cache_path.stat().st_mtime) / 3600.0
+            backtest_start = pd.to_datetime(BACKTEST_START)
+            today = pd.Timestamp.now().normalize()
+            age_hours = (
+                pd.Timestamp.now().timestamp() - cache_path.stat().st_mtime
+            ) / 3600.0
             if age_hours <= max_age_hours:
-                logging.info("Using cached CoinMetrics BTC data from %s", cache_path)
-                csv_bytes = cache_path.read_bytes()
+                cached_bytes = cache_path.read_bytes()
+                if _is_cache_usable(cached_bytes, backtest_start, today):
+                    logging.info("Using cached CoinMetrics BTC data from %s", cache_path)
+                    csv_bytes = cached_bytes
+                else:
+                    logging.warning(
+                        "Cached CoinMetrics data at %s looks truncated/invalid; refreshing.",
+                        cache_path,
+                    )
+                    response = requests.get(url, timeout=30)
+                    response.raise_for_status()
+                    csv_bytes = response.content
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    cache_path.write_bytes(csv_bytes)
             else:
                 logging.info("Cached data is stale (%.2fh old); refreshing", age_hours)
                 response = requests.get(url, timeout=30)
@@ -91,20 +130,24 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
     # --- GAP FILLING LOGIC ---
     today = pd.Timestamp.now().normalize()
     backtest_start = pd.to_datetime(BACKTEST_START)
-    
+
     # Create complete date range index
     full_date_range = pd.date_range(start=backtest_start, end=today, freq="D")
-    
+
     # Reindex to identify missing dates (this adds NaNs for missing rows)
     df = df.reindex(df.index.union(full_date_range)).sort_index()
-    
+
     # Identify gaps within our backtest window
     backtest_mask = (df.index >= backtest_start) & (df.index <= today)
     missing_dates = df.index[backtest_mask & df[PRICE_COL].isna()]
-    
+
     if len(missing_dates) > 0:
-        logging.info(f"Found {len(missing_dates)} missing dates in backtest range. Filling gaps...")
-        
+        logging.info(
+            f"Found {len(missing_dates)} missing dates in backtest range. Filling gaps..."
+        )
+        filled_count = 0
+        forward_filled_count = 0
+
         for date in missing_dates:
             # Get previous price for validation if available
             previous_price = None
@@ -119,21 +162,34 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
             if date == today:
                 price_usd = fetch_btc_price_robust(previous_price=previous_price)
             else:
-                price_usd = fetch_btc_price_historical(date, previous_price=previous_price)
+                price_usd = fetch_btc_price_historical(
+                    date, previous_price=previous_price
+                )
 
             if price_usd is not None:
                 df.loc[date, PRICE_COL] = price_usd
-                logging.info(f"Filled gap for {date.date()}: ${price_usd:,.2f}")
+                filled_count += 1
+                logging.debug(f"Filled gap for {date.date()}: ${price_usd:,.2f}")
             else:
                 # If everything failed, forward-fill from previous known price as last resort
                 if previous_price is not None:
                     df.loc[date, PRICE_COL] = previous_price
+                    forward_filled_count += 1
                     logging.warning(
                         f"FAILED to fetch price for {date.date()} from all sources. "
                         f"Using previous price (${previous_price:,.2f}) as fallback."
                     )
                 else:
-                    logging.error(f"CRITICAL: Could not resolve price for {date.date()} and no previous price available.")
+                    logging.error(
+                        f"CRITICAL: Could not resolve price for {date.date()} and no previous price available."
+                    )
+
+        logging.info(
+            "Gap filling complete: %s fetched, %s forward-filled, %s total",
+            filled_count,
+            forward_filled_count,
+            len(missing_dates),
+        )
 
     # Ensure we have today's MVRV value (use yesterday's if missing)
     MVRV_COL = "CapMVRVCur"
@@ -155,8 +211,12 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
     remaining_missing = df.loc[backtest_start:today, PRICE_COL].isnull()
     if remaining_missing.any():
         num_missing = remaining_missing.sum()
-        first_missing = df.loc[backtest_start:today][remaining_missing].index.min().date()
-        raise AssertionError(f"Critical error: {num_missing} dates still missing BTC-USD prices. First missing: {first_missing}")
+        first_missing = (
+            df.loc[backtest_start:today][remaining_missing].index.min().date()
+        )
+        raise AssertionError(
+            f"Critical error: {num_missing} dates still missing BTC-USD prices. First missing: {first_missing}"
+        )
 
     logging.info(
         f"Loaded and validated BTC data: {len(df)} rows, {df.index.min().date()} to {df.index.max().date()}"
@@ -300,6 +360,24 @@ def compute_cycle_spd(
         # Compute weights using strategy_function
         window_feat = full_feat.loc[window_start:window_end]
         weight_slice = strategy_function(window_feat)
+        if weight_slice.empty:
+            # Some strategies may return empty weights for low-feature windows.
+            # Fall back to uniform weights over available price dates.
+            weight_slice = pd.Series(
+                np.full(len(price_slice), 1.0 / len(price_slice)),
+                index=price_slice.index,
+            )
+        else:
+            # Align strategy output to price index and normalize defensively.
+            weight_slice = weight_slice.reindex(price_slice.index).fillna(0.0)
+            weight_total = float(weight_slice.sum())
+            if not np.isfinite(weight_total) or weight_total <= 0:
+                weight_slice = pd.Series(
+                    np.full(len(price_slice), 1.0 / len(price_slice)),
+                    index=price_slice.index,
+                )
+            else:
+                weight_slice = weight_slice / weight_total
 
         # Validate weights sum to 1.0 if requested
         if validate_weights:

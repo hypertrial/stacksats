@@ -4,6 +4,8 @@ import logging
 import os
 from datetime import datetime
 
+from . import matplotlib_setup  # noqa: F401
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.dates as mdates

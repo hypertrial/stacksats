@@ -221,3 +221,14 @@ __marimo__/
 *.ogg
 *.mov
 *.avi
+
+*.csv
+*.json
+*.yaml
+*.yml
+*.xml
+*.html
+*.css
+*.js
+*.ts
+*.tsx

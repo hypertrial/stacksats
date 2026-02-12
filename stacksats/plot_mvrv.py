@@ -15,6 +15,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from . import matplotlib_setup  # noqa: F401
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.dates as mdates

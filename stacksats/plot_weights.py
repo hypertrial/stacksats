@@ -14,6 +14,8 @@ import os
 import sys
 from typing import Tuple
 
+from . import matplotlib_setup  # noqa: F401
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.dates as mdates

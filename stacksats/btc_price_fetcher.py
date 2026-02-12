@@ -8,6 +8,8 @@ This module provides a reliable way to fetch current BTC-USD prices with:
 
 import logging
 from typing import Optional
+from io import BytesIO
+from functools import lru_cache
 
 import pandas as pd
 import requests
@@ -19,6 +21,9 @@ from tenacity import (
 )
 
 logger = logging.getLogger(__name__)
+
+# CoinMetrics CSV URL
+COINMETRICS_BTC_CSV_URL = "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv"
 
 # Price validation constants
 MIN_BTC_PRICE = 1000.0  # Minimum reasonable BTC price (USD)
@@ -160,6 +165,60 @@ def fetch_price_binance() -> float:
     return price
 
 
+@lru_cache(maxsize=1)
+def _load_coinmetrics_data() -> pd.DataFrame:
+    """Load CoinMetrics BTC CSV data with caching.
+    
+    Returns:
+        DataFrame with 'time' as index and 'PriceUSD' column
+    """
+    logger.debug("Loading CoinMetrics BTC data from GitHub...")
+    response = requests.get(COINMETRICS_BTC_CSV_URL, timeout=30)
+    response.raise_for_status()
+    
+    df = pd.read_csv(BytesIO(response.content))
+    df["time"] = pd.to_datetime(df["time"])
+    df.set_index("time", inplace=True)
+    df.index = df.index.normalize().tz_localize(None)
+    
+    # Remove duplicates and sort
+    df = df.loc[~df.index.duplicated(keep="last")].sort_index()
+    
+    if "PriceUSD" not in df.columns:
+        raise ValueError("PriceUSD column not found in CoinMetrics data")
+    
+    logger.debug(f"Loaded CoinMetrics data: {len(df)} rows from {df.index.min()} to {df.index.max()}")
+    return df
+
+
+def fetch_historical_price_coinmetrics(date: "pd.Timestamp") -> float:
+    """Fetch historical BTC price from CoinMetrics CSV data for a specific date.
+    
+    Args:
+        date: pandas Timestamp for the date to fetch
+        
+    Returns:
+        float: BTC price in USD
+        
+    Raises:
+        ValueError: If date not found in CoinMetrics data or price is missing
+    """
+    df = _load_coinmetrics_data()
+    date_normalized = date.normalize()
+    
+    if date_normalized not in df.index:
+        raise ValueError(f"Date {date.date()} not found in CoinMetrics data")
+    
+    price = df.loc[date_normalized, "PriceUSD"]
+    
+    if pd.isna(price):
+        raise ValueError(f"PriceUSD is missing for {date.date()} in CoinMetrics data")
+    
+    price = float(price)
+    logger.debug(f"CoinMetrics historical ({date.date()}) returned price: ${price:,.2f}")
+    return price
+
+
 def fetch_historical_price_coingecko(date: "pd.Timestamp") -> float:
     """Fetch historical BTC price from CoinGecko API for a specific date.
 
@@ -230,6 +289,9 @@ def fetch_btc_price_historical(
     previous_price: Optional[float] = None,
 ) -> Optional[float]:
     """Fetch historical BTC price with retry logic and fallback sources.
+    
+    Uses CoinMetrics CSV data as the primary source, falling back to API sources
+    if CoinMetrics data is unavailable for the requested date.
 
     Args:
         date: pandas Timestamp for the date to fetch
@@ -239,6 +301,7 @@ def fetch_btc_price_historical(
         float: BTC price in USD, or None if all sources fail
     """
     sources = [
+        (lambda: fetch_historical_price_coinmetrics(date), "CoinMetrics Historical"),
         (lambda: fetch_historical_price_coingecko(date), "CoinGecko Historical"),
         (lambda: fetch_historical_price_binance(date), "Binance Historical"),
     ]
@@ -248,7 +311,7 @@ def fetch_btc_price_historical(
             # We use a longer wait for historical as rate limits are tighter
             price = fetch_func()
             if validate_price(price, previous_price):
-                logger.info(
+                logger.debug(
                     f"Successfully fetched historical BTC price for {date.date()} from {source_name}: ${price:,.2f}"
                 )
                 return price
