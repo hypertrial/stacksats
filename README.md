@@ -241,3 +241,16 @@ Run lint:
 ```bash
 ruff check .
 ```
+
+## Contributors
+
+This project has benefited from contributions by researchers from the following universities:
+
+- Columbia University (Master of Data Science)
+- Cornell University (Master of Engineering in Management)
+- Georgia Institute of Technology (Master of Science in Analytics)
+- London School of Economics (Master of Science in Data Science)
+- University of British Columbia (Master of Data Science)
+- University of California, Davis (Master of Science in Business Analytics)
+- University of California, Irvine (Master of Data Science)
+- University of California, San Diego (Master of Quantitative Finance)
