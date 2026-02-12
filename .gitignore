@@ -226,6 +226,10 @@ __marimo__/
 *.json
 *.yaml
 *.yml
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
 *.xml
 *.html
 *.css

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=69", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "stacksats"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Bitcoin DCA model development, backtesting, and Modal deployment toolkit"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -29,6 +29,7 @@ dependencies = [
   "requests>=2.31.0",
   "matplotlib>=3.7.0",
   "seaborn>=0.12.0",
+  "tenacity>=8.2.0",
 ]
 
 [project.urls]
@@ -42,7 +43,6 @@ deploy = [
   "psycopg2-binary>=2.9.0",
   "fastapi>=0.104.0",
   "python-dotenv>=1.0.0",
-  "tenacity>=8.2.0",
   "pyarrow>=13.0.0",
 ]
 dev = [
@@ -72,3 +72,8 @@ include = ["stacksats", "stacksats.*"]
 
 [tool.setuptools.package-data]
 stacksats = ["py.typed"]
+
+[tool.setuptools_scm]
+tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"

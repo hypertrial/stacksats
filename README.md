@@ -253,6 +253,8 @@ Run lint:
 ruff check .
 ```
 
+Release process: see `docs/release.md`.
+
 ## Contributors
 
 This project has benefited from contributions by researchers from the following universities:
