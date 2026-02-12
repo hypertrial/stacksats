@@ -136,9 +136,11 @@ The model combines three primary signals with two modulation factors:
 ### 200-Day Simple Moving Average
 
 ```python
-price_ma200 = price.rolling(200, min_periods=100).mean()
-price_vs_ma = (price / price_ma200) - 1  # Clipped to [-1, 1]
+price_ma = price.rolling(200, min_periods=100).mean()
+price_vs_ma = (price / price_ma) - 1  # Clipped to [-1, 1]
 ```
+
+In `precompute_features()`, the moving-average column is stored as `price_ma`.
 
 | Value | Interpretation |
 |-------|----------------|
@@ -308,7 +310,7 @@ def allocate_sequential_stable(raw, n_past, locked_weights=None):
     
     # Past days: use signal-based weights
     for i in range(n_past):
-        signal = compute_stable_signal_weights(raw[:i+1])[-1]
+        signal = _compute_stable_signal(raw[:i+1])[-1]
         w[i] = signal * base_weight
     
     # Future days: uniform distribution
@@ -327,7 +329,13 @@ def allocate_sequential_stable(raw, n_past, locked_weights=None):
 Core weight computation for a date range using all enhanced features:
 
 ```python
-def compute_weights_fast(features_df, start_date, end_date) -> pd.Series:
+def compute_weights_fast(
+    features_df,
+    start_date,
+    end_date,
+    n_past=None,
+    locked_weights=None,
+) -> pd.Series:
     # Extract all features: price_vs_ma, mvrv_zscore, mvrv_gradient,
     #   mvrv_percentile, mvrv_acceleration, mvrv_volatility, signal_confidence
     # Compute uniform base PDF
@@ -340,7 +348,13 @@ def compute_weights_fast(features_df, start_date, end_date) -> pd.Series:
 Wrapper that handles the past/future weight split for production use:
 
 ```python
-def compute_window_weights(features_df, start_date, end_date, current_date) -> pd.Series:
+def compute_window_weights(
+    features_df,
+    start_date,
+    end_date,
+    current_date,
+    locked_weights=None,
+) -> pd.Series:
     # 1. Extend features with placeholders for future dates
     # 2. Compute FULL range weights
     # 3. Split at current_date boundary:
@@ -404,7 +418,7 @@ Core mathematical and logical components are verified by unit tests in `tests/te
 
 Run model-specific tests via:
 ```bash
-pytest tests/test_model_development_helpers.py tests/test_model_development.py -v
+pytest tests/test_model_development_helpers.py -v
 ```
 
 ## Data Requirements

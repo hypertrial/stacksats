@@ -56,8 +56,8 @@ class MyStrategy:
         if window.empty:
             return pd.Series(dtype=float)
 
-        z = window["mvrv_zscore"].to_numpy()
-        ma = window["price_vs_ma"].to_numpy()
+        z = window.get("mvrv_zscore", pd.Series(0.0, index=window.index)).to_numpy()
+        ma = window.get("price_vs_ma", pd.Series(0.0, index=window.index)).to_numpy()
         raw = np.exp((-1.2 * z) + (-0.8 * ma))
         w = raw / raw.sum()
         return pd.Series(w, index=window.index)
@@ -96,6 +96,10 @@ Top-level package exports:
 - `BacktestResult`: Result object with summary/plot/serialization helpers
 - `ValidationResult`: Structured validation output
 - `WindowStrategy`, `CallableWindowStrategy`, `MVRVStrategy`
+
+`load_data()` also supports cache controls via optional keyword args:
+- `cache_dir` (default `~/.stacksats/cache`, set to `None` to disable local cache)
+- `max_age_hours` (default `24`, refresh threshold for cached CoinMetrics CSV)
 
 ## Writing a Strategy
 
@@ -234,6 +238,13 @@ Run tests:
 
 ```bash
 pytest tests/ -v
+```
+
+Verify documented command examples:
+
+```bash
+# Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e .)
+python scripts/test_example_commands.py
 ```
 
 Run lint:

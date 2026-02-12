@@ -119,6 +119,13 @@ modal deploy stacksats/modal_app.py
 
 ## 6) Useful Development Commands
 
+Verify this document's example commands end-to-end:
+
+```bash
+# Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e .)
+python scripts/test_example_commands.py
+```
+
 Run tests:
 
 ```bash

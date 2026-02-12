@@ -17,7 +17,7 @@ The backtest system validates the dynamic DCA strategy by comparing its performa
 flowchart TD
     subgraph data [Data Loading]
         CM[CoinMetrics CSV]
-        PRICE[Live BTC Price<br/>CoinGecko/Coinbase/Bitstamp]
+        GAP[Gap Filling + Today Refresh<br/>Historical/Live price fetchers]
     end
     
     subgraph features [Feature Precomputation]
@@ -43,8 +43,8 @@ flowchart TD
         JSON[metrics.json]
     end
     
-    CM --> PRECOMPUTE
-    PRICE --> PRECOMPUTE
+    CM --> GAP
+    GAP --> PRECOMPUTE
     PRECOMPUTE --> FEATS
     FEATS --> WINDOWS
     WINDOWS --> WEIGHTS
@@ -61,7 +61,7 @@ flowchart TD
 
 ### Data Loading (`load_data`)
 
-Loads Bitcoin price and MVRV data from CoinMetrics, extending it with today's live price:
+Loads Bitcoin price and MVRV data from CoinMetrics, then fills missing dates in the backtest range (including today if needed) using historical/live price fetchers with forward-fill fallback:
 
 ```python
 btc_df = load_data()
@@ -96,7 +96,7 @@ For each daily start date from 2018-01-01, creates a 1-year investment window:
 # Window: 2024-12-28 → 2025-12-28
 ```
 
-**Total Windows**: 2554 (daily rolling windows)
+**Total Windows**: depends on the selected start/end dates (daily rolling windows).
 
 ### Sats-per-Dollar (SPD) Calculation
 
@@ -121,6 +121,8 @@ percentile = (spd - min_spd) / (max_spd - min_spd) × 100
 ## Interpreting Results
 
 ### Sample Backtest Output
+
+The exact numbers vary by data refresh date and selected window range.
 
 ```
 2025-12-29 15:54:21 INFO     Backtesting date range: 2018-01-01 to 2025-12-28 (2554 total windows)

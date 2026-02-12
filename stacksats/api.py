@@ -168,12 +168,25 @@ def run_backtest(
 
         window_start = df_window.index.min()
         window_end = df_window.index.max()
-        return strategy.compute_weights(
+        weights = strategy.compute_weights(
             features_df=features_df,
             start_date=window_start,
             end_date=window_end,
             current_date=window_end,
         )
+        if weights.empty:
+            return weights
+
+        weight_sum = float(weights.sum())
+        assert np.isclose(weight_sum, 1.0, rtol=1e-5, atol=1e-8), (
+            f"Weights for range {window_start.date()} to {window_end.date()} "
+            f"sum to {weight_sum:.10f}, expected 1.0"
+        )
+        assert not bool((weights < 0).any()), (
+            f"Weights for range {window_start.date()} to {window_end.date()} "
+            "contain negative values"
+        )
+        return weights
 
     spd_table, exp_decay_percentile = backtest_dynamic_dca(
         btc_df,
