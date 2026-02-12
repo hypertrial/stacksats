@@ -11,7 +11,7 @@ from pytest_bdd import given, parsers, then, when
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from export_weights import (
+from stacksats.export_weights import (
     DATE_FREQ,
     MIN_RANGE_LENGTH_DAYS,
     RANGE_END,

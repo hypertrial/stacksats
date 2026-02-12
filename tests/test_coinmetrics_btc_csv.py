@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from btc_api.coinmetrics_btc_csv import (
+from stacksats.btc_api.coinmetrics_btc_csv import (
     fetch_coinmetrics_btc_csv,
     get_coinmetrics_btc_csv_raw,
     COINMETRICS_BTC_CSV_URL,

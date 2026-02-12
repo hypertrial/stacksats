@@ -8,7 +8,7 @@ Covers:
 
 import numpy as np
 
-from model_development import (
+from stacksats.model_development import (
     allocate_sequential_stable,
     compute_dynamic_multiplier,
     compute_adaptive_trend_modifier,

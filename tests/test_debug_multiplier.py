@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from model_development import (
+from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     MVRV_VOLATILITY_DAMPENING,
     _clean_array,

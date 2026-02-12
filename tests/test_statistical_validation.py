@@ -21,15 +21,15 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import backtest
-from backtest import compute_weights_modal
-from model_development import (
+import stacksats.backtest as backtest
+from stacksats.backtest import compute_weights_modal
+from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     FEATS,
     compute_weights_fast,
     precompute_features,
 )
-from prelude import compute_cycle_spd
+from stacksats.prelude import compute_cycle_spd
 
 # -----------------------------------------------------------------------------
 # Randomized Baseline Tests

@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 from unittest.mock import MagicMock, patch
 
-from export_weights import insert_all_data, update_today_weights
+from stacksats.export_weights import insert_all_data, update_today_weights
 
 # -----------------------------------------------------------------------------
 # Fixtures
@@ -51,7 +51,7 @@ def test_insert_all_data_copy_success(mock_db_connection, sample_df):
     assert cursor.copy_from.called
     
     # Verify execute_values was NOT called (no fallback needed)
-    with patch("export_weights.execute_values") as mock_exec_values:
+    with patch("stacksats.export_weights.execute_values") as mock_exec_values:
         assert not mock_exec_values.called
         
     assert inserted == 2
@@ -71,7 +71,7 @@ def test_insert_all_data_fallback(mock_db_connection, sample_df):
     cursor.copy_from.side_effect = Exception("COPY failed permission denied")
     
     # Mock execute_values
-    with patch("export_weights.execute_values") as mock_exec_values:
+    with patch("stacksats.export_weights.execute_values") as mock_exec_values:
         # Run function
         inserted = insert_all_data(conn, sample_df)
         
@@ -97,7 +97,7 @@ def test_insert_all_data_fallback(mock_db_connection, sample_df):
 # Test Update Logic
 # -----------------------------------------------------------------------------
 
-@patch("export_weights.get_current_btc_price")
+@patch("stacksats.export_weights.get_current_btc_price")
 def test_update_today_weights_success(mock_get_price, mock_db_connection, sample_df):
     """Test update_today_weights when price fetch succeeds."""
     conn, cursor = mock_db_connection
@@ -126,7 +126,7 @@ def test_update_today_weights_success(mock_get_price, mock_db_connection, sample
     assert updated == 1
 
 
-@patch("export_weights.get_current_btc_price")
+@patch("stacksats.export_weights.get_current_btc_price")
 def test_update_today_weights_price_fetch_failure(mock_get_price, mock_db_connection, sample_df):
     """Test update_today_weights when price fetch fails but DF has price."""
     conn, cursor = mock_db_connection
@@ -152,7 +152,7 @@ def test_update_today_weights_price_fetch_failure(mock_get_price, mock_db_connec
     assert updated == 1
 
 
-@patch("export_weights.get_current_btc_price")
+@patch("stacksats.export_weights.get_current_btc_price")
 def test_update_today_weights_no_price(mock_get_price, mock_db_connection):
     """Test update_today_weights when no price available anywhere."""
     conn, cursor = mock_db_connection

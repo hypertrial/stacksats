@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from export_weights import (
+from stacksats.export_weights import (
     create_table_if_not_exists,
     insert_all_data,
     table_is_empty,
@@ -92,7 +92,7 @@ class TestDatabaseOperations:
         assert cursor.copy_from.called
         assert "temp_bitcoin_dca" in cursor.copy_from.call_args[0][1]
 
-    @patch("export_weights.execute_values")
+    @patch("stacksats.export_weights.execute_values")
     @patch("time.time", side_effect=[100, 101, 102, 103])
     def test_insert_all_data_fallback_to_execute_values(self, mock_time, mock_execute_values, mock_conn):
         """Test insert_all_data falls back to execute_values if COPY fails."""
@@ -116,7 +116,7 @@ class TestDatabaseOperations:
         assert actual_inserted == 1
         assert mock_execute_values.called
 
-    @patch("export_weights.get_current_btc_price")
+    @patch("stacksats.export_weights.get_current_btc_price")
     @patch("time.time", side_effect=[100, 101, 102, 103])
     def test_update_today_weights(self, mock_time, mock_get_price, mock_conn):
         """Test update_today_weights executes bulk update SQL."""

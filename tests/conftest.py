@@ -2,7 +2,6 @@
 
 import json
 import os
-import sys
 import tempfile
 from io import StringIO
 from pathlib import Path
@@ -11,10 +10,6 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 
 # -----------------------------------------------------------------------------
 # Sample Data Fixtures
@@ -56,7 +51,7 @@ def sample_btc_df(sample_btc_prices):
 @pytest.fixture
 def sample_features_df(sample_btc_df):
     """Create precomputed features DataFrame."""
-    from model_development import precompute_features
+    from stacksats.model_development import precompute_features
 
     return precompute_features(sample_btc_df)
 
@@ -126,12 +121,12 @@ def mock_coinmetrics_response(mocker, sample_coinmetrics_csv):
 def mock_btc_price(mocker):
     """Mock the BTC price fetcher."""
     mocker.patch(
-        "btc_price_fetcher.fetch_btc_price_robust",
+        "stacksats.btc_price_fetcher.fetch_btc_price_robust",
         return_value=98000.0,
     )
     # Also patch in prelude module
     mocker.patch(
-        "prelude.fetch_btc_price_robust",
+        "stacksats.prelude.fetch_btc_price_robust",
         return_value=98000.0,
     )
     return 98000.0
@@ -158,7 +153,7 @@ def mock_db_connection(mocker):
     mock_cursor.fetchall.return_value = []
     mock_cursor.rowcount = 0
 
-    mocker.patch("export_weights.psycopg2.connect", return_value=mock_conn)
+    mocker.patch("stacksats.export_weights.psycopg2.connect", return_value=mock_conn)
     mocker.patch.dict(
         os.environ, {"DATABASE_URL": "postgresql://test:test@localhost/test"}
     )
@@ -409,7 +404,7 @@ def simulation_mock_db(mocker):
     def _track_rowcount():
         return db_state["count"]
 
-    mocker.patch("export_weights.psycopg2.connect", return_value=mock_conn)
+    mocker.patch("stacksats.export_weights.psycopg2.connect", return_value=mock_conn)
     mocker.patch.dict(
         os.environ, {"DATABASE_URL": "postgresql://test:test@localhost/test"}
     )
@@ -452,7 +447,7 @@ def truncated_features_df_factory(sample_btc_df):
     Returns a function that precomputes features using only data up to
     a specified date, simulating point-in-time feature availability.
     """
-    from model_development import precompute_features
+    from stacksats.model_development import precompute_features
 
     def _create_truncated_features(truncate_date):
         """Create features using only data up to truncate_date.
@@ -606,7 +601,7 @@ def sample_btc_df_validate():
 @pytest.fixture
 def sample_features_df_validate(sample_btc_df_validate):
     """Precompute features for validation sample data."""
-    from model_development import precompute_features
+    from stacksats.model_development import precompute_features
 
     return precompute_features(sample_btc_df_validate)
 
@@ -614,7 +609,7 @@ def sample_features_df_validate(sample_btc_df_validate):
 @pytest.fixture
 def sample_weights_df(sample_features_df_validate, sample_btc_df_validate):
     """Generate sample weights for testing with multiple date ranges."""
-    from export_weights import process_start_date_batch
+    from stacksats.export_weights import process_start_date_batch
     from tests.test_helpers import PRICE_COL
 
     start_date = pd.Timestamp("2025-01-01")
@@ -647,7 +642,7 @@ def deterministic_features_fixture():
 
     Features are designed so that day with lowest z-score gets highest weight.
     """
-    from model_development import FEATS
+    from stacksats.model_development import FEATS
 
     dates = pd.date_range("2025-01-01", "2025-01-05", freq="D")
     # Create features where day 0 has lowest z-scores (should get highest weight)
@@ -667,7 +662,7 @@ def deterministic_features_fixture():
 @pytest.fixture
 def min_w_floor_fixture():
     """Create features that would push weights below MIN_W without floor."""
-    from model_development import FEATS
+    from stacksats.model_development import FEATS
 
     dates = pd.date_range("2025-01-01", "2025-01-10", freq="D")
     # Create extreme features that would cause very small raw weights
@@ -685,7 +680,7 @@ def min_w_floor_fixture():
 @pytest.fixture
 def degenerate_features_fixture():
     """Create all-zero or constant features for degenerate case testing."""
-    from model_development import FEATS
+    from stacksats.model_development import FEATS
 
     dates = pd.date_range("2025-01-01", "2025-01-05", freq="D")
     # All features are zero (constant)

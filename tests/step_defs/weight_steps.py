@@ -10,7 +10,7 @@ from pytest_bdd import given, parsers, then, when
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from model_development import (
+from stacksats.model_development import (
     MIN_W,
     allocate_sequential_stable,
     compute_dynamic_multiplier,

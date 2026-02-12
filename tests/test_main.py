@@ -5,7 +5,7 @@ import os
 
 import pandas as pd
 
-from backtest import (
+from stacksats.backtest import (
     create_cumulative_performance,
     create_excess_percentile_distribution,
     create_performance_comparison_chart,

@@ -15,7 +15,7 @@ from freezegun import freeze_time
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from export_weights import (
+from stacksats.export_weights import (
     BTC_PRICE_COL,
     RANGE_END,
     RANGE_START,
@@ -24,7 +24,7 @@ from export_weights import (
     process_start_date_batch,
     table_is_empty,
 )
-from model_development import MIN_W, precompute_features
+from stacksats.model_development import MIN_W, precompute_features
 
 # -----------------------------------------------------------------------------
 # Simulation Test Harness
@@ -282,7 +282,7 @@ class TestScenarioAInitialPopulation:
         mock_cursor.fetchone.return_value = (0,)
 
         # Mock price fetcher
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
         mock_price.return_value = 100000.0
 
         # Create harness
@@ -320,7 +320,7 @@ class TestScenarioAInitialPopulation:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
         mock_price.return_value = 100000.0
 
         start_date = "2025-12-07"
@@ -347,7 +347,7 @@ class TestScenarioAInitialPopulation:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
         mock_price.return_value = 100000.0
 
         start_date = "2025-12-07"
@@ -384,7 +384,7 @@ class TestScenarioBDailyUpdates:
         mock_cursor.fetchone.return_value = (1000,)
         db_state["count"] = 1000
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         start_date = "2025-12-07"
         harness = SimulationTestHarness(simulation_btc_df, start_date, num_days=2)
@@ -420,7 +420,7 @@ class TestScenarioBDailyUpdates:
         mock_cursor.fetchone.return_value = (1000,)
         db_state["count"] = 1000
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         start_date = "2025-12-07"
         harness = SimulationTestHarness(simulation_btc_df, start_date, num_days=2)
@@ -463,7 +463,7 @@ class TestScenarioCMultiDayProgression:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         start_date = "2025-12-07"
         num_days = 7
@@ -543,7 +543,7 @@ class TestScenarioCMultiDayProgression:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         start_date = "2025-12-07"
         num_days = 14
@@ -571,7 +571,7 @@ class TestScenarioCMultiDayProgression:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         start_date = "2025-12-07"
         harness = SimulationTestHarness(simulation_btc_df, start_date, num_days=3)
@@ -645,7 +645,7 @@ class TestScenarioDEdgeCases:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
         mock_price.return_value = 100000.0
 
         # Start on a leap year date
@@ -668,7 +668,7 @@ class TestScenarioDEdgeCases:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         # Use a date range that will end during simulation
         start_date = "2025-12-07"
@@ -706,7 +706,7 @@ class TestScenarioDEdgeCases:
         mock_conn, mock_cursor, db_state = simulation_mock_db
         mock_cursor.fetchone.return_value = (0,)
 
-        mock_price = mocker.patch("export_weights.fetch_btc_price_robust")
+        mock_price = mocker.patch("stacksats.export_weights.fetch_btc_price_robust")
 
         # Create a modified price series with extreme movements
         extreme_df = simulation_btc_df.copy()

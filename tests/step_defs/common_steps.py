@@ -15,7 +15,7 @@ from pytest_bdd import given, parsers, then, when
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from model_development import (
+from stacksats.model_development import (
     MIN_W,
     compute_weights_fast,
     precompute_features,
@@ -180,7 +180,7 @@ def then_no_nan_weights(bdd_context):
 @then("the features should contain all required columns")
 def then_features_have_columns(bdd_context):
     """Assert features DataFrame has all required columns."""
-    from model_development import FEATS
+    from stacksats.model_development import FEATS
 
     features_df = bdd_context["features_df"]
     for feat in FEATS:
@@ -190,7 +190,7 @@ def then_features_have_columns(bdd_context):
 @then("the features should have no NaN values")
 def then_features_no_nan(bdd_context):
     """Assert features have no NaN values."""
-    from model_development import FEATS
+    from stacksats.model_development import FEATS
 
     features_df = bdd_context["features_df"]
     for feat in FEATS:

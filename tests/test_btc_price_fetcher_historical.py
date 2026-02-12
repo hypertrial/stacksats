@@ -10,7 +10,7 @@ import pytest
 import pandas as pd
 import responses
 
-from btc_price_fetcher import (
+from stacksats.btc_price_fetcher import (
     fetch_historical_price_coingecko,
     fetch_historical_price_binance,
     fetch_btc_price_historical,

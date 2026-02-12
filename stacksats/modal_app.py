@@ -5,11 +5,74 @@ Deploys web endpoints and scheduled jobs on Modal.
 
 try:
     import modal
-except ImportError as exc:  # pragma: no cover - only hit without deploy extras
-    raise ImportError(
-        "Missing optional dependency 'modal'. "
-        "Install deploy extras with: pip install stacksats[deploy]"
-    ) from exc
+except ImportError:  # pragma: no cover - used in local/test environments
+    class _LocalModalFunction:
+        """Local stand-in that mimics Modal function wrappers for tests."""
+
+        def __init__(self, fn):
+            self._fn = fn
+
+        def __call__(self, *args, **kwargs):
+            return self._fn(*args, **kwargs)
+
+        def get_raw_f(self):
+            return self._fn
+
+        def remote(self, *args, **kwargs):
+            return self._fn(*args, **kwargs)
+
+        def map(self, iterable):
+            return (self._fn(item) for item in iterable)
+
+    class _LocalApp:
+        def __init__(self, _name):
+            self._name = _name
+
+        def function(self, *args, **kwargs):
+            del args, kwargs
+
+            def decorator(fn):
+                return _LocalModalFunction(fn)
+
+            return decorator
+
+        def local_entrypoint(self, *args, **kwargs):
+            del args, kwargs
+
+            def decorator(fn):
+                return fn
+
+            return decorator
+
+    class _LocalSecret:
+        @classmethod
+        def from_name(cls, _name):
+            return cls()
+
+    class _LocalImage:
+        @classmethod
+        def debian_slim(cls, **kwargs):
+            del kwargs
+            return cls()
+
+        def pip_install(self, *packages):
+            del packages
+            return self
+
+        def add_local_dir(self, *_args, **_kwargs):
+            return self
+
+    class _LocalCron:
+        def __init__(self, _expr):
+            self.expr = _expr
+
+    class _ModalShim:
+        App = _LocalApp
+        Secret = _LocalSecret
+        Image = _LocalImage
+        Cron = _LocalCron
+
+    modal = _ModalShim()
 
 # Load environment variables from .env file
 try:

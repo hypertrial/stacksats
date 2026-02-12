@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prelude import load_data
+from stacksats.prelude import load_data
 
 # -----------------------------------------------------------------------------
 # Test Fixtures
@@ -60,7 +60,7 @@ def mock_coinmetrics_with_mvrv(mocker, sample_coinmetrics_data):
 def mock_btc_price_fetcher(mocker):
     """Mock BTC price fetcher to return a fixed price."""
     mocker.patch(
-        "prelude.fetch_btc_price_robust",
+        "stacksats.prelude.fetch_btc_price_robust",
         return_value=98000.0,
     )
     return 98000.0
@@ -69,7 +69,7 @@ def mock_btc_price_fetcher(mocker):
 @pytest.fixture
 def mock_backtest_start(mocker):
     """Mock BACKTEST_START to match sample data range."""
-    mocker.patch("prelude.BACKTEST_START", "2024-01-01")
+    mocker.patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
 
 
 
@@ -125,7 +125,7 @@ class TestMVRVFallback:
 
         # Load data - should trigger fallback
         with caplog.at_level(logging.INFO):
-            result_df = load_data()
+            result_df = load_data(cache_dir=None)
 
         # Verify today's MVRV was filled with yesterday's value
         if today in result_df.index:
@@ -174,7 +174,7 @@ class TestMVRVFallback:
 
         # Load data
         with caplog.at_level(logging.INFO):
-            result_df = load_data()
+            result_df = load_data(cache_dir=None)
 
         # Verify today's MVRV is unchanged
         if today in result_df.index:
@@ -221,7 +221,7 @@ class TestMVRVFallback:
 
         # Load data - should trigger warning
         with caplog.at_level(logging.WARNING):
-            load_data()
+            load_data(cache_dir=None)
 
         # Verify warning was logged
         assert "Could not find valid MVRV" in caplog.text, (
@@ -264,7 +264,7 @@ class TestMVRVFallback:
 
         # Load data - should trigger warning
         with caplog.at_level(logging.WARNING):
-            load_data()
+            load_data(cache_dir=None)
 
         # Verify warning was logged
         assert "Could not find valid MVRV" in caplog.text, (
@@ -286,7 +286,7 @@ class TestMVRVFallback:
 
         # Load data
         with caplog.at_level(logging.INFO):
-            result_df = load_data()
+            result_df = load_data(cache_dir=None)
 
         # Verify no MVRV column in result
         assert "CapMVRVCur" not in result_df.columns, (
@@ -307,12 +307,12 @@ class TestMVRVFallback:
 
         # Mock price fetcher to return None (sub simulating API failure)
         mocker.patch(
-            "prelude.fetch_btc_price_robust",
+            "stacksats.prelude.fetch_btc_price_robust",
             return_value=None,
         )
         # Also mock historical to return None
         mocker.patch(
-            "prelude.fetch_btc_price_historical",
+            "stacksats.prelude.fetch_btc_price_historical",
             return_value=None,
         )
 
@@ -341,7 +341,7 @@ class TestMVRVFallback:
 
         # Load data
         with caplog.at_level(logging.INFO):
-            result_df = load_data()
+            result_df = load_data(cache_dir=None)
 
         # Verify today IS in result (added by gap filling)
         assert today in result_df.index, (
@@ -396,7 +396,7 @@ class TestMVRVFallback:
         mock_coinmetrics_with_mvrv.content = csv_buffer.getvalue().encode("utf-8")
 
         try:
-            result_df = load_data()
+            result_df = load_data(cache_dir=None)
 
             # Verify historical MVRV is unchanged
             if (

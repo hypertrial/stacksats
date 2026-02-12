@@ -19,8 +19,8 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from export_weights import generate_date_ranges, process_start_date_batch
-from model_development import (
+from stacksats.export_weights import generate_date_ranges, process_start_date_batch
+from stacksats.model_development import (
     allocate_sequential_stable,
     compute_dynamic_multiplier,
     compute_weights_fast,

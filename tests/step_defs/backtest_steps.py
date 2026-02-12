@@ -10,9 +10,9 @@ from pytest_bdd import given, parsers, then, when
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import backtest
-from backtest import compute_weights_modal
-from prelude import BACKTEST_END, backtest_dynamic_dca, compute_cycle_spd
+import stacksats.backtest as backtest
+from stacksats.backtest import compute_weights_modal
+from stacksats.prelude import BACKTEST_END, backtest_dynamic_dca, compute_cycle_spd
 
 # -----------------------------------------------------------------------------
 # Given Steps - Backtest Setup

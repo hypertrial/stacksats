@@ -16,7 +16,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backtest import (
+from stacksats.backtest import (
     create_cumulative_performance,
     create_excess_percentile_distribution,
     create_performance_comparison_chart,

@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pandas as pd
-from modal_app import (
+from stacksats.modal_app import (
     process_start_date_batch_modal,
     daily_export,
     daily_export_retry,
@@ -18,7 +18,7 @@ class TestModalAppFunctions:
         # Patching inside the function's scope logic
         with patch("pickle.loads") as mock_loads, \
              patch("pandas.to_datetime") as mock_to_datetime, \
-             patch("export_weights.process_start_date_batch") as mock_process_batch:
+             patch("stacksats.export_weights.process_start_date_batch") as mock_process_batch:
             
             # Setup mock data
             mock_loads.side_effect = [
@@ -45,11 +45,11 @@ class TestModalAppFunctions:
             assert mock_loads.call_count == 2
             assert mock_process_batch.called
 
-    @patch("modal_app.run_export.remote")
-    @patch("export_weights.get_db_connection")
-    @patch("export_weights.create_table_if_not_exists")
-    @patch("export_weights.table_is_empty")
-    @patch("export_weights.update_today_weights")
+    @patch("stacksats.modal_app.run_export.remote")
+    @patch("stacksats.export_weights.get_db_connection")
+    @patch("stacksats.export_weights.create_table_if_not_exists")
+    @patch("stacksats.export_weights.table_is_empty")
+    @patch("stacksats.export_weights.update_today_weights")
     def test_daily_export_logic(self, mock_update, mock_empty, mock_create, mock_get_db, mock_run_remote):
         """Test daily_export logic flow."""
         # Setup mocks
@@ -65,11 +65,11 @@ class TestModalAppFunctions:
         assert result["rows_affected"] == 5
         assert mock_run_remote.called
 
-    @patch("export_weights.today_data_exists")
-    @patch("export_weights.get_db_connection")
-    @patch("modal_app.run_export.remote")
-    @patch("export_weights.table_is_empty")
-    @patch("export_weights.create_table_if_not_exists")
+    @patch("stacksats.export_weights.today_data_exists")
+    @patch("stacksats.export_weights.get_db_connection")
+    @patch("stacksats.modal_app.run_export.remote")
+    @patch("stacksats.export_weights.table_is_empty")
+    @patch("stacksats.export_weights.create_table_if_not_exists")
     def test_daily_export_retry_skips_if_data_exists(self, mock_create, mock_empty, mock_run_remote, mock_get_db, mock_today_exists):
         """Test that daily_export_retry skips if data already exists."""
         mock_today_exists.return_value = True
@@ -83,12 +83,12 @@ class TestModalAppFunctions:
         assert result["reason"] == "data_already_exists"
         assert not mock_run_remote.called
 
-    @patch("export_weights.today_data_exists")
-    @patch("export_weights.get_db_connection")
-    @patch("modal_app.run_export.remote")
-    @patch("export_weights.table_is_empty")
-    @patch("export_weights.create_table_if_not_exists")
-    @patch("export_weights.update_today_weights")
+    @patch("stacksats.export_weights.today_data_exists")
+    @patch("stacksats.export_weights.get_db_connection")
+    @patch("stacksats.modal_app.run_export.remote")
+    @patch("stacksats.export_weights.table_is_empty")
+    @patch("stacksats.export_weights.create_table_if_not_exists")
+    @patch("stacksats.export_weights.update_today_weights")
     def test_daily_export_retry_runs_if_data_missing(self, mock_update, mock_create, mock_empty, mock_run_remote, mock_get_db, mock_today_exists):
         """Test that daily_export_retry runs if data is missing."""
         mock_today_exists.return_value = False

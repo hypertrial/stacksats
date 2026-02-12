@@ -6,7 +6,7 @@ import responses
 from io import BytesIO
 from unittest.mock import patch
 
-from prelude import load_data
+from stacksats.prelude import load_data
 
 @pytest.fixture
 def mock_coinmetrics_csv():
@@ -26,9 +26,9 @@ class TestPreludeGapFilling:
     """Tests for load_data() gap filling behavior."""
 
     @responses.activate
-    @patch("prelude.BACKTEST_START", "2024-01-01")
-    @patch("prelude.fetch_btc_price_historical")
-    @patch("prelude.fetch_btc_price_robust")
+    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
+    @patch("stacksats.prelude.fetch_btc_price_historical")
+    @patch("stacksats.prelude.fetch_btc_price_robust")
     def test_load_data_fills_historical_gap(self, mock_robust, mock_historical, mock_coinmetrics_csv):
         """Test that load_data identifies and fills a gap in historical data."""
         # Mock CoinMetrics response
@@ -46,7 +46,7 @@ class TestPreludeGapFilling:
         # Mock robust fetcher for "today" (even if Jan 5 is latest in CSV, pd.Timestamp.now() will be later)
         mock_robust.return_value = 45000.0
         
-        df = load_data()
+        df = load_data(cache_dir=None)
         
         # Verify Jan 3rd was filled
         assert df.loc[gap_date, "PriceUSD_coinmetrics"] == 42000.0
@@ -56,8 +56,8 @@ class TestPreludeGapFilling:
         assert not df.loc["2024-01-01":"2024-01-03", "PriceUSD_coinmetrics"].isna().any()
 
     @responses.activate
-    @patch("prelude.BACKTEST_START", "2024-01-01")
-    @patch("prelude.fetch_btc_price_historical")
+    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
+    @patch("stacksats.prelude.fetch_btc_price_historical")
     def test_load_data_forward_fill_fallback(self, mock_historical, mock_coinmetrics_csv):
         """Test that load_data forward-fills if API fetching fails."""
         responses.add(
@@ -71,14 +71,14 @@ class TestPreludeGapFilling:
         mock_historical.return_value = None
         
         # Previous price before hole (Jan 3) is Jan 2nd ($41000)
-        df = load_data()
+        df = load_data(cache_dir=None)
         
         gap_date = pd.Timestamp("2024-01-03")
         # Should have forward-filled from Jan 2nd (41000)
         assert df.loc[gap_date, "PriceUSD_coinmetrics"] == 41000.0
         
     @responses.activate
-    @patch("prelude.BACKTEST_START", "2024-01-01")
+    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
     def test_load_data_assertion_on_unresolvable_gap(self):
         """Test that load_data raises AssertionError if a gap is truly unresolvable (e.g., first date missing)."""
         # Create CSV where the VERY FIRST date is missing PriceUSD
@@ -97,6 +97,6 @@ class TestPreludeGapFilling:
             status=200,
         )
         
-        with patch("prelude.fetch_btc_price_historical", return_value=None):
+        with patch("stacksats.prelude.fetch_btc_price_historical", return_value=None):
             with pytest.raises(AssertionError, match="dates still missing BTC-USD prices"):
-                load_data()
+                load_data(cache_dir=None)

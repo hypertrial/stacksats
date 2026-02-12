@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from model_development import (
+from stacksats.model_development import (
     allocate_sequential_stable,
     compute_weights_fast,
     compute_window_weights,

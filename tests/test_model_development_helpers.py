@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from model_development import (
+from stacksats.model_development import (
     classify_mvrv_zone,
     compute_signal_confidence,
     rolling_percentile,

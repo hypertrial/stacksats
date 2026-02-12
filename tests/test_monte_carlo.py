@@ -22,7 +22,7 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model_development import compute_weights_fast, precompute_features
+from stacksats.model_development import compute_weights_fast, precompute_features
 
 # -----------------------------------------------------------------------------
 # Price Generators

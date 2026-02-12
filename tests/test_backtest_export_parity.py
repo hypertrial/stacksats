@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtest import compute_weights_modal
-from export_weights import process_start_date_batch
-from model_development import compute_window_weights, precompute_features
+from stacksats.backtest import compute_weights_modal
+from stacksats.export_weights import process_start_date_batch
+from stacksats.model_development import compute_window_weights, precompute_features
 
 # Tolerance for floating point comparisons
 FLOAT_TOLERANCE = 1e-12
@@ -627,7 +627,7 @@ class TestComputeWeightsModalParity:
         For backtesting historical data, all dates are in the "past",
         so compute_weights_modal should use end_date as current_date.
         """
-        import backtest
+        import stacksats.backtest as backtest
 
         backtest._FEATURES_DF = parity_features_df
 
@@ -656,7 +656,7 @@ class TestComputeWeightsModalParity:
         self, parity_features_df, parity_btc_df
     ):
         """Test compute_weights_modal matches export_weights for historical window."""
-        import backtest
+        import stacksats.backtest as backtest
 
         backtest._FEATURES_DF = parity_features_df
 

@@ -21,7 +21,7 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model_development import compute_weights_fast, precompute_features
+from stacksats.model_development import compute_weights_fast, precompute_features
 
 # -----------------------------------------------------------------------------
 # Cross-Validation Utilities
@@ -137,7 +137,7 @@ def evaluate_fold(
     Returns:
         Dictionary with performance metrics
     """
-    from model_development import compute_weights_fast
+    from stacksats.model_development import compute_weights_fast
 
     # Determine window size based on test period length
     test_days = (test_end - test_start).days

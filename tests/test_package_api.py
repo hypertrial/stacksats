@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-import export_weights
+import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
 from stacksats import CallableWindowStrategy, MVRVStrategy, run_backtest
 

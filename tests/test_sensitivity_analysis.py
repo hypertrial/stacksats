@@ -17,8 +17,8 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import model_development as md
-from model_development import (
+import stacksats.model_development as md
+from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     FEATS,
     compute_asymmetric_extreme_boost,

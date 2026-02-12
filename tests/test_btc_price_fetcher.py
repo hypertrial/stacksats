@@ -13,7 +13,7 @@ import pytest
 import responses
 import requests
 
-from btc_price_fetcher import (
+from stacksats.btc_price_fetcher import (
     fetch_price_coingecko,
     fetch_price_coinbase,
     fetch_price_bitstamp,

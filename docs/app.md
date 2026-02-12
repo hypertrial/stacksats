@@ -18,7 +18,7 @@ Cloud-based automation for computing and storing dynamic Bitcoin DCA investment 
 
 ## Overview
 
-The Modal app (`modal_app.py`) automates daily weight computation and database updates:
+The Modal app (`stacksats/modal_app.py`) automates daily weight computation and database updates:
 
 - Computes weights for ~730 date range permutations using an ML model
 - Runs daily with automatic retry logic
@@ -261,13 +261,13 @@ Each source: 3 attempts with exponential backoff (2-10s). Validates price range 
 
 | File | Constant | Value |
 | ---- | -------- | ----- |
-| `export_weights.py` | `RANGE_START` | "2025-12-01" |
-| `export_weights.py` | `RANGE_END` | "2027-12-31" |
-| `export_weights.py` | `MIN_RANGE_LENGTH_DAYS` | 120 |
-| `model_development.py` | `MIN_W` | 1e-6 |
-| `model_development.py` | `WINS` | [30, 90, 180, 365, 1461] |
-| `modal_app.py` | Timeout | 1800s |
-| `modal_app.py` | Batch size | 50 start dates |
+| `stacksats/export_weights.py` | `RANGE_START` | "2025-12-01" |
+| `stacksats/export_weights.py` | `RANGE_END` | "2027-12-31" |
+| `stacksats/export_weights.py` | `MIN_RANGE_LENGTH_DAYS` | 120 |
+| `stacksats/model_development.py` | `MIN_W` | 1e-6 |
+| `stacksats/model_development.py` | `WINS` | [30, 90, 180, 365, 1461] |
+| `stacksats/modal_app.py` | Timeout | 1800s |
+| `stacksats/modal_app.py` | Batch size | 50 start dates |
 
 ### Environment Variables (Modal Secrets)
 
@@ -279,14 +279,14 @@ Each source: 3 attempts with exponential backoff (2-10s). Validates price range 
 ### Deploy
 
 ```bash
-modal deploy modal_app.py
+modal deploy stacksats/modal_app.py
 ```
 
 ### Manual Execution
 
 ```bash
-modal run modal_app.py::main        # Test export
-modal run modal_app.py::run_export  # Trigger export
+modal run stacksats/modal_app.py::main        # Test export
+modal run stacksats/modal_app.py::run_export  # Trigger export
 modal app list                      # View status
 ```
 
@@ -300,7 +300,7 @@ modal secret create bitcoin-weights-secret BITCOIN_WEIGHTS_API_KEY=<key>
 ### Local Development
 
 ```bash
-python export_weights.py  # Run without Modal
+python -m stacksats.export_weights  # Run without Modal
 ```
 
 ## Testing
@@ -351,8 +351,8 @@ GROUP BY DCA_date ORDER BY DCA_date DESC LIMIT 10;
 
 ## Related Files
 
-- [`modal_app.py`](modal_app.py) - Modal app definition
-- [`export_weights.py`](export_weights.py) - Core export logic
-- [`model_development.py`](model_development.py) - ML model
-- [`btc_price_fetcher.py`](btc_price_fetcher.py) - Price API integration
-- [`prelude.py`](prelude.py) - Data loading
+- [`stacksats/modal_app.py`](../stacksats/modal_app.py) - Modal app definition
+- [`stacksats/export_weights.py`](../stacksats/export_weights.py) - Core export logic
+- [`stacksats/model_development.py`](../stacksats/model_development.py) - ML model
+- [`stacksats/btc_price_fetcher.py`](../stacksats/btc_price_fetcher.py) - Price API integration
+- [`stacksats/prelude.py`](../stacksats/prelude.py) - Data loading

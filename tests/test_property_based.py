@@ -27,8 +27,8 @@ except ImportError:
 
     st = None
 
-from export_weights import process_start_date_batch
-from model_development import MIN_W, precompute_features
+from stacksats.export_weights import process_start_date_batch
+from stacksats.model_development import MIN_W, precompute_features
 from tests.test_helpers import PRICE_COL
 
 # Skip all tests in this module if hypothesis is not available
