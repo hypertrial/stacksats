@@ -18,7 +18,7 @@ Instead, report privately using one of these channels:
 1. GitHub Security Advisories (preferred):
    - Go to the repository Security tab and create a private advisory.
 2. Email:
-   - `maintainers@stackingsats.org`
+   - `team@hypertrial.ai`
 
 Include:
 

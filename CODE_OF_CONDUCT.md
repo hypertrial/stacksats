@@ -31,7 +31,7 @@ This Code of Conduct applies to all project spaces, including issues, pull reque
 To report behavior that violates this Code of Conduct:
 
 - Open a private security advisory on GitHub when appropriate.
-- Or contact maintainers at `maintainers@stackingsats.org`.
+- Or contact maintainers at `team@hypertrial.ai`.
 
 All reports are handled confidentially to the extent possible.
 
