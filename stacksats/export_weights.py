@@ -53,6 +53,26 @@ def _require_deploy_dependency(name: str, imported_obj):
         )
 
 
+def _validate_strategy_contract(strategy: BaseStrategy) -> None:
+    """Enforce framework-owned compute kernel boundaries for strategies."""
+    if strategy.__class__.compute_weights is not BaseStrategy.compute_weights:
+        raise TypeError(
+            "Custom compute_weights overrides are not allowed. "
+            "Implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals) instead."
+        )
+    strategy_cls = strategy.__class__
+    has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
+    has_profile_hook = (
+        strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
+    )
+    if not (has_propose_hook or has_profile_hook):
+        raise TypeError(
+            "Strategy must implement propose_weight(state) or "
+            "build_target_profile(ctx, features_df, signals)."
+        )
+
+
 def process_start_date_batch(
     start_date,
     end_dates,
@@ -80,6 +100,11 @@ def process_start_date_batch(
     Returns:
         DataFrame with columns: id, start_date, end_date, DCA_date, btc_usd, weight
     """
+    if strategy is not None:
+        if not isinstance(strategy, BaseStrategy):
+            raise TypeError("strategy must subclass BaseStrategy.")
+        _validate_strategy_contract(strategy)
+
     results = []
 
     for end_date in end_dates:
@@ -102,8 +127,6 @@ def process_start_date_batch(
                 locked_weights=locked_weights,
             )
         else:
-            if not isinstance(strategy, BaseStrategy):
-                raise TypeError("strategy must subclass BaseStrategy.")
             weights = strategy.compute_weights(
                 StrategyContext(
                     features_df=features_df,

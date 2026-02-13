@@ -1,12 +1,13 @@
 """Tests for Modal app functions in modal_app.py."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 from stacksats.modal_app import (
-    process_start_date_batch_modal,
     daily_export,
     daily_export_retry,
+    process_start_date_batch_modal,
+    run_export,
 )
 
 
@@ -110,3 +111,61 @@ class TestModalAppFunctions:
             assert result["status"] == "success"
             assert result["rows_affected"] == 10
             assert mock_run_remote.called
+
+    def test_run_export_initializes_table_before_lock_reads(self):
+        """Test run_export creates table before querying locked history."""
+        idx = pd.date_range("2024-01-01", periods=3, freq="D")
+        btc_df = pd.DataFrame(
+            {"PriceUSD_coinmetrics": [100.0, 101.0, 102.0]},
+            index=idx,
+        )
+        features_df = btc_df.copy()
+        date_ranges = [(idx.min(), idx.max())]
+        grouped_ranges = {idx.min(): [idx.max()]}
+        batch_result = pd.DataFrame(
+            {
+                "id": [0, 1, 2],
+                "start_date": [idx.min().strftime("%Y-%m-%d")] * 3,
+                "end_date": [idx.max().strftime("%Y-%m-%d")] * 3,
+                "DCA_date": idx.strftime("%Y-%m-%d"),
+                "btc_usd": [100.0, 101.0, 102.0],
+                "weight": [0.3, 0.3, 0.4],
+            }
+        )
+
+        call_order = []
+        mock_conn = MagicMock()
+        with patch("stacksats.export_weights.get_db_connection", return_value=mock_conn), patch(
+            "stacksats.prelude.load_data", return_value=btc_df
+        ), patch(
+            "stacksats.model_development.precompute_features", return_value=features_df
+        ), patch(
+            "stacksats.prelude.generate_date_ranges", return_value=date_ranges
+        ), patch(
+            "stacksats.prelude.group_ranges_by_start_date",
+            return_value=grouped_ranges,
+        ), patch.object(
+            process_start_date_batch_modal, "map", return_value=[batch_result]
+        ), patch(
+            "stacksats.export_weights.load_locked_weights_for_window", return_value=None
+        ) as mock_load_locked, patch(
+            "stacksats.export_weights.create_table_if_not_exists"
+        ) as mock_create_table:
+            mock_create_table.side_effect = lambda _conn: call_order.append("create")
+            mock_load_locked.side_effect = (
+                lambda *_args, **_kwargs: call_order.append("load_locked")
+            )
+
+            func = run_export.get_raw_f()
+            final_df, metadata = func(
+                range_start="2024-01-01",
+                range_end="2024-01-03",
+                min_range_length_days=1,
+                btc_price_col="PriceUSD_coinmetrics",
+            )
+
+            assert not final_df.empty
+            assert metadata["date_ranges"] == 1
+            assert mock_conn.close.called
+            assert call_order[0] == "create"
+            assert "load_locked" in call_order[1:]

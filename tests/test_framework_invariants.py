@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from stacksats.framework_contract import validate_span_length
+from stacksats.export_weights import process_start_date_batch
 from stacksats.model_development import (
     allocate_sequential_stable,
     allocate_from_proposals,
@@ -191,3 +192,29 @@ def test_runner_rejects_compute_weights_override() -> None:
     runner = StrategyRunner()
     with pytest.raises(TypeError, match="Custom compute_weights overrides"):
         runner._validate_strategy_contract(_IllegalComputeWeightsStrategy())
+
+
+def test_export_batch_rejects_compute_weights_override() -> None:
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    features_df = pd.DataFrame(
+        {
+            "PriceUSD_coinmetrics": np.linspace(100.0, 102.0, len(idx)),
+            "mvrv_zscore": np.linspace(-1.0, 1.0, len(idx)),
+        },
+        index=idx,
+    )
+    btc_df = pd.DataFrame(
+        {"PriceUSD_coinmetrics": np.linspace(100.0, 102.0, len(idx))},
+        index=idx,
+    )
+    with pytest.raises(TypeError, match="Custom compute_weights overrides"):
+        process_start_date_batch(
+            start_date=idx.min(),
+            end_dates=[idx.max()],
+            features_df=features_df,
+            btc_df=btc_df,
+            current_date=idx.max(),
+            btc_price_col="PriceUSD_coinmetrics",
+            strategy=_IllegalComputeWeightsStrategy(),
+            enforce_span_contract=False,
+        )

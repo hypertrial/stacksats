@@ -237,6 +237,7 @@ def run_export(
         MIN_RANGE_LENGTH_DAYS,
         RANGE_END,
         RANGE_START,
+        create_table_if_not_exists,
         get_db_connection,
         load_locked_weights_for_window,
     )
@@ -289,6 +290,8 @@ def run_export(
     locked_by_start_end: dict[str, dict[str, np.ndarray]] = {}
     conn = get_db_connection()
     try:
+        # Ensure first production run can initialize lock storage before reads.
+        create_table_if_not_exists(conn)
         for start_date in sorted_start_dates:
             start_key = start_date.strftime("%Y-%m-%d")
             per_end: dict[str, np.ndarray] = {}

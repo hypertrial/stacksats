@@ -7,6 +7,7 @@ import importlib
 import importlib.util
 import json
 import inspect
+import sys
 from pathlib import Path
 
 from .strategy_types import BaseStrategy
@@ -26,7 +27,14 @@ def _load_module(module_or_path: str):
             raise ImportError(f"Could not load module spec from file: {file_path}")
 
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # Register before exec so decorators/type introspection can resolve
+        # module globals via sys.modules during import-time execution.
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            sys.modules.pop(module_name, None)
+            raise
         return module
 
     return importlib.import_module(module_or_path)
