@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize(

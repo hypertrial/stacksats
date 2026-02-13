@@ -181,7 +181,7 @@ with open(r\"\"\"%s\"\"\", "w", encoding="utf-8") as f:
         text=True,
         env={
             **os.environ,
-            "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+            "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
         },
     )
     assert proc.returncode == 0, proc.stderr
@@ -191,7 +191,11 @@ with open(r\"\"\"%s\"\"\", "w", encoding="utf-8") as f:
 
 
 def test_backtest_json_schema_snapshot_contract() -> None:
-    schema_path = Path(__file__).parent / "snapshots" / "backtest_result_schema.json"
+    schema_path = (
+        Path(__file__).resolve().parents[2]
+        / "snapshots"
+        / "backtest_result_schema.json"
+    )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     spd = pd.DataFrame(
