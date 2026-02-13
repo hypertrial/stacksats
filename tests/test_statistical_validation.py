@@ -438,7 +438,7 @@ class TestSanityChecks:
     """Basic sanity checks to catch obvious errors."""
 
     def test_weights_are_positive(self, sample_features_df):
-        """All weights must be positive."""
+        """All weights must be non-negative."""
         start_date = pd.Timestamp("2024-01-01")
         end_date = pd.Timestamp("2024-06-30")
 
@@ -449,7 +449,7 @@ class TestSanityChecks:
 
         weights = compute_weights_fast(sample_features_df, start_date, end_date)
 
-        assert (weights > 0).all(), f"Found non-positive weights: min={weights.min()}"
+        assert (weights >= 0).all(), f"Found negative weights: min={weights.min()}"
 
     def test_feats_has_expected_count(self):
         """Verify FEATS has expected count of feature names."""

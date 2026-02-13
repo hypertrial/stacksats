@@ -15,6 +15,12 @@ Enhanced MVRV utilization includes:
 
 import numpy as np
 import pandas as pd
+from .framework_contract import (
+    apply_clipped_weight,
+    assert_final_invariants,
+    compute_n_past,
+    validate_locked_prefix,
+)
 
 # =============================================================================
 # Constants
@@ -395,39 +401,28 @@ def allocate_sequential_stable(
     Returns:
         Weights summing to 1.0
     """
+    raw = np.asarray(raw, dtype=float)
     n = len(raw)
     if n == 0:
-        return np.array([])
+        return np.array([], dtype=float)
     if n_past <= 0:
-        return np.full(n, 1.0 / n)
+        out = np.full(n, 1.0 / n, dtype=float)
+        assert_final_invariants(out)
+        return out
 
     n_past = min(n_past, n)
-    w = np.zeros(n)
     base_weight = 1.0 / n
+    intent = np.zeros(n, dtype=float)
+    for i in range(n):
+        signal = _compute_stable_signal(raw[: i + 1])[-1]
+        intent[i] = signal * base_weight
 
-    # Compute or use locked weights for past days
-    if locked_weights is not None and len(locked_weights) >= n_past:
-        w[:n_past] = locked_weights[:n_past]
-    else:
-        for i in range(n_past):
-            signal = _compute_stable_signal(raw[: i + 1])[-1]
-            w[i] = signal * base_weight
-
-    # Scale past weights if they exceed budget
-    past_sum = w[:n_past].sum()
-    target_budget = n_past / n
-    if past_sum > target_budget + 1e-10:
-        w[:n_past] *= target_budget / past_sum
-
-    # Future days (except last): uniform
-    n_future = n - n_past
-    if n_future > 1:
-        w[n_past : n - 1] = base_weight
-
-    # Last day absorbs remainder
-    w[n - 1] = max(1.0 - w[: n - 1].sum(), 0)
-
-    return w
+    return allocate_from_proposals(
+        proposals=intent,
+        n_past=n_past,
+        n_total=n,
+        locked_weights=locked_weights,
+    )
 
 
 def allocate_from_proposals(
@@ -444,31 +439,38 @@ def allocate_from_proposals(
     if n_total == 0:
         return np.array([], dtype=float)
     if n_past <= 0:
-        return np.full(n_total, 1.0 / n_total, dtype=float)
+        out = np.full(n_total, 1.0 / n_total, dtype=float)
+        assert_final_invariants(out)
+        return out
 
     n_past = min(n_past, n_total)
+    proposals_arr = np.asarray(proposals, dtype=float)
     w = np.zeros(n_total, dtype=float)
+    locked_prefix = validate_locked_prefix(locked_weights, n_past)
+    prefix_len = len(locked_prefix)
+    if prefix_len > 0:
+        w[:prefix_len] = locked_prefix
 
-    if locked_weights is not None and len(locked_weights) >= n_past:
-        for i in range(n_past):
-            remaining_budget = max(1.0 - float(w[:i].sum()), 0.0)
-            locked = float(locked_weights[i])
-            if not np.isfinite(locked):
-                locked = 0.0
-            w[i] = float(np.clip(locked, 0.0, remaining_budget))
-    else:
-        for i in range(n_past):
-            remaining_budget = max(1.0 - float(w[:i].sum()), 0.0)
-            proposed = float(proposals[i]) if i < len(proposals) else 0.0
-            if not np.isfinite(proposed):
-                proposed = 0.0
-            w[i] = float(np.clip(proposed, 0.0, remaining_budget))
+    remaining_budget = 1.0 - float(w[:prefix_len].sum())
+    for i in range(prefix_len, n_past):
+        proposed = float(proposals_arr[i]) if i < len(proposals_arr) else 0.0
+        clipped, remaining_budget = apply_clipped_weight(proposed, remaining_budget)
+        w[i] = clipped
 
     n_future = n_total - n_past
-    remaining_after_past = max(1.0 - float(w[:n_past].sum()), 0.0)
-    if n_future > 1:
-        w[n_past : n_total - 1] = remaining_after_past / n_future
-    w[n_total - 1] = max(1.0 - float(w[: n_total - 1].sum()), 0.0)
+    if n_future == 0:
+        # Entire window is in the past/current segment.
+        # Preserve prior days and absorb any tiny remainder on the final day.
+        w[n_total - 1] += max(remaining_budget, 0.0)
+    else:
+        if n_future == 1:
+            w[n_total - 1] = max(remaining_budget, 0.0)
+        else:
+            uniform_future = max(remaining_budget, 0.0) / n_future
+            w[n_past : n_total - 1] = uniform_future
+            w[n_total - 1] = max(remaining_budget - uniform_future * (n_future - 1), 0.0)
+
+    assert_final_invariants(w)
     return w
 
 
@@ -826,12 +828,9 @@ def compute_weights_from_target_profile(
         raise ValueError(f"Unsupported target profile mode '{mode}'.")
 
     if n_past is None:
-        past_end = min(current_date, end_date)
-        if start_date <= past_end:
-            n_past = len(pd.date_range(start=start_date, end=past_end, freq="D"))
-        else:
-            n_past = 0
+        n_past = compute_n_past(full_range, current_date)
     weights = allocate_sequential_stable(raw, n_past, locked_weights)
+    assert_final_invariants(weights)
     return pd.Series(weights, index=full_range, dtype=float)
 
 
@@ -856,6 +855,7 @@ def compute_weights_from_proposals(
         n_total=len(full_range),
         locked_weights=locked_weights,
     )
+    assert_final_invariants(weights)
     return pd.Series(weights, index=full_range, dtype=float)
 
 
@@ -935,4 +935,5 @@ def compute_window_weights(
         mode="preference",
         locked_weights=locked_weights,
     )
+    assert_final_invariants(weights.to_numpy(dtype=float))
     return weights

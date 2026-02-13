@@ -12,6 +12,7 @@ Weight computation strategy:
 
 import os
 
+import numpy as np
 import pandas as pd
 try:
     import psycopg2
@@ -21,8 +22,8 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
+from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
-from .prelude import generate_date_ranges, group_ranges_by_start_date
 from .strategy_types import BaseStrategy, StrategyContext
 
 # Load environment variables from .env file
@@ -59,6 +60,8 @@ def process_start_date_batch(
     current_date,
     btc_price_col,
     strategy=None,
+    locked_weights_by_end_date: dict[str, np.ndarray] | None = None,
+    enforce_span_contract: bool = False,
 ):
     """Process all date ranges sharing the same start_date.
 
@@ -79,12 +82,24 @@ def process_start_date_batch(
     results = []
 
     for end_date in end_dates:
+        if enforce_span_contract:
+            validate_span_length(start_date, end_date)
         full_range = pd.date_range(start=start_date, end=end_date, freq="D")
         n_total = len(full_range)
+        end_date_key = end_date.strftime("%Y-%m-%d")
+        locked_weights = None
+        if locked_weights_by_end_date is not None:
+            locked_weights = locked_weights_by_end_date.get(end_date_key)
 
         # Compute weights using either provided strategy or default model function.
         if strategy is None:
-            weights = compute_window_weights(features_df, start_date, end_date, current_date)
+            weights = compute_window_weights(
+                features_df,
+                start_date,
+                end_date,
+                current_date,
+                locked_weights=locked_weights,
+            )
         else:
             if not isinstance(strategy, BaseStrategy):
                 raise TypeError("strategy must subclass BaseStrategy.")
@@ -94,8 +109,19 @@ def process_start_date_batch(
                     start_date=start_date,
                     end_date=end_date,
                     current_date=current_date,
+                    locked_weights=locked_weights,
                 )
             )
+            if weights.empty:
+                weights = compute_window_weights(
+                    features_df,
+                    start_date,
+                    end_date,
+                    current_date,
+                    locked_weights=locked_weights,
+                )
+            else:
+                weights = weights.reindex(full_range).fillna(0.0)
 
         # Get prices: past prices are known, future prices are NaN
         range_prices = btc_df[btc_price_col].reindex(full_range).values
@@ -114,6 +140,32 @@ def process_start_date_batch(
         results.append(range_df)
 
     return pd.concat(results, ignore_index=True)
+
+
+def load_locked_weights_for_window(
+    conn,
+    start_date: str,
+    end_date: str,
+    lock_end_date: str,
+) -> np.ndarray | None:
+    """Load immutable locked prefix from DB for a specific allocation window."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT weight
+            FROM bitcoin_dca
+            WHERE start_date = %s
+              AND end_date = %s
+              AND DCA_date >= %s
+              AND DCA_date <= %s
+            ORDER BY DCA_date ASC
+            """,
+            (start_date, end_date, start_date, lock_end_date),
+        )
+        rows = cur.fetchall()
+    if not rows:
+        return None
+    return np.array([float(row[0]) for row in rows], dtype=float)
 
 
 def get_db_connection():

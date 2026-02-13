@@ -7,12 +7,15 @@ import pandas as pd
 import requests
 
 from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
+from .framework_contract import validate_span_length
 from .model_development import precompute_features
 
 # Configuration
 BACKTEST_START = "2018-01-01"
 PURCHASE_FREQ = "Daily"  # Daily frequency for DCA purchases
-# Standard 1-year window used across all modules (backtest.py, export_weights.py)
+# Standard 1-year window anchor used across modules.
+# End dates are computed as start + 1 year - 1 day to guarantee
+# exactly 365 or 366 allocation days (inclusive).
 WINDOW_OFFSET = pd.DateOffset(years=1)
 
 PURCHASE_FREQ_TO_OFFSET = {"Daily": "1D"}
@@ -239,7 +242,7 @@ def parse_window_dates(window_label: str) -> pd.Timestamp:
 def generate_date_ranges(
     range_start: str, range_end: str, min_length_days: int = 120
 ) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
-    """Generate date ranges where each start_date has an end_date exactly 1 year later.
+    """Generate date ranges with exactly 365/366 allocation days.
 
     Uses DATE_FREQ (daily) for start date generation.
     Each start_date is paired with exactly one end_date that is 1 year later.
@@ -253,18 +256,19 @@ def generate_date_ranges(
     Returns:
         List of (start_date, end_date) tuples
     """
+    del min_length_days
     start, end = pd.to_datetime(range_start), pd.to_datetime(range_end)
+    start_dates = pd.date_range(start=start, end=end, freq="D")
 
-    # Generate all possible start dates from range_start to range_end - 1 year
-    max_start_date = end - WINDOW_OFFSET
-    start_dates = pd.date_range(start=start, end=max_start_date, freq="D")
+    def _window_end(start_date: pd.Timestamp) -> pd.Timestamp:
+        return start_date + WINDOW_OFFSET - pd.Timedelta(days=1)
 
-    # For each start date, set end_date to exactly 1 year later
     date_ranges = []
     for start_date in start_dates:
-        end_date = start_date + WINDOW_OFFSET
+        end_date = _window_end(start_date)
         # Only include if end_date is within range_end
         if end_date <= end:
+            validate_span_length(start_date, end_date)
             date_ranges.append((start_date, end_date))
 
     return date_ranges
@@ -322,10 +326,11 @@ def compute_cycle_spd(
     else:
         full_feat = features_df.loc[start:end]
 
-    window_offset = WINDOW_OFFSET
+    def _window_end(start_dt: pd.Timestamp) -> pd.Timestamp:
+        return start_dt + WINDOW_OFFSET - pd.Timedelta(days=1)
 
     # Generate start dates daily (matching export_weights.py DATE_FREQ)
-    max_start_date = pd.to_datetime(end) - window_offset
+    max_start_date = pd.to_datetime(end)
     start_dates = pd.date_range(
         start=pd.to_datetime(start),
         end=max_start_date,
@@ -333,7 +338,7 @@ def compute_cycle_spd(
     )
 
     if len(start_dates) > 0:
-        actual_end_date = (start_dates[-1] + window_offset).date()
+        actual_end_date = _window_end(start_dates[-1]).date()
         logging.info(
             f"Backtesting date range: {start_dates[0].date()} to {actual_end_date} "
             f"({len(start_dates)} total windows)"
@@ -342,11 +347,12 @@ def compute_cycle_spd(
     results = []
     validated_windows = 0
     for window_start in start_dates:
-        window_end = window_start + window_offset
+        window_end = _window_end(window_start)
 
         # Only include if end_date is within range
         if window_end > pd.to_datetime(end):
             continue
+        validate_span_length(window_start, window_end)
 
         price_slice = dataframe["PriceUSD_coinmetrics"].loc[window_start:window_end]
         if price_slice.empty:

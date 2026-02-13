@@ -135,9 +135,9 @@ def then_weights_above_min(bdd_context):
 
 @then("all weights should be positive")
 def then_weights_positive(bdd_context):
-    """Assert all weights are positive."""
+    """Assert all weights are non-negative."""
     weights = bdd_context["weights"]
-    assert (weights > 0).all(), "Found non-positive weights"
+    assert (weights >= 0).all(), "Found negative weights"
 
 
 @then("all weights should be finite")

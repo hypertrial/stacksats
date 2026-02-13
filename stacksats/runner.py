@@ -20,6 +20,7 @@ from .strategy_types import (
     ExportConfig,
     StrategyArtifactSet,
     StrategyContext,
+    TargetProfile,
     ValidationConfig,
 )
 
@@ -188,8 +189,15 @@ class StrategyRunner:
             )
 
         probe_step = max(len(backtest_idx) // 50, 1)
+        strategy_cls = strategy.__class__
+        has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
+        has_profile_hook = (
+            strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
+        )
         for probe in backtest_idx[::probe_step]:
-            window_start = max(start_ts, probe - WINDOW_OFFSET)
+            window_start = max(
+                start_ts, probe - WINDOW_OFFSET + pd.Timedelta(days=1)
+            )
             if window_start > probe:
                 continue
             full_ctx = StrategyContext(
@@ -223,11 +231,45 @@ class StrategyRunner:
                     )
                     break
 
-        max_window_start = end_ts - WINDOW_OFFSET
+            if has_profile_hook and not has_propose_hook:
+                full_features = strategy.transform_features(full_ctx)
+                masked_features = strategy.transform_features(masked_ctx)
+                full_signals = strategy.build_signals(full_ctx, full_features)
+                masked_signals = strategy.build_signals(masked_ctx, masked_features)
+                full_profile = strategy.build_target_profile(
+                    full_ctx, full_features, full_signals
+                )
+                masked_profile = strategy.build_target_profile(
+                    masked_ctx, masked_features, masked_signals
+                )
+
+                def _profile_series(
+                    profile: TargetProfile | pd.Series,
+                ) -> pd.Series:
+                    values = profile.values if isinstance(profile, TargetProfile) else profile
+                    return pd.to_numeric(values, errors="coerce")
+
+                full_profile_series = _profile_series(full_profile)
+                masked_profile_series = _profile_series(masked_profile)
+                if probe in full_profile_series.index and probe in masked_profile_series.index:
+                    full_probe = full_profile_series.loc[probe]
+                    masked_probe = masked_profile_series.loc[probe]
+                    if not (
+                        np.isfinite(full_probe)
+                        and np.isfinite(masked_probe)
+                        and np.isclose(float(full_probe), float(masked_probe), atol=1e-12)
+                    ):
+                        forward_leakage_ok = False
+                        messages.append(
+                            f"Forward leakage detected near {probe.strftime('%Y-%m-%d')}."
+                        )
+                        break
+
+        max_window_start = end_ts - WINDOW_OFFSET + pd.Timedelta(days=1)
         if start_ts <= max_window_start:
             window_starts = pd.date_range(start=start_ts, end=max_window_start, freq="D")
             for window_start in window_starts:
-                window_end = window_start + WINDOW_OFFSET
+                window_end = window_start + WINDOW_OFFSET - pd.Timedelta(days=1)
                 ctx = StrategyContext(
                     features_df=features_df,
                     start_date=window_start,
@@ -301,6 +343,7 @@ class StrategyRunner:
                     run_date,
                     config.btc_price_col,
                     strategy=strategy,
+                    enforce_span_contract=True,
                 )
             )
         if not all_results:

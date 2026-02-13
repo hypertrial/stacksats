@@ -22,6 +22,7 @@ class StrategyContext:
     start_date: pd.Timestamp
     end_date: pd.Timestamp
     current_date: pd.Timestamp
+    locked_weights: np.ndarray | None = None
     btc_price_col: str = "PriceUSD_coinmetrics"
     mvrv_col: str = "CapMVRVCur"
 
@@ -166,15 +167,15 @@ class BaseStrategy(ABC):
 
     def compute_weights(self, ctx: StrategyContext) -> pd.Series:
         """Framework-owned orchestration from hooks -> final weights."""
+        from .framework_contract import compute_n_past
+
+        expected_index = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
         features_df = self.transform_features(ctx)
         if not isinstance(features_df, pd.DataFrame):
             raise TypeError("transform_features must return a pandas DataFrame.")
-        if features_df.empty:
+        if len(expected_index) == 0:
             return pd.Series(dtype=float)
-
-        expected_index = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        if not features_df.index.equals(expected_index):
-            raise ValueError("transform_features output index must match window date range.")
+        features_df = features_df.reindex(expected_index).ffill().fillna(0.0)
 
         signals = self.build_signals(ctx, features_df)
         if not isinstance(signals, dict):
@@ -196,11 +197,7 @@ class BaseStrategy(ABC):
                 "build_target_profile(ctx, features_df, signals)."
             )
 
-        past_end = min(ctx.current_date, ctx.end_date)
-        if ctx.start_date <= past_end:
-            n_past = len(pd.date_range(start=ctx.start_date, end=past_end, freq="D"))
-        else:
-            n_past = 0
+        n_past = compute_n_past(expected_index, ctx.current_date)
 
         if has_propose_hook:
             from .model_development import compute_weights_from_proposals
@@ -228,6 +225,7 @@ class BaseStrategy(ABC):
                 start_date=ctx.start_date,
                 end_date=ctx.end_date,
                 n_past=n_past,
+                locked_weights=ctx.locked_weights,
             )
 
         profile = self.build_target_profile(ctx, features_df, validated_signals)
@@ -251,6 +249,7 @@ class BaseStrategy(ABC):
             target_profile=target_series,
             mode=mode,
             n_past=n_past,
+            locked_weights=ctx.locked_weights,
         )
 
     def default_backtest_config(self) -> BacktestConfig:

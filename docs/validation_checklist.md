@@ -9,6 +9,21 @@ Framework invariants are defined in `docs/framework.md`. Validation should confi
 - per-day feasibility projection is respected,
 - remaining-budget enforcement holds,
 - past weights remain locked/immutable.
+- allocation windows are exactly 365 or 366 days (never 367).
+
+## Framework Contract Enforcement
+
+Primary implementation points:
+- `stacksats/framework_contract.py` (span checks, clipping, lock-prefix validation, final invariants)
+- `stacksats/model_development.py` (sealed allocation kernel paths)
+- `stacksats/prelude.py` (365/366 allocation-day window generation)
+- `stacksats/export_weights.py` + `stacksats/modal_app.py` (production lock loading through yesterday)
+
+Primary enforcement tests:
+- `tests/test_framework_invariants.py`
+- `tests/test_weight_stability.py`
+- `tests/test_backtest_export_parity.py`
+- `tests/test_bdd_date_ranges.py`
 
 ## Inputs You Need
 
@@ -101,6 +116,16 @@ Pass criteria:
 
 ```bash
 pytest tests/ -v
+ruff check .
+```
+
+Framework contract gate (mirrors CI/local enforcement):
+
+```bash
+pytest -q tests/test_runner.py
+pytest -q tests/test_weight_stability.py
+pytest -q tests/test_bdd_database_operations.py
+pytest -q
 ruff check .
 ```
 

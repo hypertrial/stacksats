@@ -53,8 +53,9 @@ User strategy scope:
 
 Framework scope:
 - target->raw conversion
-- iterative allocation (`allocate_sequential_stable`)
-- weight validation and leakage checks
+- iterative allocation (`allocate_from_proposals` / `allocate_sequential_stable`)
+- per-day clipping + remaining-budget enforcement
+- locked-prefix immutability and final invariant checks
 
 Canonical framework boundary and invariants are defined in `docs/framework.md`.
 
@@ -332,25 +333,19 @@ def compute_dynamic_multiplier(...):
 
 ## Sequential Allocation
 
-The `allocate_sequential_stable` function ensures all constraints are met:
+The framework allocation kernel enforces:
+- locked-prefix immutability for historical days,
+- feasibility clipping at each day handoff,
+- remaining-budget enforcement,
+- final invariants (`finite`, `non-negative`, `sum == 1.0`).
 
 ```python
-def allocate_sequential_stable(raw, n_past, locked_weights=None):
-    n_total = len(raw)
-    base_weight = 1.0 / n_total
-    
-    # Past days: use signal-based weights
-    for i in range(n_past):
-        signal = _compute_stable_signal(raw[:i+1])[-1]
-        w[i] = signal * base_weight
-    
-    # Future days: uniform distribution
-    w[n_past:] = base_weight
-    
-    # Last day absorbs remainder to ensure sum = 1.0
-    w[-1] = 1.0 - sum(w[:-1])
-    
-    return w
+def allocate_from_proposals(proposals, n_past, n_total, locked_weights=None):
+    # 1) Preserve immutable locked prefix exactly
+    # 2) For unlocked past/current days, clip each proposal to remaining budget
+    # 3) Distribute future remainder uniformly
+    # 4) Assert final invariants
+    ...
 ```
 
 ## Weight Computation Functions
@@ -367,15 +362,24 @@ def compute_window_weights(
     current_date,
     locked_weights=None,
 ) -> pd.Series:
-    # 1. Extend features with placeholders for future dates
-    # 2. Compute FULL range weights
+    # 1. Compute full-range intent over the window index
+    # 2. Apply framework-owned kernel mechanics
     # 3. Split at current_date boundary:
-    #    - Past/current dates: signal-based weights (LOCKED)
+    #    - Locked prefix (if provided): immutable
+    #    - Past/current unlocked days: clipped by remaining budget
     #    - Future dates: uniform weights for remaining budget
-    # 4. Return combined weights summing to 1.0
+    # 4. Final invariant checks before return
 ```
 
 **Key Invariant**: As `current_date` advances, more weights get locked in and the remaining budget for future dates decreases.
+
+## Framework Contract Enforcement
+
+- Contract helpers live in `stacksats/framework_contract.py`.
+- Allocation kernel paths are in `stacksats/model_development.py` (`allocate_from_proposals`, `allocate_sequential_stable`, `compute_window_weights`).
+- Date-span generation is enforced in `stacksats/prelude.py` (`generate_date_ranges`) with 365/366 allocation-day windows only.
+- Production lock loading and pass-through are in `stacksats/export_weights.py` and `stacksats/modal_app.py`.
+- Enforcement tests: `tests/test_framework_invariants.py`, `tests/test_weight_stability.py`, `tests/test_backtest_export_parity.py`, and `tests/test_bdd_date_ranges.py`.
 
 ## Constants Reference
 

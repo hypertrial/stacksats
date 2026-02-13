@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.framework_contract import validate_span_length
 from stacksats.model_development import (
+    allocate_sequential_stable,
     allocate_from_proposals,
     compute_weights_from_proposals,
 )
@@ -49,6 +51,59 @@ def test_locked_weights_are_immutable_when_present() -> None:
     assert np.isclose(weights[0], 0.1)
     assert np.isclose(weights[1], 0.2)
     assert np.isclose(weights.sum(), 1.0)
+
+
+def test_partial_locked_prefix_computes_today_from_intent() -> None:
+    proposals = np.array([0.25, 0.25, 0.90, 0.90], dtype=float)
+    locked_prefix = np.array([0.20, 0.10], dtype=float)
+    weights = allocate_from_proposals(
+        proposals,
+        n_past=3,
+        n_total=4,
+        locked_weights=locked_prefix,
+    )
+    assert np.isclose(weights[0], 0.20)
+    assert np.isclose(weights[1], 0.10)
+    assert np.isclose(weights[2], 0.70)
+    assert np.isclose(weights.sum(), 1.0)
+
+
+def test_partial_locked_prefix_supported_in_stable_kernel() -> None:
+    raw = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+    locked_prefix = np.array([0.10, 0.20], dtype=float)
+    weights = allocate_sequential_stable(raw, n_past=3, locked_weights=locked_prefix)
+    assert np.isclose(weights[0], 0.10)
+    assert np.isclose(weights[1], 0.20)
+    assert weights[2] >= 0.0
+    assert np.isclose(weights.sum(), 1.0)
+
+
+def test_immutability_after_lock_with_changed_intent() -> None:
+    locked_prefix = np.array([0.20, 0.10], dtype=float)
+    weights_a = allocate_from_proposals(
+        np.array([0.2, 0.1, 0.2, 0.8], dtype=float),
+        n_past=3,
+        n_total=4,
+        locked_weights=locked_prefix,
+    )
+    weights_b = allocate_from_proposals(
+        np.array([0.9, 0.9, 0.9, 0.1], dtype=float),
+        n_past=3,
+        n_total=4,
+        locked_weights=locked_prefix,
+    )
+    np.testing.assert_allclose(weights_a[:2], locked_prefix, atol=1e-12)
+    np.testing.assert_allclose(weights_b[:2], locked_prefix, atol=1e-12)
+
+
+def test_span_length_contract_accepts_only_365_or_366_rows() -> None:
+    start = pd.Timestamp("2024-01-01")
+    end_366 = pd.Timestamp("2024-12-31")
+    end_365 = pd.Timestamp("2023-12-31")
+    assert validate_span_length(start, end_366) == 366
+    assert validate_span_length(pd.Timestamp("2023-01-01"), end_365) == 365
+    with pytest.raises(ValueError, match="365 or 366 allocation days"):
+        validate_span_length(pd.Timestamp("2024-01-01"), pd.Timestamp("2025-01-01"))
 
 
 def test_budget_exhaustion_still_sums_to_one() -> None:

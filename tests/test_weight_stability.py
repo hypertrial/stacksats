@@ -17,6 +17,7 @@ from stacksats.model_development import (
     compute_window_weights,
     precompute_features,
 )
+from stacksats.prelude import generate_date_ranges
 
 # Tolerance for floating-point comparisons
 FLOAT_TOLERANCE = 1e-10
@@ -413,3 +414,16 @@ class TestStableAllocationProperties:
 
         assert np.isclose(stable_weights.sum(), 1.0, atol=FLOAT_TOLERANCE)
         assert np.all(stable_weights >= -FLOAT_TOLERANCE)
+
+
+def test_generate_date_ranges_has_365_or_366_rows_only() -> None:
+    ranges = generate_date_ranges("2023-01-01", "2027-12-31")
+    assert len(ranges) > 0
+    for start, end in ranges:
+        days = len(pd.date_range(start=start, end=end, freq="D"))
+        assert days in (365, 366)
+
+
+def test_generate_date_ranges_never_produces_367_rows() -> None:
+    ranges = generate_date_ranges("2023-01-01", "2027-12-31")
+    assert all(len(pd.date_range(start=s, end=e, freq="D")) != 367 for s, e in ranges)

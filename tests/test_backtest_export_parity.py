@@ -249,6 +249,47 @@ class TestPastWeightImmutabilityParity:
             err_msg="Past weights changed as current_date advanced (export)",
         )
 
+    def test_kernel_parity_with_locked_prefix_mixed_window(
+        self, parity_features_df, parity_btc_df
+    ):
+        start_date = pd.Timestamp("2025-01-01")
+        end_date = pd.Timestamp("2025-12-31")
+        current_date = pd.Timestamp("2025-07-01")
+        full_idx = pd.date_range(start=start_date, end=end_date, freq="D")
+        n_past = int((full_idx <= current_date).sum())
+        locked_prefix = np.full(n_past - 1, 0.001, dtype=float)
+        locked_prefix[0] = 0.1
+
+        backtest_weights = compute_window_weights(
+            parity_features_df,
+            start_date,
+            end_date,
+            current_date,
+            locked_weights=locked_prefix,
+        )
+        export_result = process_start_date_batch(
+            start_date,
+            [end_date],
+            parity_features_df,
+            parity_btc_df,
+            current_date,
+            PRICE_COL,
+            locked_weights_by_end_date={end_date.strftime("%Y-%m-%d"): locked_prefix},
+        )
+        export_weights = export_result.set_index("DCA_date")["weight"]
+        export_weights.index = pd.to_datetime(export_weights.index)
+        np.testing.assert_allclose(
+            backtest_weights.values,
+            export_weights.values,
+            rtol=FLOAT_TOLERANCE,
+            atol=FLOAT_TOLERANCE,
+        )
+        np.testing.assert_allclose(
+            backtest_weights.iloc[: n_past - 1].to_numpy(),
+            locked_prefix,
+            atol=FLOAT_TOLERANCE,
+        )
+
     def test_past_weights_parity_across_time(self, parity_features_df, parity_btc_df):
         """Test that past weights are identical in both modules across time."""
         start_date = pd.Timestamp("2021-01-01")

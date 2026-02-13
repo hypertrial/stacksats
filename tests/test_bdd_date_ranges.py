@@ -3,11 +3,26 @@
 This module wires the date_ranges.feature to step definitions.
 """
 
+import pandas as pd
 from pytest_bdd import scenarios
 
 # Import step definitions to make them available
 from tests.step_defs.common_steps import *  # noqa: F401, F403
 from tests.step_defs.database_steps import *  # noqa: F401, F403
+from stacksats.prelude import generate_date_ranges
 
 # Load all scenarios from the feature file
 scenarios("date_ranges.feature")
+
+
+def test_bdd_ranges_span_cardinality_is_365_or_366() -> None:
+    ranges = generate_date_ranges("2025-01-01", "2027-12-31")
+    assert len(ranges) > 0
+    for start, end in ranges:
+        cardinality = len(pd.date_range(start=start, end=end, freq="D"))
+        assert cardinality in (365, 366)
+
+
+def test_bdd_ranges_never_367_rows() -> None:
+    ranges = generate_date_ranges("2025-01-01", "2027-12-31")
+    assert all(len(pd.date_range(start=s, end=e, freq="D")) != 367 for s, e in ranges)

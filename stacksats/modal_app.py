@@ -6,6 +6,8 @@ Deploys web endpoints and scheduled jobs on Modal.
 import os
 from pathlib import Path
 
+import numpy as np
+
 try:
     import modal
 except ImportError:  # pragma: no cover - used in local/test environments
@@ -144,7 +146,7 @@ def process_start_date_batch_modal(args_tuple):
     from .export_weights import process_start_date_batch
     from .loader import load_strategy
 
-    if len(args_tuple) == 7:
+    if len(args_tuple) == 8:
         (
             start_date_str,
             end_date_strs,
@@ -153,7 +155,24 @@ def process_start_date_batch_modal(args_tuple):
             features_df_pickle,
             btc_df_pickle,
             strategy_spec,
+            locked_weights_by_end_date,
         ) = args_tuple
+    elif len(args_tuple) == 7:
+        (
+            start_date_str,
+            end_date_strs,
+            current_date_str,
+            btc_price_col,
+            features_df_pickle,
+            btc_df_pickle,
+            trailing_arg,
+        ) = args_tuple
+        if isinstance(trailing_arg, (dict, type(None))):
+            strategy_spec = None
+            locked_weights_by_end_date = trailing_arg or {}
+        else:
+            strategy_spec = trailing_arg
+            locked_weights_by_end_date = {}
     elif len(args_tuple) == 6:
         (
             start_date_str,
@@ -164,9 +183,10 @@ def process_start_date_batch_modal(args_tuple):
             btc_df_pickle,
         ) = args_tuple
         strategy_spec = None
+        locked_weights_by_end_date = {}
     else:
         raise ValueError(
-            f"process_start_date_batch_modal expected 6 or 7 args, got {len(args_tuple)}"
+            f"process_start_date_batch_modal expected 6, 7, or 8 args, got {len(args_tuple)}"
         )
 
     # Reconstruct DataFrames from pickle
@@ -186,10 +206,14 @@ def process_start_date_batch_modal(args_tuple):
         current_date,
         btc_price_col,
         strategy=strategy,
+        locked_weights_by_end_date=locked_weights_by_end_date,
+        enforce_span_contract=True,
     )
 
 
-@app.function(image=image, timeout=1800)  # 30 minutes timeout for large exports
+@app.function(
+    image=image, timeout=1800, secrets=[database_secret]
+)  # 30 minutes timeout for large exports
 def run_export(
     range_start: str = None,
     range_end: str = None,
@@ -213,8 +237,10 @@ def run_export(
         MIN_RANGE_LENGTH_DAYS,
         RANGE_END,
         RANGE_START,
+        get_db_connection,
         generate_date_ranges,
         group_ranges_by_start_date,
+        load_locked_weights_for_window,
     )
     from .model_development import precompute_features
     from .prelude import load_data
@@ -258,6 +284,32 @@ def run_export(
     btc_df_pickle = pickle.dumps(btc_df)
     features_df_pickle = pickle.dumps(features_df)
     current_date_str = current_date.strftime("%Y-%m-%d")
+    lock_end_date_str = (current_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Load immutable historical lock prefixes from production DB if available.
+    locked_by_start_end: dict[str, dict[str, np.ndarray]] = {}
+    try:
+        conn = get_db_connection()
+        try:
+            for start_date in sorted_start_dates:
+                start_key = start_date.strftime("%Y-%m-%d")
+                per_end: dict[str, np.ndarray] = {}
+                for end_date in grouped_ranges[start_date]:
+                    end_key = end_date.strftime("%Y-%m-%d")
+                    locked = load_locked_weights_for_window(
+                        conn,
+                        start_key,
+                        end_key,
+                        lock_end_date_str,
+                    )
+                    if locked is not None:
+                        per_end[end_key] = locked
+                locked_by_start_end[start_key] = per_end
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"Warning: could not load locked DB prefixes, continuing unlocked ({exc})")
+        locked_by_start_end = {}
 
     # Prepare arguments for batches
     batch_args = []
@@ -272,6 +324,7 @@ def run_export(
                 features_df_pickle,
                 btc_df_pickle,
                 strategy_spec,
+                locked_by_start_end.get(start_date.strftime("%Y-%m-%d"), {}),
             )
         )
 

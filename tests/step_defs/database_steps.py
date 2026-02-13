@@ -187,8 +187,11 @@ def then_ranges_one_year(bdd_context):
     """Assert all ranges are exactly 1 year."""
     ranges = bdd_context["date_ranges"]
     for start, end in ranges:
-        days_diff = (end - start).days
-        assert days_diff in (365, 366), f"Range is {days_diff} days, expected 365-366"
+        cardinality = len(pd.date_range(start=start, end=end, freq="D"))
+        assert cardinality in (
+            365,
+            366,
+        ), f"Range has {cardinality} allocation days, expected 365-366"
 
 
 @then("all ranges should be within configured bounds")
