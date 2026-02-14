@@ -24,7 +24,6 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
 from .btc_price_fetcher import fetch_btc_price_robust
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
-from .prelude import generate_date_ranges, group_ranges_by_start_date
 from .strategy_types import BaseStrategy, StrategyContext
 
 # Load environment variables from .env file
