@@ -9,6 +9,12 @@ StackSats, developed by [Hypertrial](https://www.hypertrial.ai), is a Python pac
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
+## Start Here
+
+Start with the docs at [`docs/framework.md`](docs/framework.md). It is the canonical framework contract and the best first read before using StackSats.
+
+For the full docs index, see [`docs/README.md`](docs/README.md).
+
 ## Framework Principles
 
 - The framework owns budget math, iteration, feasibility clipping, and lock semantics.
@@ -16,8 +22,7 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 - Strategy hooks support either day-level intent (`propose_weight(state)`) or batch intent (`build_target_profile(...)`).
 - The same sealed allocation kernel runs in local, backtest, and production.
 
-See `docs/framework.md` for the canonical contract.
-For a docs index, start at `docs/README.md`.
+See [`docs/framework.md`](docs/framework.md) for the canonical contract.
 
 ## Installation
 
