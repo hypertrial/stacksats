@@ -20,8 +20,8 @@ Feature: Computation Consistency
     Then the weights should be deterministic
 
   Scenario: Leap day boundary is handled correctly
-    Given a date range from "2024-02-28" to "2025-02-27"
-    And current date is "2025-02-27"
+    Given a date range from "2024-02-28" to "2025-02-26"
+    And current date is "2025-02-26"
     When I process a start date batch
     Then batch weights should sum to 1.0
     And batch result should have required columns
@@ -43,4 +43,3 @@ Feature: Computation Consistency
     And current date is "2025-12-31"
     When I process a start date batch
     Then batch weights should sum to 1.0
-

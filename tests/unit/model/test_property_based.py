@@ -28,6 +28,7 @@ except ImportError:
     st = None
 
 from stacksats.export_weights import process_start_date_batch
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import precompute_features
 from tests.test_helpers import PRICE_COL
 
@@ -298,7 +299,7 @@ class TestImpossibleFloor:
     def test_impossible_floor_scenario(self, sample_features_df, sample_btc_df):
         """Test floor behavior under a contract-valid 365-day window."""
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-12-31")
+        end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
         result = process_start_date_batch(
             start_date,
@@ -309,7 +310,7 @@ class TestImpossibleFloor:
             PRICE_COL,
         )
 
-        assert len(result) == 365
+        assert len(result) == ALLOCATION_SPAN_DAYS
         assert np.isclose(result["weight"].sum(), 1.0, rtol=1e-12)
         assert (result["weight"] >= 0).all()
 
@@ -318,7 +319,7 @@ class TestImpossibleFloor:
         start_date = pd.Timestamp("2025-01-01")
         end_date = pd.Timestamp("2025-01-02")
 
-        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        with pytest.raises(ValueError, match="configured fixed span"):
             process_start_date_batch(
                 start_date,
                 [end_date],

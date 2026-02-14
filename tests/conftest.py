@@ -610,11 +610,13 @@ def sample_features_df_validate(sample_btc_df_validate):
 def sample_weights_df(sample_features_df_validate, sample_btc_df_validate):
     """Generate sample weights for testing with multiple date ranges."""
     from stacksats.export_weights import process_start_date_batch
+    from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
     from tests.test_helpers import PRICE_COL
 
     start_date = pd.Timestamp("2025-01-01")
-    end_dates = [pd.Timestamp("2025-12-31"), pd.Timestamp("2026-01-01")]
-    current_date = pd.Timestamp("2025-12-31")
+    end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+    end_dates = [end_date]
+    current_date = end_date
 
     return process_start_date_batch(
         start_date,

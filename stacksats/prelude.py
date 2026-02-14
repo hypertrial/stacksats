@@ -7,15 +7,15 @@ import pandas as pd
 import requests
 
 from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
+from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from .model_development import precompute_features
 
 # Configuration
 BACKTEST_START = "2018-01-01"
 PURCHASE_FREQ = "Daily"  # Daily frequency for DCA purchases
-# Standard 1-year window anchor used across modules.
-# End dates are computed as start + 1 year (inclusive slicing),
-# matching Modal backtest window conventions.
-WINDOW_OFFSET = pd.DateOffset(years=1)
+# Fixed allocation span used across modules.
+WINDOW_DAYS = ALLOCATION_SPAN_DAYS
+WINDOW_OFFSET = ALLOCATION_WINDOW_OFFSET
 
 PURCHASE_FREQ_TO_OFFSET = {"Daily": "1D"}
 
@@ -241,10 +241,10 @@ def parse_window_dates(window_label: str) -> pd.Timestamp:
 def generate_date_ranges(
     range_start: str, range_end: str, min_length_days: int = 120
 ) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
-    """Generate date ranges where each start_date has end_date = start + 1 year.
+    """Generate date ranges where each start_date has fixed-span end_date.
 
     Uses DATE_FREQ (daily) for start date generation.
-    Each start_date is paired with exactly one end_date that is 1 year later.
+    Each start_date is paired with exactly one end_date at fixed span length.
     Uses WINDOW_OFFSET from prelude.py for consistency across modules.
 
     Args:
@@ -358,10 +358,10 @@ def compute_cycle_spd(
 
         # Compute weights using strategy_function
         window_feat = full_feat.loc[window_start:window_end]
-        # Under the strict span contract, strategies only accept full one-year windows.
+        # Under the strict span contract, strategies only accept full-span windows.
         # Historical datasets that begin after BACKTEST_START can create partial windows
         # at the front edge; skip those instead of surfacing per-window contract errors.
-        if len(window_feat) not in (365, 366, 367):
+        if len(window_feat) != WINDOW_DAYS:
             continue
         weight_slice = strategy_function(window_feat)
         if weight_slice.empty:

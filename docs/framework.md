@@ -4,22 +4,28 @@ This document is the canonical strategy contract for StackSats.
 
 ## Framework Owns (Non-Negotiable)
 
-- Fixed budget and fixed allocation span (365 or 366 days depending on leap year)
-- Uniform initialization of all daily weights
-- Day-by-day iterative execution loop
-- Locked historical weights (past days are immutable)
-- Feasibility projection/clipping at the daily handoff boundary
-- Remaining-budget enforcement
-- Validation guards (`NaN`/`inf`/range checks) and final invariants
+1. Fixed budget.
+2. Fixed allocation span (global config) between 90 and 1460 days (inclusive).
+3. Uniform initialization of all daily weights.
+4. Day-by-day iterative execution loop.
+5. Daily reinitialization of all future days with the remaining uniform weight.
+6. Locked historical weights (past days are immutable).
+7. Feasibility projection/clipping at the daily handoff boundary.
+8. Remaining-budget and allocation-range enforcement:
+   - Total budget must be used by the end of the allocation span.
+   - All daily weights must sum to 1.
+   - Minimum daily weight is `1e-5`.
+   - Maximum daily weight is `0.1`.
+9. Validation guards (`NaN`/`inf`/range checks) and final invariants.
 
 ## User Owns (Flexible)
 
-- Feature engineering from lagged/base data
-- Signal definitions/formulas
-- Signal weights and hyperparameters
-- Daily intent output:
-  - `propose_weight(state)` for per-day proposals, or
-  - `build_target_profile(...)` for a full-window intent series
+1. Feature engineering from lagged/base data
+2. Signal definitions/formulas
+3. Signal weights and hyperparameters
+4. Daily intent output:
+   - `propose_weight(state)` for per-day proposals, or
+   - `build_target_profile(...)` for a full-window intent series
 
 ## Handoff Boundary
 
@@ -34,9 +40,9 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 
 ## Required Behavior
 
-- Users can strongly influence allocation each day through features/signals/intent.
-- Users cannot alter iteration mechanics or rewrite past allocations.
-- Local, backtest, and production run the same sealed allocation kernel.
+1. Users can strongly influence allocation each day through features/signals/intent.
+2. Users cannot alter iteration mechanics or rewrite past allocations.
+3. Local, backtest, and production run the same sealed allocation kernel.
 
 ## Production Daily Lifecycle
 

@@ -16,6 +16,9 @@ Enhanced MVRV utilization includes:
 import numpy as np
 import pandas as pd
 from .framework_contract import (
+    ALLOCATION_SPAN_DAYS,
+    MAX_DAILY_WEIGHT,
+    MIN_DAILY_WEIGHT,
     apply_clipped_weight,
     assert_final_invariants,
     compute_n_past,
@@ -31,7 +34,8 @@ PRICE_COL = "PriceUSD_coinmetrics"
 MVRV_COL = "CapMVRVCur"
 
 # Strategy parameters
-MIN_W = 1e-6
+MIN_W = MIN_DAILY_WEIGHT
+MAX_W = MAX_DAILY_WEIGHT
 MA_WINDOW = 200  # 200-day simple moving average
 MVRV_GRADIENT_WINDOW = 30  # Window for MVRV trend detection
 MVRV_ROLLING_WINDOW = 365  # Window for MVRV Z-score normalization
@@ -405,35 +409,42 @@ def allocate_sequential_stable(
     n = len(raw)
     if n == 0:
         return np.array([])
+    enforce_contract_bounds = n == ALLOCATION_SPAN_DAYS
     if n_past <= 0:
-        return np.full(n, 1.0 / n)
+        out = np.full(n, 1.0 / n, dtype=float)
+        assert_final_invariants(out)
+        return out
 
     n_past = min(n_past, n)
-    w = np.zeros(n)
+    raw_arr = np.asarray(raw, dtype=float)
+    w = np.zeros(n, dtype=float)
     base_weight = 1.0 / n
+    locked_prefix = validate_locked_prefix(locked_weights, n_past)
+    prefix_len = len(locked_prefix)
+    if prefix_len > 0:
+        w[:prefix_len] = locked_prefix
 
-    # Compute or use locked weights for past days
-    if locked_weights is not None and len(locked_weights) >= n_past:
-        w[:n_past] = locked_weights[:n_past]
-    else:
-        for i in range(n_past):
-            signal = _compute_stable_signal(raw[: i + 1])[-1]
-            w[i] = signal * base_weight
+    remaining_budget = 1.0 - float(w[:prefix_len].sum())
+    for i in range(prefix_len, n_past):
+        signal = float(_compute_stable_signal(raw_arr[: i + 1])[-1])
+        proposed = signal * base_weight
+        clipped, remaining_budget = apply_clipped_weight(
+            proposed,
+            remaining_budget,
+            n - i,
+            enforce_contract_bounds=enforce_contract_bounds,
+        )
+        w[i] = clipped
 
-    # Scale past weights if they exceed budget
-    past_sum = w[:n_past].sum()
-    target_budget = n_past / n
-    if past_sum > target_budget + 1e-10:
-        w[:n_past] *= target_budget / past_sum
-
-    # Future days (except last): uniform
+    # Future days are reinitialized uniformly from remaining budget.
     n_future = n - n_past
-    if n_future > 1:
-        w[n_past : n - 1] = base_weight
+    if n_future > 0:
+        uniform_future = max(remaining_budget, 0.0) / n_future
+        w[n_past:] = uniform_future
+    else:
+        w[n - 1] += max(remaining_budget, 0.0)
 
-    # Last day absorbs remainder
-    w[n - 1] = max(1.0 - w[: n - 1].sum(), 0)
-
+    assert_final_invariants(w)
     return w
 
 
@@ -450,6 +461,7 @@ def allocate_from_proposals(
     """
     if n_total == 0:
         return np.array([], dtype=float)
+    enforce_contract_bounds = n_total == ALLOCATION_SPAN_DAYS
     if n_past <= 0:
         out = np.full(n_total, 1.0 / n_total, dtype=float)
         assert_final_invariants(out)
@@ -466,21 +478,21 @@ def allocate_from_proposals(
     remaining_budget = 1.0 - float(w[:prefix_len].sum())
     for i in range(prefix_len, n_past):
         proposed = float(proposals_arr[i]) if i < len(proposals_arr) else 0.0
-        clipped, remaining_budget = apply_clipped_weight(proposed, remaining_budget)
+        clipped, remaining_budget = apply_clipped_weight(
+            proposed,
+            remaining_budget,
+            n_total - i,
+            enforce_contract_bounds=enforce_contract_bounds,
+        )
         w[i] = clipped
 
     n_future = n_total - n_past
-    if n_future == 0:
-        # Entire window is in the past/current segment.
-        # Preserve prior days and absorb any tiny remainder on the final day.
-        w[n_total - 1] += max(remaining_budget, 0.0)
+    if n_future > 0:
+        uniform_future = max(remaining_budget, 0.0) / n_future
+        w[n_past:] = uniform_future
     else:
-        if n_future == 1:
-            w[n_total - 1] = max(remaining_budget, 0.0)
-        else:
-            uniform_future = max(remaining_budget, 0.0) / n_future
-            w[n_past : n_total - 1] = uniform_future
-            w[n_total - 1] = max(remaining_budget - uniform_future * (n_future - 1), 0.0)
+        # Entire window is in the past/current segment.
+        w[n_total - 1] += max(remaining_budget, 0.0)
 
     assert_final_invariants(w)
     return w

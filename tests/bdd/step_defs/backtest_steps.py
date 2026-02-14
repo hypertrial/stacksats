@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import stacksats.backtest as backtest
 from stacksats.backtest import compute_weights_modal
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.prelude import BACKTEST_END, backtest_dynamic_dca, compute_cycle_spd
 
 # -----------------------------------------------------------------------------
@@ -224,7 +225,7 @@ def then_empty_weights(bdd_context):
 def then_single_day_weight(bdd_context):
     """Assert one-year window weights are valid and normalized."""
     weights = bdd_context["weights"]
-    assert len(weights) in (365, 366, 367), "Expected contract-valid window length"
+    assert len(weights) == ALLOCATION_SPAN_DAYS, "Expected configured fixed-span length"
     assert np.isclose(weights.sum(), 1.0), "Weights must sum to 1.0"
 
 

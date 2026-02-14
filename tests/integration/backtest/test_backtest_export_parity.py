@@ -567,9 +567,9 @@ class TestEdgeCasesParity:
         date = pd.Timestamp("2021-06-15")
         current_date = pd.Timestamp("2021-06-15")
 
-        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        with pytest.raises(ValueError, match="configured fixed span"):
             compute_window_weights(parity_features_df, date, date, current_date)
-        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        with pytest.raises(ValueError, match="configured fixed span"):
             process_start_date_batch(
                 date,
                 [date],
@@ -584,9 +584,9 @@ class TestEdgeCasesParity:
         start_date = pd.Timestamp("2024-02-28")
         end_date = pd.Timestamp("2024-03-01")
         current_date = pd.Timestamp("2024-03-01")
-        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        with pytest.raises(ValueError, match="configured fixed span"):
             compute_window_weights(parity_features_df, start_date, end_date, current_date)
-        with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+        with pytest.raises(ValueError, match="configured fixed span"):
             process_start_date_batch(
                 start_date,
                 [end_date],

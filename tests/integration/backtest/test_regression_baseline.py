@@ -18,6 +18,7 @@ import pytest
 
 from stacksats.api import BacktestResult
 from stacksats.export_weights import process_start_date_batch
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import compute_window_weights, precompute_features
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import (
@@ -83,7 +84,7 @@ def test_export_backtest_weight_alignment_regression() -> None:
     features_df = precompute_features(btc_df)
 
     start_date = pd.Timestamp("2024-01-01")
-    end_date = pd.Timestamp("2024-12-31")
+    end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
     current_date = pd.Timestamp("2024-07-01")
 
     backtest_weights = compute_window_weights(

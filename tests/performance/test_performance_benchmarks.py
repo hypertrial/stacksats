@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from stacksats.export_weights import generate_date_ranges, process_start_date_batch
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import (
     allocate_sequential_stable,
     compute_dynamic_multiplier,
@@ -27,6 +28,10 @@ from stacksats.model_development import (
     precompute_features,
     softmax,
 )
+
+
+def _span_end(start_date: pd.Timestamp) -> pd.Timestamp:
+    return start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
 # Check if pytest-benchmark is available
 try:
@@ -103,14 +108,14 @@ class TestComputeWeightsBenchmark:
             pytest.skip("pytest-benchmark not installed")
 
         start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
+        end_date = _span_end(start_date)
 
         result = benchmark(
             compute_weights_fast, benchmark_features_df, start_date, end_date
         )
 
         # Verify output
-        assert len(result) == 366  # 2024 is leap year
+        assert len(result) == ALLOCATION_SPAN_DAYS
         assert np.isclose(result.sum(), 1.0, rtol=1e-6)
 
     def test_compute_weights_fast_6_months(self, benchmark_features_df, benchmark):
@@ -166,8 +171,8 @@ class TestMathFunctionsBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        raw = np.random.exponential(1, 366)
-        result = benchmark(allocate_sequential_stable, raw, n_past=366)
+        raw = np.random.exponential(1, ALLOCATION_SPAN_DAYS)
+        result = benchmark(allocate_sequential_stable, raw, n_past=ALLOCATION_SPAN_DAYS)
 
         assert np.isclose(result.sum(), 1.0)
 
@@ -176,14 +181,14 @@ class TestMathFunctionsBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        price_vs_ma = np.random.uniform(-1, 1, 366)
-        mvrv_zscore = np.random.uniform(-4, 4, 366)
-        mvrv_gradient = np.random.uniform(-1, 1, 366)
+        price_vs_ma = np.random.uniform(-1, 1, ALLOCATION_SPAN_DAYS)
+        mvrv_zscore = np.random.uniform(-4, 4, ALLOCATION_SPAN_DAYS)
+        mvrv_gradient = np.random.uniform(-1, 1, ALLOCATION_SPAN_DAYS)
         result = benchmark(
             compute_dynamic_multiplier, price_vs_ma, mvrv_zscore, mvrv_gradient
         )
 
-        assert len(result) == 366
+        assert len(result) == ALLOCATION_SPAN_DAYS
         assert (result > 0).all()
 
 
@@ -200,7 +205,7 @@ class TestBatchProcessingBenchmark:
             pytest.skip("pytest-benchmark not installed")
 
         start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-12-31")
+        end_date = _span_end(start_date)
         current_date = pd.Timestamp("2025-12-31")
 
         result = benchmark(
@@ -224,7 +229,8 @@ class TestBatchProcessingBenchmark:
             pytest.skip("pytest-benchmark not installed")
 
         start_date = pd.Timestamp("2024-01-01")
-        end_dates = [pd.Timestamp("2024-12-30"), pd.Timestamp("2024-12-31")]
+        end_date = _span_end(start_date)
+        end_dates = [end_date, end_date]
         current_date = pd.Timestamp("2025-12-31")
 
         result = benchmark(
@@ -324,7 +330,8 @@ class TestPerformanceThresholds:
     def test_batch_processing_under_1_second(self, perf_features_df, perf_btc_df):
         """Verify batch processing valid ranges completes in under 1 second."""
         start_date = pd.Timestamp("2024-01-01")
-        end_dates = [pd.Timestamp("2024-12-30"), pd.Timestamp("2024-12-31")]
+        end_date = _span_end(start_date)
+        end_dates = [end_date, end_date]
         current_date = pd.Timestamp("2025-12-31")
 
         start = time.perf_counter()

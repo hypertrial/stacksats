@@ -6,10 +6,17 @@ framework-side allocation mechanics.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 
-ALLOWED_SPAN_DAYS = (365, 366, 367)
+MIN_SPAN_DAYS = 90
+MAX_SPAN_DAYS = 1460
+DEFAULT_SPAN_DAYS = 365
+
+MIN_DAILY_WEIGHT = 1e-5
+MAX_DAILY_WEIGHT = 0.1
 SUM_TOLERANCE = 1e-8
 
 
@@ -19,6 +26,53 @@ def _as_timestamp(value: pd.Timestamp | str) -> pd.Timestamp:
     if ts.tzinfo is not None:
         ts = ts.tz_localize(None)
     return ts.normalize()
+
+
+def _load_allocation_span_days() -> int:
+    """Load and validate fixed allocation span from environment/config defaults."""
+    raw = os.getenv("STACKSATS_ALLOCATION_SPAN_DAYS")
+    if raw is None:
+        span_days = DEFAULT_SPAN_DAYS
+    else:
+        try:
+            span_days = int(raw)
+        except ValueError as exc:
+            raise ValueError(
+                "STACKSATS_ALLOCATION_SPAN_DAYS must be an integer."
+            ) from exc
+    if span_days < MIN_SPAN_DAYS or span_days > MAX_SPAN_DAYS:
+        raise ValueError(
+            f"Allocation span must be between {MIN_SPAN_DAYS} and {MAX_SPAN_DAYS} "
+            f"days, got {span_days}."
+        )
+    return span_days
+
+
+ALLOCATION_SPAN_DAYS = _load_allocation_span_days()
+ALLOCATION_WINDOW_OFFSET = pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+
+
+def _is_contract_length(n_days: int) -> bool:
+    """Return True when n_days equals the configured fixed allocation span."""
+    return int(n_days) == ALLOCATION_SPAN_DAYS
+
+
+def _assert_weight_budget_feasible(n_days: int) -> None:
+    """Ensure min/max daily bounds can satisfy a full budget for n_days."""
+    if n_days <= 0:
+        return
+    min_budget = n_days * MIN_DAILY_WEIGHT
+    max_budget = n_days * MAX_DAILY_WEIGHT
+    if min_budget > 1.0 + SUM_TOLERANCE:
+        raise ValueError(
+            f"Infeasible allocation bounds: min total {min_budget:.6f} > 1.0 "
+            f"for {n_days} days."
+        )
+    if max_budget < 1.0 - SUM_TOLERANCE:
+        raise ValueError(
+            f"Infeasible allocation bounds: max total {max_budget:.6f} < 1.0 "
+            f"for {n_days} days."
+        )
 
 
 def validate_span_length(
@@ -34,9 +88,10 @@ def validate_span_length(
     if end_ts < start_ts:
         raise ValueError("end_date must be on or after start_date.")
     n_days = len(pd.date_range(start=start_ts, end=end_ts, freq="D"))
-    if n_days not in ALLOWED_SPAN_DAYS:
+    if n_days != ALLOCATION_SPAN_DAYS:
         raise ValueError(
-            f"Allocation span must have 365, 366, or 367 allocation days, got {n_days}."
+            "Allocation span must match configured fixed span "
+            f"{ALLOCATION_SPAN_DAYS} days, got {n_days}."
         )
     return n_days
 
@@ -71,6 +126,15 @@ def validate_locked_prefix(
         raise ValueError("locked_weights must be finite.")
     if (locked < 0).any() or (locked > 1).any():
         raise ValueError("locked_weights values must be within [0, 1].")
+    if _is_contract_length(n_past):
+        if (locked < MIN_DAILY_WEIGHT - SUM_TOLERANCE).any():
+            raise ValueError(
+                f"locked_weights contain values below minimum {MIN_DAILY_WEIGHT}."
+            )
+        if (locked > MAX_DAILY_WEIGHT + SUM_TOLERANCE).any():
+            raise ValueError(
+                f"locked_weights contain values above maximum {MAX_DAILY_WEIGHT}."
+            )
 
     running_sum = 0.0
     for value in locked:
@@ -80,13 +144,41 @@ def validate_locked_prefix(
     return locked
 
 
-def apply_clipped_weight(proposed_weight: float, remaining_budget: float) -> tuple[float, float]:
-    """Clip a proposed day weight into feasible bounds."""
+def apply_clipped_weight(
+    proposed_weight: float,
+    remaining_budget: float,
+    remaining_days_including_today: int = 1,
+    *,
+    enforce_contract_bounds: bool = False,
+) -> tuple[float, float]:
+    """Clip a proposed day weight into feasible bounds.
+
+    For contract-valid spans, clipping enforces:
+    - per-day [MIN_DAILY_WEIGHT, MAX_DAILY_WEIGHT]
+    - feasibility for all future days under remaining budget.
+    """
     proposal = float(proposed_weight)
     remaining = max(float(remaining_budget), 0.0)
     if not np.isfinite(proposal):
         proposal = 0.0
-    clipped = float(np.clip(proposal, 0.0, remaining))
+
+    days_left = int(remaining_days_including_today)
+    if days_left <= 0:
+        return 0.0, remaining
+
+    if enforce_contract_bounds:
+        future_days = days_left - 1
+        min_future = future_days * MIN_DAILY_WEIGHT
+        max_future = future_days * MAX_DAILY_WEIGHT
+        lower = max(MIN_DAILY_WEIGHT, remaining - max_future)
+        upper = min(MAX_DAILY_WEIGHT, remaining - min_future)
+        if lower > upper + SUM_TOLERANCE:
+            raise ValueError(
+                "No feasible allocation bounds for current day under remaining budget."
+            )
+        clipped = float(np.clip(proposal, lower, upper))
+    else:
+        clipped = float(np.clip(proposal, 0.0, remaining))
     return clipped, remaining - clipped
 
 
@@ -103,6 +195,17 @@ def assert_final_invariants(weights: np.ndarray) -> None:
         raise ValueError("weights contain negative values.")
     if (arr > 1.0 + SUM_TOLERANCE).any():
         raise ValueError("weights contain out-of-range values above 1.0.")
+    n_days = len(arr)
+    if _is_contract_length(n_days):
+        _assert_weight_budget_feasible(n_days)
+        if (arr < MIN_DAILY_WEIGHT - SUM_TOLERANCE).any():
+            raise ValueError(
+                f"weights contain values below minimum {MIN_DAILY_WEIGHT}."
+            )
+        if (arr > MAX_DAILY_WEIGHT + SUM_TOLERANCE).any():
+            raise ValueError(
+                f"weights contain values above maximum {MAX_DAILY_WEIGHT}."
+            )
     total = float(arr.sum())
     if not np.isclose(total, 1.0, atol=SUM_TOLERANCE, rtol=0.0):
         raise ValueError(f"weights must sum to 1.0, got {total:.12f}.")

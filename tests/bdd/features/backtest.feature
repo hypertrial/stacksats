@@ -8,13 +8,13 @@ Feature: Backtest
     And backtest features are initialized
 
   Scenario: Weights are computed only for window dates
-    Given a backtest window from "2020-06-01" to "2021-06-01"
+    Given a backtest window from "2020-06-01" to "2021-05-31"
     When I extract the feature window
     And I compute weights for the window using compute_weights_modal
     Then weights should be computed only for the window dates
 
   Scenario: Weights match window index boundaries
-    Given a backtest window from "2020-06-01" to "2021-06-01"
+    Given a backtest window from "2020-06-01" to "2021-05-31"
     When I extract the feature window
     And I compute weights for the window using compute_weights_modal
     Then weight index should match window dates
@@ -39,7 +39,7 @@ Feature: Backtest
     Then excess percentile should equal dynamic minus uniform
 
   Scenario: Weight computation is deterministic
-    Given a backtest window from "2020-06-01" to "2021-06-01"
+    Given a backtest window from "2020-06-01" to "2021-05-31"
     When I extract the feature window
     And I compute weights twice for the same window
     Then both weight computations should be identical
@@ -49,7 +49,7 @@ Feature: Backtest
     When I compute weights for the window using compute_weights_modal
     Then empty window should produce empty weights
 
-  Scenario: Single day window has weight 1.0
+  Scenario: Fixed-span window is normalized
     Given single-day feature window
     When I compute weights for the window using compute_weights_modal
     Then single-day weight should equal 1.0
@@ -57,4 +57,3 @@ Feature: Backtest
   Scenario: Backtest returns numeric exp_decay_percentile
     When I run backtest_dynamic_dca_modal
     Then exp_decay_percentile should be a number
-

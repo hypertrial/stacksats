@@ -169,11 +169,11 @@ class TestBoundaryConditions:
         window_feat = sample_features_df.loc[start_date:end_date]
 
         if len(window_feat) > 0:
-            with pytest.raises(ValueError, match="365, 366, or 367 allocation days"):
+            with pytest.raises(ValueError, match="configured fixed span"):
                 compute_weights_modal(window_feat)
 
     def test_date_range_at_data_boundaries(self, sample_btc_df, sample_features_df):
-        """Boundary windows must still respect 365/366-day contract."""
+        """Boundary windows must still respect the configured fixed span contract."""
         backtest._FEATURES_DF = sample_features_df
 
         # Use dates at the start of features

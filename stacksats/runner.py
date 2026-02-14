@@ -12,6 +12,11 @@ import numpy as np
 import pandas as pd
 
 from .data_btc import BTCDataProvider
+from .framework_contract import (
+    ALLOCATION_SPAN_DAYS,
+    MAX_DAILY_WEIGHT,
+    MIN_DAILY_WEIGHT,
+)
 from .model_development import precompute_features
 from .prelude import BACKTEST_START, WINDOW_OFFSET, backtest_dynamic_dca
 from .strategy_types import (
@@ -77,6 +82,17 @@ class StrategyRunner:
                 f"Weights for range {window_start.date()} to {window_end.date()} "
                 "contain negative values"
             )
+        if len(weights) == ALLOCATION_SPAN_DAYS:
+            if bool((weights < (MIN_DAILY_WEIGHT - 1e-12)).any()):
+                raise WeightValidationError(
+                    f"Weights for range {window_start.date()} to {window_end.date()} "
+                    f"contain values below minimum {MIN_DAILY_WEIGHT}"
+                )
+            if bool((weights > (MAX_DAILY_WEIGHT + 1e-12)).any()):
+                raise WeightValidationError(
+                    f"Weights for range {window_start.date()} to {window_end.date()} "
+                    f"contain values above maximum {MAX_DAILY_WEIGHT}"
+                )
 
     def _provenance(
         self,
@@ -196,7 +212,7 @@ class StrategyRunner:
         )
         for probe in backtest_idx[::probe_step]:
             window_start = max(
-                start_ts, probe - WINDOW_OFFSET + pd.Timedelta(days=1)
+                start_ts, probe - WINDOW_OFFSET
             )
             if window_start > probe:
                 continue
@@ -265,11 +281,11 @@ class StrategyRunner:
                         )
                         break
 
-        max_window_start = end_ts - WINDOW_OFFSET + pd.Timedelta(days=1)
+        max_window_start = end_ts - WINDOW_OFFSET
         if start_ts <= max_window_start:
             window_starts = pd.date_range(start=start_ts, end=max_window_start, freq="D")
             for window_start in window_starts:
-                window_end = window_start + WINDOW_OFFSET - pd.Timedelta(days=1)
+                window_end = window_start + WINDOW_OFFSET
                 ctx = StrategyContext(
                     features_df=features_df,
                     start_date=window_start,

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import (
     allocate_sequential_stable,
     compute_weights_fast,
@@ -416,14 +417,17 @@ class TestStableAllocationProperties:
         assert np.all(stable_weights >= -FLOAT_TOLERANCE)
 
 
-def test_generate_date_ranges_has_365_366_or_367_rows_only() -> None:
+def test_generate_date_ranges_match_configured_span() -> None:
     ranges = generate_date_ranges("2023-01-01", "2027-12-31")
     assert len(ranges) > 0
     for start, end in ranges:
         days = len(pd.date_range(start=start, end=end, freq="D"))
-        assert days in (365, 366, 367)
+        assert days == ALLOCATION_SPAN_DAYS
 
 
-def test_generate_date_ranges_can_produce_367_rows() -> None:
+def test_generate_date_ranges_can_produce_configured_span() -> None:
     ranges = generate_date_ranges("2023-01-01", "2027-12-31")
-    assert any(len(pd.date_range(start=s, end=e, freq="D")) == 367 for s, e in ranges)
+    assert any(
+        len(pd.date_range(start=s, end=e, freq="D")) == ALLOCATION_SPAN_DAYS
+        for s, e in ranges
+    )

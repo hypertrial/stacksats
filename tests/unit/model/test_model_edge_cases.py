@@ -46,17 +46,19 @@ def test_allocate_sequential_stable_n_past_zero():
 
 
 def test_allocate_sequential_stable_locked_weights_mismatch():
-    """Partial locked prefixes keep shape under past-budget scaling."""
+    """Partial locked prefixes stay immutable while future days rebalance."""
     raw = np.array([1.0, 1.0, 1.0])
     n_past = 2
     locked = np.array([0.5])
 
     weights = allocate_sequential_stable(raw, n_past, locked_weights=locked)
 
-    # Kernel may scale the past segment, so absolute locked value can change.
-    target_budget = n_past / len(raw)
-    assert np.isclose(weights[:n_past].sum(), target_budget)
-    assert weights[0] > 0.0
+    # Locked prefix values remain fixed exactly.
+    np.testing.assert_allclose(weights[: len(locked)], locked)
+    # Remaining budget is split between unlocked-past and future according to
+    # sequential kernel + future-uniform reinitialization.
+    assert np.isclose(weights[1], 1 / 3)
+    assert np.isclose(weights[2], 1 / 6)
     assert np.isclose(weights.sum(), 1.0)
     assert len(weights) == 3
 

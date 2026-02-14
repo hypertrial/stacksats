@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import stacksats.backtest as backtest
 from stacksats.backtest import compute_weights_modal
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import compute_weights_fast, precompute_features
 from stacksats.prelude import compute_cycle_spd
 
@@ -122,7 +123,7 @@ class TestWeightComputationPerformance:
         backtest._FEATURES_DF = sample_features_df
 
         start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
+        end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
         if start_date not in sample_features_df.index:
             pytest.skip("Start date not in features index")

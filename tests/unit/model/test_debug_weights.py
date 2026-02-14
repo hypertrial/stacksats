@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     _clean_array,
@@ -112,7 +113,7 @@ class TestWeightComputationPipeline:
     def test_weights_sum_to_one(self, features_data):
         """Verify computed weights sum to 1.0."""
         start_date = pd.to_datetime("2024-12-01")
-        end_date = pd.to_datetime("2025-12-01")
+        end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
         current_date = pd.Timestamp.now().normalize()
 
         weights = compute_window_weights(
@@ -126,7 +127,7 @@ class TestWeightComputationPipeline:
     def test_weights_have_variation(self, features_data):
         """Verify weights have meaningful variation."""
         start_date = pd.to_datetime("2024-12-01")
-        end_date = pd.to_datetime("2025-12-01")
+        end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
         current_date = pd.Timestamp.now().normalize()
 
         weights = compute_window_weights(

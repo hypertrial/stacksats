@@ -24,6 +24,7 @@ from stacksats.export_weights import (
     table_is_empty,
     today_data_exists,
 )
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from tests.test_helpers import PRICE_COL
 
 # -----------------------------------------------------------------------------
@@ -184,14 +185,14 @@ def then_ranges_not_empty(bdd_context):
 
 @then("all ranges should have 1-year span")
 def then_ranges_one_year(bdd_context):
-    """Assert all ranges are exactly 1 year."""
+    """Assert all ranges have the configured fixed span."""
     ranges = bdd_context["date_ranges"]
     for start, end in ranges:
         cardinality = len(pd.date_range(start=start, end=end, freq="D"))
-        assert cardinality in (
-            365,
-            366,
-        ), f"Range has {cardinality} allocation days, expected 365-366"
+        assert cardinality == ALLOCATION_SPAN_DAYS, (
+            f"Range has {cardinality} allocation days, "
+            f"expected {ALLOCATION_SPAN_DAYS}"
+        )
 
 
 @then("all ranges should be within configured bounds")

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 
 if TYPE_CHECKING:
     from .api import BacktestResult, ValidationResult
@@ -268,6 +269,11 @@ class BaseStrategy(ABC):
             return
         if bool((weights < 0).any()):
             raise ValueError("Weights contain negative values.")
+        if len(weights) == ALLOCATION_SPAN_DAYS:
+            if bool((weights < (MIN_DAILY_WEIGHT - 1e-12)).any()):
+                raise ValueError(f"Weights must be >= {MIN_DAILY_WEIGHT}.")
+            if bool((weights > (MAX_DAILY_WEIGHT + 1e-12)).any()):
+                raise ValueError(f"Weights must be <= {MAX_DAILY_WEIGHT}.")
         weight_sum = float(weights.sum())
         if abs(weight_sum - 1.0) > 1e-5:
             raise ValueError(f"Weights must sum to 1.0 (got {weight_sum:.10f}).")
