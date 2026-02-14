@@ -136,6 +136,7 @@ class ValidationResult:
     win_rate: float
     win_rate_ok: bool
     messages: list[str]
+    min_win_rate: float = 50.0
 
     def summary(self) -> str:
         """Return a concise validation summary string."""
@@ -144,5 +145,5 @@ class ValidationResult:
             f"Validation {status} | "
             f"Forward Leakage: {self.forward_leakage_ok} | "
             f"Weight Constraints: {self.weight_constraints_ok} | "
-            f"Win Rate: {self.win_rate:.2f}% (>=50%: {self.win_rate_ok})"
+            f"Win Rate: {self.win_rate:.2f}% (>={self.min_win_rate:.2f}%: {self.win_rate_ok})"
         )

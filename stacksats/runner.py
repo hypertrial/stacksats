@@ -377,6 +377,7 @@ class StrategyRunner:
                 win_rate=0.0,
                 win_rate_ok=False,
                 messages=["No data available in the requested date range."],
+                min_win_rate=float(config.min_win_rate),
             )
 
         probe_step = 1 if strict_mode else max(len(backtest_idx) // 50, 1)
@@ -707,6 +708,7 @@ class StrategyRunner:
             win_rate=float(backtest_result.win_rate),
             win_rate_ok=win_rate_ok,
             messages=messages,
+            min_win_rate=float(config.min_win_rate),
         )
 
     def export(

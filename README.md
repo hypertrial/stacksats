@@ -118,7 +118,7 @@ output/<strategy_id>/<version>/<run_id>/
 
 Top-level exports:
 
-- `BaseStrategy`, `StrategyContext`, `TargetProfile`
+- `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`
 - `StrategyArtifactSet`
 - `BacktestResult`, `ValidationResult`

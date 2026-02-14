@@ -259,13 +259,23 @@ signal_confidence = agreement * 0.7 + gradient_alignment * 0.3
 
 ### Look-Ahead Bias Prevention
 
-All features are **lagged by 1 day** to prevent information leakage:
+Model signal columns are **lagged by 1 day** to prevent information leakage:
 
 ```python
-features = features.shift(1).fillna(defaults)
+signal_cols = [
+    "price_vs_ma",
+    "mvrv_zscore",
+    "mvrv_gradient",
+    "mvrv_percentile",
+    "mvrv_acceleration",
+    "mvrv_zone",
+    "mvrv_volatility",
+]
+features[signal_cols] = features[signal_cols].shift(1)
 ```
 
-This ensures the weight for day `t` only uses information available up to day `t-1`.
+This ensures the weight for day `t` uses signal values available up to day `t-1`.
+Raw reference columns such as `PriceUSD_coinmetrics` and `price_ma` remain aligned to their day index.
 
 ## Dynamic Multiplier Computation
 
@@ -409,10 +419,12 @@ def compute_window_weights(
 
 ## Feature List
 
-All features computed by `precompute_features()`:
+All columns produced by `precompute_features()`:
 
 | Feature | Range | Description |
 |---------|-------|-------------|
+| `PriceUSD_coinmetrics` | (price) | BTC USD close from CoinMetrics |
+| `price_ma` | (price) | 200-day simple moving average |
 | `price_vs_ma` | [-1, 1] | Normalized distance from 200-day MA |
 | `mvrv_zscore` | [-4, 4] | MVRV Z-score (365-day window) |
 | `mvrv_gradient` | [-1, 1] | Smoothed MVRV trend direction |

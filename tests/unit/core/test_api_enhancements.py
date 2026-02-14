@@ -120,6 +120,23 @@ def test_validation_result_summary_format():
     assert "Win Rate: 72.30%" in summary
 
 
+def test_validation_result_summary_uses_configured_threshold():
+    """ValidationResult summary should show configured win-rate threshold."""
+    result = ValidationResult(
+        passed=False,
+        forward_leakage_ok=True,
+        weight_constraints_ok=True,
+        win_rate=72.3,
+        win_rate_ok=False,
+        messages=["Win rate below threshold"],
+        min_win_rate=75.0,
+    )
+
+    summary = result.summary()
+    assert ">=75.00%" in summary
+    assert "False" in summary
+
+
 def test_validate_strategy_passes_with_uniform_strategy():
     """Uniform example strategy should satisfy validation when win-rate floor is relaxed."""
     btc_df = _sample_btc_df()
