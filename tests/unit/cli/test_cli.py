@@ -57,6 +57,41 @@ def test_cli_strategy_validate_uses_runner(monkeypatch, capsys) -> None:
     assert "Validation PASSED" in out
 
 
+def test_cli_strategy_validate_strict_flag(monkeypatch, capsys) -> None:
+    class FakeResult:
+        passed = True
+        messages = ["ok"]
+
+        @staticmethod
+        def summary() -> str:
+            return "Validation PASSED"
+
+    class FakeRunner:
+        def validate(self, strategy, config):
+            del strategy
+            assert config.strict is True
+            return FakeResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "validate",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--strict",
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert "Validation PASSED" in out
+
+
 def test_cli_strategy_backtest_writes_strategy_addressable_output(monkeypatch, tmp_path) -> None:
     class FakeBacktestResult:
         strategy_id = "fake-strategy"

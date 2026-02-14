@@ -52,7 +52,3 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 4. Project to feasible `final_weight_today` with remaining-budget constraints.
 5. Persist today as locked.
 6. Advance to next day; past values remain immutable.
-
-## Design Intent
-
-This boundary is deliberate: it maximizes strategy flexibility while preventing forward-looking bias and preserving deterministic allocation semantics.

@@ -16,6 +16,28 @@ class _UniformProposeStrategy(BaseStrategy):
         return state.uniform_weight
 
 
+class _MutatingProposeStrategy(BaseStrategy):
+    strategy_id = "runner-mutating"
+    version = "1.0.0"
+
+    def transform_features(self, ctx):
+        # Intentional contract violation for strict-mode guard coverage.
+        ctx.features_df["__mutated__"] = 1.0
+        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+
+
+class _RandomProposeStrategy(BaseStrategy):
+    strategy_id = "runner-random"
+    version = "1.0.0"
+
+    def propose_weight(self, state):
+        rng = np.random.default_rng()
+        return float(rng.uniform(0.0, state.uniform_weight * 2.0))
+
+
 def _btc_df(days: int = 900) -> pd.DataFrame:
     idx = pd.date_range("2021-01-01", periods=days, freq="D")
     return pd.DataFrame(
@@ -96,3 +118,37 @@ def test_export_raises_when_no_ranges_generated(monkeypatch: pytest.MonkeyPatch)
             btc_df=_btc_df(days=1200),
             current_date=pd.Timestamp("2025-01-02"),
         )
+
+
+def test_validate_strict_rejects_strategy_that_mutates_context_features() -> None:
+    runner = StrategyRunner()
+    result = runner.validate(
+        _MutatingProposeStrategy(),
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2023-12-31",
+            min_win_rate=0.0,
+            strict=True,
+        ),
+        btc_df=_btc_df(days=1200),
+    )
+
+    assert bool(result.passed) is False
+    assert any("mutated ctx.features_df" in message for message in result.messages)
+
+
+def test_validate_strict_rejects_non_deterministic_strategy() -> None:
+    runner = StrategyRunner()
+    result = runner.validate(
+        _RandomProposeStrategy(),
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2023-12-31",
+            min_win_rate=0.0,
+            strict=True,
+        ),
+        btc_df=_btc_df(days=1200),
+    )
+
+    assert bool(result.passed) is False
+    assert any("non-deterministic" in message for message in result.messages)

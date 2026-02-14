@@ -1,169 +1,113 @@
-# Strategy Validation Checklist (No Forward-Looking Bias)
+# Strategy Validation Properties (Exhaustive)
 
-Use this checklist before submitting or deploying a strategy.
+This is the canonical running list of properties that validation enforces for strategies.
 
-It is designed to answer one core question:
-**"Does my model avoid forward-looking leakage and behave robustly out-of-sample?"**
+Framework contract reference: `docs/framework.md`
 
-Framework invariants are defined in `docs/framework.md`. Validation should confirm:
-- per-day feasibility projection is respected,
-- remaining-budget enforcement holds,
-- past weights remain locked/immutable.
-- allocation windows match the configured fixed span (default: 365 days).
+## Validation Property Checklist
 
-## Framework Contract Enforcement
+1. [ ] **Allocation span config is valid**
+   - `STACKSATS_ALLOCATION_SPAN_DAYS` must be an integer in `[90, 1460]` (default `365`).
 
-Primary implementation points:
-- `stacksats/framework_contract.py` (span checks, clipping, lock-prefix validation, final invariants)
-- `stacksats/model_development.py` (sealed allocation kernel paths)
-- `stacksats/prelude.py` (fixed-span allocation-day window generation)
-- `stacksats/export_weights.py` + `stacksats/modal_app.py` (production lock loading through yesterday)
+2. [ ] **Strategy cannot bypass framework orchestration**
+   - Custom `compute_weights` overrides are rejected.
 
-Primary enforcement tests:
-- `tests/unit/core/test_framework_invariants.py`
-- `tests/unit/model/test_weight_stability.py`
-- `tests/integration/backtest/test_backtest_export_parity.py`
-- `tests/bdd/scenarios/test_bdd_date_ranges.py`
+3. [ ] **Strategy must implement an allowed hook path**
+   - At least one is required: `propose_weight(state)` or `build_target_profile(ctx, features_df, signals)`.
 
-## Inputs You Need
+4. [ ] **`transform_features` output type is valid**
+   - Must return a pandas `DataFrame`.
 
-- A strategy spec in format: `module_or_path:ClassName`
-- Example: `examples/model_example.py:ExampleMVRVStrategy`
+5. [ ] **`build_signals` output type is valid**
+   - Must return `dict[str, pandas.Series]`.
 
-Set it once:
+6. [ ] **Signal and profile series shape/index contract holds**
+   - Each series must be a pandas `Series`, with no duplicate index, ascending index, exact match to window index.
 
-```bash
-export STRATEGY_SPEC="examples/model_example.py:ExampleMVRVStrategy"
-```
+7. [ ] **Signal and profile series numeric validity holds**
+   - Series values must be finite numeric (no `NaN`, `inf`, or non-numeric coercion failures).
 
-## 0) Environment and Install
+8. [ ] **`propose_weight` outputs are finite**
+   - Every proposal must be finite numeric.
 
-From repo root:
+9. [ ] **Target profile mode is valid**
+   - Only `preference` and `absolute` modes are allowed.
 
-```bash
-pip install -e .
-pip install -r requirements-dev.txt
-```
+10. [ ] **Allocation index monotonicity holds for temporal counting**
+   - Allocation index used for `n_past` must be monotonic increasing.
 
-## 1) Primary Submission Gate (Must Pass)
+11. [ ] **Locked-prefix structural validity holds**
+   - `locked_weights` must be 1D, finite, values in `[0, 1]`, and length `<= n_past`.
 
-Run package-level validation:
+12. [ ] **Locked-prefix budget feasibility holds**
+   - Running sum of locked weights must never exceed total budget `1.0`.
 
-```bash
-stacksats strategy validate \
-  --strategy "$STRATEGY_SPEC" \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
-  --min-win-rate 50.0
-```
+13. [ ] **Locked-prefix daily bounds hold on contract-length windows**
+   - When window length equals configured span, locked values must be within `[1e-5, 0.1]`.
 
-Pass criteria:
+14. [ ] **Per-day clipping obeys future feasibility constraints**
+   - For contract-length windows, daily clipping enforces both day bounds and future-budget feasibility.
+   - Infeasible bounds must hard-fail.
 
-- Command exits successfully (`0`)
-- Summary reports:
-  - `Forward Leakage: True`
-  - `Weight Constraints: True`
-  - Win rate meets threshold
+15. [ ] **Output weight vector structure is valid**
+   - Final weights must be 1D and finite.
 
-Fail criteria:
+16. [ ] **Output weight values are valid**
+   - No negative weights; no values above `1.0` (within tolerance).
 
-- Any leakage message such as `Forward leakage detected`
-- Any weight constraint failure (negative weights or sum != 1.0)
-- Win rate below `--min-win-rate`
+17. [ ] **Output weights sum exactly to budget (within tolerance)**
+   - Final weight sum must be `1.0`.
 
-## 2) Hard Forward-Leakage Regression Tests (Must Pass)
+18. [ ] **Contract-length day bounds hold on final weights**
+   - For span-length windows, each day weight must be within `[1e-5, 0.1]`.
 
-Run the targeted leakage and stability suites:
+19. [ ] **Daily bounds are globally feasible for span length**
+   - Span must satisfy feasibility: `n_days * min_daily_weight <= 1.0 <= n_days * max_daily_weight`.
 
-```bash
-pytest tests/bdd/scenarios/test_bdd_forward_looking.py -v
-pytest tests/unit/model/test_weight_stability.py -v
-pytest tests/unit/core/test_api_enhancements.py -k "forward_leakage or leaky" -v
-```
+20. [ ] **Historical lock immutability is enforced in strict checks**
+   - Injected locked prefix must be preserved exactly when recomputing under perturbed future features.
 
-What these cover:
+21. [ ] **Forward-leakage resistance: masked-future invariance**
+   - Prefix weights at probe date must match when all future features are masked to `NaN`.
 
-- Forward-looking behavior scenarios (BDD)
-- Past-weight stability as `current_date` advances
-- Intentional leaky strategy detection in API validation
+22. [ ] **Forward-leakage resistance: perturbed-future invariance**
+   - Prefix weights at probe date must match when future features are strongly perturbed.
 
-Pass criteria:
+23. [ ] **Profile-only leakage resistance is enforced**
+   - For profile-hook strategies (without propose hook), prefix profile values must be invariant under masked/perturbed future inputs.
 
-- All selected tests pass
-- No forward-looking assertions fail
+24. [ ] **Strict mode forbids in-place feature mutation**
+   - Strategy must not mutate `ctx.features_df` during weight computation.
 
-## 3) Time-Series Validation (Strongly Recommended)
+25. [ ] **Strict mode forbids profile-build feature mutation**
+   - Strategy must not mutate `ctx.features_df` during transform/signal/profile build path.
 
-Run walk-forward and out-of-sample consistency checks:
+26. [ ] **Strict mode determinism holds**
+   - Repeated runs with identical inputs must produce exactly matching weights (within `atol=1e-12`).
 
-```bash
-pytest tests/integration/backtest/test_cross_validation.py -v
-pytest tests/integration/backtest/test_statistical_validation.py -v
-```
+27. [ ] **Weight constraints hold across validation windows**
+   - Validation windows must not violate sum, negativity, or (when applicable) min/max day bounds.
 
-What these cover:
+28. [ ] **Boundary saturation stays below strict threshold**
+   - In strict mode, boundary-hit rate (days at `MIN` or `MAX`) must be `<= max_boundary_hit_rate` (default `0.85`).
 
-- Expanding and rolling time-series folds (train before test)
-- Overfitting signals (train/test gap checks)
-- Randomized baseline checks (shuffled prices should not produce strong outperformance)
+29. [ ] **Cross-fold robustness minimum is met in strict mode (when fold checks run)**
+   - Minimum fold win rate must be `>= min_fold_win_rate` (default `20.0`).
+   - Fold checks are skipped when there is insufficient date range for at least two valid folds.
 
-Pass criteria:
+30. [ ] **Cross-fold instability is bounded in strict mode (when fold checks run)**
+   - Fold win-rate standard deviation must be `<= max_fold_win_rate_std` (default `35.0`).
+   - Fold checks are skipped when there is insufficient date range for at least two valid folds.
 
-- No failures in cross-validation ordering or fold integrity
-- No major overfitting/leakage indicator failures
+31. [ ] **Shuffled-null robustness threshold is met in strict mode (when shuffled checks run)**
+   - Mean win rate on shuffled-price trials must be `<= max_shuffled_win_rate` (default `80.0`) across `shuffled_trials` (default `3`).
+   - Shuffled checks are skipped when `PriceUSD_coinmetrics` is missing, the shuffled window is empty, or `shuffled_trials <= 0`.
 
-## 4) Full Test Sweep Before Final Sign-Off
+32. [ ] **Global win-rate threshold is met**
+   - Validation backtest win rate must be `>= min_win_rate` (default `50.0`).
 
-```bash
-pytest tests/ -v
-ruff check .
-```
+33. [ ] **Validation date range must contain data**
+   - Empty requested validation range is an automatic validation failure.
 
-Framework contract gate (mirrors CI/local enforcement):
-
-```bash
-pytest -q tests/unit/core/test_runner.py
-pytest -q tests/unit/model/test_weight_stability.py
-pytest -q tests/bdd/scenarios/test_bdd_database_operations.py
-pytest -q
-ruff check .
-```
-
-Pass criteria:
-
-- Test suite passes or only has justified skips
-- Lint passes
-
-## 5) Optional Manual Sanity Backtest
-
-Run a backtest and inspect output artifacts:
-
-```bash
-stacksats strategy backtest \
-  --strategy "$STRATEGY_SPEC" \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
-  --output-dir output \
-  --strategy-label pre-submit-check
-```
-
-Review:
-
-- `output/metrics.json`
-- Percentile behavior looks plausible (not suspiciously perfect)
-- Win/loss profile is stable and explainable
-
-## 6) Quick Go / No-Go Decision
-
-Go if all are true:
-
-- `stacksats strategy validate` passes with forward leakage and weight constraints marked true
-- Forward-looking and stability tests pass
-- Cross-validation/statistical validation show no leakage/overfitting red flags
-- Full tests and lint pass
-
-No-go if any are true:
-
-- Any forward leakage failure
-- Any weight normalization/negativity failure
-- Reproducible evidence of suspicious performance on randomized/shuffled data
+34. [ ] **Backtest path must generate windows**
+   - Validation relies on backtest windows; if none are generated, validation cannot pass.

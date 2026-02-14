@@ -80,8 +80,11 @@ stacksats strategy validate \
   --strategy-config strategy_config.json \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
+  --strict \
   --min-win-rate 50.0
 ```
+
+`--strict` enables additional robustness gates (determinism, mutation, leakage, OOS fold checks, and shuffled baseline checks).
 
 ## 3) Run Full Backtest via Strategy Lifecycle CLI
 

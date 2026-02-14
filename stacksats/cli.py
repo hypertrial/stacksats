@@ -28,6 +28,11 @@ def _build_parser() -> argparse.ArgumentParser:
     validate_cmd.add_argument("--start-date", default=None)
     validate_cmd.add_argument("--end-date", default=None)
     validate_cmd.add_argument("--min-win-rate", type=float, default=50.0)
+    validate_cmd.add_argument(
+        "--strict",
+        action="store_true",
+        help="Run additional robustness gates (determinism, mutation, leakage, OOS, placebo).",
+    )
 
     backtest_cmd = strategy_sub.add_parser("backtest", help="Backtest strategy")
     backtest_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
@@ -67,6 +72,7 @@ def main() -> None:
                 start_date=args.start_date,
                 end_date=args.end_date,
                 min_win_rate=args.min_win_rate,
+                strict=args.strict,
             ),
         )
         print(result.summary())

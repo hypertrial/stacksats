@@ -41,6 +41,12 @@ class ValidationConfig:
     start_date: str | None = None
     end_date: str | None = None
     min_win_rate: float = 50.0
+    strict: bool = False
+    min_fold_win_rate: float = 20.0
+    max_fold_win_rate_std: float = 35.0
+    max_shuffled_win_rate: float = 80.0
+    shuffled_trials: int = 3
+    max_boundary_hit_rate: float = 0.85
 
 
 @dataclass(frozen=True)
