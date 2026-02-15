@@ -65,7 +65,7 @@ jobs:
           - name: py312-smoke
             python_version: "3.12"
             test_target: tests/unit tests/bdd/scenarios
-            extras: ".[dev]"
+            extras: ".[dev,deploy]"
 
     steps:
       - name: Check out code

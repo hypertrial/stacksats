@@ -2,11 +2,13 @@
 
 
 import runpy
+from pathlib import Path
 import pandas as pd
 import pytest
 import requests
 import responses
 
+import stacksats.btc_api.coinmetrics_btc_csv as coinmetrics_btc_csv_module
 from stacksats.btc_api.coinmetrics_btc_csv import (
     fetch_coinmetrics_btc_csv,
     COINMETRICS_BTC_CSV_URL,
@@ -132,4 +134,5 @@ def test_module_dunder_main_executes(monkeypatch: pytest.MonkeyPatch) -> None:
             return None
 
     monkeypatch.setattr("requests.get", lambda *args, **kwargs: _FakeResponse())
-    runpy.run_module("stacksats.btc_api.coinmetrics_btc_csv", run_name="__main__")
+    module_path = Path(coinmetrics_btc_csv_module.__file__).resolve()
+    runpy.run_path(str(module_path), run_name="__main__")
