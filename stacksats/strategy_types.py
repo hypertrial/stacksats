@@ -13,6 +13,7 @@ from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAIL
 
 if TYPE_CHECKING:
     from .api import BacktestResult, ValidationResult
+    from .strategy_time_series import StrategyTimeSeriesBatch
 
 
 @dataclass(frozen=True)
@@ -304,7 +305,7 @@ class BaseStrategy(ABC):
         self,
         config: ExportConfig | None = None,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> "StrategyTimeSeriesBatch":
         from .runner import StrategyRunner
 
         runner = StrategyRunner()

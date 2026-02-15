@@ -232,11 +232,11 @@ def test_update_today_weights_continues_when_previous_price_lookup_fails(
 
     df = pd.DataFrame(
         {
-            "id": [1],
+            "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2024-12-31"],
-            "DCA_date": ["2024-01-01"],
-            "btc_usd": [50000.0],
+            "date": ["2024-01-01"],
+            "price_usd": [50000.0],
             "weight": [1.0],
         }
     )

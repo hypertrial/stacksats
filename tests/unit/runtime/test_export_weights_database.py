@@ -73,11 +73,11 @@ class TestDatabaseOperations:
     def test_insert_all_data_copy_success(self, mock_time, mock_conn):
         """Test insert_all_data uses COPY FROM successfully."""
         df = pd.DataFrame({
-            "id": [1],
+            "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2025-01-01"],
-            "DCA_date": ["2024-01-01"],
-            "btc_usd": [50000.0],
+            "date": ["2024-01-01"],
+            "price_usd": [50000.0],
             "weight": [1.0]
         })
         
@@ -97,11 +97,11 @@ class TestDatabaseOperations:
     def test_insert_all_data_fallback_to_execute_values(self, mock_time, mock_execute_values, mock_conn):
         """Test insert_all_data falls back to execute_values if COPY fails."""
         df = pd.DataFrame({
-            "id": [1],
+            "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2025-01-01"],
-            "DCA_date": ["2024-01-01"],
-            "btc_usd": [50000.0],
+            "date": ["2024-01-01"],
+            "price_usd": [50000.0],
             "weight": [1.0]
         })
         
@@ -123,12 +123,12 @@ class TestDatabaseOperations:
         mock_get_price.return_value = 60000.0
         
         df = pd.DataFrame({
-            "id": [1, 2],
+            "day_index": [0, 1],
             "start_date": ["2024-01-01", "2024-01-01"],
             "end_date": ["2025-01-01", "2025-01-01"],
-            "DCA_date": ["2024-01-01", "2024-01-02"],
+            "date": ["2024-01-01", "2024-01-02"],
             "weight": [1.1, 1.2],
-            "btc_usd": [50000.0, 50000.0]
+            "price_usd": [50000.0, 50000.0]
         })
         
         today_str = "2024-01-01"

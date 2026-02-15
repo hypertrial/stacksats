@@ -78,7 +78,8 @@ def process_start_date_batch(
         btc_price_col: Column name for BTC price
 
     Returns:
-        DataFrame with columns: id, start_date, end_date, DCA_date, btc_usd, weight
+        DataFrame with canonical columns:
+        day_index, start_date, end_date, date, price_usd, weight
     """
     if strategy is not None:
         if not isinstance(strategy, BaseStrategy):
@@ -133,11 +134,11 @@ def process_start_date_batch(
         # Create DataFrame for this range
         range_df = pd.DataFrame(
             {
-                "id": range(n_total),
+                "day_index": range(n_total),
                 "start_date": start_date.strftime("%Y-%m-%d"),
                 "end_date": end_date.strftime("%Y-%m-%d"),
-                "DCA_date": full_range.strftime("%Y-%m-%d"),
-                "btc_usd": range_prices,
+                "date": full_range.strftime("%Y-%m-%d"),
+                "price_usd": range_prices,
                 "weight": weights.values,
             }
         )
@@ -325,8 +326,15 @@ def insert_all_data(conn, df):
         buffer = StringIO()
         # Select and format columns for COPY
         copy_df = df[
-            ["id", "start_date", "end_date", "DCA_date", "btc_usd", "weight"]
+            ["day_index", "start_date", "end_date", "date", "price_usd", "weight"]
         ].copy()
+        copy_df = copy_df.rename(
+            columns={
+                "day_index": "id",
+                "date": "DCA_date",
+                "price_usd": "btc_usd",
+            }
+        )
         # Convert to proper types and handle NaN
         copy_df["id"] = copy_df["id"].astype(int)
         copy_df["btc_usd"] = copy_df["btc_usd"].where(pd.notna(copy_df["btc_usd"]), "")
@@ -398,11 +406,11 @@ def insert_all_data(conn, df):
         logging.info("Preparing data for bulk insertion...")
         data = [
             (
-                int(row["id"]),
+                int(row["day_index"]),
                 row["start_date"],
                 row["end_date"],
-                row["DCA_date"],
-                float(row["btc_usd"]) if pd.notna(row["btc_usd"]) else None,
+                row["date"],
+                float(row["price_usd"]) if pd.notna(row["price_usd"]) else None,
                 float(row["weight"]) if pd.notna(row["weight"]) else None,
             )
             for _, row in df.iterrows()
@@ -463,7 +471,7 @@ def insert_all_data(conn, df):
 
 
 def update_today_weights(conn, df, today_str):
-    """Update weight and btc_usd columns for rows where date equals today.
+    """Update weight and BTC price columns for rows where date equals today.
 
     Fetches current BTC price using robust fetcher with retry logic and multiple sources,
     and updates both weight and btc_usd columns for all rows matching today's date.
@@ -471,6 +479,15 @@ def update_today_weights(conn, df, today_str):
     """
     import logging
     import time
+
+    required_cols = {"day_index", "start_date", "end_date", "date", "price_usd", "weight"}
+    missing_cols = sorted(col for col in required_cols if col not in df.columns)
+    if missing_cols:
+        raise ValueError(
+            "update_today_weights requires canonical columns: "
+            + ", ".join(sorted(required_cols))
+            + f". Missing: {', '.join(missing_cols)}"
+        )
 
     # Try to get previous day's price from database for validation
     previous_price = None
@@ -502,9 +519,10 @@ def update_today_weights(conn, df, today_str):
             "Failed to fetch BTC price from all API sources. Will use price from dataframe if available."
         )
         # Fallback to price from dataframe if available
-        today_df_temp = df[df["DCA_date"] == today_str]
-        if not today_df_temp.empty and "btc_usd" in today_df_temp.columns:
-            current_btc_price = today_df_temp["btc_usd"].iloc[0]
+        day_mask = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+        today_df_temp = df[day_mask]
+        if not today_df_temp.empty:
+            current_btc_price = today_df_temp["price_usd"].iloc[0]
             if pd.notna(current_btc_price):
                 logging.info(
                     f"Using BTC price from dataframe: ${current_btc_price:,.2f}"
@@ -521,8 +539,9 @@ def update_today_weights(conn, df, today_str):
             current_btc_price = None
 
     # Filter for today's data
-    logging.info(f"Filtering data for DCA_date = {today_str}")
-    today_df = df[df["DCA_date"] == today_str].copy()
+    logging.info(f"Filtering data for date = {today_str}")
+    day_mask = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+    today_df = df[day_mask].copy()
 
     if today_df.empty:
         logging.warning(f"No data found for today ({today_str})")
@@ -532,7 +551,7 @@ def update_today_weights(conn, df, today_str):
     # skip the update to avoid writing invalid/zero weights.
     if current_btc_price is None:
         # Check if dataframe has valid prices
-        if "btc_usd" in today_df.columns and today_df["btc_usd"].notna().any():
+        if today_df["price_usd"].notna().any():
             logging.info("Using existing BTC prices from dataframe for update.")
         else:
             logging.warning(
@@ -547,7 +566,7 @@ def update_today_weights(conn, df, today_str):
     # Log some sample data to verify
     sample_row = today_df.iloc[0]
     logging.info(
-        f"Sample row - id: {sample_row['id']}, start_date: {sample_row['start_date']}, end_date: {sample_row['end_date']}, weight: {sample_row['weight']:.6f}"
+        f"Sample row - day_index: {sample_row['day_index']}, start_date: {sample_row['start_date']}, end_date: {sample_row['end_date']}, weight: {sample_row['weight']:.6f}"
     )
     if current_btc_price is not None:
         logging.info(f"Will update BTC price to: ${current_btc_price:,.2f}")
@@ -559,10 +578,10 @@ def update_today_weights(conn, df, today_str):
         # Prepare tuples: (id, start_date, end_date, DCA_date, weight, btc_usd)
         update_data = [
             (
-                int(row["id"]),
+                int(row["day_index"]),
                 row["start_date"],
                 row["end_date"],
-                row["DCA_date"],
+                row["date"],
                 float(row["weight"]) if pd.notna(row["weight"]) else None,
                 current_btc_price,
             )
@@ -572,10 +591,10 @@ def update_today_weights(conn, df, today_str):
         # Fallback: only update weight if BTC price fetch failed
         update_data = [
             (
-                int(row["id"]),
+                int(row["day_index"]),
                 row["start_date"],
                 row["end_date"],
-                row["DCA_date"],
+                row["date"],
                 float(row["weight"]) if pd.notna(row["weight"]) else None,
             )
             for _, row in today_df.iterrows()

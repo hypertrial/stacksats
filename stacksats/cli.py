@@ -107,7 +107,7 @@ def main() -> None:
         return
 
     if args.strategy_command == "export":
-        df = runner.export(
+        batch = runner.export(
             strategy,
             ExportConfig(
                 range_start=args.start_date,
@@ -116,9 +116,11 @@ def main() -> None:
             ),
         )
         meta = {
-            "rows": int(len(df)),
+            "rows": int(batch.row_count),
+            "windows": int(batch.window_count),
             "strategy_id": strategy.strategy_id,
             "version": strategy.version,
+            "schema_version": batch.schema_version,
             "output_dir": args.output_dir,
         }
         print(json.dumps(meta, indent=2))

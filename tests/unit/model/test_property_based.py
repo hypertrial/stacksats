@@ -194,7 +194,7 @@ class TestPropertyBasedInvariants:
     @given(date_range_strategy())
     @settings(max_examples=50, deadline=5000)
     def test_dca_date_coverage(self, date_range_tuple):
-        """Property: DCA_date coverage matches expected range."""
+        """Property: date coverage matches expected range."""
         start_date, end_date, current_date = date_range_tuple
 
         if start_date > end_date:
@@ -218,7 +218,7 @@ class TestPropertyBasedInvariants:
 
             if len(result) > 0:
                 expected_dates = pd.date_range(start=start_date, end=end_date, freq="D")
-                actual_dates = set(pd.to_datetime(result["DCA_date"]))
+                actual_dates = set(pd.to_datetime(result["date"]))
 
                 # Should cover all expected dates
                 assert len(actual_dates) == len(expected_dates), (
@@ -270,11 +270,11 @@ class TestPropertyBasedInvariants:
             if len(result1) > 0 and len(result2) > 0:
                 # Past weights (<= current_date1) should be identical
                 past1 = result1[
-                    pd.to_datetime(result1["DCA_date"]) <= current_date1
-                ].sort_values("DCA_date")
+                    pd.to_datetime(result1["date"]) <= current_date1
+                ].sort_values("date")
                 past2 = result2[
-                    pd.to_datetime(result2["DCA_date"]) <= current_date1
-                ].sort_values("DCA_date")
+                    pd.to_datetime(result2["date"]) <= current_date1
+                ].sort_values("date")
 
                 if len(past1) > 1 and len(past2) > 1:
                     # With budget scaling, absolute values may change but

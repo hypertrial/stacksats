@@ -36,7 +36,7 @@ Feature: Data Integrity
 
   Scenario: DCA date is within the range boundaries
     When I check DCA dates are within range
-    Then DCA_date should be within the range
+    Then date should be within the range
 
   Scenario: Data types match schema requirements
     When I check data types

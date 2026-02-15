@@ -42,6 +42,8 @@ StackSats now treats strategy objects as first-class runtime objects:
 - `StrategyContext`: typed BTC runtime inputs passed to strategy hooks
 - `TargetProfile`: user-defined daily preference/target series
 - `DayState`: per-day user hook input for `propose_weight(state)`
+- `StrategyTimeSeries`: validated single-window final output series
+- `StrategyTimeSeriesBatch`: collection of exported windows
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`: explicit execution configuration
 - `StrategyRunner`: single orchestration service used by strategy methods and CLI
 

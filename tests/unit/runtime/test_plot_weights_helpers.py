@@ -102,8 +102,8 @@ def test_fetch_weights_for_date_range_returns_dataframe() -> None:
 
     df = fetch_weights_for_date_range(conn, "2024-01-01", "2024-12-31")
 
-    assert list(df.columns) == ["DCA_date", "weight", "btc_usd", "id"]
-    assert pd.api.types.is_datetime64_any_dtype(df["DCA_date"])
+    assert list(df.columns) == ["date", "weight", "price_usd", "day_index"]
+    assert pd.api.types.is_datetime64_any_dtype(df["date"])
     assert len(df) == 2
 
 
@@ -132,10 +132,10 @@ def test_plot_dca_weights_draws_boundary_for_mixed_past_and_future(
 
     df = pd.DataFrame(
         {
-            "DCA_date": pd.date_range("2024-01-01", periods=4, freq="D"),
+            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
             "weight": [0.2, 0.3, 0.25, 0.25],
-            "btc_usd": [50000.0, 51000.0, None, None],
-            "id": [1, 2, 3, 4],
+            "price_usd": [50000.0, 51000.0, None, None],
+            "day_index": [0, 1, 2, 3],
         }
     )
 

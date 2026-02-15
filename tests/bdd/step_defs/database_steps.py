@@ -286,7 +286,7 @@ def then_commit_called(bdd_context):
 def then_batch_has_columns(bdd_context):
     """Assert batch result has required columns."""
     result = bdd_context["batch_result"]
-    required = ["id", "start_date", "end_date", "DCA_date", "btc_usd", "weight"]
+    required = ["day_index", "start_date", "end_date", "date", "price_usd", "weight"]
     for col in required:
         assert col in result.columns, f"Missing column: {col}"
 

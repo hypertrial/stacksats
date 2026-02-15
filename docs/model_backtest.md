@@ -97,6 +97,8 @@ Writes run artifacts under:
 
 Includes:
 - `weights.csv`
+- `timeseries_schema.md`
+- canonical columns: `start_date`, `end_date`, `day_index`, `date`, `price_usd`, `weight`
 - `artifacts.json` (strategy metadata + file map)
 
 ## Usage

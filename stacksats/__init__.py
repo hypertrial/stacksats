@@ -4,6 +4,12 @@ from .api import BacktestResult, ValidationResult
 from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
+from .strategy_time_series import (
+    ColumnSpec,
+    StrategySeriesMetadata,
+    StrategyTimeSeries,
+    StrategyTimeSeriesBatch,
+)
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     BacktestConfig,
@@ -23,6 +29,10 @@ __all__ = [
     "DayState",
     "ExportConfig",
     "MVRVStrategy",
+    "ColumnSpec",
+    "StrategySeriesMetadata",
+    "StrategyTimeSeries",
+    "StrategyTimeSeriesBatch",
     "StrategyArtifactSet",
     "StrategyContext",
     "TargetProfile",

@@ -83,7 +83,7 @@ class TestWeightComputationParity:
             current_date,
             PRICE_COL,
         )
-        export_weights = export_result.set_index("DCA_date")["weight"]
+        export_weights = export_result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
 
         # Verify identical weights
@@ -122,7 +122,7 @@ class TestWeightComputationParity:
             current_date,
             PRICE_COL,
         )
-        export_weights = export_result.set_index("DCA_date")["weight"]
+        export_weights = export_result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
 
         # Verify identical weights
@@ -159,7 +159,7 @@ class TestWeightComputationParity:
             current_date,
             PRICE_COL,
         )
-        export_weights = export_result.set_index("DCA_date")["weight"]
+        export_weights = export_result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
 
         # Verify identical weights
@@ -235,8 +235,8 @@ class TestPastWeightImmutabilityParity:
             PRICE_COL,
         )
 
-        weights_1 = result_1.set_index("DCA_date")["weight"]
-        weights_2 = result_2.set_index("DCA_date")["weight"]
+        weights_1 = result_1.set_index("date")["weight"]
+        weights_2 = result_2.set_index("date")["weight"]
 
         # Past weights (before current_date_1) should be stable
         # Note: slight drift is acceptable due to rolling feature recalculation
@@ -276,7 +276,7 @@ class TestPastWeightImmutabilityParity:
             PRICE_COL,
             locked_weights_by_end_date={end_date.strftime("%Y-%m-%d"): locked_prefix},
         )
-        export_weights = export_result.set_index("DCA_date")["weight"]
+        export_weights = export_result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
         np.testing.assert_allclose(
             backtest_weights.values,
@@ -310,7 +310,7 @@ class TestPastWeightImmutabilityParity:
                 current_date,
                 PRICE_COL,
             )
-            export_weights = export_result.set_index("DCA_date")["weight"]
+            export_weights = export_result.set_index("date")["weight"]
             export_weights.index = pd.to_datetime(export_weights.index)
 
             # Verify identical weights at this current_date
@@ -442,8 +442,8 @@ class TestFutureWeightUniformityParity:
         )
 
         # Get future weights (after current_date) except the last day
-        result["DCA_date_dt"] = pd.to_datetime(result["DCA_date"])
-        future_mask = result["DCA_date_dt"] > current_date
+        result["date_dt"] = pd.to_datetime(result["date"])
+        future_mask = result["date_dt"] > current_date
         future_rows = result[future_mask]
         future_weights_except_last = future_rows["weight"].iloc[:-1]
 
@@ -474,8 +474,8 @@ class TestFutureWeightUniformityParity:
             current_date,
             PRICE_COL,
         )
-        result["DCA_date_dt"] = pd.to_datetime(result["DCA_date"])
-        export_future_weight = result[result["DCA_date_dt"] > current_date][
+        result["date_dt"] = pd.to_datetime(result["date"])
+        export_future_weight = result[result["date_dt"] > current_date][
             "weight"
         ].iloc[0]
 
@@ -514,7 +514,7 @@ class TestDayByDayProgressionParity:
                 current_date,
                 PRICE_COL,
             )
-            export_weights = result.set_index("DCA_date")["weight"]
+            export_weights = result.set_index("date")["weight"]
             export_weights.index = pd.to_datetime(export_weights.index)
 
             # Verify identical
@@ -616,7 +616,7 @@ class TestEdgeCasesParity:
             current_date,
             PRICE_COL,
         )
-        export_weights = result.set_index("DCA_date")["weight"]
+        export_weights = result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
 
         np.testing.assert_allclose(
@@ -692,7 +692,7 @@ class TestComputeWeightsSharedParity:
             end_date,  # All dates are past
             PRICE_COL,
         )
-        export_weights = result.set_index("DCA_date")["weight"]
+        export_weights = result.set_index("date")["weight"]
         export_weights.index = pd.to_datetime(export_weights.index)
 
         # Should be identical

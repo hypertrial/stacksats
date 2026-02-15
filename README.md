@@ -121,6 +121,7 @@ Top-level exports:
 - `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`
 - `StrategyArtifactSet`
+- `StrategyTimeSeries`, `StrategyTimeSeriesBatch`
 - `BacktestResult`, `ValidationResult`
 - `load_strategy()`, `load_data()`, `precompute_features()`
 - `MVRVStrategy`

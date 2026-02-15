@@ -95,7 +95,7 @@ def test_runner_validate_empty_range_returns_failure_result() -> None:
 
 def test_runner_export_writes_artifacts(tmp_path) -> None:
     runner = StrategyRunner()
-    df = runner.export(
+    batch = runner.export(
         UniformBaseStrategy(),
         ExportConfig(
             range_start="2023-01-01",
@@ -105,7 +105,10 @@ def test_runner_export_writes_artifacts(tmp_path) -> None:
         btc_df=_btc_df(),
         current_date=pd.Timestamp("2024-01-15"),
     )
-    assert not df.empty
+    assert batch.row_count > 0
+    flattened = batch.to_dataframe()
+    assert not flattened.empty
+    assert {"start_date", "end_date", "date", "price_usd", "weight"}.issubset(flattened.columns)
     artifact_paths = list(tmp_path.glob("**/artifacts.json"))
     assert artifact_paths, "Expected artifacts.json in strategy-addressable output path."
     payload = json.loads(artifact_paths[0].read_text(encoding="utf-8"))

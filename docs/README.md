@@ -13,6 +13,7 @@ Use this page as the entry point for repository documentation.
 - `framework.md`: canonical framework/user boundary and invariants
 - `model.md`: signal/model internals and strategy runtime interfaces
 - `model_backtest.md`: backtest pipeline, metrics, and artifact interpretation
+- `objects.md`: fundamental runtime object contracts (`strategy`, `StrategyTimeSeries`)
 
 ## Maintainer Docs
 

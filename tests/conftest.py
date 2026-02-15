@@ -312,7 +312,7 @@ def simulation_mock_db(mocker):
 
     # Track database state
     db_state = {
-        "rows": {},  # Key: (id, start_date, end_date, DCA_date), Value: row dict
+        "rows": {},  # Key: (day_index, start_date, end_date, date), Value: row dict
         "count": 0,
         "inserted_count": 0,
         "updated_count": 0,

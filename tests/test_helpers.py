@@ -6,8 +6,8 @@ import pandas as pd
 FLOAT_TOLERANCE = 1e-12
 WEIGHT_SUM_TOLERANCE = 1e-6  # Tolerance for weight sum validation
 PRICE_COL = "PriceUSD_coinmetrics"
-DATE_COLS = ["start_date", "end_date", "DCA_date"]
-PRIMARY_KEY_COLS = ["id", "start_date", "end_date", "DCA_date"]
+DATE_COLS = ["start_date", "end_date", "date"]
+PRIMARY_KEY_COLS = ["day_index", "start_date", "end_date", "date"]
 
 # Sample data bounds
 SAMPLE_START = "2024-01-01"

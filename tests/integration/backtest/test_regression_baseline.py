@@ -101,7 +101,7 @@ def test_export_backtest_weight_alignment_regression() -> None:
         current_date,
         PRICE_COL,
     )
-    export_weights = export_df.set_index("DCA_date")["weight"]
+    export_weights = export_df.set_index("date")["weight"]
     export_weights.index = pd.to_datetime(export_weights.index)
 
     np.testing.assert_allclose(backtest_weights.values, export_weights.values, atol=1e-12)
@@ -116,7 +116,7 @@ def test_runner_export_backtest_parity_with_base_strategy(tmp_path: Path) -> Non
         BacktestConfig(start_date="2023-01-01", end_date="2024-12-31"),
         btc_df=btc_df,
     )
-    exported = runner.export(
+    exported_batch = runner.export(
         strategy,
         ExportConfig(
             range_start="2023-01-01",
@@ -127,6 +127,7 @@ def test_runner_export_backtest_parity_with_base_strategy(tmp_path: Path) -> Non
         current_date=pd.Timestamp("2024-07-01"),
     )
     assert not backtest_result.spd_table.empty
+    exported = exported_batch.to_dataframe()
     assert not exported.empty
 
 

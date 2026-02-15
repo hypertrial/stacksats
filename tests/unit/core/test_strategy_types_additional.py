@@ -180,7 +180,7 @@ def test_strategy_wrapper_methods_delegate_to_runner(monkeypatch: pytest.MonkeyP
     strategy = _SimpleProposeStrategy()
     backtest_result = object()
     validation_result = object()
-    export_result = pd.DataFrame({"id": [1]})
+    export_result = object()
 
     class FakeRunner:
         def backtest(self, *args, **kwargs):
@@ -196,7 +196,7 @@ def test_strategy_wrapper_methods_delegate_to_runner(monkeypatch: pytest.MonkeyP
 
     assert strategy.backtest() is backtest_result
     assert strategy.validate() is validation_result
-    assert strategy.export_weights().equals(export_result)
+    assert strategy.export_weights() is export_result
 
 
 def test_compute_weights_returns_empty_when_context_range_is_empty() -> None:

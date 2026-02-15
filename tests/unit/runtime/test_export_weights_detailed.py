@@ -21,11 +21,11 @@ def mock_db_connection():
 def sample_df():
     """Create a sample DataFrame for testing."""
     return pd.DataFrame({
-        "id": [1, 2],
+        "day_index": [0, 1],
         "start_date": ["2024-01-01", "2024-01-01"],
         "end_date": ["2024-12-31", "2024-12-31"],
-        "DCA_date": ["2024-06-01", "2024-06-02"],
-        "btc_usd": [50000.0, 51000.0],
+        "date": ["2024-06-01", "2024-06-02"],
+        "price_usd": [50000.0, 51000.0],
         "weight": [0.5, 0.5]
     })
 
@@ -119,7 +119,7 @@ def test_update_today_weights_success(mock_get_price, mock_db_connection, sample
     assert cursor.execute.called
     call_args = cursor.execute.call_args[0][0]
     
-    # Should be updating both weight and btc_usd
+    # Should be updating both weight and btc_usd (DB column)
     assert "UPDATE bitcoin_dca" in call_args
     assert "SET weight = v.weight, btc_usd = v.btc_usd" in call_args
     
@@ -145,7 +145,7 @@ def test_update_today_weights_price_fetch_failure(mock_get_price, mock_db_connec
     assert cursor.execute.called
     call_args = cursor.execute.call_args[0][0]
     
-    # It should still try to update btc_usd because it found it in the dataframe
+    # It should still try to update btc_usd because it found price in the dataframe
     # The logic in update_today_weights falls back to dataframe price if API fails
     assert "SET weight = v.weight, btc_usd = v.btc_usd" in call_args
     
@@ -160,11 +160,11 @@ def test_update_today_weights_no_price(mock_get_price, mock_db_connection):
     
     # Create DF with NO price info for today
     df_no_price = pd.DataFrame({
-        "id": [1],
+        "day_index": [0],
         "start_date": ["2024-01-01"],
         "end_date": ["2024-12-31"],
-        "DCA_date": ["2024-06-01"],
-        "btc_usd": [None], # Missing price
+        "date": ["2024-06-01"],
+        "price_usd": [None], # Missing price
         "weight": [0.5]
     })
     

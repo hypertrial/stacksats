@@ -125,7 +125,9 @@ output/<strategy_id>/<version>/<run_id>/
 
 This includes:
 - `weights.csv`
+- `timeseries_schema.md`
 - `artifacts.json` (`strategy_id`, `version`, `config_hash`, `run_id`, file map)
+- canonical `weights.csv` columns: `start_date`, `end_date`, `day_index`, `date`, `price_usd`, `weight`
 
 Notes:
 - `stacksats strategy export` is strategy artifact export (filesystem output).

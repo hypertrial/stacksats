@@ -208,11 +208,11 @@ def test_update_today_weights_returns_zero_when_today_absent() -> None:
 
     df = pd.DataFrame(
         {
-            "id": [1],
+            "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2024-12-31"],
-            "DCA_date": ["2024-01-02"],
-            "btc_usd": [50000.0],
+            "date": ["2024-01-02"],
+            "price_usd": [50000.0],
             "weight": [1.0],
         }
     )
@@ -236,11 +236,11 @@ def test_update_today_weights_uses_weight_only_sql_when_price_stays_none(
 
     df = pd.DataFrame(
         {
-            "id": [1, 2],
+            "day_index": [0, 1],
             "start_date": ["2024-01-01", "2024-01-01"],
             "end_date": ["2024-12-31", "2024-12-31"],
-            "DCA_date": ["2024-01-01", "2024-01-01"],
-            "btc_usd": [None, 50000.0],
+            "date": ["2024-01-01", "2024-01-01"],
+            "price_usd": [None, 50000.0],
             "weight": [0.4, 0.6],
         }
     )

@@ -7,7 +7,6 @@ import sys
 from types import SimpleNamespace
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from stacksats import cli
@@ -142,10 +141,15 @@ def test_cli_strategy_backtest_writes_strategy_addressable_output(monkeypatch, t
 
 
 def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
+    class FakeBatch:
+        row_count = 2
+        window_count = 1
+        schema_version = "1.0.0"
+
     class FakeRunner:
         def export(self, strategy, config):
             del config
-            return pd.DataFrame({"id": [1, 2]})
+            return FakeBatch()
 
     class FakeStrategy:
         strategy_id = "fake-strategy"
@@ -168,6 +172,7 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
     cli.main()
     out = capsys.readouterr().out
     assert '"rows": 2' in out
+    assert '"windows": 1' in out
 
 
 def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:
@@ -191,10 +196,15 @@ def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:
 
 
 def test_cli_module_dunder_main_executes(monkeypatch) -> None:
+    class FakeBatch:
+        row_count = 1
+        window_count = 1
+        schema_version = "1.0.0"
+
     class FakeRunner:
         def export(self, strategy, config):
             del strategy, config
-            return pd.DataFrame({"id": [1]})
+            return FakeBatch()
 
     class FakeStrategy:
         strategy_id = "fake-main"

@@ -19,6 +19,7 @@ from .framework_contract import (
 )
 from .model_development import precompute_features
 from .prelude import BACKTEST_START, WINDOW_OFFSET, backtest_dynamic_dca
+from .strategy_time_series import StrategyTimeSeriesBatch
 from .strategy_types import (
     BacktestConfig,
     BaseStrategy,
@@ -718,7 +719,7 @@ class StrategyRunner:
         *,
         btc_df: pd.DataFrame | None = None,
         current_date: pd.Timestamp | None = None,
-    ) -> pd.DataFrame:
+    ) -> StrategyTimeSeriesBatch:
         from .export_weights import process_start_date_batch
         from .prelude import generate_date_ranges, group_ranges_by_start_date
 
@@ -748,6 +749,13 @@ class StrategyRunner:
         result_df = pd.concat(all_results, ignore_index=True)
 
         provenance = self._provenance(strategy, config)
+        series_batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+            result_df,
+            strategy_id=provenance["strategy_id"],
+            strategy_version=provenance["version"],
+            run_id=provenance["run_id"],
+            config_hash=provenance["config_hash"],
+        )
         output_root = (
             Path(config.output_dir)
             / strategy.strategy_id
@@ -756,17 +764,23 @@ class StrategyRunner:
         )
         output_root.mkdir(parents=True, exist_ok=True)
         result_path = output_root / "weights.csv"
-        result_df.to_csv(result_path, index=False)
+        export_df = series_batch.to_dataframe()
+        export_df.to_csv(result_path, index=False)
+        schema_path = output_root / "timeseries_schema.md"
+        schema_path.write_text(series_batch.schema_markdown(), encoding="utf-8")
         metadata = StrategyArtifactSet(
             strategy_id=strategy.strategy_id,
             version=strategy.version,
             config_hash=provenance["config_hash"],
             run_id=provenance["run_id"],
             output_dir=str(output_root),
-            files={"weights_csv": str(result_path)},
+            files={
+                "weights_csv": str(result_path),
+                "timeseries_schema_md": str(schema_path),
+            },
         )
         (output_root / "artifacts.json").write_text(
             json.dumps(asdict(metadata), indent=2),
             encoding="utf-8",
         )
-        return result_df
+        return series_batch

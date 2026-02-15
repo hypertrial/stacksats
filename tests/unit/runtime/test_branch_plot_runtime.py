@@ -41,10 +41,10 @@ def test_plot_weights_handles_future_only_data_and_normalizes(
 ) -> None:
     df = pd.DataFrame(
         {
-            "DCA_date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
             "weight": [2.0, 2.0, 2.0],
-            "btc_usd": [None, None, None],
-            "id": [1, 2, 3],
+            "price_usd": [None, None, None],
+            "day_index": [0, 1, 2],
         }
     )
     monkeypatch.setattr("stacksats.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
@@ -81,10 +81,10 @@ def test_plot_weights_main_uses_oldest_range_when_no_args(
         "stacksats.plot_weights.fetch_weights_for_date_range",
         lambda _conn, _start, _end: pd.DataFrame(
             {
-                "DCA_date": pd.date_range("2024-01-01", periods=2, freq="D"),
+                "date": pd.date_range("2024-01-01", periods=2, freq="D"),
                 "weight": [0.5, 0.5],
-                "btc_usd": [50000.0, None],
-                "id": [1, 2],
+                "price_usd": [50000.0, None],
+                "day_index": [0, 1],
             }
         ),
     )

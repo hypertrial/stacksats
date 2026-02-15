@@ -40,7 +40,7 @@ def given_weights_df(sample_weights_df, bdd_context):
 def when_check_duplicates(bdd_context):
     """Check for duplicate rows."""
     df = bdd_context["weights_df"]
-    key_cols = ["start_date", "end_date", "DCA_date"]
+    key_cols = ["start_date", "end_date", "date"]
     duplicates = df.duplicated(subset=key_cols, keep=False)
     bdd_context["duplicates"] = duplicates
 
@@ -55,11 +55,11 @@ def when_check_pk(bdd_context):
 
 @when("I check sequential IDs within each range")
 def when_check_sequential_ids(bdd_context):
-    """Check ID sequentiality."""
+    """Check day_index sequentiality."""
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        ids = group["id"].sort_values().values
+        ids = group["day_index"].sort_values().values
         expected = np.arange(len(group))
         if not np.array_equal(ids, expected):
             violations.append(f"{start} to {end}")
@@ -72,7 +72,7 @@ def when_check_sequential_dates(bdd_context):
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        dates = pd.to_datetime(group["DCA_date"]).sort_values()
+        dates = pd.to_datetime(group["date"]).sort_values()
         gaps = dates.diff().dropna()
         invalid = gaps[gaps != pd.Timedelta(days=1)]
         if not invalid.empty:
@@ -101,7 +101,7 @@ def when_check_missing_dates(bdd_context):
     violations = []
     for (start, end), group in iter_date_ranges(df):
         expected = set(pd.date_range(start=start, end=end, freq="D"))
-        actual = set(pd.to_datetime(group["DCA_date"]))
+        actual = set(pd.to_datetime(group["date"]))
         missing = expected - actual
         if missing:
             violations.append(f"{start} to {end}: missing {len(missing)} dates")
@@ -126,7 +126,7 @@ def when_check_dca_in_range(bdd_context):
         df[f"_{col}"] = pd.to_datetime(df[col])
 
     invalid = df[
-        (df["_DCA_date"] < df["_start_date"]) | (df["_DCA_date"] > df["_end_date"])
+        (df["_date"] < df["_start_date"]) | (df["_date"] > df["_end_date"])
     ]
     bdd_context["dca_range_violations"] = invalid
 
@@ -149,16 +149,16 @@ def when_check_dtypes(bdd_context):
     df = bdd_context["weights_df"]
     dtype_issues = []
 
-    if df["id"].dtype not in [np.int64, np.int32, int]:
-        dtype_issues.append(f"id: {df['id'].dtype}")
+    if df["day_index"].dtype not in [np.int64, np.int32, int]:
+        dtype_issues.append(f"day_index: {df['day_index'].dtype}")
 
     if df["weight"].dtype not in [np.float64, np.float32, float]:
         dtype_issues.append(f"weight: {df['weight'].dtype}")
 
-    non_null_btc = df["btc_usd"].dropna()
+    non_null_btc = df["price_usd"].dropna()
     if len(non_null_btc) > 0:
         if non_null_btc.dtype not in [np.float64, np.float32, float]:
-            dtype_issues.append(f"btc_usd: {non_null_btc.dtype}")
+            dtype_issues.append(f"price_usd: {non_null_btc.dtype}")
 
     bdd_context["dtype_issues"] = dtype_issues
 
@@ -169,8 +169,8 @@ def when_check_nulls(bdd_context):
     df = bdd_context["weights_df"]
     null_issues = []
 
-    if df["id"].isna().any():
-        null_issues.append(f"id: {df['id'].isna().sum()} nulls")
+    if df["day_index"].isna().any():
+        null_issues.append(f"day_index: {df['day_index'].isna().sum()} nulls")
 
     if df["weight"].isna().any():
         null_issues.append(f"weight: {df['weight'].isna().sum()} nulls")
@@ -236,11 +236,11 @@ def then_start_before_end(bdd_context):
     assert invalid.empty, f"Found {len(invalid)} rows with start >= end"
 
 
-@then("DCA_date should be within the range")
+@then("date should be within the range")
 def then_dca_in_range(bdd_context):
     """Assert DCA dates are within range."""
     invalid = bdd_context["dca_range_violations"]
-    assert invalid.empty, f"Found {len(invalid)} DCA_dates outside range"
+    assert invalid.empty, f"Found {len(invalid)} dates outside range"
 
 
 @then("weights should sum to 1.0 per range")

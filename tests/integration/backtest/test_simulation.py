@@ -178,7 +178,7 @@ class SimulationTestHarness:
 
         # Combine results
         final_df = pd.concat(all_results, ignore_index=True)[
-            ["id", "start_date", "end_date", "DCA_date", "btc_usd", "weight"]
+            ["day_index", "start_date", "end_date", "date", "price_usd", "weight"]
         ]
 
         return final_df
@@ -225,23 +225,23 @@ class SimulationTestHarness:
             # Store rows
             for _, row in final_df.iterrows():
                 key = (
-                    int(row["id"]),
+                    int(row["day_index"]),
                     row["start_date"],
                     row["end_date"],
-                    row["DCA_date"],
+                    row["date"],
                 )
                 db_state["rows"][key] = row.to_dict()
         else:
             # Simulate update for today
-            today_df = final_df[final_df["DCA_date"] == current_date_str]
+            today_df = final_df[final_df["date"] == current_date_str]
             db_state["updated_count"] = len(today_df)
             # Update rows
             for _, row in today_df.iterrows():
                 key = (
-                    int(row["id"]),
+                    int(row["day_index"]),
                     row["start_date"],
                     row["end_date"],
-                    row["DCA_date"],
+                    row["date"],
                 )
                 db_state["rows"][key] = row.to_dict()
 
@@ -250,7 +250,7 @@ class SimulationTestHarness:
             key = (start, end)
             if key not in self.weight_history:
                 self.weight_history[key] = {}
-            self.weight_history[key][current_date_str] = group_df.set_index("DCA_date")[
+            self.weight_history[key][current_date_str] = group_df.set_index("date")[
                 "weight"
             ]
 
@@ -297,11 +297,11 @@ class TestScenarioAInitialPopulation:
 
         # Verify structure
         df = result["df"]
-        assert "id" in df.columns
+        assert "day_index" in df.columns
         assert "start_date" in df.columns
         assert "end_date" in df.columns
-        assert "DCA_date" in df.columns
-        assert "btc_usd" in df.columns
+        assert "date" in df.columns
+        assert "price_usd" in df.columns
         assert "weight" in df.columns
 
         # Verify validation passed
@@ -404,7 +404,7 @@ class TestScenarioBDailyUpdates:
 
         # Verify only today's rows were updated
         today_df = result1["df"][
-            result1["df"]["DCA_date"] == result1["current_date_str"]
+            result1["df"]["date"] == result1["current_date_str"]
         ]
         assert len(today_df) > 0
 
@@ -483,7 +483,7 @@ class TestScenarioCMultiDayProgression:
                 results.append(result)
 
         # Check that past weights remain stable
-        # For each date range, compare weights for the same DCA_date across different current_dates
+        # For each date range, compare weights for the same date across different current_dates
         # grouped_ranges maps start_date -> list of end_dates, so we need to iterate over items
         for start_date, end_dates_list in list(harness.grouped_ranges.items())[
             :5
@@ -501,7 +501,7 @@ class TestScenarioCMultiDayProgression:
                 ]
                 if not range_df.empty:
                     weights_by_day[result["current_date_str"]] = range_df.set_index(
-                        "DCA_date"
+                        "date"
                     )["weight"]
 
             # Past weights should NEVER change when current_date advances
@@ -605,15 +605,15 @@ class TestScenarioCMultiDayProgression:
             # Find dates that are future on day 0
             current_date_day0 = results[0]["current_date"]
             future_dates = day0_df[
-                day0_df["DCA_date"] > current_date_day0.strftime("%Y-%m-%d")
+                day0_df["date"] > current_date_day0.strftime("%Y-%m-%d")
             ]
 
             if not future_dates.empty:
                 # Pick a date that should become past
-                test_dca_date = future_dates.iloc[0]["DCA_date"]
+                test_dca_date = future_dates.iloc[0]["date"]
 
                 # On day 0, this should be future (uniform weight)
-                day0_weight = day0_df[day0_df["DCA_date"] == test_dca_date][
+                day0_weight = day0_df[day0_df["date"] == test_dca_date][
                     "weight"
                 ].iloc[0]
 
@@ -622,7 +622,7 @@ class TestScenarioCMultiDayProgression:
                     (results[2]["df"]["start_date"] == test_start.strftime("%Y-%m-%d"))
                     & (results[2]["df"]["end_date"] == test_end.strftime("%Y-%m-%d"))
                 ]
-                day2_weight = day2_df[day2_df["DCA_date"] == test_dca_date][
+                day2_weight = day2_df[day2_df["date"] == test_dca_date][
                     "weight"
                 ].iloc[0]
 

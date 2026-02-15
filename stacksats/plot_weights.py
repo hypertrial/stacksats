@@ -119,10 +119,10 @@ def fetch_weights_for_date_range(conn, start_date: str, end_date: str) -> pd.Dat
         end_date: End date string (YYYY-MM-DD)
 
     Returns:
-        DataFrame with columns: DCA_date, weight, btc_usd, id
+        DataFrame with columns: date, weight, price_usd, day_index
     """
     query = """
-        SELECT DCA_date, weight, btc_usd, id
+        SELECT DCA_date AS date, weight, btc_usd AS price_usd, id AS day_index
         FROM bitcoin_dca
         WHERE start_date = %s AND end_date = %s
         ORDER BY DCA_date ASC
@@ -135,8 +135,8 @@ def fetch_weights_for_date_range(conn, start_date: str, end_date: str) -> pd.Dat
     if not rows:
         raise ValueError(f"No data found for date range {start_date} to {end_date}")
 
-    df = pd.DataFrame(rows, columns=["DCA_date", "weight", "btc_usd", "id"])
-    df["DCA_date"] = pd.to_datetime(df["DCA_date"])
+    df = pd.DataFrame(rows, columns=["date", "weight", "price_usd", "day_index"])
+    df["date"] = pd.to_datetime(df["date"])
 
     return df
 
@@ -150,11 +150,11 @@ def plot_dca_weights(
     """Create and save a plot of DCA weights over time.
 
     Differentiates between:
-    - Past weights (with btc_usd price data) - computed by the model
-    - Future weights (no btc_usd price data) - placeholder/projected weights
+    - Past weights (with price_usd price data) - computed by the model
+    - Future weights (no price_usd price data) - placeholder/projected weights
 
     Args:
-        df: DataFrame with DCA_date, weight, btc_usd, id columns
+        df: DataFrame with date, weight, price_usd, day_index columns
         start_date: Start date string for plot title
         end_date: End date string for plot title
         output_path: Path to save the plot
@@ -168,8 +168,8 @@ def plot_dca_weights(
     fig, ax = plt.subplots(figsize=(14, 8))
 
     # Split data into past (has price) and future (no price)
-    past_df = df[df["btc_usd"].notna()].copy()
-    future_df = df[df["btc_usd"].isna()].copy()
+    past_df = df[df["price_usd"].notna()].copy()
+    future_df = df[df["price_usd"].isna()].copy()
 
     has_past = len(past_df) > 0
     has_future = len(future_df) > 0
@@ -180,8 +180,8 @@ def plot_dca_weights(
         past_mean = past_weights.mean()
         past_min = past_weights.min()
         past_max = past_weights.max()
-        past_min_date = past_df.loc[past_df["weight"].idxmin(), "DCA_date"]
-        past_max_date = past_df.loc[past_df["weight"].idxmax(), "DCA_date"]
+        past_min_date = past_df.loc[past_df["weight"].idxmin(), "date"]
+        past_max_date = past_df.loc[past_df["weight"].idxmax(), "date"]
 
     # Overall stats for y-axis limits
     all_weights = df["weight"].values
@@ -191,14 +191,14 @@ def plot_dca_weights(
     # Plot PAST weights (model-computed) - solid blue
     if has_past:
         ax.fill_between(
-            past_df["DCA_date"],
+            past_df["date"],
             past_df["weight"],
             alpha=0.3,
             color="#2563eb",
             label=f"Past Weights (n={len(past_df)})",
         )
         ax.plot(
-            past_df["DCA_date"],
+            past_df["date"],
             past_df["weight"],
             linewidth=2.5,
             color="#1e40af",
@@ -211,14 +211,14 @@ def plot_dca_weights(
     # Plot FUTURE weights (projected) - dashed orange
     if has_future:
         ax.fill_between(
-            future_df["DCA_date"],
+            future_df["date"],
             future_df["weight"],
             alpha=0.2,
             color="#f97316",
             label=f"Future Weights (n={len(future_df)})",
         )
         ax.plot(
-            future_df["DCA_date"],
+            future_df["date"],
             future_df["weight"],
             linewidth=2,
             color="#ea580c",
@@ -232,7 +232,7 @@ def plot_dca_weights(
 
     # Add vertical line at boundary between past and future
     if has_past and has_future:
-        boundary_date = past_df["DCA_date"].max()
+        boundary_date = past_df["date"].max()
         ax.axvline(
             x=boundary_date,
             color="#6b7280",
