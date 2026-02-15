@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import runpy
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stacksats import cli
 
@@ -165,3 +168,50 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
     cli.main()
     out = capsys.readouterr().out
     assert '"rows": 2' in out
+
+
+def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:
+    class FakeParser:
+        def parse_args(self):
+            return SimpleNamespace(
+                strategy="dummy.py:Dummy",
+                strategy_config=None,
+                strategy_command="unknown",
+            )
+
+        def error(self, message):
+            raise RuntimeError(message)
+
+    monkeypatch.setattr(cli, "_build_parser", lambda: FakeParser())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: object())
+
+    with pytest.raises(RuntimeError, match="Unsupported command"):
+        cli.main()
+
+
+def test_cli_module_dunder_main_executes(monkeypatch) -> None:
+    class FakeRunner:
+        def export(self, strategy, config):
+            del strategy, config
+            return pd.DataFrame({"id": [1]})
+
+    class FakeStrategy:
+        strategy_id = "fake-main"
+        version = "1.0.0"
+
+    monkeypatch.setattr("stacksats.loader.load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr("stacksats.runner.StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "export",
+            "--strategy",
+            "dummy.py:Dummy",
+        ],
+    )
+
+    runpy.run_module("stacksats.cli", run_name="__main__")

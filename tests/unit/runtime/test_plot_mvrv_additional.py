@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import runpy
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -84,3 +87,31 @@ def test_plot_mvrv_metrics_raises_when_cleaned_dataset_is_empty(tmp_path) -> Non
 
     with pytest.raises(ValueError, match="No valid MVRV data available after removing missing values"):
         plot_mvrv_metrics(df, output_path=str(tmp_path / "unused.svg"))
+
+
+def test_plot_mvrv_module_dunder_main_executes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    idx = pd.date_range("2024-01-01", periods=120, freq="D")
+    df = pd.DataFrame(
+        {
+            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "CapMVRVZ": np.linspace(-1.0, 1.0, len(idx)),
+        },
+        index=idx,
+    )
+    monkeypatch.setattr(
+        "stacksats.btc_api.coinmetrics_btc_csv.fetch_coinmetrics_btc_csv",
+        lambda: df,
+    )
+    monkeypatch.setattr("matplotlib.pyplot.savefig", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["plot_mvrv.py", "--output", str(tmp_path / "mvrv.svg")],
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("stacksats.plot_mvrv", run_name="__main__")
+
+    assert excinfo.value.code == 0

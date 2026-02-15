@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -264,3 +265,28 @@ raise RuntimeError("boom during import")
         load_strategy(f"{strategy_path}:AnyClass")
 
     assert module_name not in sys.modules
+
+
+def test_load_strategy_raises_when_module_spec_has_no_loader(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    strategy_path = _write_module(
+        tmp_path / "specless_strategy.py",
+        """
+from stacksats.strategy_types import BaseStrategy
+
+class SpeclessStrategy(BaseStrategy):
+    strategy_id = "specless"
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+    monkeypatch.setattr(
+        "stacksats.loader.importlib.util.spec_from_file_location",
+        lambda *args, **kwargs: SimpleNamespace(loader=None),
+    )
+
+    with pytest.raises(ImportError, match="Could not load module spec"):
+        load_strategy(f"{strategy_path}:SpeclessStrategy")

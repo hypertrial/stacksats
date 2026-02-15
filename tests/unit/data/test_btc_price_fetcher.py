@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import os
+import runpy
 import pytest
 import responses
 import requests
@@ -686,3 +687,49 @@ class TestEdgeCases:
         assert validate_price(MAX_BTC_PRICE) is True
         assert validate_price(MIN_BTC_PRICE - 0.01) is False
         assert validate_price(MAX_BTC_PRICE + 0.01) is False
+
+
+def test_module_dunder_main_executes_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def _fake_get(url, params=None, timeout=None):
+        del params, timeout
+        if "coingecko.com/api/v3/simple/price" in url:
+            return _FakeResponse({"bitcoin": {"usd": 97000.0}})
+        if "coinbase.com/v2/prices/BTC-USD/spot" in url:
+            return _FakeResponse({"data": {"amount": "97100.0"}})
+        if "bitstamp.net/api/v2/ticker/btcusd" in url:
+            return _FakeResponse({"last": "97200.0"})
+        if "kraken.com/0/public/Ticker" in url:
+            return _FakeResponse({"error": [], "result": {"XXBTZUSD": {"c": ["97300.0", "1"]}}})
+        if "binance.com/api/v3/ticker/price" in url:
+            return _FakeResponse({"price": "97400.0"})
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr("requests.get", _fake_get)
+    runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+
+
+def test_module_dunder_main_prints_failure_when_all_sources_raise(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _always_fail_get(*_args, **_kwargs):
+        raise requests.exceptions.RequestException("network down")
+
+    monkeypatch.setattr("requests.get", _always_fail_get)
+    runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+
+    output = capsys.readouterr().out
+    assert "Error - network down" in output
+    assert "FINAL RESULT  : FAILED (All sources down)" in output

@@ -217,3 +217,22 @@ class TestRobustHistoricalFetcher:
         
         price = fetch_btc_price_historical(TEST_DATE)
         assert price is None
+
+
+def test_historical_fetch_warns_on_invalid_price_and_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from stacksats import btc_price_fetcher as fetcher
+
+    monkeypatch.setattr(fetcher, "fetch_historical_price_coinmetrics", lambda date: 10.0)
+    monkeypatch.setattr(fetcher, "fetch_historical_price_coingecko", lambda date: 42000.0)
+    monkeypatch.setattr(
+        fetcher,
+        "fetch_historical_price_binance",
+        lambda date: (_ for _ in ()).throw(ValueError("should not be called")),
+    )
+    monkeypatch.setattr(fetcher, "validate_price", lambda price, previous_price=None: price > 1000.0)
+
+    price = fetcher.fetch_btc_price_historical(TEST_DATE)
+
+    assert price == 42000.0

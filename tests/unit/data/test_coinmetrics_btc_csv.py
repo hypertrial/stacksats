@@ -1,6 +1,7 @@
 """Tests for CoinMetrics BTC CSV fetcher in btc_api/coinmetrics_btc_csv.py."""
 
 
+import runpy
 import pandas as pd
 import pytest
 import requests
@@ -120,3 +121,15 @@ class TestFetchCoinMetricsBTCCSV:
 
         assert len(df) == 1
         assert df.iloc[0]["PriceUSD"] == 50500.0
+
+
+def test_module_dunder_main_executes(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeResponse:
+        content = b"time,PriceUSD,CapMVRVCur\n2024-01-01,50000,2.0\n"
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: _FakeResponse())
+    runpy.run_module("stacksats.btc_api.coinmetrics_btc_csv", run_name="__main__")

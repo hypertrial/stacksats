@@ -6,9 +6,11 @@ import pytest
 
 import stacksats.framework_contract as framework_contract
 from stacksats.framework_contract import (
+    ALLOCATION_SPAN_DAYS,
     apply_clipped_weight,
     assert_final_invariants,
     compute_n_past,
+    validate_span_length,
     validate_locked_prefix,
 )
 
@@ -90,6 +92,18 @@ def test_apply_clipped_weight_raises_when_enforced_bounds_are_infeasible() -> No
         )
 
 
+def test_apply_clipped_weight_returns_zero_when_no_days_left() -> None:
+    clipped, remaining = apply_clipped_weight(
+        proposed_weight=0.3,
+        remaining_budget=0.7,
+        remaining_days_including_today=0,
+        enforce_contract_bounds=True,
+    )
+
+    assert clipped == 0.0
+    assert remaining == 0.7
+
+
 def test_load_allocation_span_days_rejects_non_integer_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -109,6 +123,47 @@ def test_load_allocation_span_days_rejects_out_of_range_env(
 
     with pytest.raises(ValueError, match="Allocation span must be between"):
         framework_contract._load_allocation_span_days()
+
+
+def test_assert_weight_budget_feasible_returns_for_non_positive_days() -> None:
+    assert framework_contract._assert_weight_budget_feasible(0) is None
+
+
+def test_assert_weight_budget_feasible_rejects_min_budget_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(framework_contract, "MIN_DAILY_WEIGHT", 2.0)
+    with pytest.raises(ValueError, match="min total"):
+        framework_contract._assert_weight_budget_feasible(1)
+
+
+def test_assert_weight_budget_feasible_rejects_max_budget_underflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(framework_contract, "MAX_DAILY_WEIGHT", 0.2)
+    with pytest.raises(ValueError, match="max total"):
+        framework_contract._assert_weight_budget_feasible(1)
+
+
+def test_validate_span_length_rejects_end_before_start() -> None:
+    with pytest.raises(ValueError, match="on or after"):
+        validate_span_length("2024-01-02", "2024-01-01")
+
+
+def test_validate_locked_prefix_rejects_values_below_contract_minimum() -> None:
+    locked = np.full(ALLOCATION_SPAN_DAYS, 1.0 / ALLOCATION_SPAN_DAYS, dtype=float)
+    locked[0] = framework_contract.MIN_DAILY_WEIGHT / 10.0
+
+    with pytest.raises(ValueError, match="below minimum"):
+        validate_locked_prefix(locked, n_past=ALLOCATION_SPAN_DAYS)
+
+
+def test_validate_locked_prefix_rejects_values_above_contract_maximum() -> None:
+    locked = np.full(ALLOCATION_SPAN_DAYS, 1.0 / ALLOCATION_SPAN_DAYS, dtype=float)
+    locked[0] = framework_contract.MAX_DAILY_WEIGHT + 1e-6
+
+    with pytest.raises(ValueError, match="above maximum"):
+        validate_locked_prefix(locked, n_past=ALLOCATION_SPAN_DAYS)
 
 
 def test_assert_final_invariants_rejects_non_1d() -> None:
@@ -134,3 +189,29 @@ def test_assert_final_invariants_rejects_values_above_one() -> None:
 def test_assert_final_invariants_rejects_sum_mismatch() -> None:
     with pytest.raises(ValueError, match="must sum to 1.0"):
         assert_final_invariants(np.array([0.2, 0.2]))
+
+
+def test_assert_final_invariants_accepts_empty_array() -> None:
+    assert_final_invariants(np.array([], dtype=float))
+
+
+def test_assert_final_invariants_rejects_below_min_for_contract_span() -> None:
+    base = 1.0 / ALLOCATION_SPAN_DAYS
+    arr = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
+    arr[0] = framework_contract.MIN_DAILY_WEIGHT / 10.0
+    deficit = base - arr[0]
+    arr[1:] += deficit / (ALLOCATION_SPAN_DAYS - 1)
+
+    with pytest.raises(ValueError, match="below minimum"):
+        assert_final_invariants(arr)
+
+
+def test_assert_final_invariants_rejects_above_max_for_contract_span() -> None:
+    base = 1.0 / ALLOCATION_SPAN_DAYS
+    arr = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
+    arr[0] = framework_contract.MAX_DAILY_WEIGHT + 1e-6
+    excess = arr[0] - base
+    arr[1:] -= excess / (ALLOCATION_SPAN_DAYS - 1)
+
+    with pytest.raises(ValueError, match="above maximum"):
+        assert_final_invariants(arr)

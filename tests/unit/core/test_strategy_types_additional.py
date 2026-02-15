@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
-from stacksats.strategy_types import BaseStrategy, StrategyContext
+from stacksats.strategy_types import BaseStrategy, DayState, StrategyContext
 
 
 def _context(*, start: str = "2024-01-01", periods: int = 3) -> StrategyContext:
@@ -210,3 +210,24 @@ def test_compute_weights_returns_empty_when_context_range_is_empty() -> None:
 
     result = _SimpleProposeStrategy().compute_weights(ctx)
     assert result.empty
+
+
+def test_base_strategy_default_propose_weight_raises_not_implemented() -> None:
+    class _ProfileOnlyStrategy(BaseStrategy):
+        strategy_id = "profile-only"
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx, features_df, signals
+            return pd.Series(dtype=float)
+
+    state = DayState(
+        current_date=pd.Timestamp("2024-01-01"),
+        features=pd.Series(dtype=float),
+        remaining_budget=1.0,
+        day_index=0,
+        total_days=1,
+        uniform_weight=1.0,
+    )
+
+    with pytest.raises(NotImplementedError, match="Override propose_weight"):
+        _ProfileOnlyStrategy().propose_weight(state)

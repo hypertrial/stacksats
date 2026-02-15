@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 from stacksats.model_development import (
+    _compute_stable_signal,
     classify_mvrv_zone,
     compute_signal_confidence,
     rolling_percentile,
@@ -84,3 +85,9 @@ class TestModelDevelopmentHelpers:
         # Last case: agreement on "sell" (High Z, High Pct, Neg Grad, Above MA) should also have high conf
         assert conf[0] > 0.5
         assert conf[2] > 0.5
+
+    def test_compute_stable_signal_empty_input(self):
+        """Test stable signal helper for empty arrays."""
+        result = _compute_stable_signal(np.array([], dtype=float))
+        assert isinstance(result, np.ndarray)
+        assert result.size == 0

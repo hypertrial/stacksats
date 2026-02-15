@@ -248,3 +248,20 @@ def test_example_strategies_return_valid_weight_vectors():
         assert not weights.empty
         assert bool((weights >= 0).all())
         assert np.isclose(float(weights.sum()), 1.0, atol=1e-8)
+
+
+def test_example_profile_strategies_return_empty_profile_for_empty_window():
+    idx = pd.DatetimeIndex([])
+    empty_features = pd.DataFrame(index=idx)
+    ctx = StrategyContext(
+        features_df=empty_features,
+        start_date=pd.Timestamp("2024-01-01"),
+        end_date=pd.Timestamp("2024-01-01"),
+        current_date=pd.Timestamp("2024-01-01"),
+    )
+
+    simple_profile = SimpleZScoreStrategy().build_target_profile(ctx, empty_features, {})
+    momentum_profile = MomentumStrategy().build_target_profile(ctx, empty_features, {})
+
+    assert simple_profile.empty
+    assert momentum_profile.empty

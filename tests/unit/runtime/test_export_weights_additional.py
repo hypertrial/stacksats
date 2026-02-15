@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import builtins
+import importlib
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -8,6 +10,7 @@ import pytest
 
 from stacksats.export_weights import (
     get_db_connection,
+    get_current_btc_price,
     load_locked_weights_for_window,
     process_start_date_batch,
     update_today_weights,
@@ -114,6 +117,34 @@ def test_get_db_connection_requires_deploy_dependency(monkeypatch: pytest.Monkey
 
     with pytest.raises(ImportError, match="Install deploy extras"):
         get_db_connection()
+
+
+def test_export_weights_import_falls_back_when_dotenv_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import stacksats.export_weights as export_weights_module
+
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "dotenv":
+            raise ImportError("dotenv unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    reloaded = importlib.reload(export_weights_module)
+
+    assert reloaded is export_weights_module
+
+
+def test_get_current_btc_price_logs_success_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("stacksats.export_weights.fetch_btc_price_robust", lambda previous_price=None: 50000.0)
+
+    price = get_current_btc_price(previous_price=49000.0)
+
+    assert price == 50000.0
 
 
 class _StrategyWithHook(BaseStrategy):
