@@ -32,6 +32,14 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
     [First Strategy Run](start/first-strategy-run.md)
 
+-   :material-notebook-outline: __Interactive Notebook Demo__
+
+    ---
+
+    Explore a runnable marimo notebook preview for the model example workflow.
+
+    [Notebook Demo](start/notebook-demo.md)
+
 -   :material-shield-check: __Know the Contract__
 
     ---
@@ -75,7 +83,8 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 ## Recommended Reading Path
 
 1. [Quickstart](start/quickstart.md)
-2. [First Strategy Run](start/first-strategy-run.md)
-3. [Framework Boundary](framework.md)
-4. [Model Internals](model.md)
-5. [CLI Commands](commands.md)
+2. [Notebook Demo](start/notebook-demo.md)
+3. [First Strategy Run](start/first-strategy-run.md)
+4. [Framework Boundary](framework.md)
+5. [Model Internals](model.md)
+6. [CLI Commands](commands.md)

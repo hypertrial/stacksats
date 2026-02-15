@@ -23,6 +23,7 @@ Update docs in the same PR when any of these change:
 - `stacksats/strategy_types.py`: update strategy object docs and API reference.
 - `stacksats/strategy_time_series.py`: run schema sync script and update TimeSeries docs.
 - CLI flag or command behavior changes: update `docs/commands.md` and relevant recipes.
+- `examples/model_example_notebook.py`: regenerate `docs/assets/notebooks/model_example_notebook.html` via `bash scripts/export_notebook_demo.sh`.
 
 ## CI expectations
 

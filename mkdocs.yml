@@ -88,6 +88,7 @@ nav:
       - Welcome: index.md
       - Quickstart: start/quickstart.md
       - First Strategy Run: start/first-strategy-run.md
+      - Notebook Demo: start/notebook-demo.md
       - What's New: whats-new.md
   - Concepts:
       - Framework Boundary: framework.md

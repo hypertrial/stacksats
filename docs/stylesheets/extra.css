@@ -141,3 +141,19 @@ body {
   background-color: var(--accent-brown);
   border-color: var(--accent-brown);
 }
+
+.notebook-embed {
+  margin: 1rem 0 1.2rem;
+  border: 1px solid rgba(248, 147, 26, 0.28);
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background: var(--bg-1);
+}
+
+.notebook-embed iframe {
+  display: block;
+  width: 100%;
+  min-height: 820px;
+  border: 0;
+  background: #ffffff;
+}

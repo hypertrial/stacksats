@@ -11,6 +11,8 @@ Weight computation strategy:
 """
 
 import os
+import sys
+from types import ModuleType
 
 import numpy as np
 import pandas as pd
@@ -18,7 +20,8 @@ try:
     import psycopg2
     from psycopg2.extras import execute_values
 except ImportError:  # pragma: no cover - exercised only without deploy extras
-    psycopg2 = None
+    psycopg2 = ModuleType("psycopg2")
+    sys.modules.setdefault("psycopg2", psycopg2)
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
@@ -26,6 +29,18 @@ from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
 from .prelude import generate_date_ranges, group_ranges_by_start_date  # noqa: F401
 from .strategy_types import BaseStrategy, StrategyContext, validate_strategy_contract
+
+
+def _missing_psycopg2(*_args, **_kwargs):
+    raise ImportError(
+        "Missing optional dependency 'psycopg2-binary'. "
+        "Install deploy extras with: pip install stacksats[deploy]"
+    )
+
+
+if not hasattr(psycopg2, "connect"):
+    psycopg2.connect = _missing_psycopg2
+
 
 # Load environment variables from .env file
 try:
@@ -51,6 +66,18 @@ def _require_deploy_dependency(name: str, imported_obj):
             f"Missing optional dependency '{name}'. "
             "Install deploy extras with: pip install stacksats[deploy]"
         )
+
+
+def _sql_quote(value) -> str:
+    """Quote values for dynamic VALUES SQL when psycopg2 adapt isn't available."""
+    if value is None:
+        return "NULL"
+    if isinstance(value, (float, np.floating)):
+        return str(float(value))
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    text = str(value).replace("'", "''")
+    return f"'{text}'"
 
 
 def process_start_date_batch(
@@ -197,7 +224,8 @@ def load_locked_weights_for_window(
 
 def get_db_connection():
     """Get database connection using DATABASE_URL environment variable."""
-    _require_deploy_dependency("psycopg2-binary", psycopg2)
+    if psycopg2 is None:
+        _missing_psycopg2()
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError("DATABASE_URL environment variable is not set")
@@ -621,10 +649,6 @@ def update_today_weights(conn, df, today_str):
             )
 
             if current_btc_price is not None:
-                # Bulk update with both weight and btc_usd using VALUES clause
-                # Use psycopg2's quote capabilities for safe SQL construction
-                from psycopg2.extensions import adapt
-
                 values_list = []
                 for row in batch:
                     (
@@ -636,16 +660,12 @@ def update_today_weights(conn, df, today_str):
                         btc_usd_val,
                     ) = row
                     # Properly escape and format values
-                    weight_sql = (
-                        adapt(weight_val).getquoted().decode()
-                        if weight_val is not None
-                        else "NULL"
-                    )
-                    btc_usd_sql = adapt(btc_usd_val).getquoted().decode()
+                    weight_sql = _sql_quote(weight_val)
+                    btc_usd_sql = _sql_quote(btc_usd_val)
                     values_list.append(
-                        f"({id_val}, {adapt(start_date_val).getquoted().decode()}::date, "
-                        f"{adapt(end_date_val).getquoted().decode()}::date, "
-                        f"{adapt(DCA_date_val).getquoted().decode()}::date, "
+                        f"({id_val}, {_sql_quote(start_date_val)}::date, "
+                        f"{_sql_quote(end_date_val)}::date, "
+                        f"{_sql_quote(DCA_date_val)}::date, "
                         f"{weight_sql}::float, {btc_usd_sql}::float)"
                     )
                 values_str = ", ".join(values_list)
@@ -662,22 +682,15 @@ def update_today_weights(conn, df, today_str):
                     """
                 )
             else:
-                # Bulk update with weight only using VALUES clause
-                from psycopg2.extensions import adapt
-
                 values_list = []
                 for row in batch:
                     id_val, start_date_val, end_date_val, DCA_date_val, weight_val = row
                     # Properly escape and format values
-                    weight_sql = (
-                        adapt(weight_val).getquoted().decode()
-                        if weight_val is not None
-                        else "NULL"
-                    )
+                    weight_sql = _sql_quote(weight_val)
                     values_list.append(
-                        f"({id_val}, {adapt(start_date_val).getquoted().decode()}::date, "
-                        f"{adapt(end_date_val).getquoted().decode()}::date, "
-                        f"{adapt(DCA_date_val).getquoted().decode()}::date, "
+                        f"({id_val}, {_sql_quote(start_date_val)}::date, "
+                        f"{_sql_quote(end_date_val)}::date, "
+                        f"{_sql_quote(DCA_date_val)}::date, "
                         f"{weight_sql}::float)"
                     )
                 values_str = ", ".join(values_list)

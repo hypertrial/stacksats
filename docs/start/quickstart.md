@@ -51,6 +51,7 @@ output/<strategy_id>/<version>/<run_id>/
 
 ## 5) What to read next
 
+- [Notebook Demo](notebook-demo.md)
 - [First Strategy Run](first-strategy-run.md)
 - [Framework Boundary](../framework.md)
 - [CLI Commands](../commands.md)

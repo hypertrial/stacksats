@@ -12,6 +12,7 @@ Usage:
 import argparse
 import os
 import sys
+from types import ModuleType
 from typing import Tuple
 
 from .matplotlib_setup import configure_matplotlib_env
@@ -23,8 +24,20 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
-import psycopg2  # noqa: E402
 import seaborn as sns  # noqa: E402
+try:
+    import psycopg2  # noqa: E402
+except ImportError:  # pragma: no cover - exercised only without deploy extras
+    psycopg2 = ModuleType("psycopg2")
+
+    def _missing_connect(*_args, **_kwargs):
+        raise ImportError(
+            "Missing optional dependency 'psycopg2-binary'. "
+            "Install deploy extras with: pip install stacksats[deploy]"
+        )
+
+    psycopg2.connect = _missing_connect
+    sys.modules.setdefault("psycopg2", psycopg2)
 
 # Load environment variables from .env file
 try:

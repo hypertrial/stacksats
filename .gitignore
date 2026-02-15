@@ -238,6 +238,8 @@ __marimo__/
 !mkdocs.yml
 *.xml
 *.html
+!docs/assets/notebooks/
+!docs/assets/notebooks/*.html
 *.css
 !docs/stylesheets/
 !docs/stylesheets/*.css

@@ -16,11 +16,10 @@ def _():
     import shlex
     import subprocess
     import sys
-    import textwrap
     from importlib import util as importlib_util
     from pathlib import Path
 
-    return Path, importlib_util, shlex, subprocess, sys, textwrap
+    return Path, importlib_util, shlex, subprocess, sys
 
 
 @app.cell
@@ -29,23 +28,16 @@ def _(mo):
         """
         # StackSats model example notebook
 
-        This notebook installs the package in the **current venv**, defines
-        the strategy in-notebook, and runs one backtest command.
+        This notebook installs the package in the **current venv** and runs a
+        backtest using the packaged example strategy.
         """
     )
     return
 
 
 @app.cell
-def _(Path):
-    repo_root = Path.cwd()
-    strategy_file = repo_root / "output" / "notebook_model_strategy.py"
-    return repo_root, strategy_file
-
-
-@app.cell
-def _(mo, repo_root):
-    mo.md(f"Repository root: `{repo_root}`")
+def _(mo):
+    mo.md("Repository root: current working directory")
     return
 
 
@@ -69,7 +61,8 @@ def _(Path, shlex, subprocess):
 @app.cell
 def _(mo, sys):
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
-    mo.md(f"Python: `{sys.executable}`  \nInside venv: `{'yes' if in_venv else 'no'}`")
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    mo.md(f"Python version: `{py_version}`  \nInside venv: `{'yes' if in_venv else 'no'}`")
     return in_venv
 
 
@@ -94,34 +87,9 @@ def _(importlib_util, run_cmd, sys):
 
 
 @app.cell
-def _(strategy_file, textwrap):
-    strategy_source = textwrap.dedent(
-        """
-        \"\"\"Notebook-defined strategy wrapper for StackSats.\"\"\"
-
-        from __future__ import annotations
-
-        from examples.model_example import ExampleMVRVStrategy as _ExampleMVRVStrategy
-
-
-        class ExampleMVRVStrategy(_ExampleMVRVStrategy):
-            strategy_id = "example-mvrv-notebook"
-            version = "4.2.0"
-            description = (
-                "Notebook wrapper around the score-focused CoinMetrics model example strategy."
-            )
-        """
-    ).lstrip()
-    strategy_file.parent.mkdir(parents=True, exist_ok=True)
-    strategy_file.write_text(strategy_source, encoding="utf-8")
-    print(f"Wrote strategy file: {strategy_file}")
-    return strategy_file
-
-
-@app.cell
-def _(run_cmd, strategy_file):
+def _(run_cmd):
     print("1) Backtest")
-    strategy_spec = f"{strategy_file}:ExampleMVRVStrategy"
+    strategy_spec = "examples/model_example.py:ExampleMVRVStrategy"
     run_cmd(
         [
             "stacksats",
