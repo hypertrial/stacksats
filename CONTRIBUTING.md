@@ -26,6 +26,8 @@ Run these before opening a pull request:
 ```bash
 ruff check .
 bash scripts/check_docs_refs.sh
+python scripts/sync_objects_schema_docs.py --check
+mkdocs build --strict
 pytest tests/ -v
 python -m build
 python -m twine check dist/*
@@ -50,6 +52,7 @@ bash scripts/release_check.sh
 - Prefer small, reviewable PRs over large mixed changes.
 - Include test coverage for fixes/features when practical.
 - Avoid committing secrets or environment files.
+- Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 
 ## Release notes policy
 

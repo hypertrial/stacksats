@@ -1,3 +1,8 @@
+---
+title: CLI Commands
+description: Command reference for validating, backtesting, and exporting StackSats strategies.
+---
+
 # Commands for `examples/model_example.py`
 
 This file explains how to run checks, backtests, and exports using the standalone strategy file:
@@ -8,6 +13,15 @@ This file explains how to run checks, backtests, and exports using the standalon
 Strategy implementations can use either:
 - `propose_weight(state)` for per-day intent, or
 - `build_target_profile(ctx, features_df, signals)` for batch intent.
+
+## Strategy Lifecycle Flow
+
+```mermaid
+flowchart LR
+    A["strategy validate"] --> B["strategy backtest"]
+    B --> C["strategy export"]
+    C --> D["output/<strategy_id>/<version>/<run_id>/"]
+```
 
 ## Prerequisites
 

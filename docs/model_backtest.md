@@ -1,3 +1,8 @@
+---
+title: Backtest Runtime
+description: How StackSats runs backtests, computes metrics, and writes artifacts.
+---
+
 # Bitcoin DCA Backtest System
 
 This document explains how StackSats runs strategy backtests and how to interpret the output metrics.
@@ -12,6 +17,17 @@ Default behavior:
 - Default end: dynamic "yesterday" (`get_backtest_end()`), unless overridden
 
 Allocation invariants and the framework/user boundary are defined in `docs/framework.md`.
+
+## Backtest Pipeline
+
+```mermaid
+flowchart LR
+    A["Load strategy + data"] --> B["Generate windows"]
+    B --> C["Compute dynamic and uniform SPD"]
+    C --> D["Percentile normalization"]
+    D --> E["Aggregate metrics"]
+    E --> F["Write plots and JSON artifacts"]
+```
 
 ## Runtime Path
 

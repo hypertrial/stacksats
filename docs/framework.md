@@ -1,3 +1,8 @@
+---
+title: Framework Boundary
+description: Canonical contract separating user strategy scope from framework-enforced mechanics.
+---
+
 # Framework vs User Control
 
 This document is the canonical strategy contract for StackSats.

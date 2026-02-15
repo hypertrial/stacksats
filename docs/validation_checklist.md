@@ -1,8 +1,24 @@
+---
+title: Validation Checklist
+description: Exhaustive list of validation properties enforced by the StackSats framework.
+---
+
 # Strategy Validation Properties (Exhaustive)
 
 This is the canonical running list of properties that validation enforces for strategies.
 
 Framework contract reference: `docs/framework.md`
+
+## Validation Execution Flow
+
+```mermaid
+flowchart LR
+    A["Input strategy + date range"] --> B["Contract checks"]
+    B --> C["Backtest metrics"]
+    C --> D["Leakage + strict diagnostics"]
+    D --> E["Threshold checks"]
+    E --> F["Validation pass/fail summary"]
+```
 
 ## Validation Property Checklist
 

@@ -1,0 +1,4 @@
+[codespell]
+skip = .git,venv,site,dist,build,*.svg,*.png,*.jpg,*.jpeg,*.json,*.csv
+ignore-words-list = mvrv,sats,fo,nd
+quiet-level = 2

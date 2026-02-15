@@ -5,6 +5,18 @@ repo_url: https://github.com/hypertrial/stacksats
 repo_name: hypertrial/stacksats
 edit_uri: edit/main/docs/
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            show_source: false
+            show_root_heading: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+
 theme:
   name: material
   language: en
@@ -40,9 +52,6 @@ theme:
     - search.highlight
     - toc.follow
 
-plugins:
-  - search
-
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -75,13 +84,29 @@ nav:
       - Welcome: index.md
       - Quickstart: start/quickstart.md
       - First Strategy Run: start/first-strategy-run.md
+      - What's New: whats-new.md
   - Concepts:
       - Framework Boundary: framework.md
-      - Model Internals: model.md
-      - Backtest System: model_backtest.md
+      - Model Overview: model.md
+      - Signals and Features: concepts/model-signals-features.md
+      - Allocation Kernel: concepts/allocation-kernel.md
+      - Backtest Runtime: model_backtest.md
   - Reference:
       - CLI Commands: commands.md
-      - Runtime Objects: objects.md
+      - Runtime Objects Overview: objects.md
+      - Strategy Object: reference/strategy-object.md
+      - Strategy TimeSeries: reference/strategy-timeseries.md
+      - Strategy TimeSeries Schema: reference/strategy-timeseries-schema.md
+      - API Reference:
+          - API Index: reference/api/index.md
+          - strategy_types: reference/api/strategy-types.md
+          - runner: reference/api/runner.md
+          - api module: reference/api/api-module.md
       - Validation Checklist: validation_checklist.md
+      - Task Recipes:
+          - Create a Strategy: recipes/create-strategy.md
+          - Strict Validation: recipes/strict-validation.md
+          - Interpret Backtest Metrics: recipes/interpret-backtest.md
   - Maintainers:
       - Release Guide: release.md
+      - Docs Ownership: docs_ownership.md

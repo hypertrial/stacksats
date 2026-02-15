@@ -1,3 +1,8 @@
+---
+title: Welcome
+description: Entry point for StackSats docs, quick navigation, and recommended learning path.
+---
+
 # StackSats Documentation
 
 <div class="hero-block">

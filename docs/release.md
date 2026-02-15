@@ -1,3 +1,8 @@
+---
+title: Release Guide
+description: Manual and automated release process for StackSats package and documentation workflows.
+---
+
 # Release Guide
 
 This guide covers both:
@@ -137,7 +142,12 @@ In PyPI project settings, add a Trusted Publisher with:
 - Pull requests run packaging checks (`package-check.yml`).
 - Pushes of tags matching `v*` publish to PyPI (`publish-pypi.yml`).
 - PyPI publish job validates tag/version consistency before upload.
-- Pull requests also run docs build checks (`docs-check.yml`).
+- Pull requests also run docs quality checks (`docs-check.yml`):
+  - markdown lint
+  - spelling checks
+  - link checks
+  - docs reference checks
+  - strict docs build
 - Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
 
 ## GitHub Pages Source

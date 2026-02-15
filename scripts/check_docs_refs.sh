@@ -9,8 +9,11 @@ DOC_FILES=(
   CONTRIBUTING.md
   CHANGELOG.md
   SECURITY.md
-  docs/*.md
 )
+
+while IFS= read -r file; do
+  DOC_FILES+=("${file}")
+done < <(rg --files docs -g '*.md' | sort)
 
 TOKENS=()
 while IFS= read -r line; do

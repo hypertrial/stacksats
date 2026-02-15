@@ -1,3 +1,8 @@
+---
+title: First Strategy Run
+description: Build, validate, and backtest your first custom StackSats strategy.
+---
+
 # First Strategy Run
 
 This walkthrough gets a custom strategy running with minimal code.

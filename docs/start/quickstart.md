@@ -1,3 +1,8 @@
+---
+title: Quickstart
+description: Five-minute setup and first execution path for StackSats.
+---
+
 # Quickstart
 
 Use this page for a 5-minute first run.

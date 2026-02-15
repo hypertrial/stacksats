@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync generated schema sections in docs/objects.md."""
+"""Sync generated schema sections in StrategyTimeSeries schema docs."""
 
 from __future__ import annotations
 
@@ -11,12 +11,17 @@ from stacksats.docs_objects_schema import objects_docs_path, render_objects_docs
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Sync StrategyTimeSeries schema docs in docs/objects.md."
+        description=(
+            "Sync StrategyTimeSeries schema docs in "
+            "docs/reference/strategy-timeseries-schema.md."
+        )
     )
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if docs/objects.md is out of sync.",
+        help=(
+            "Exit non-zero if docs/reference/strategy-timeseries-schema.md is out of sync."
+        ),
     )
     args = parser.parse_args()
 
@@ -27,11 +32,11 @@ def main() -> int:
     if args.check:
         if rendered != original:
             print(
-                "docs/objects.md is out of date. "
+                f"{doc_path} is out of date. "
                 "Run: python scripts/sync_objects_schema_docs.py"
             )
             return 1
-        print("docs/objects.md schema sections are up to date.")
+        print(f"{doc_path} schema sections are up to date.")
         return 0
 
     if rendered != original:
@@ -44,4 +49,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

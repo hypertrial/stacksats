@@ -28,7 +28,24 @@ jobs:
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs mkdocs-material
+          pip install -e .
+          pip install mkdocs mkdocs-material mkdocstrings[python] codespell pymarkdownlnt
+
+      - name: Lint markdown
+        run: pymarkdown scan --disable-rules MD013,MD033 docs README.md CONTRIBUTING.md CHANGELOG.md
+
+      - name: Check spelling
+        run: codespell docs README.md CONTRIBUTING.md CHANGELOG.md --config .codespellrc
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --glob --verbose --no-progress --max-retries 2 --retry-wait-time 2
+            --accept 200,429 --exclude-mail
+            docs/**/*.md README.md CONTRIBUTING.md CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check docs references
         run: bash scripts/check_docs_refs.sh

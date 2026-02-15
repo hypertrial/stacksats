@@ -1,4 +1,4 @@
-"""Helpers for keeping docs/objects.md schema sections in sync with code."""
+"""Helpers for keeping StrategyTimeSeries schema docs in sync with code."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ COINMETRICS_LINEAGE_END = "<!-- END: STRATEGY_TIMESERIES_COINMETRICS_LINEAGE -->
 
 
 def objects_docs_path(root_dir: Path | None = None) -> Path:
-    """Return docs/objects.md path for repository root."""
+    """Return generated StrategyTimeSeries schema docs path for repository root."""
     base = root_dir or Path(__file__).resolve().parents[1]
-    return base / "docs" / "objects.md"
+    return base / "docs" / "reference" / "strategy-timeseries-schema.md"
 
 
 def _replace_section(content: str, begin: str, end: str, body: str) -> str:
@@ -30,7 +30,7 @@ def _replace_section(content: str, begin: str, end: str, body: str) -> str:
 
 
 def render_objects_docs(content: str) -> str:
-    """Return objects.md content with generated schema sections."""
+    """Return schema docs content with generated StrategyTimeSeries sections."""
     updated = _replace_section(
         content,
         STRATEGY_SCHEMA_BEGIN,
