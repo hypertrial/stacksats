@@ -3,33 +3,85 @@ site_description: Strategy-first Bitcoin DCA modeling and backtesting documentat
 site_url: https://hypertrial.github.io/stacksats/
 repo_url: https://github.com/hypertrial/stacksats
 repo_name: hypertrial/stacksats
+edit_uri: edit/main/docs/
 
 theme:
   name: material
+  language: en
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.expand
+    - navigation.indexes
+    - navigation.tracking
     - navigation.top
     - content.code.copy
+    - content.action.edit
+    - content.action.view
     - search.suggest
     - search.highlight
+    - toc.follow
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/hypertrial/stacksats
+      name: GitHub Repository
+    - icon: fontawesome/solid/globe
+      link: https://www.stackingsats.org
+      name: StackingSats Website
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - tables
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
   - toc:
       permalink: true
 
 nav:
-  - Home: index.md
-  - Getting Started:
-      - Commands: commands.md
-      - Validation Checklist: validation_checklist.md
-  - Core Design:
+  - Start:
+      - Welcome: index.md
+      - Quickstart: start/quickstart.md
+      - First Strategy Run: start/first-strategy-run.md
+  - Concepts:
       - Framework Boundary: framework.md
       - Model Internals: model.md
       - Backtest System: model_backtest.md
+  - Reference:
+      - CLI Commands: commands.md
       - Runtime Objects: objects.md
+      - Validation Checklist: validation_checklist.md
   - Maintainers:
       - Release Guide: release.md

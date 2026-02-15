@@ -235,6 +235,8 @@ __marimo__/
 *.xml
 *.html
 *.css
+!docs/stylesheets/
+!docs/stylesheets/*.css
 *.js
 *.ts
 *.tsx

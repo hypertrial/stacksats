@@ -1,23 +1,76 @@
 # StackSats Documentation
 
-Use this site as the primary entry point for StackSats docs.
+<div class="hero-block">
+  <p class="hero-kicker">Strategy-first Bitcoin DCA toolkit</p>
+  <h2>Build, validate, and backtest stacking sats strategies with a sealed allocation framework.</h2>
+  <p>
+    StackSats, developed by Hypertrial, is a Python package for strategy-first Bitcoin DCA ("stacking sats") research and execution.
+    Learn more at <a href="https://www.stackingsats.org">www.stackingsats.org</a>.
+  </p>
+</div>
 
-## Getting Started
+<div class="grid cards" markdown>
 
-- [Commands](commands.md): runnable CLI and example strategy commands
-- [Validation Checklist](validation_checklist.md): pre-submit validation and leakage checks
-- [Repository README](https://github.com/hypertrial/stacksats/blob/main/README.md): package overview and quick start
+-   :material-rocket-launch: __Start Fast__
 
-## Core Design
+    ---
 
-- [Framework Boundary](framework.md): canonical framework/user boundary and invariants
-- [Model Internals](model.md): signal/model internals and strategy runtime interfaces
-- [Backtest System](model_backtest.md): backtest pipeline, metrics, and artifact interpretation
-- [Runtime Objects](objects.md): fundamental runtime object contracts (`strategy`, `StrategyTimeSeries`)
+    New to StackSats? Use the guided onboarding path.
 
-## Maintainer Docs
+    [Quickstart](start/quickstart.md)
 
-- [Release Guide](release.md): packaging and PyPI release process
-- [Contributing Guide](https://github.com/hypertrial/stacksats/blob/main/CONTRIBUTING.md)
-- [Security Policy](https://github.com/hypertrial/stacksats/blob/main/SECURITY.md)
-- [Changelog](https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md)
+-   :material-code-braces: __Run Your First Strategy__
+
+    ---
+
+    Create a custom strategy and run validate/backtest/export.
+
+    [First Strategy Run](start/first-strategy-run.md)
+
+-   :material-shield-check: __Know the Contract__
+
+    ---
+
+    Understand framework-owned invariants and user-owned hooks.
+
+    [Framework Boundary](framework.md)
+
+-   :material-terminal: __CLI and Outputs__
+
+    ---
+
+    Use lifecycle commands and inspect artifact conventions.
+
+    [CLI Commands](commands.md)
+
+-   :material-chart-line: __Model + Backtest Internals__
+
+    ---
+
+    Deep-dive on feature engineering, scoring, and metrics behavior.
+
+    [Model Internals](model.md) | [Backtest System](model_backtest.md)
+
+-   :material-file-document-check: __Validation + Release__
+
+    ---
+
+    Operational checklists for strategy quality and maintainers.
+
+    [Validation Checklist](validation_checklist.md) | [Release Guide](release.md)
+
+</div>
+
+## What StackSats Gives You
+
+- Deterministic, invariant-enforced allocation behavior.
+- Clear separation between strategy intent and framework mechanics.
+- Reproducible lifecycle workflows for validate, backtest, and export.
+
+## Recommended Reading Path
+
+1. [Quickstart](start/quickstart.md)
+2. [First Strategy Run](start/first-strategy-run.md)
+3. [Framework Boundary](framework.md)
+4. [Model Internals](model.md)
+5. [CLI Commands](commands.md)
