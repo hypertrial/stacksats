@@ -211,6 +211,9 @@ __marimo__/
 /output
 
 *.svg
+!Stacking Sats Logo.svg
+!docs/assets/
+!docs/assets/*.svg
 *.png
 *.jpg
 *.jpeg

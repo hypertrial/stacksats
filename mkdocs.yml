@@ -19,6 +19,7 @@ plugins:
 
 theme:
   name: material
+  logo: assets/stacking-sats-logo.svg
   language: en
   font:
     text: IBM Plex Sans
