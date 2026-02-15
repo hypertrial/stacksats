@@ -53,6 +53,23 @@ def test_strategy_time_series_rejects_unknown_columns() -> None:
         StrategyTimeSeries(metadata=_metadata(), data=data)
 
 
+def test_strategy_time_series_accepts_coinmetrics_passthrough_column() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [42000.0, 43000.0, np.nan],
+            "SplyCur": [100.0, 101.0, 102.0],
+        }
+    )
+    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+
+    schema = series.schema()
+    assert "SplyCur" in schema
+    assert schema["SplyCur"].description == "CoinMetrics current circulating BTC supply."
+    assert schema["SplyCur"].source == "coinmetrics"
+
+
 def test_strategy_time_series_rejects_weight_sum_mismatch() -> None:
     data = pd.DataFrame(
         {
@@ -102,6 +119,29 @@ def test_strategy_time_series_batch_from_flat_dataframe() -> None:
     )
     first = batch.for_window("2024-01-01", "2024-01-02")
     assert len(first.data) == 2
+
+
+def test_strategy_time_series_batch_preserves_coinmetrics_passthrough_columns() -> None:
+    flat = pd.DataFrame(
+        {
+            "start_date": ["2024-01-01", "2024-01-01"],
+            "end_date": ["2024-01-02", "2024-01-02"],
+            "date": ["2024-01-01", "2024-01-02"],
+            "weight": [0.45, 0.55],
+            "price_usd": [40000.0, 41000.0],
+            "SplyCur": [100.0, 101.0],
+        }
+    )
+    batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+        flat,
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+    )
+
+    flattened = batch.to_dataframe()
+    assert "SplyCur" in flattened.columns
 
 
 def test_strategy_time_series_batch_rejects_duplicate_windows() -> None:

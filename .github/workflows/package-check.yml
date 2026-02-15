@@ -47,6 +47,9 @@ jobs:
       - name: Check docs references
         run: bash scripts/check_docs_refs.sh
 
+      - name: Check docs schema sync
+        run: python scripts/sync_objects_schema_docs.py --check
+
       - name: Run tests
         run: pytest tests/ -v -m "not performance"
 

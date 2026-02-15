@@ -97,96 +97,19 @@ def _(importlib_util, run_cmd, sys):
 def _(strategy_file, textwrap):
     strategy_source = textwrap.dedent(
         """
-        \"\"\"Notebook-defined example strategy for StackSats.\"\"\"
+        \"\"\"Notebook-defined strategy wrapper for StackSats.\"\"\"
 
         from __future__ import annotations
 
-        import numpy as np
-        import pandas as pd
-
-        from stacksats import model_development as model_lib
-        from stacksats import BaseStrategy, StrategyContext, TargetProfile
+        from examples.model_example import ExampleMVRVStrategy as _ExampleMVRVStrategy
 
 
-        class ExampleMVRVStrategy(BaseStrategy):
+        class ExampleMVRVStrategy(_ExampleMVRVStrategy):
             strategy_id = "example-mvrv-notebook"
-            version = "3.0.0"
-            description = "Notebook strategy matching stacksats.model_development logic."
-
-            @staticmethod
-            def _clean_array(values: pd.Series) -> np.ndarray:
-                arr = values.to_numpy(dtype=float)
-                return np.where(np.isfinite(arr), arr, 0.0)
-
-            def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-                # Runner already passes precomputed model features in ctx.features_df.
-                # Recomputing here drops raw MVRV inputs and degrades parity with runtime export.
-                return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-
-            def build_signals(
-                self,
-                ctx: StrategyContext,
-                features_df: pd.DataFrame,
-            ) -> dict[str, pd.Series]:
-                del ctx, features_df
-                return {}
-
-            def build_target_profile(
-                self,
-                ctx: StrategyContext,
-                features_df: pd.DataFrame,
-                signals: dict[str, pd.Series],
-            ) -> TargetProfile:
-                del ctx, signals
-                if features_df.empty:
-                    return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
-
-                n = len(features_df.index)
-                base = np.ones(n, dtype=float) / n
-
-                price_vs_ma = self._clean_array(features_df["price_vs_ma"])
-                mvrv_zscore = self._clean_array(features_df["mvrv_zscore"])
-                mvrv_gradient = self._clean_array(features_df["mvrv_gradient"])
-
-                if "mvrv_percentile" in features_df.columns:
-                    mvrv_percentile = self._clean_array(features_df["mvrv_percentile"])
-                    mvrv_percentile = np.where(mvrv_percentile == 0.0, 0.5, mvrv_percentile)
-                else:
-                    mvrv_percentile = None
-
-                if "mvrv_acceleration" in features_df.columns:
-                    mvrv_acceleration = self._clean_array(features_df["mvrv_acceleration"])
-                else:
-                    mvrv_acceleration = None
-
-                if "mvrv_volatility" in features_df.columns:
-                    mvrv_volatility = self._clean_array(features_df["mvrv_volatility"])
-                    mvrv_volatility = np.where(mvrv_volatility == 0.0, 0.5, mvrv_volatility)
-                else:
-                    mvrv_volatility = None
-
-                if "signal_confidence" in features_df.columns:
-                    signal_confidence = self._clean_array(features_df["signal_confidence"])
-                    signal_confidence = np.where(
-                        signal_confidence == 0.0,
-                        0.5,
-                        signal_confidence,
-                    )
-                else:
-                    signal_confidence = None
-
-                multiplier = model_lib.compute_dynamic_multiplier(
-                    price_vs_ma,
-                    mvrv_zscore,
-                    mvrv_gradient,
-                    mvrv_percentile,
-                    mvrv_acceleration,
-                    mvrv_volatility,
-                    signal_confidence,
-                )
-                raw = base * multiplier
-                absolute = pd.Series(raw, index=features_df.index, dtype=float)
-                return TargetProfile(values=absolute, mode="absolute")
+            version = "4.1.0"
+            description = (
+                "Notebook wrapper around the strict-robust CoinMetrics model example strategy."
+            )
         """
     ).lstrip()
     strategy_file.parent.mkdir(parents=True, exist_ok=True)
@@ -206,6 +129,8 @@ def _(run_cmd, strategy_file):
             "backtest",
             "--strategy",
             strategy_spec,
+            "--end-date",
+            "2026-01-31",
             "--output-dir",
             "output",
         ]
