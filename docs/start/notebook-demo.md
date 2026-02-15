@@ -16,7 +16,7 @@ It demonstrates:
 <div class="notebook-embed">
   <iframe
     title="StackSats marimo notebook demo"
-    src="../assets/notebooks/model_example_notebook.html"
+    src="../../assets/notebooks/model_example_notebook.html"
     loading="lazy"
     referrerpolicy="no-referrer"
   ></iframe>
@@ -24,7 +24,7 @@ It demonstrates:
 
 ## Open full notebook view
 
-- [Open the exported notebook directly](../assets/notebooks/model_example_notebook.html)
+- [Open the exported notebook directly](../../assets/notebooks/model_example_notebook.html)
 - [View notebook source (`examples/model_example_notebook.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook.py)
 
 ## Run it locally
