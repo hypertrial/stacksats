@@ -106,9 +106,9 @@ def _(strategy_file, textwrap):
 
         class ExampleMVRVStrategy(_ExampleMVRVStrategy):
             strategy_id = "example-mvrv-notebook"
-            version = "4.1.0"
+            version = "4.2.0"
             description = (
-                "Notebook wrapper around the strict-robust CoinMetrics model example strategy."
+                "Notebook wrapper around the score-focused CoinMetrics model example strategy."
             )
         """
     ).lstrip()

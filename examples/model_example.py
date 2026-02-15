@@ -1,9 +1,9 @@
-"""CoinMetrics-enhanced strategy wired to StackSats model_development logic.
+"""Score-focused CoinMetrics-enhanced strategy for StackSats.
 
-The strategy starts from the package's MVRV/MA multiplier and adds lagged
-CoinMetrics overlays (flow, activity, liquidity, exchange-supply share, miner
-pressure). It still hands only daily intent to the sealed framework allocation
-kernel.
+This strategy starts from the package MVRV/MA multiplier and adds lagged,
+regime-conditional CoinMetrics overlays with multi-horizon features and
+interaction terms. It only returns daily intent and leaves allocation mechanics
+to the sealed framework kernel.
 """
 
 from __future__ import annotations
@@ -26,22 +26,32 @@ from stacksats import model_development as model_lib
 
 
 class ExampleMVRVStrategy(BaseStrategy):
-    """MVRV strategy with CoinMetrics overlays and regime-aware gating."""
+    """MVRV strategy with score-focused CoinMetrics overlays."""
 
     strategy_id = "example-mvrv"
-    version = "4.1.0"
-    description = "MVRV + CoinMetrics overlays tuned for strict fold robustness."
+    version = "4.2.0"
+    description = "Score-focused MVRV + multi-horizon CoinMetrics overlays."
 
     coinmetrics_cache_path: Path = Path(
         os.environ.get("STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv")
     ).expanduser()
 
-    preference_temperature: float = 0.165
-    netflow_weight: float = 0.084
-    activity_weight: float = 0.584
-    liquidity_weight: float = 0.217
-    exchange_share_weight: float = 0.032
-    miner_pressure_weight: float = -0.176
+    # Dynamic temperature controls how aggressively baseline preference is used.
+    base_temperature: float = 0.58
+    temperature_confidence_boost: float = 0.55
+    temperature_volatility_penalty: float = 0.35
+    temperature_zone_boost: float = 0.14
+
+    # Overlay composition weights.
+    overlay_scale: float = 0.75
+    netflow_weight: float = 0.22
+    activity_weight: float = 0.30
+    liquidity_weight: float = 0.10
+    exchange_share_weight: float = 0.08
+    miner_pressure_weight: float = 0.12
+    roi_weight: float = 0.12
+    interaction_weight: float = 0.12
+    momentum_follow_weight: float = 0.18
 
     def __init__(self) -> None:
         self._coinmetrics_features: pd.DataFrame | None = None
@@ -59,6 +69,12 @@ class ExampleMVRVStrategy(BaseStrategy):
         with np.errstate(divide="ignore", invalid="ignore"):
             z = (series - mean) / std
         return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    @staticmethod
+    def _to_numeric(raw: pd.DataFrame, columns: list[str]) -> None:
+        for col in columns:
+            if col in raw.columns:
+                raw[col] = pd.to_numeric(raw[col], errors="coerce")
 
     def _load_coinmetrics_features(self) -> pd.DataFrame:
         if self._coinmetrics_features is not None:
@@ -79,85 +95,129 @@ class ExampleMVRVStrategy(BaseStrategy):
         raw.index = raw.index.normalize().tz_localize(None)
         raw = raw.loc[~raw.index.duplicated(keep="last")].sort_index()
 
-        numeric_cols = [
-            "PriceUSD",
-            "CapMrktCurUSD",
-            "FlowInExUSD",
-            "FlowOutExUSD",
-            "AdrActCnt",
-            "TxCnt",
-            "volume_reported_spot_usd_1d",
-            "SplyExNtv",
-            "SplyCur",
-            "IssTotUSD",
-            "HashRate",
-        ]
-        for col in numeric_cols:
-            if col in raw.columns:
-                raw[col] = pd.to_numeric(raw[col], errors="coerce")
+        self._to_numeric(
+            raw,
+            [
+                "PriceUSD",
+                "CapMrktCurUSD",
+                "FlowInExUSD",
+                "FlowOutExUSD",
+                "AdrActCnt",
+                "TxCnt",
+                "FeeTotNtv",
+                "volume_reported_spot_usd_1d",
+                "SplyExNtv",
+                "SplyCur",
+                "IssTotUSD",
+                "HashRate",
+                "ROI30d",
+                "ROI1yr",
+            ],
+        )
 
         features = pd.DataFrame(index=raw.index)
 
+        # Exchange flow pressure: fast/slow/slope variants.
         if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
             cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            netflow = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
-            features["cm_netflow_pressure"] = self._rolling_zscore(netflow, 90)
+            flow_ratio = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
+            flow_fast = flow_ratio.rolling(7, min_periods=3).mean()
+            flow_slow = flow_ratio.rolling(30, min_periods=10).mean()
+            features["cm_netflow_fast"] = self._rolling_zscore(flow_fast, 120)
+            features["cm_netflow_slow"] = self._rolling_zscore(flow_slow, 240)
+            features["cm_netflow_slope"] = self._rolling_zscore(flow_fast - flow_slow, 180)
         else:
-            features["cm_netflow_pressure"] = 0.0
+            features["cm_netflow_fast"] = 0.0
+            features["cm_netflow_slow"] = 0.0
+            features["cm_netflow_slope"] = 0.0
+
+        # Activity and divergence vs price momentum.
+        activity_parts: list[pd.Series] = []
+        if "AdrActCnt" in raw.columns:
+            activity_parts.append(self._rolling_zscore(np.log1p(raw["AdrActCnt"]), 365))
+        if "TxCnt" in raw.columns:
+            activity_parts.append(self._rolling_zscore(np.log1p(raw["TxCnt"]), 365))
+        if "FeeTotNtv" in raw.columns:
+            activity_parts.append(self._rolling_zscore(np.log1p(raw["FeeTotNtv"]), 365))
 
         if "PriceUSD" in raw.columns:
-            price_mom = self._rolling_zscore(np.log(raw["PriceUSD"]).diff(30), 365)
-            activity_parts: list[pd.Series] = []
-            if "AdrActCnt" in raw.columns:
-                activity_parts.append(self._rolling_zscore(np.log1p(raw["AdrActCnt"]), 365))
-            if "TxCnt" in raw.columns:
-                activity_parts.append(self._rolling_zscore(np.log1p(raw["TxCnt"]), 365))
-            if activity_parts:
-                activity = sum(activity_parts) / float(len(activity_parts))
-                features["cm_activity_divergence"] = activity - price_mom
-            else:
-                features["cm_activity_divergence"] = 0.0
+            price_log = np.log(raw["PriceUSD"].replace(0.0, np.nan))
+            mom_30 = self._rolling_zscore(price_log.diff(30), 365)
+            mom_90 = self._rolling_zscore(price_log.diff(90), 365)
         else:
-            features["cm_activity_divergence"] = 0.0
+            mom_30 = pd.Series(0.0, index=raw.index)
+            mom_90 = pd.Series(0.0, index=raw.index)
 
+        if activity_parts:
+            activity = sum(activity_parts) / float(len(activity_parts))
+            features["cm_activity_level"] = activity
+            features["cm_activity_div_fast"] = activity - mom_30
+            features["cm_activity_div_slow"] = activity - mom_90
+        else:
+            features["cm_activity_level"] = 0.0
+            features["cm_activity_div_fast"] = 0.0
+            features["cm_activity_div_slow"] = 0.0
+
+        # Liquidity level and short impulse.
         if "volume_reported_spot_usd_1d" in raw.columns:
-            liquidity = self._rolling_zscore(np.log1p(raw["volume_reported_spot_usd_1d"]), 90)
-            features["cm_liquidity_stress"] = liquidity
+            vol_log = np.log1p(raw["volume_reported_spot_usd_1d"])
+            features["cm_liquidity_level"] = self._rolling_zscore(vol_log, 180)
+            features["cm_liquidity_impulse"] = self._rolling_zscore(vol_log.diff(7), 120)
         else:
-            features["cm_liquidity_stress"] = 0.0
+            features["cm_liquidity_level"] = 0.0
+            features["cm_liquidity_impulse"] = 0.0
 
+        # Exchange supply share level + change.
         if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
             share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
-            features["cm_exchange_share"] = self._rolling_zscore(share, 180)
+            features["cm_exchange_share_level"] = self._rolling_zscore(share, 240)
+            features["cm_exchange_share_delta"] = self._rolling_zscore(share.diff(30), 240)
         else:
-            features["cm_exchange_share"] = 0.0
+            features["cm_exchange_share_level"] = 0.0
+            features["cm_exchange_share_delta"] = 0.0
 
+        # Miner pressure + hash momentum.
         issuance_pressure: pd.Series | None = None
-        hash_momentum: pd.Series | None = None
         if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
             cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            issuance_pressure = self._rolling_zscore(raw["IssTotUSD"] / cap, 180)
+            issuance_pressure = self._rolling_zscore(raw["IssTotUSD"] / cap, 240)
+
+        hash_momentum: pd.Series | None = None
         if "HashRate" in raw.columns:
-            hash_momentum = self._rolling_zscore(
-                np.log(raw["HashRate"].replace(0.0, np.nan)).diff(30), 365
-            )
-        if issuance_pressure is not None and hash_momentum is not None:
-            features["cm_miner_pressure"] = issuance_pressure - (0.5 * hash_momentum)
-        elif issuance_pressure is not None:
+            hash_log = np.log(raw["HashRate"].replace(0.0, np.nan))
+            hash_fast = self._rolling_zscore(hash_log.diff(30), 365)
+            hash_slow = self._rolling_zscore(hash_log.diff(90), 365)
+            hash_momentum = (0.6 * hash_fast) + (0.4 * hash_slow)
+
+        if issuance_pressure is not None:
             features["cm_miner_pressure"] = issuance_pressure
-        elif hash_momentum is not None:
-            features["cm_miner_pressure"] = -hash_momentum
         else:
             features["cm_miner_pressure"] = 0.0
 
+        if hash_momentum is not None:
+            features["cm_hash_momentum"] = hash_momentum
+        else:
+            features["cm_hash_momentum"] = 0.0
+
+        # ROI context gates.
+        if "ROI30d" in raw.columns:
+            features["cm_roi30"] = self._rolling_zscore(raw["ROI30d"], 365)
+        else:
+            features["cm_roi30"] = mom_30
+
+        if "ROI1yr" in raw.columns:
+            features["cm_roi1y"] = self._rolling_zscore(raw["ROI1yr"], 365)
+        else:
+            features["cm_roi1y"] = mom_90
+
         features = features.shift(1)
-        features = features.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-4.0, 4.0)
+        features = features.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        features = features.clip(-6.0, 6.0)
+
         self._coinmetrics_features = features
         return features
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        # Runner already passes precomputed model features in ctx.features_df.
-        # Add local CoinMetrics overlays (lagged) if cache is available.
         features = ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
         cm = self._load_coinmetrics_features()
         if cm.empty:
@@ -221,60 +281,104 @@ class ExampleMVRVStrategy(BaseStrategy):
         )
         base_preference = np.log(np.clip(multiplier, 1e-12, None))
 
-        netflow = self._clean_array(
-            features_df.get("cm_netflow_pressure", pd.Series(0.0, index=features_df.index))
+        def _col(name: str) -> np.ndarray:
+            return self._clean_array(features_df.get(name, pd.Series(0.0, index=features_df.index)))
+
+        netflow_fast = _col("cm_netflow_fast")
+        netflow_slow = _col("cm_netflow_slow")
+        netflow_slope = _col("cm_netflow_slope")
+
+        activity_level = _col("cm_activity_level")
+        activity_div_fast = _col("cm_activity_div_fast")
+        activity_div_slow = _col("cm_activity_div_slow")
+
+        liquidity_level = _col("cm_liquidity_level")
+        liquidity_impulse = _col("cm_liquidity_impulse")
+
+        exchange_level = _col("cm_exchange_share_level")
+        exchange_delta = _col("cm_exchange_share_delta")
+
+        miner_pressure = _col("cm_miner_pressure")
+        hash_momentum = _col("cm_hash_momentum")
+
+        roi30 = _col("cm_roi30")
+        roi1y = _col("cm_roi1y")
+
+        mvrv_zone = _col("mvrv_zone")
+        volatility = _col("mvrv_volatility") if "mvrv_volatility" in features_df else np.full(
+            len(features_df.index), 0.5
         )
-        activity = self._clean_array(
-            features_df.get("cm_activity_divergence", pd.Series(0.0, index=features_df.index))
-        )
-        liquidity = self._clean_array(
-            features_df.get("cm_liquidity_stress", pd.Series(0.0, index=features_df.index))
-        )
-        exchange_share = self._clean_array(
-            features_df.get("cm_exchange_share", pd.Series(0.0, index=features_df.index))
-        )
-        miner_pressure = self._clean_array(
-            features_df.get("cm_miner_pressure", pd.Series(0.0, index=features_df.index))
+        confidence = _col("signal_confidence") if "signal_confidence" in features_df else np.full(
+            len(features_df.index), 0.5
         )
 
-        mvrv_zone = self._clean_array(
-            features_df.get("mvrv_zone", pd.Series(0.0, index=features_df.index))
+        high_vol = np.clip((volatility - 0.5) / 0.5, 0.0, 1.0)
+        value_gate = np.where(mvrv_zone <= -1.0, 1.25, np.where(mvrv_zone >= 1.0, 0.75, 1.00))
+        risk_gate = np.where(mvrv_zone >= 1.0, 1.25, np.where(mvrv_zone <= -1.0, 0.75, 1.00))
+
+        zone_temp_boost = np.where(mvrv_zone <= -1.0, self.temperature_zone_boost, -0.05)
+        dynamic_temperature = (
+            self.base_temperature
+            + self.temperature_confidence_boost * (np.clip(confidence, 0.0, 1.0) - 0.5)
+            - self.temperature_volatility_penalty * high_vol
+            + zone_temp_boost
         )
-        volatility = self._clean_array(
-            features_df.get("mvrv_volatility", pd.Series(0.5, index=features_df.index))
-        )
-        confidence = self._clean_array(
-            features_df.get("signal_confidence", pd.Series(0.5, index=features_df.index))
+        dynamic_temperature = np.clip(dynamic_temperature, 0.20, 1.15)
+
+        netflow_component = (
+            (-0.55 * netflow_fast) + (-0.30 * netflow_slow) + (-0.15 * netflow_slope)
+        ) * risk_gate
+
+        activity_component = (
+            (0.40 * activity_level) + (0.40 * activity_div_fast) + (0.20 * activity_div_slow)
+        ) * value_gate
+
+        liquidity_component = (
+            (-0.65 * liquidity_level) + (-0.35 * liquidity_impulse)
+        ) * (0.60 + 0.40 * risk_gate) * (0.70 + 0.30 * high_vol)
+
+        exchange_component = (
+            (-0.70 * exchange_level) + (-0.30 * exchange_delta)
+        ) * risk_gate
+
+        miner_component = (
+            (-0.60 * miner_pressure) + (-0.40 * hash_momentum)
+        ) * (0.80 + 0.20 * risk_gate)
+
+        roi_component = ((-0.65 * roi30) + (-0.35 * roi1y)) * np.where(
+            mvrv_zone >= 1.0, 1.10, np.where(mvrv_zone <= -1.0, 0.80, 1.00)
         )
 
-        value_regime_gate = np.where(
-            mvrv_zone <= -1.0,
-            1.25,
-            np.where(mvrv_zone >= 1.0, 0.70, 1.00),
-        )
-        risk_regime_gate = np.where(
-            mvrv_zone >= 1.0,
-            1.25,
-            np.where(mvrv_zone <= -1.0, 0.70, 1.00),
+        interaction_component = (
+            (-netflow_fast * np.clip(roi30, -3.0, 3.0)) * 0.40
+            + (activity_div_fast * np.clip(confidence, 0.0, 1.0)) * 0.35
+            + (-liquidity_level * high_vol) * 0.25
         )
 
-        high_vol = np.clip((volatility - 0.5) * 2.0, 0.0, 1.0)
-        uncertainty_shrink = 1.0 - (0.30 * high_vol)
-        confidence_scale = 0.85 + (0.30 * np.clip(confidence, 0.0, 1.0))
+        momentum_follow = (
+            0.60 * np.tanh(roi30 / 2.0) + 0.40 * np.tanh(roi1y / 2.0)
+        ) * np.where(mvrv_zone >= 1.0, 0.60, 1.00)
 
         overlay = (
-            -self.netflow_weight * netflow * risk_regime_gate
-            + self.activity_weight * activity * value_regime_gate
-            - self.liquidity_weight * liquidity * risk_regime_gate
-            - self.exchange_share_weight * exchange_share * risk_regime_gate
-            - self.miner_pressure_weight * miner_pressure * risk_regime_gate
+            self.netflow_weight * netflow_component
+            + self.activity_weight * activity_component
+            + self.liquidity_weight * liquidity_component
+            + self.exchange_share_weight * exchange_component
+            + self.miner_pressure_weight * miner_component
+            + self.roi_weight * roi_component
+            + self.interaction_weight * interaction_component
+            + self.momentum_follow_weight * momentum_follow
         )
 
-        preference = (base_preference * self.preference_temperature) + (
-            overlay * uncertainty_shrink * confidence_scale
+        uncertainty_shrink = 1.0 - (0.25 * high_vol)
+        confidence_scale = 0.75 + (0.50 * np.clip(confidence, 0.0, 1.0))
+
+        preference = (base_preference * dynamic_temperature) + (
+            self.overlay_scale * overlay * uncertainty_shrink * confidence_scale
         )
         preference = np.where(np.isfinite(preference), preference, 0.0)
         preference = np.clip(preference, -50.0, 50.0)
+
         profile = pd.Series(preference, index=features_df.index, dtype=float)
         return TargetProfile(values=profile, mode="preference")
 
