@@ -11,6 +11,9 @@ python -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
 ```
 
 Optional deploy extras:
@@ -32,6 +35,10 @@ pytest tests/ -v
 python -m build
 python -m twine check dist/*
 ```
+
+Hook behavior:
+- `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
+- `pre-push` (every push): fast pytest suite plus `mkdocs build --strict`.
 
 You can also run the project helper:
 

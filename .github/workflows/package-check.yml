@@ -61,6 +61,7 @@ jobs:
 
   tests:
     name: tests-${{ matrix.name }}
+    if: ${{ (github.event_name == 'pull_request' && matrix.run_on_pr) || (github.event_name == 'push' && matrix.run_on_push) || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -69,9 +70,21 @@ jobs:
           - name: py311-full
             python_version: "3.11"
             test_target: tests/
+            extras: ".[dev,deploy]"
+            run_on_pr: false
+            run_on_push: true
+          - name: py311-core
+            python_version: "3.11"
+            test_target: tests/unit tests/bdd/scenarios
+            extras: ".[dev]"
+            run_on_pr: true
+            run_on_push: false
           - name: py312-smoke
             python_version: "3.12"
             test_target: tests/unit tests/bdd/scenarios
+            extras: ".[dev]"
+            run_on_pr: true
+            run_on_push: true
 
     steps:
       - name: Check out code
@@ -90,12 +103,12 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,deploy]"
+          pip install -e "${{ matrix.extras }}"
 
       - name: Run tests
         run: |
           pytest ${{ matrix.test_target }} -v -m "not performance and not slow" \
-            --durations=25 --durations-min=1.0
+            --durations=25 --durations-min=1.0 --dist=loadscope
 
   package:
     runs-on: ubuntu-latest

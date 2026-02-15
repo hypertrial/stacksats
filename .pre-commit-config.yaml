@@ -1,0 +1,42 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check .
+        language: system
+        pass_filenames: false
+
+      - id: docs-refs
+        name: docs refs check
+        entry: bash scripts/check_docs_refs.sh
+        language: system
+        pass_filenames: false
+
+      - id: schema-sync-check
+        name: docs schema sync check
+        entry: python scripts/sync_objects_schema_docs.py --check
+        language: system
+        pass_filenames: false
+
+      - id: pytest-fast
+        name: pytest fast suite
+        entry: pytest tests/unit tests/bdd/scenarios -m "not performance and not slow" -q --maxfail=1 --dist=loadscope
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: mkdocs-strict
+        name: mkdocs strict build
+        entry: mkdocs build --strict
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
