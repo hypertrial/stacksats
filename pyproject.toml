@@ -36,7 +36,7 @@ dependencies = [
 Homepage = "https://github.com/hypertrial/stacksats"
 Repository = "https://github.com/hypertrial/stacksats"
 Source = "https://github.com/hypertrial/stacksats"
-Documentation = "https://github.com/hypertrial/stacksats/tree/main/docs"
+Documentation = "https://hypertrial.github.io/stacksats/"
 Issues = "https://github.com/hypertrial/stacksats/issues"
 Changelog = "https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md"
 Security = "https://github.com/hypertrial/stacksats/security/policy"
@@ -58,6 +58,8 @@ dev = [
   "hypothesis>=6.0.0",
   "ruff>=0.1.0",
   "vulture",
+  "mkdocs>=1.6.0",
+  "mkdocs-material>=9.5.0",
 ]
 
 [project.scripts]

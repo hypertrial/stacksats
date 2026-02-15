@@ -116,6 +116,8 @@ Trusted Publishing removes the need for stored PyPI secrets in GitHub.
 
 - `.github/workflows/package-check.yml`
 - `.github/workflows/publish-pypi.yml`
+- `.github/workflows/docs-check.yml`
+- `.github/workflows/docs-pages.yml`
 
 ### Configure Trusted Publisher on PyPI
 
@@ -135,6 +137,12 @@ In PyPI project settings, add a Trusted Publisher with:
 - Pull requests run packaging checks (`package-check.yml`).
 - Pushes of tags matching `v*` publish to PyPI (`publish-pypi.yml`).
 - PyPI publish job validates tag/version consistency before upload.
+- Pull requests also run docs build checks (`docs-check.yml`).
+- Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
+
+## GitHub Pages Source
+
+Configure Pages source to `GitHub Actions`.
 
 ## End-to-End Validation Runbook
 

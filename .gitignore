@@ -231,6 +231,7 @@ __marimo__/
 !.github/workflows/
 !.github/workflows/*.yml
 !.github/workflows/*.yaml
+!mkdocs.yml
 *.xml
 *.html
 *.css

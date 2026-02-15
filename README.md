@@ -14,6 +14,7 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 Start with the docs at [`docs/framework.md`](docs/framework.md). It is the canonical framework contract and the best first read before using StackSats.
 
 For the full docs index, see [`docs/README.md`](docs/README.md).
+Hosted docs site: <https://hypertrial.github.io/stacksats/>.
 
 ## Framework Principles
 

@@ -13,6 +13,10 @@ hypothesis>=6.0.0
 ruff>=0.1.0
 vulture
 
+# Documentation
+mkdocs>=1.6.0
+mkdocs-material>=9.5.0
+
 # Core dependencies (also in requirements.txt)
 numpy
 pandas
@@ -23,4 +27,3 @@ requests
 psycopg2-binary
 python-dotenv
 tenacity
-
