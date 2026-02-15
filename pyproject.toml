@@ -35,6 +35,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/hypertrial/stacksats"
 Repository = "https://github.com/hypertrial/stacksats"
+Source = "https://github.com/hypertrial/stacksats"
 Documentation = "https://github.com/hypertrial/stacksats/tree/main/docs"
 Issues = "https://github.com/hypertrial/stacksats/issues"
 Changelog = "https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md"
