@@ -93,17 +93,13 @@ body {
   padding: 1.2rem 1.25rem;
   border-radius: 0.9rem;
   border: 1px solid rgba(248, 147, 26, 0.35);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(248, 147, 26, 0.18), transparent 55%),
-    linear-gradient(135deg, rgba(46, 38, 63, 0.62), rgba(28, 30, 55, 0.4));
+  background: var(--surface-1);
   margin-bottom: 1rem;
 }
 
 [data-md-color-scheme="slate"] .hero-block {
   border-color: rgba(248, 147, 26, 0.35);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(248, 147, 26, 0.18), transparent 55%),
-    linear-gradient(135deg, rgba(46, 38, 63, 0.62), rgba(28, 30, 55, 0.4));
+  background: var(--surface-1);
 }
 
 .hero-kicker {
