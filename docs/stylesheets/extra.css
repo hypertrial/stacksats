@@ -47,7 +47,7 @@
 }
 
 body {
-  background: radial-gradient(circle at 15% -10%, var(--surface-1), transparent 45%), var(--bg-2);
+  background: var(--bg-2);
   color: var(--text);
 }
 

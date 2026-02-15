@@ -6,9 +6,16 @@ cd "${ROOT_DIR}"
 
 mkdir -p docs/assets/notebooks
 
-# marimo writes logs under HOME; default to /tmp if HOME is unavailable.
-HOME="${HOME:-/tmp}" marimo export html \
+# marimo writes logs under HOME; force a writable HOME for CI and sandboxes.
+export HOME="${MARIMO_HOME:-/tmp}"
+
+marimo export html \
   examples/model_example_notebook.py \
   -o docs/assets/notebooks/model_example_notebook.html
 
+marimo export html \
+  examples/model_example_notebook_browser.py \
+  -o docs/assets/notebooks/model_example_notebook_browser.html
+
 echo "Exported docs/assets/notebooks/model_example_notebook.html"
+echo "Exported docs/assets/notebooks/model_example_notebook_browser.html"

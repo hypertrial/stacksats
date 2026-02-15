@@ -1,35 +1,43 @@
 ---
 title: Notebook Demo
-description: Embedded marimo notebook preview demonstrating the StackSats model example workflow.
+description: Embedded browser-safe marimo notebook demo for strategy logic, metrics, and charts.
 ---
 
 # Notebook Demo
 
-Use this embedded marimo notebook to quickly see the StackSats workflow end-to-end.
+Use this embedded browser-safe marimo notebook to quickly see a StackSats-style strategy workflow end-to-end.
 
 It demonstrates:
 
-- environment/dependency checks in-notebook
-- running a strategy backtest via the StackSats CLI
-- generated artifact location and summary output
+- in-memory market data generation
+- strategy signal and dynamic DCA policy logic
+- backtest summary metrics and visualizations
 
 <div class="notebook-embed">
   <iframe
-    title="StackSats marimo notebook demo"
-    src="../../assets/notebooks/model_example_notebook.html"
+    title="StackSats browser-safe marimo notebook demo"
+    src="../../assets/notebooks/model_example_notebook_browser.html"
     loading="lazy"
     referrerpolicy="no-referrer"
   ></iframe>
 </div>
 
-## Open full notebook view
+## Open notebook views
 
-- [Open the exported notebook directly](https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook.html)
-- [View notebook source (`examples/model_example_notebook.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook.py)
+- [Open browser-safe exported notebook](../../assets/notebooks/model_example_notebook_browser.html)
+- [View browser-safe notebook source (`examples/model_example_notebook_browser.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook_browser.py)
+- [Open full local exported notebook](../../assets/notebooks/model_example_notebook.html)
+- [View full local notebook source (`examples/model_example_notebook.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook.py)
 
-## Run it locally
+## Run locally
 
 From repository root in your active virtualenv:
+
+```bash
+marimo edit examples/model_example_notebook_browser.py
+```
+
+For the full package + CLI workflow notebook:
 
 ```bash
 marimo edit examples/model_example_notebook.py
