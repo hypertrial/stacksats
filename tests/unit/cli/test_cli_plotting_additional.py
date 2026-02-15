@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from stacksats import cli
-from stacksats.matplotlib_setup import configure_matplotlib_env
+from stacksats.matplotlib_setup import _is_writable_dir, configure_matplotlib_env
 from stacksats.plot_mvrv import plot_mvrv_metrics
 from stacksats.plot_weights import main as main_weights
 
@@ -144,3 +144,10 @@ def test_configure_matplotlib_env_preserves_existing_writable_env(
 
     assert os.environ["XDG_CACHE_HOME"] == xdg
     assert os.environ["MPLCONFIGDIR"] == mpl
+
+
+def test_is_writable_dir_returns_false_when_path_is_a_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "not-a-dir"
+    file_path.write_text("content", encoding="utf-8")
+
+    assert _is_writable_dir(file_path) is False

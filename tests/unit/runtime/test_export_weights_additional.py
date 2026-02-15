@@ -251,3 +251,60 @@ def test_update_today_weights_uses_weight_only_sql_when_price_stays_none(
     sql_text = "\n".join(call.args[0] for call in cursor.execute.call_args_list if call.args)
     assert "SET weight = v.weight" in sql_text
     assert "btc_usd = v.btc_usd" not in sql_text
+
+
+def test_get_current_btc_price_returns_none_when_all_sources_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "stacksats.export_weights.fetch_btc_price_robust",
+        lambda previous_price=None: None,
+    )
+
+    price = get_current_btc_price(previous_price=49000.0)
+
+    assert price is None
+
+
+def test_update_today_weights_raises_when_required_columns_missing() -> None:
+    conn = MagicMock()
+    df_missing_price = pd.DataFrame(
+        {
+            "day_index": [0],
+            "start_date": ["2024-01-01"],
+            "end_date": ["2024-12-31"],
+            "date": ["2024-01-01"],
+            "weight": [1.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires canonical columns"):
+        update_today_weights(conn, df_missing_price, today_str="2024-01-01")
+
+
+def test_update_today_weights_returns_zero_when_no_api_price_and_today_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = (None,)
+
+    monkeypatch.setattr(
+        "stacksats.export_weights.get_current_btc_price",
+        lambda previous_price=None: None,
+    )
+
+    df = pd.DataFrame(
+        {
+            "day_index": [0],
+            "start_date": ["2024-01-01"],
+            "end_date": ["2024-12-31"],
+            "date": ["2024-01-02"],
+            "price_usd": [50000.0],
+            "weight": [1.0],
+        }
+    )
+
+    updated = update_today_weights(conn, df, today_str="2024-01-01")
+
+    assert updated == 0
