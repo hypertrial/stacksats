@@ -40,7 +40,7 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
     [Framework Boundary](framework.md)
 
--   :material-terminal: __CLI and Outputs__
+-   :material-console: __CLI and Outputs__
 
     ---
 

@@ -119,7 +119,8 @@ Trusted Publishing removes the need for stored PyPI secrets in GitHub.
 
 ### Workflow files used by this repository
 
-- `.github/workflows/package-check.yml`
+- `.github/workflows/package-check.yml` (push to `main`)
+- `.github/workflows/package-check-pr.yml` (pull requests)
 - `.github/workflows/publish-pypi.yml`
 - `.github/workflows/docs-check.yml`
 - `.github/workflows/docs-pages.yml`
@@ -139,7 +140,8 @@ In PyPI project settings, add a Trusted Publisher with:
 
 ## Automated Release Flow
 
-- Pull requests run packaging checks (`package-check.yml`).
+- Pull requests run packaging checks (`package-check-pr.yml`).
+- Pushes to `main` run packaging checks (`package-check.yml`).
 - Pushes of tags matching `v*` publish to PyPI (`publish-pypi.yml`).
 - PyPI publish job validates tag/version consistency before upload.
 - Pull requests also run docs quality checks (`docs-check.yml`):
@@ -158,7 +160,7 @@ Configure Pages source to `GitHub Actions`.
 
 Use this sequence after workflows are merged:
 
-1. Open a PR with release notes/changelog updates and verify `package-check.yml` passes.
+1. Open a PR with release notes/changelog updates and verify `package-check-pr.yml` passes.
 2. Create and push annotated tag `vX.Y.Z`.
 3. Verify `publish-pypi.yml` succeeds.
 4. Install from PyPI in a fresh virtual environment and run command smoke tests.

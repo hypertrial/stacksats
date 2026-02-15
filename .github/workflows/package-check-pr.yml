@@ -1,7 +1,7 @@
-name: package-check
+name: package-check-pr
 
 on:
-  push:
+  pull_request:
     branches:
       - main
     paths-ignore:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-check-${{ github.ref }}
+  group: package-check-pr-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -58,10 +58,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: py311-full
+          - name: py311-core
             python_version: "3.11"
-            test_target: tests/
-            extras: ".[dev,deploy]"
+            test_target: tests/unit tests/bdd/scenarios
+            extras: ".[dev]"
           - name: py312-smoke
             python_version: "3.12"
             test_target: tests/unit tests/bdd/scenarios
