@@ -1,38 +1,109 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
 
 :root {
-  --stacksats-gold: #f5a623;
-  --stacksats-slate: #0f172a;
-  --stacksats-ink: #111827;
+  --bg-0: #0e0e1f;
+  --bg-1: #171839;
+  --bg-2: #1e1e44;
+  --surface-1: #2e263f;
+
+  --brand: #f8931a;
+  --brand-2: #e89339;
+
+  --text: #ffffff;
+  --text-muted: #a5a5b4;
+
+  --neutral-1: #efd7bd;
+  --accent-brown: #855d4a;
 }
 
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: var(--stacksats-ink);
-  --md-primary-fg-color--light: #1f2937;
-  --md-primary-fg-color--dark: #000000;
-  --md-accent-fg-color: var(--stacksats-gold);
+  --md-default-bg-color: var(--bg-2);
+  --md-default-fg-color: var(--text);
+  --md-default-fg-color--light: var(--text-muted);
+  --md-default-fg-color--lighter: var(--text-muted);
+  --md-default-fg-color--lightest: var(--text-muted);
+  --md-primary-fg-color: var(--bg-0);
+  --md-primary-fg-color--light: var(--bg-1);
+  --md-primary-fg-color--dark: #080812;
+  --md-accent-fg-color: var(--brand);
+  --md-typeset-a-color: var(--brand);
+  --md-code-bg-color: #15152b;
+  --md-code-fg-color: var(--neutral-1);
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #0b1220;
-  --md-accent-fg-color: #fbbf24;
+  --md-default-bg-color: var(--bg-2);
+  --md-default-fg-color: var(--text);
+  --md-default-fg-color--light: var(--text-muted);
+  --md-default-fg-color--lighter: var(--text-muted);
+  --md-default-fg-color--lightest: var(--text-muted);
+  --md-primary-fg-color: var(--bg-0);
+  --md-primary-fg-color--light: var(--bg-1);
+  --md-primary-fg-color--dark: #080812;
+  --md-accent-fg-color: var(--brand);
+  --md-typeset-a-color: var(--brand);
+  --md-code-bg-color: #15152b;
+  --md-code-fg-color: var(--neutral-1);
+}
+
+body {
+  background: radial-gradient(circle at 15% -10%, var(--surface-1), transparent 45%), var(--bg-2);
+  color: var(--text);
+}
+
+.md-header {
+  background: linear-gradient(90deg, var(--bg-0), var(--bg-1));
+  box-shadow: 0 1px 0 rgba(248, 147, 26, 0.18);
+}
+
+.md-tabs {
+  background: var(--bg-1);
+}
+
+.md-sidebar--primary,
+.md-sidebar--secondary,
+.md-nav,
+.md-search__form {
+  background: var(--bg-1);
+}
+
+.md-nav__link:hover,
+.md-nav__link:focus,
+.md-typeset a:hover,
+.md-typeset a:focus {
+  color: var(--brand-2);
+}
+
+.md-typeset code {
+  border: 1px solid rgba(239, 215, 189, 0.1);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  background: rgba(23, 24, 57, 0.8);
+  border-color: rgba(248, 147, 26, 0.32);
+}
+
+.md-footer {
+  background: var(--bg-0);
+  color: var(--text-muted);
 }
 
 .hero-block {
   padding: 1.2rem 1.25rem;
   border-radius: 0.9rem;
-  border: 1px solid rgba(245, 166, 35, 0.32);
+  border: 1px solid rgba(248, 147, 26, 0.35);
   background:
-    radial-gradient(circle at 0% 0%, rgba(245, 166, 35, 0.12), transparent 55%),
-    linear-gradient(135deg, rgba(17, 24, 39, 0.04), rgba(17, 24, 39, 0.01));
+    radial-gradient(circle at 0% 0%, rgba(248, 147, 26, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(46, 38, 63, 0.62), rgba(28, 30, 55, 0.4));
   margin-bottom: 1rem;
 }
 
 [data-md-color-scheme="slate"] .hero-block {
-  border-color: rgba(251, 191, 36, 0.36);
+  border-color: rgba(248, 147, 26, 0.35);
   background:
-    radial-gradient(circle at 0% 0%, rgba(251, 191, 36, 0.18), transparent 55%),
-    linear-gradient(135deg, rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.2));
+    radial-gradient(circle at 0% 0%, rgba(248, 147, 26, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(46, 38, 63, 0.62), rgba(28, 30, 55, 0.4));
 }
 
 .hero-kicker {
@@ -41,7 +112,7 @@
   letter-spacing: 0.08em;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--stacksats-gold);
+  color: var(--brand);
 }
 
 .hero-block h2 {
@@ -52,15 +123,21 @@
 .md-typeset .grid.cards > ol > li,
 .md-typeset .grid.cards > ul > li {
   border-radius: 0.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(248, 147, 26, 0.2);
+  background: linear-gradient(150deg, rgba(23, 24, 57, 0.92), rgba(46, 38, 63, 0.68));
 }
 
 [data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li,
 [data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li {
-  border-color: rgba(148, 163, 184, 0.3);
+  border-color: rgba(248, 147, 26, 0.2);
 }
 
 .md-typeset .admonition.tip,
 .md-typeset details.tip {
-  border-color: rgba(245, 166, 35, 0.45);
+  border-color: rgba(248, 147, 26, 0.45);
+}
+
+.md-button--primary {
+  background-color: var(--accent-brown);
+  border-color: var(--accent-brown);
 }
