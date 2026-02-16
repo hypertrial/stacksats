@@ -59,6 +59,12 @@ Run the packaged example strategy:
 python examples/model_example.py
 ```
 
+Artifacts are written under:
+
+```text
+output/<strategy_id>/<version>/<run_id>/
+```
+
 For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/commands.md`](docs/commands.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 

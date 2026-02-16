@@ -76,7 +76,7 @@ python examples/model_example.py \
 What this does:
 - Runs `strategy.validate(...)`
 - Runs `strategy.backtest(...)`
-- Writes plots + JSON output to `output/`
+- Writes plots + JSON output under `output/<strategy_id>/<version>/<run_id>/`
 
 ## 2) Validate Strategy via Strategy Lifecycle CLI
 
@@ -145,6 +145,7 @@ This includes:
 
 Notes:
 - `stacksats strategy export` is strategy artifact export (filesystem output).
+- `--start-date` and `--end-date` are required for `stacksats strategy export`.
 
 ## 5) Useful Development Commands
 

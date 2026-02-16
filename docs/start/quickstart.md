@@ -31,7 +31,11 @@ Use this page for a 5-minute first run.
 python examples/model_example.py
 ```
 
-This runs validation and backtest, then writes artifacts to `output/`.
+This runs validation and backtest, then writes artifacts under:
+
+```text
+output/<strategy_id>/<version>/<run_id>/
+```
 
 ## 3) Use the Strategy Lifecycle CLI
 

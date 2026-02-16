@@ -50,10 +50,19 @@ class ValidationConfig:
     max_boundary_hit_rate: float = 0.85
 
 
+def _default_export_range_start() -> str:
+    today = pd.Timestamp.now().normalize()
+    return (today - pd.Timedelta(days=364)).strftime("%Y-%m-%d")
+
+
+def _default_export_range_end() -> str:
+    return pd.Timestamp.now().normalize().strftime("%Y-%m-%d")
+
+
 @dataclass(frozen=True)
 class ExportConfig:
-    range_start: str = "2025-12-01"
-    range_end: str = "2027-12-31"
+    range_start: str = field(default_factory=_default_export_range_start)
+    range_end: str = field(default_factory=_default_export_range_end)
     output_dir: str = "output"
     btc_price_col: str = "PriceUSD_coinmetrics"
 

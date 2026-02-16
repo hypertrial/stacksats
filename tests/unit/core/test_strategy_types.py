@@ -28,8 +28,12 @@ def test_strategy_context_defaults() -> None:
 def test_config_defaults() -> None:
     assert BacktestConfig().output_dir == "output"
     assert ValidationConfig().min_win_rate == 50.0
-    assert ExportConfig().output_dir == "output"
-    assert ExportConfig().range_start == "2025-12-01"
+    export_config = ExportConfig()
+    assert export_config.output_dir == "output"
+    start = pd.to_datetime(export_config.range_start)
+    end = pd.to_datetime(export_config.range_end)
+    assert end >= start
+    assert (end - start).days in {364, 365}
 
 
 def test_strategy_artifact_set_fields() -> None:

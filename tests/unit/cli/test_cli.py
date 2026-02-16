@@ -145,6 +145,7 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
         row_count = 2
         window_count = 1
         schema_version = "1.0.0"
+        run_id = "run-123"
 
     class FakeRunner:
         def export(self, strategy, config):
@@ -166,6 +167,10 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
             "export",
             "--strategy",
             "dummy.py:Dummy",
+            "--start-date",
+            "2025-12-01",
+            "--end-date",
+            "2027-12-31",
         ],
     )
 
@@ -200,6 +205,7 @@ def test_cli_module_dunder_main_executes(monkeypatch) -> None:
         row_count = 1
         window_count = 1
         schema_version = "1.0.0"
+        run_id = "run-main"
 
     class FakeRunner:
         def export(self, strategy, config):
@@ -221,6 +227,10 @@ def test_cli_module_dunder_main_executes(monkeypatch) -> None:
             "export",
             "--strategy",
             "dummy.py:Dummy",
+            "--start-date",
+            "2025-12-01",
+            "--end-date",
+            "2027-12-31",
         ],
     )
 

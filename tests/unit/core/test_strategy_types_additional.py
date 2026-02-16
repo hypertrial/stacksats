@@ -173,7 +173,11 @@ def test_default_config_methods_include_strategy_metadata() -> None:
 
     assert strategy.default_backtest_config().strategy_label == strategy.strategy_id
     assert strategy.default_validation_config().min_win_rate == 50.0
-    assert strategy.default_export_config().range_start == "2025-12-01"
+    export_config = strategy.default_export_config()
+    start = pd.to_datetime(export_config.range_start)
+    end = pd.to_datetime(export_config.range_end)
+    assert end >= start
+    assert (end - start).days in {364, 365}
 
 
 def test_strategy_wrapper_methods_delegate_to_runner(monkeypatch: pytest.MonkeyPatch) -> None:

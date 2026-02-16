@@ -407,8 +407,13 @@ def main() -> None:
         )
     )
     print(result.summary())
-    result.plot(output_dir=args.output_dir)
-    result.to_json(f"{args.output_dir}/backtest_result.json")
+    output_root = (
+        Path(args.output_dir) / result.strategy_id / result.strategy_version / result.run_id
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    result.plot(output_dir=str(output_root))
+    result.to_json(output_root / "backtest_result.json")
+    print(f"Saved: {output_root}")
 
 
 if __name__ == "__main__":

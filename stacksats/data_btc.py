@@ -14,6 +14,10 @@ import requests
 from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
 
 
+class DataLoadError(RuntimeError):
+    """Raised when BTC source data cannot be loaded safely."""
+
+
 def _is_cache_usable(csv_bytes: bytes, backtest_start: pd.Timestamp, today: pd.Timestamp) -> bool:
     """Return True when cached CoinMetrics data appears complete and usable."""
     try:
@@ -56,38 +60,65 @@ class BTCDataProvider:
         today = now.normalize()
         backtest_start_ts = pd.to_datetime(backtest_start)
 
+        def _download_csv(*, cache_available: bool) -> bytes:
+            try:
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                return response.content
+            except requests.RequestException as exc:
+                cache_note = (
+                    " A local cache file exists but was not usable."
+                    if cache_available
+                    else " No local cache file was available."
+                )
+                raise DataLoadError(
+                    "Unable to download CoinMetrics BTC data."
+                    " Check internet/proxy settings and retry."
+                    f"{cache_note}"
+                ) from exc
+
         if use_cache:
             cache_path = Path(self.cache_dir).expanduser() / "coinmetrics_btc.csv"
             if cache_path.exists():
                 age_hours = (now.timestamp() - cache_path.stat().st_mtime) / 3600.0
                 if age_hours <= self.max_age_hours:
-                    cached_bytes = cache_path.read_bytes()
+                    try:
+                        cached_bytes = cache_path.read_bytes()
+                    except OSError:
+                        cached_bytes = b""
                     if _is_cache_usable(cached_bytes, backtest_start_ts, today):
                         csv_bytes = cached_bytes
                     else:
-                        response = requests.get(url, timeout=30)
-                        response.raise_for_status()
-                        csv_bytes = response.content
+                        csv_bytes = _download_csv(cache_available=True)
                         cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        cache_path.write_bytes(csv_bytes)
+                        try:
+                            cache_path.write_bytes(csv_bytes)
+                        except OSError as exc:
+                            logging.warning("Could not write cache file %s: %s", cache_path, exc)
                 else:
-                    response = requests.get(url, timeout=30)
-                    response.raise_for_status()
-                    csv_bytes = response.content
+                    csv_bytes = _download_csv(cache_available=True)
                     cache_path.parent.mkdir(parents=True, exist_ok=True)
-                    cache_path.write_bytes(csv_bytes)
+                    try:
+                        cache_path.write_bytes(csv_bytes)
+                    except OSError as exc:
+                        logging.warning("Could not write cache file %s: %s", cache_path, exc)
             else:
-                response = requests.get(url, timeout=30)
-                response.raise_for_status()
-                csv_bytes = response.content
+                csv_bytes = _download_csv(cache_available=False)
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_bytes(csv_bytes)
+                try:
+                    cache_path.write_bytes(csv_bytes)
+                except OSError as exc:
+                    logging.warning("Could not write cache file %s: %s", cache_path, exc)
         else:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            csv_bytes = response.content
+            csv_bytes = _download_csv(cache_available=False)
 
-        df = pd.read_csv(BytesIO(csv_bytes))
+        try:
+            df = pd.read_csv(BytesIO(csv_bytes))
+        except Exception as exc:
+            raise DataLoadError(
+                "Downloaded CoinMetrics data could not be parsed as CSV."
+                " If the issue persists, remove the local cache file and retry."
+            ) from exc
         df["time"] = pd.to_datetime(df["time"])
         df.set_index("time", inplace=True)
         df.index = df.index.normalize().tz_localize(None)
