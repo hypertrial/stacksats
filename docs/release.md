@@ -132,11 +132,11 @@ In PyPI project settings, add a Trusted Publisher with:
 - Owner: `hypertrial`
 - Repository: `stacksats`
 - Workflow filename: `publish-pypi.yml`
-- Environment (recommended): `pypi`
+- Environment: leave blank unless the workflow job is explicitly bound to a GitHub environment.
 
-### Recommended GitHub environment protections
+### Optional GitHub environment protections
 
-- `pypi`: required reviewer(s), protected branch/tag rules.
+If you bind the publish job to a GitHub environment (for example `pypi`), the PyPI trusted publisher must include the exact same environment name.
 
 ## Automated Release Flow
 
