@@ -1,14 +1,11 @@
 ---
 title: Release Guide
-description: Manual and automated release process for StackSats package and documentation workflows.
+description: Manual-first release process for StackSats package and documentation workflows.
 ---
 
 # Release Guide
 
-This guide covers both:
-
-- Manual PyPI releases (immediate baseline).
-- Automated releases using Trusted Publishing with GitHub Actions OIDC.
+This guide is manual-first. It covers token-based PyPI releases.
 
 ## Release Policy
 
@@ -35,9 +32,9 @@ python -m pip install --upgrade pip
 python -m pip install --upgrade build twine
 ```
 
-### Local token handling (manual fallback)
+### Local token handling (default)
 
-For manual uploads, use PyPI API tokens locally only. Do not commit them.
+Use PyPI API tokens locally only. Do not commit them.
 
 Example with environment variables:
 
@@ -87,12 +84,10 @@ python -m build
 python -m twine check dist/*
 ```
 
-### 4) Publish to PyPI
+### 4) Publish to PyPI (default)
 
 ```bash
-export TWINE_USERNAME=__token__
-export TWINE_PASSWORD="<pypi-token>"
-python -m twine upload dist/*
+bash scripts/publish_pypi_manual.sh
 ```
 
 ### 5) Tag release
@@ -113,37 +108,11 @@ The tag is the source of truth for the version. No manual version bump is requir
   - `stacksats-plot-mvrv`
   - `stacksats-plot-weights`
 
-## Trusted Publishing (OIDC) Setup
-
-Trusted Publishing removes the need for stored PyPI secrets in GitHub.
-
-### Workflow files used by this repository
-
-- `.github/workflows/package-check.yml` (push to `main`)
-- `.github/workflows/package-check-pr.yml` (pull requests)
-- `.github/workflows/publish-pypi.yml`
-- `.github/workflows/docs-check.yml`
-- `.github/workflows/docs-pages.yml`
-
-### Configure Trusted Publisher on PyPI
-
-In PyPI project settings, add a Trusted Publisher with:
-
-- Owner: `hypertrial`
-- Repository: `stacksats`
-- Workflow filename: `publish-pypi.yml`
-- Environment: leave blank unless the workflow job is explicitly bound to a GitHub environment.
-
-### Optional GitHub environment protections
-
-If you bind the publish job to a GitHub environment (for example `pypi`), the PyPI trusted publisher must include the exact same environment name.
-
-## Automated Release Flow
+## CI Workflow Notes
 
 - Pull requests run packaging checks (`package-check-pr.yml`).
 - Pushes to `main` run packaging checks (`package-check.yml`).
-- Pushes of tags matching `v*` publish to PyPI (`publish-pypi.yml`).
-- PyPI publish job validates tag/version consistency before upload.
+- PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
 - Pull requests also run docs quality checks (`docs-check.yml`):
   - markdown lint
   - spelling checks
@@ -162,19 +131,19 @@ Use this sequence after workflows are merged:
 
 1. Open a PR with release notes/changelog updates and verify `package-check-pr.yml` passes.
 2. Create and push annotated tag `vX.Y.Z`.
-3. Verify `publish-pypi.yml` succeeds.
-4. Install from PyPI in a fresh virtual environment and run command smoke tests.
+3. Run `bash scripts/publish_pypi_manual.sh`.
+4. Verify package page on PyPI.
+5. Install from PyPI in a fresh virtual environment and run command smoke tests.
 
 Expected results:
 
-- No PyPI API tokens are configured in GitHub repository secrets.
-- PyPI publishes only from `v*` tags.
-- Tag/version mismatch fails before publish.
+- Manual publish succeeds with local `PYPI_API_KEY`.
+- Local build and `twine check` pass before upload.
 
 ## Operational Notes
 
-- Do not store PyPI tokens in GitHub Secrets when using OIDC Trusted Publishing.
-- Keep manual twine upload steps documented for emergency fallback only.
+- Do not commit PyPI tokens or store them in repository files.
+- Keep `scripts/publish_pypi_manual.sh` as the default release path.
 - If a release fails after version/tag creation, bump to the next version and retry; do not overwrite versions.
 - Keep contributor and policy docs current:
   - `CONTRIBUTING.md`

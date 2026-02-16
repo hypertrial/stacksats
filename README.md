@@ -1,6 +1,6 @@
 # StackSats
 
-![Stacking Sats Logo](Stacking%20Sats%20Logo.svg)
+![Stacking Sats Logo](https://raw.githubusercontent.com/hypertrial/stacksats/main/docs/assets/stacking-sats-logo.svg)
 
 [![PyPI version](https://img.shields.io/pypi/v/stacksats.svg)](https://pypi.org/project/stacksats/)
 [![Python versions](https://img.shields.io/pypi/pyversions/stacksats.svg)](https://pypi.org/project/stacksats/)
