@@ -24,4 +24,3 @@ Feature: Export Weights
     And current date is "2025-01-05"
     When I process a start date batch
     Then batch result should have required columns
-

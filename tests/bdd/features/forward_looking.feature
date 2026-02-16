@@ -35,4 +35,3 @@ Feature: Forward-Looking Bias Prevention
   Scenario: Features have no NaN values
     When I precompute features
     Then the features should have no NaN values
-

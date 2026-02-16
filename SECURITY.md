@@ -36,4 +36,3 @@ Include:
 
 - Please allow maintainers time to investigate and patch before public disclosure.
 - Once fixed, we will document the change in `CHANGELOG.md` and release notes.
-

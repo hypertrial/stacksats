@@ -33,6 +33,7 @@ from .model_development_helpers import (
     compute_percentile_signal,
     compute_signal_confidence,
     rolling_percentile,
+    softmax as _softmax,
     zscore,
 )
 
@@ -75,6 +76,11 @@ FEATS = [
     "mvrv_volatility",
     "signal_confidence",
 ]
+
+
+def softmax(x: np.ndarray) -> np.ndarray:
+    """Backward-compatible wrapper exported from this module."""
+    return _softmax(x)
 
 
 # =============================================================================

@@ -347,7 +347,7 @@ class TestMVRVFallback:
         assert today in result_df.index, (
             "Today should be added to index even if fetcher fails (forward fill)"
         )
-        
+
         # Verify MVRV fallback occurred
         assert "Used yesterday's MVRV value" in caplog.text, (
             "Should log fallback message when MVRV forward filled"

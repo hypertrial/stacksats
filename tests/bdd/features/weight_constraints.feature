@@ -22,4 +22,3 @@ Feature: Weight Constraints
 
   Scenario: Weights have variance within each range
     Then weights should have variance
-

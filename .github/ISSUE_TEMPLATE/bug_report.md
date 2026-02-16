@@ -30,4 +30,3 @@ What did you expect instead?
 - [ ] I ran `pytest tests/ -v`
 - [ ] I checked docs for expected usage (`README.md`, `docs/commands.md`)
 - [ ] I am not sharing secrets or private credentials
-

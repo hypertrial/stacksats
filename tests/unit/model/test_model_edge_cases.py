@@ -23,9 +23,9 @@ def test_allocate_sequential_stable_n_past_gt_n():
     """Test that n_past > n is handled by locking all weights."""
     raw = np.array([1.0, 1.0, 1.0])
     n_past = 5 # Greater than len(raw)
-    
+
     weights = allocate_sequential_stable(raw, n_past)
-    
+
     assert len(weights) == 3
     # Should behave as if n_past = 3
     # Stable allocation logic applies to all
@@ -37,9 +37,9 @@ def test_allocate_sequential_stable_n_past_zero():
     """Test behavior when n_past is 0 (all future)."""
     raw = np.array([1.0, 1.0, 1.0])
     n_past = 0
-    
+
     weights = allocate_sequential_stable(raw, n_past)
-    
+
     # All uniform
     expected = np.array([1/3, 1/3, 1/3])
     np.testing.assert_allclose(weights, expected)
@@ -73,12 +73,12 @@ def test_compute_dynamic_multiplier_extreme_values():
     price_vs_ma = np.array([0.0])
     mvrv_zscore = np.array([1000.0]) # Extreme value
     mvrv_gradient = np.array([0.0])
-    
+
     # Should not crash and clip result
     multiplier = compute_dynamic_multiplier(
         price_vs_ma, mvrv_zscore, mvrv_gradient
     )
-    
+
     assert np.all(np.isfinite(multiplier))
     assert multiplier[0] > 0 # Multipliers must be positive
 
@@ -86,13 +86,13 @@ def test_compute_dynamic_multiplier_extreme_values():
 def test_compute_asymmetric_extreme_boost_bounds():
     """Test that boost logic handles extremely deep negative values correctly."""
     z_scores = np.array([-10.0, -5.0, 0.0, 5.0, 10.0])
-    
+
     boost = compute_asymmetric_extreme_boost(z_scores)
-    
+
     assert np.all(np.isfinite(boost))
-    
+
     # -10 should have massive boost
-    assert boost[0] > boost[1] 
+    assert boost[0] > boost[1]
     # +10 should have massive penalty (negative boost)
     assert boost[4] < boost[3]
 
@@ -101,9 +101,9 @@ def test_compute_adaptive_trend_modifier_bounds():
     """Test limits of adaptive trend modifier."""
     mvrv_gradient = np.array([-10.0, -1.0, 0.0, 1.0, 10.0])
     mvrv_zscore = np.array([0.0] * 5) # Neutral z-score
-    
+
     modifier = compute_adaptive_trend_modifier(mvrv_gradient, mvrv_zscore)
-    
+
     # Should be clipped to [0.3, 1.5]
     assert np.all(modifier >= 0.3)
     assert np.all(modifier <= 1.5)

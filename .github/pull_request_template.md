@@ -20,4 +20,3 @@ Describe what changed and why.
 - [ ] Backward compatible
 - [ ] No secrets added
 - [ ] Release notes impact understood
-

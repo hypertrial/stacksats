@@ -47,4 +47,3 @@ def configure_matplotlib_env() -> None:
     current_mpl = os.environ.get("MPLCONFIGDIR")
     if not current_mpl or not _is_writable_dir(Path(current_mpl)):
         os.environ["MPLCONFIGDIR"] = str(mpl_config)
-

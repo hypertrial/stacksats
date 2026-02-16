@@ -54,4 +54,3 @@ Feature: Model Development
     Given a window size of 50 days
     When I compute the dynamic multiplier
     Then dynamic multiplier should have no NaN values
-

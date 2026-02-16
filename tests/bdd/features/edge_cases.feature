@@ -43,4 +43,3 @@ Feature: Edge Cases
     When I process a start date batch
     Then batch weights should sum to 1.0
     And batch result should have required columns
-

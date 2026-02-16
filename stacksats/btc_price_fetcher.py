@@ -168,52 +168,52 @@ def fetch_price_binance() -> float:
 @lru_cache(maxsize=1)
 def _load_coinmetrics_data() -> pd.DataFrame:
     """Load CoinMetrics BTC CSV data with caching.
-    
+
     Returns:
         DataFrame with 'time' as index and 'PriceUSD' column
     """
     logger.debug("Loading CoinMetrics BTC data from GitHub...")
     response = requests.get(COINMETRICS_BTC_CSV_URL, timeout=30)
     response.raise_for_status()
-    
+
     df = pd.read_csv(BytesIO(response.content))
     df["time"] = pd.to_datetime(df["time"])
     df.set_index("time", inplace=True)
     df.index = df.index.normalize().tz_localize(None)
-    
+
     # Remove duplicates and sort
     df = df.loc[~df.index.duplicated(keep="last")].sort_index()
-    
+
     if "PriceUSD" not in df.columns:
         raise ValueError("PriceUSD column not found in CoinMetrics data")
-    
+
     logger.debug(f"Loaded CoinMetrics data: {len(df)} rows from {df.index.min()} to {df.index.max()}")
     return df
 
 
 def fetch_historical_price_coinmetrics(date: "pd.Timestamp") -> float:
     """Fetch historical BTC price from CoinMetrics CSV data for a specific date.
-    
+
     Args:
         date: pandas Timestamp for the date to fetch
-        
+
     Returns:
         float: BTC price in USD
-        
+
     Raises:
         ValueError: If date not found in CoinMetrics data or price is missing
     """
     df = _load_coinmetrics_data()
     date_normalized = date.normalize()
-    
+
     if date_normalized not in df.index:
         raise ValueError(f"Date {date.date()} not found in CoinMetrics data")
-    
+
     price = df.loc[date_normalized, "PriceUSD"]
-    
+
     if pd.isna(price):
         raise ValueError(f"PriceUSD is missing for {date.date()} in CoinMetrics data")
-    
+
     price = float(price)
     logger.debug(f"CoinMetrics historical ({date.date()}) returned price: ${price:,.2f}")
     return price
@@ -289,7 +289,7 @@ def fetch_btc_price_historical(
     previous_price: Optional[float] = None,
 ) -> Optional[float]:
     """Fetch historical BTC price with retry logic and fallback sources.
-    
+
     Uses CoinMetrics CSV data as the primary source, falling back to API sources
     if CoinMetrics data is unavailable for the requested date.
 

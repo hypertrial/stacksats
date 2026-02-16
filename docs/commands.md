@@ -169,11 +169,11 @@ ruff check .
 
 ## Troubleshooting
 
-- **`Invalid strategy spec`**  
+- **`Invalid strategy spec`**
   Ensure format is exactly `module_or_path:ClassName`.
 
-- **`Class 'ExampleMVRVStrategy' not found`**  
+- **`Class 'ExampleMVRVStrategy' not found`**
   Check class name spelling and file path.
 
-- **`Strategy file not found`**  
+- **`Strategy file not found`**
   Run from repo root or pass an absolute file path.

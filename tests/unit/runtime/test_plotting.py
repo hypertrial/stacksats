@@ -21,11 +21,11 @@ class TestPlottingScripts:
             "CapMVRVZ": [0.5, 1.5, 2.5]
         }, index=pd.date_range("2024-01-01", periods=3))
         mock_fetch.return_value = df
-        
+
         # Call main with no arguments (uses defaults)
         with patch("sys.argv", ["stacksats.plot_mvrv.py"]):
             main_mvrv()
-            
+
         assert mock_savefig.called
         assert mock_fetch.called
 
@@ -38,18 +38,18 @@ class TestPlottingScripts:
         mock_conn = MagicMock()
         mock_get_db.return_value = mock_conn
         mock_validate.return_value = True
-        
+
         # Mock cursor.fetchall() since plot_weights.py uses it instead of read_sql_query
         cursor = mock_conn.cursor.return_value.__enter__.return_value
         cursor.fetchall.return_value = [
             ("2024-01-01", 0.5, 50000.0, 1),
             ("2024-01-02", 0.5, 51000.0, 2)
         ]
-        
+
         # Call main with positional arguments
         with patch("sys.argv", ["stacksats.plot_weights.py", "2024-01-01", "2024-12-31"]):
             main_weights()
-            
+
         assert mock_get_db.called
         assert cursor.execute.called
         assert mock_savefig.called
@@ -62,10 +62,10 @@ class TestPlottingScripts:
         mock_get_db.return_value = MagicMock()
         # Mock get_oldest_date_range to raise Exception if no ranges found
         mock_get_oldest.side_effect = Exception("No date ranges found")
-        
+
         with patch("sys.argv", ["stacksats.plot_weights.py"]):
             with pytest.raises(SystemExit) as excinfo:
                 main_weights()
             assert excinfo.value.code == 1
-            
+
         assert mock_get_oldest.called

@@ -1,2 +1,1 @@
 # Bitcoin Test Suite
-

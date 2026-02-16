@@ -64,4 +64,3 @@ Feature: Weight Stability Over Time
     When I compute weights with current_date "2021-12-01"
     Then the weights should sum to 1.0
     And all weights should be uniform
-

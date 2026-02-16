@@ -123,7 +123,7 @@ class TestHistoricalFetchers:
         )
         price = fetch_historical_price_binance(TEST_DATE)
         assert price == 42600.0  # Index 4 is Close
-        
+
         # Verify timestamp
         expected_ts = int(TEST_DATE.timestamp() * 1000)
         assert responses.calls[0].request.params["startTime"] == str(expected_ts)
@@ -156,7 +156,7 @@ class TestRobustHistoricalFetcher:
             status=200,
             content_type="text/csv",
         )
-        
+
         price = fetch_btc_price_historical(TEST_DATE)
         assert price == 42500.0
         # Verify CoinGecko/Binance were not called
@@ -188,7 +188,7 @@ class TestRobustHistoricalFetcher:
             json=[[0, 0, 0, 0, "43000.0", 0, 0, 0, 0, 0, 0, 0]],
             status=200,
         )
-        
+
         price = fetch_btc_price_historical(TEST_DATE)
         assert price == 43000.0
 
@@ -214,7 +214,7 @@ class TestRobustHistoricalFetcher:
             "https://api.binance.com/api/v3/klines",
             status=404,
         )
-        
+
         price = fetch_btc_price_historical(TEST_DATE)
         assert price is None
 

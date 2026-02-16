@@ -45,4 +45,3 @@ Feature: Data Integrity
   Scenario: Required columns have no null values
     When I check for null values in required columns
     Then required columns should have no null values
-

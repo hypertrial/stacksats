@@ -66,4 +66,3 @@ Feature: Weight Computation
     Then dynamic multiplier should have correct length
     And all dynamic multiplier values should be positive
     And dynamic multiplier should have no NaN values
-

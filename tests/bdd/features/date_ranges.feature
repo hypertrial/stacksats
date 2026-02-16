@@ -34,4 +34,3 @@ Feature: Date Range Generation
 
   Scenario: DATE_FREQ is configured as daily
     Then DATE_FREQ should be daily
-

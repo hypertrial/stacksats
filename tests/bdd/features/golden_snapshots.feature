@@ -31,4 +31,3 @@ Feature: Golden Snapshot Weights
     Given a date range from "2024-06-01" to "2024-06-30"
     When I compute weights for the date range
     Then all weights should be positive
-

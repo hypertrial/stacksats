@@ -40,4 +40,3 @@ All reports are handled confidentially to the extent possible.
 Project maintainers are responsible for clarifying and enforcing these standards and may take action in response to behavior they deem inappropriate, threatening, or harmful.
 
 Enforcement actions may include warnings, temporary bans, or permanent removal from project spaces.
-

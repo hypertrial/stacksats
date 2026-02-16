@@ -34,4 +34,3 @@ Feature: Database Operations
     Given DATABASE_URL is not set
     When I get a database connection without DATABASE_URL
     Then a ValueError should be raised for missing DATABASE_URL
-
