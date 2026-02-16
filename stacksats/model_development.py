@@ -24,6 +24,17 @@ from .framework_contract import (
     validate_span_length,
     validate_locked_prefix,
 )
+from .model_development_helpers import (
+    classify_mvrv_zone,
+    compute_acceleration_modifier,
+    compute_adaptive_trend_modifier,
+    compute_asymmetric_extreme_boost,
+    compute_mvrv_volatility,
+    compute_percentile_signal,
+    compute_signal_confidence,
+    rolling_percentile,
+    zscore,
+)
 
 # =============================================================================
 # Constants
@@ -64,150 +75,6 @@ FEATS = [
     "mvrv_volatility",
     "signal_confidence",
 ]
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def softmax(x: np.ndarray) -> np.ndarray:
-    """Compute softmax probabilities."""
-    ex = np.exp(x - x.max())
-    return ex / ex.sum()
-
-
-def zscore(series: pd.Series, window: int) -> pd.Series:
-    """Compute rolling z-score."""
-    mean = series.rolling(window, min_periods=window // 2).mean()
-    std = series.rolling(window, min_periods=window // 2).std()
-    return ((series - mean) / std).fillna(0)
-
-
-def rolling_percentile(series: pd.Series, window: int) -> pd.Series:
-    """Compute rolling percentile rank (0 to 1).
-
-    Uses a 4-year window by default to capture the full Bitcoin halving cycle.
-
-    Args:
-        series: Input time series
-        window: Rolling window size (default 1461 = ~4 years)
-
-    Returns:
-        Series with percentile ranks in [0, 1]
-    """
-
-    def pct_rank(x: np.ndarray) -> float:
-        """Compute percentile rank of last value in array."""
-        if len(x) < 2:
-            return 0.5
-        rank = (x[-1] > x[:-1]).sum() / (len(x) - 1)
-        return float(rank)
-
-    return series.rolling(window, min_periods=window // 4).apply(pct_rank, raw=True)
-
-
-def classify_mvrv_zone(mvrv_zscore: np.ndarray) -> np.ndarray:
-    """Classify MVRV into discrete zones for regime detection.
-
-    Zones:
-    - -2 (deep_value): Z < -2.0 (historically rare, extreme buying opportunity)
-    - -1 (value): -2.0 <= Z < -1.0 (undervalued, increase buying)
-    -  0 (neutral): -1.0 <= Z < 1.5 (fair value, normal DCA)
-    - +1 (caution): 1.5 <= Z < 2.5 (overvalued, reduce buying)
-    - +2 (danger): Z >= 2.5 (extreme overvaluation, minimize buying)
-
-    Args:
-        mvrv_zscore: Array of MVRV Z-scores
-
-    Returns:
-        Array of zone classifications in [-2, -1, 0, 1, 2]
-    """
-    return np.select(
-        [
-            mvrv_zscore < MVRV_ZONE_DEEP_VALUE,
-            mvrv_zscore < MVRV_ZONE_VALUE,
-            mvrv_zscore < MVRV_ZONE_CAUTION,
-            mvrv_zscore < MVRV_ZONE_DANGER,
-        ],
-        [-2, -1, 0, 1],
-        default=2,
-    )
-
-
-def compute_mvrv_volatility(mvrv_zscore: pd.Series, window: int) -> pd.Series:
-    """Compute rolling volatility of MVRV Z-score.
-
-    High volatility periods suggest uncertainty - signals should be dampened.
-    Low volatility periods suggest conviction - signals can be amplified.
-
-    Args:
-        mvrv_zscore: MVRV Z-score series
-        window: Rolling window for volatility calculation
-
-    Returns:
-        Normalized volatility in [0, 1] where 1 = high volatility
-    """
-    vol = mvrv_zscore.rolling(window, min_periods=window // 4).std()
-    # Normalize to [0, 1] using historical quantiles
-    vol_pct = vol.rolling(window * 4, min_periods=window).apply(
-        lambda x: (x.iloc[-1] > x[:-1]).sum() / max(len(x) - 1, 1)
-        if len(x) > 1
-        else 0.5,
-        raw=False,
-    )
-    return vol_pct.fillna(0.5)
-
-
-def compute_signal_confidence(
-    mvrv_zscore: np.ndarray,
-    mvrv_percentile: np.ndarray,
-    mvrv_gradient: np.ndarray,
-    price_vs_ma: np.ndarray,
-) -> np.ndarray:
-    """Compute confidence score based on signal agreement.
-
-    When multiple signals agree, confidence is high:
-    - Low Z-score + Low percentile + Rising gradient = High confidence buy
-    - High Z-score + High percentile + Falling gradient = High confidence reduce
-
-    Args:
-        mvrv_zscore: MVRV Z-score in [-4, 4]
-        mvrv_percentile: 4-year percentile in [0, 1]
-        mvrv_gradient: Trend direction in [-1, 1]
-        price_vs_ma: Price vs MA in [-1, 1]
-
-    Returns:
-        Confidence score in [0, 1] where 1 = all signals strongly agree
-    """
-    # Normalize all signals to [-1, 1] where negative = buy signal
-    z_signal = -mvrv_zscore / 4  # Normalize to [-1, 1]
-    pct_signal = 0.5 - mvrv_percentile  # [0,1] -> [-0.5, 0.5] -> scale to [-1, 1]
-    pct_signal = pct_signal * 2
-    ma_signal = -price_vs_ma  # Below MA = buy signal
-
-    # Gradient indicates momentum direction
-    # Positive gradient with buy signals = confirmation
-    # Negative gradient with buy signals = divergence (lower confidence)
-    gradient_alignment = np.where(
-        z_signal < 0,  # Buy signal from Z-score
-        np.where(mvrv_gradient > 0, 1.0, 0.5),  # Rising = confirmation
-        np.where(mvrv_gradient < 0, 1.0, 0.5),  # Falling = confirmation for sell
-    )
-
-    # Calculate agreement: how many signals point the same direction?
-    signals = np.stack([z_signal, pct_signal, ma_signal], axis=0)
-    signal_std = signals.std(axis=0)
-
-    # Low std = high agreement, high std = disagreement
-    # Transform std to confidence: confidence = 1 - normalized_std
-    max_std = 1.0  # Maximum possible std when signals fully disagree
-    agreement = 1.0 - np.clip(signal_std / max_std, 0, 1)
-
-    # Combine agreement with gradient alignment
-    confidence = agreement * 0.7 + gradient_alignment * 0.3
-
-    return np.clip(confidence, 0, 1)
 
 
 # =============================================================================
@@ -267,7 +134,13 @@ def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
 
         # Zone classification
         mvrv_zone = pd.Series(
-            classify_mvrv_zone(mvrv_z.values),
+            classify_mvrv_zone(
+                mvrv_z.values,
+                zone_deep_value=MVRV_ZONE_DEEP_VALUE,
+                zone_value=MVRV_ZONE_VALUE,
+                zone_caution=MVRV_ZONE_CAUTION,
+                zone_danger=MVRV_ZONE_DANGER,
+            ),
             index=mvrv_z.index,
         )
 
@@ -471,155 +344,6 @@ def allocate_from_proposals(
 # Dynamic Multiplier
 # =============================================================================
 
-
-def compute_asymmetric_extreme_boost(mvrv_zscore: np.ndarray) -> np.ndarray:
-    """Compute asymmetric boost for extreme MVRV values.
-
-    Key insight: Bitcoin's MVRV is asymmetric - extreme lows are rare buying
-    opportunities, while extreme highs often precede corrections.
-
-    Behavior:
-    - Z < -2: Strong positive boost (aggressive accumulation)
-    - Z < -1: Moderate positive boost (value buying)
-    - -1 <= Z <= 1.5: No boost (neutral zone)
-    - Z > 1.5: Negative boost (reduce buying)
-    - Z > 2.5: Strong negative boost (minimize buying)
-
-    Args:
-        mvrv_zscore: Array of MVRV Z-scores in [-4, 4]
-
-    Returns:
-        Boost values (positive = increase buying, negative = reduce buying)
-    """
-    boost = np.zeros_like(mvrv_zscore)
-
-    # Deep undervaluation: strong positive boost (quadratic increase)
-    deep_value_mask = mvrv_zscore < MVRV_ZONE_DEEP_VALUE
-    boost = np.where(
-        deep_value_mask,
-        0.8 * (mvrv_zscore - MVRV_ZONE_DEEP_VALUE) ** 2 + 0.5,
-        boost,
-    )
-
-    # Moderate undervaluation: linear positive boost
-    value_mask = (mvrv_zscore >= MVRV_ZONE_DEEP_VALUE) & (mvrv_zscore < MVRV_ZONE_VALUE)
-    boost = np.where(
-        value_mask,
-        -0.5 * mvrv_zscore,  # Linear boost proportional to undervaluation
-        boost,
-    )
-
-    # Caution zone: moderate negative boost
-    caution_mask = (mvrv_zscore >= MVRV_ZONE_CAUTION) & (mvrv_zscore < MVRV_ZONE_DANGER)
-    boost = np.where(
-        caution_mask,
-        -0.3 * (mvrv_zscore - MVRV_ZONE_CAUTION),
-        boost,
-    )
-
-    # Danger zone: strong negative boost (quadratic decrease)
-    danger_mask = mvrv_zscore >= MVRV_ZONE_DANGER
-    boost = np.where(
-        danger_mask,
-        -0.5 * (mvrv_zscore - MVRV_ZONE_DANGER) ** 2 - 0.3,
-        boost,
-    )
-
-    return boost
-
-
-def compute_percentile_signal(mvrv_percentile: np.ndarray) -> np.ndarray:
-    """Convert MVRV percentile to buy signal.
-
-    Uses 4-year rolling percentile to capture halving cycle context.
-
-    Args:
-        mvrv_percentile: Array of percentile values in [0, 1]
-
-    Returns:
-        Signal values (positive = buy more, negative = buy less)
-    """
-    # Transform [0, 1] to [-1, 1] with emphasis on extremes
-    # Percentile < 0.25 -> strong buy signal
-    # Percentile > 0.75 -> strong sell signal
-    centered = 0.5 - mvrv_percentile  # Now in [-0.5, 0.5], positive = undervalued
-
-    # Non-linear scaling to emphasize extremes
-    signal = np.sign(centered) * (2 * np.abs(centered)) ** 1.5
-
-    return np.clip(signal, -1, 1)
-
-
-def compute_acceleration_modifier(
-    mvrv_acceleration: np.ndarray,
-    mvrv_gradient: np.ndarray,
-) -> np.ndarray:
-    """Compute modifier based on MVRV acceleration (momentum).
-
-    Acceleration helps identify:
-    - Momentum building in current direction
-    - Potential trend reversals
-
-    Args:
-        mvrv_acceleration: Second derivative of MVRV gradient
-        mvrv_gradient: First derivative (trend direction)
-
-    Returns:
-        Modifier in [0.5, 1.5] to scale other signals
-    """
-    # Same-direction acceleration: momentum building
-    # Opposite-direction acceleration: potential reversal
-    same_direction = (mvrv_acceleration * mvrv_gradient) > 0
-
-    modifier = np.where(
-        same_direction,
-        1.0 + 0.3 * np.abs(mvrv_acceleration),  # Amplify if momentum building
-        1.0 - 0.2 * np.abs(mvrv_acceleration),  # Dampen if potential reversal
-    )
-
-    return np.clip(modifier, 0.5, 1.5)
-
-
-def compute_adaptive_trend_modifier(
-    mvrv_gradient: np.ndarray,
-    mvrv_zscore: np.ndarray,
-) -> np.ndarray:
-    """Compute trend modifier with adaptive thresholds.
-
-    Instead of fixed 0.2/-0.2 thresholds, adapts based on current MVRV level:
-    - In deep value: be more aggressive with dip buying
-    - In overvalued territory: be more conservative
-
-    Args:
-        mvrv_gradient: MVRV trend direction in [-1, 1]
-        mvrv_zscore: Current MVRV Z-score
-
-    Returns:
-        Trend modifier for MA signal
-    """
-    # Adaptive thresholds based on MVRV level
-    # Lower threshold in value zone (more sensitive to reversals)
-    # Higher threshold in danger zone (require stronger confirmation)
-    threshold = np.where(
-        mvrv_zscore < -1,
-        0.1,  # Low threshold in value zone
-        np.where(mvrv_zscore > 1.5, 0.4, 0.2),  # High threshold in danger zone
-    )
-
-    # Compute modifier
-    modifier = np.where(
-        mvrv_gradient > threshold,
-        1.0 + 0.5 * np.minimum(mvrv_gradient, 1.0),  # Bull: up to 1.5x
-        np.where(
-            mvrv_gradient < -threshold,
-            0.3 + 0.2 * (1 + mvrv_gradient),  # Bear: down to 0.3x
-            1.0,  # Neutral
-        ),
-    )
-
-    return np.clip(modifier, 0.3, 1.5)
-
-
 def compute_dynamic_multiplier(
     price_vs_ma: np.ndarray,
     mvrv_zscore: np.ndarray,
@@ -667,7 +391,13 @@ def compute_dynamic_multiplier(
     value_signal = -mvrv_zscore
 
     # 2. Asymmetric extreme boost (corrected sign logic)
-    extreme_boost = compute_asymmetric_extreme_boost(mvrv_zscore)
+    extreme_boost = compute_asymmetric_extreme_boost(
+        mvrv_zscore,
+        zone_deep_value=MVRV_ZONE_DEEP_VALUE,
+        zone_value=MVRV_ZONE_VALUE,
+        zone_caution=MVRV_ZONE_CAUTION,
+        zone_danger=MVRV_ZONE_DANGER,
+    )
     value_signal = value_signal + extreme_boost
 
     # 3. MA signal: buy when below MA, with adaptive trend modulation

@@ -10,7 +10,6 @@ Weight computation strategy:
 - Each day the export process runs, future uniform weights are recalculated
 """
 
-import os
 import sys
 from types import ModuleType
 
@@ -25,6 +24,13 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
+from .export_weights_db import (
+    create_table_if_not_exists as _create_table_if_not_exists,
+    get_db_connection as _get_db_connection,
+    sql_quote as _db_sql_quote,
+    table_is_empty as _table_is_empty,
+    today_data_exists as _today_data_exists,
+)
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
 from .prelude import generate_date_ranges, group_ranges_by_start_date  # noqa: F401
@@ -70,14 +76,7 @@ def _require_deploy_dependency(name: str, imported_obj):
 
 def _sql_quote(value) -> str:
     """Quote values for dynamic VALUES SQL when psycopg2 adapt isn't available."""
-    if value is None:
-        return "NULL"
-    if isinstance(value, (float, np.floating)):
-        return str(float(value))
-    if isinstance(value, (int, np.integer)):
-        return str(int(value))
-    text = str(value).replace("'", "''")
-    return f"'{text}'"
+    return _db_sql_quote(value)
 
 
 def process_start_date_batch(
@@ -226,58 +225,17 @@ def get_db_connection():
     """Get database connection using DATABASE_URL environment variable."""
     if psycopg2 is None:
         _missing_psycopg2()
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise ValueError("DATABASE_URL environment variable is not set")
-    return psycopg2.connect(database_url)
+    return _get_db_connection(psycopg2)
 
 
 def create_table_if_not_exists(conn):
     """Create bitcoin_dca table if it doesn't already exist."""
-    with conn.cursor() as cur:
-        # Create table with last_updated column
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS bitcoin_dca (
-                id INTEGER,
-                start_date DATE,
-                end_date DATE,
-                DCA_date DATE,
-                btc_usd FLOAT,
-                weight FLOAT,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (id, start_date, end_date, DCA_date)
-            )
-        """)
-
-        # Create trigger function to update last_updated on any change
-        cur.execute("""
-            CREATE OR REPLACE FUNCTION update_bitcoin_dca_last_updated()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                NEW.last_updated = CURRENT_TIMESTAMP;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-        """)
-
-        # Create trigger that fires on UPDATE operations
-        cur.execute("""
-            DROP TRIGGER IF EXISTS bitcoin_dca_last_updated_trigger ON bitcoin_dca;
-            CREATE TRIGGER bitcoin_dca_last_updated_trigger
-                BEFORE UPDATE ON bitcoin_dca
-                FOR EACH ROW
-                EXECUTE FUNCTION update_bitcoin_dca_last_updated();
-        """)
-
-        conn.commit()
+    _create_table_if_not_exists(conn)
 
 
 def table_is_empty(conn):
     """Check if bitcoin_dca table is empty."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM bitcoin_dca")
-        count = cur.fetchone()[0]
-        return count == 0
+    return _table_is_empty(conn)
 
 
 def today_data_exists(conn, today_str):
@@ -290,16 +248,7 @@ def today_data_exists(conn, today_str):
     Returns:
         bool: True if data exists for today, False otherwise
     """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT COUNT(*) FROM bitcoin_dca
-            WHERE DCA_date = %s AND btc_usd IS NOT NULL AND weight > 0
-            """,
-            (today_str,),
-        )
-        count = cur.fetchone()[0]
-        return count > 0
+    return _today_data_exists(conn, today_str)
 
 
 def get_current_btc_price(previous_price=None):
