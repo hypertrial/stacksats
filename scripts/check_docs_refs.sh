@@ -7,7 +7,9 @@ cd "${ROOT_DIR}"
 doc_files_tmp="$(mktemp)"
 tokens_tmp="$(mktemp)"
 missing_tmp="$(mktemp)"
-trap 'rm -f "${doc_files_tmp}" "${tokens_tmp}" "${missing_tmp}"' EXIT
+blob_links_tmp="$(mktemp)"
+dup_cli_tmp="$(mktemp)"
+trap 'rm -f "${doc_files_tmp}" "${tokens_tmp}" "${missing_tmp}" "${blob_links_tmp}" "${dup_cli_tmp}"' EXIT
 
 {
   printf '%s\n' README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md
@@ -82,8 +84,42 @@ done < "${tokens_tmp}"
 
 if ((missing_count > 0)); then
   echo "Missing doc references:"
-  cat "${missing_tmp}"
+  while IFS= read -r line; do
+    echo "${line}"
+  done < "${missing_tmp}"
   exit 1
+fi
+
+if command -v rg >/dev/null 2>&1; then
+  rg -n 'https://github.com/hypertrial/stacksats/blob/main/' \
+    README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md docs \
+    > "${blob_links_tmp}" || true
+fi
+
+if [[ -s "${blob_links_tmp}" ]]; then
+  echo "Disallowed GitHub blob/main links found. Prefer tree links or stable release URLs:"
+  while IFS= read -r line; do
+    echo " - ${line}"
+  done < "${blob_links_tmp}"
+  exit 1
+fi
+
+if command -v rg >/dev/null 2>&1; then
+  rg -n 'stacksats strategy (validate|backtest|export) --strategy examples/model_example\.py:ExampleMVRVStrategy' \
+    README.md docs \
+    > "${dup_cli_tmp}" || true
+fi
+
+if [[ -s "${dup_cli_tmp}" ]]; then
+  filtered_dup_cli="$(rg -v '^docs/commands\.md:' "${dup_cli_tmp}" || true)"
+  if [[ -n "${filtered_dup_cli}" ]]; then
+    echo "Canonical example strategy CLI commands should only live in docs/commands.md:"
+    while IFS= read -r line; do
+      [[ -z "${line}" ]] && continue
+      echo " - ${line}"
+    done <<< "${filtered_dup_cli}"
+    exit 1
+  fi
 fi
 
 echo "Docs reference check passed."

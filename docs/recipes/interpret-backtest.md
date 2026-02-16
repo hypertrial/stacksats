@@ -11,6 +11,12 @@ Read backtest outputs consistently when comparing strategy changes.
 
 ## Generate a run
 
+Use the canonical backtest command as reference:
+
+- [CLI Commands: backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+
+Example:
+
 ```bash
 stacksats strategy backtest \
   --strategy my_strategy.py:MyStrategy \

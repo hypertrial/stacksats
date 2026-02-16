@@ -35,11 +35,11 @@ This runs validation and backtest, then writes artifacts to `output/`.
 
 ## 3) Use the Strategy Lifecycle CLI
 
-```bash
-stacksats strategy validate --strategy examples/model_example.py:ExampleMVRVStrategy
-stacksats strategy backtest --strategy examples/model_example.py:ExampleMVRVStrategy --output-dir output
-stacksats strategy export --strategy examples/model_example.py:ExampleMVRVStrategy --output-dir output
-```
+Run lifecycle commands from the canonical reference:
+
+- [CLI Commands](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
+- [CLI Commands](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+- [CLI Commands](../commands.md#4-export-strategy-artifacts)
 
 ## 4) Inspect outputs
 

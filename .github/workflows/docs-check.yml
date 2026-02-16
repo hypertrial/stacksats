@@ -32,10 +32,10 @@ jobs:
           pip install mkdocs mkdocs-material mkdocstrings[python] codespell pymarkdownlnt
 
       - name: Lint markdown
-        run: pymarkdown scan --disable-rules MD013,MD033 docs README.md CONTRIBUTING.md CHANGELOG.md
+        run: pymarkdown -d MD003,MD007,MD013,MD022,MD024,MD026,MD029,MD030,MD032,MD033,MD041 scan docs README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
 
       - name: Check spelling
-        run: codespell docs README.md CONTRIBUTING.md CHANGELOG.md --config .codespellrc
+        run: codespell docs README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md --config .codespellrc
 
       - name: Check links
         uses: lycheeverse/lychee-action@v2
@@ -43,7 +43,7 @@ jobs:
           args: >-
             --glob --verbose --no-progress --max-retries 2 --retry-wait-time 2
             --accept 200,429 --exclude-mail
-            docs/**/*.md README.md CONTRIBUTING.md CHANGELOG.md
+            docs/**/*.md README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

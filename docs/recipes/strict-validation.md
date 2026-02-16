@@ -11,6 +11,12 @@ Run strict validation and diagnose failures quickly.
 
 ## Command
 
+Use the canonical validate command options as your source of truth:
+
+- [CLI Commands: validate](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
+
+Typical strict run:
+
 ```bash
 stacksats strategy validate \
   --strategy my_strategy.py:MyStrategy \

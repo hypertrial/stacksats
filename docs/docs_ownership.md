@@ -7,6 +7,13 @@ description: Ownership model and update triggers for StackSats documentation.
 
 This page defines who updates what and when documentation updates are required.
 
+## Canonical page responsibilities
+
+- `docs/commands.md` is the canonical CLI command source.
+- `docs/start/*.md` are onboarding guides and should link to canonical command/reference pages instead of duplicating option matrices.
+- `README.md` stays concise and should link into docs for deep usage details.
+- `docs/whats-new.md` is a release pointer page and must stay aligned with release metadata.
+
 ## Section owners
 
 - `docs/framework.md`: framework contract maintainers.
@@ -24,6 +31,12 @@ Update docs in the same PR when any of these change:
 - `stacksats/strategy_time_series.py`: run schema sync script and update TimeSeries docs.
 - CLI flag or command behavior changes: update `docs/commands.md` and relevant recipes.
 - `examples/model_example_notebook.py` or `examples/model_example_notebook_browser.py`: regenerate notebook exports in `docs/assets/notebooks/` via `bash scripts/export_notebook_demo.sh`.
+
+## Generated artifact policy
+
+- `site/` is generated output from `mkdocs build` and must not be committed.
+- Keep generated notebook exports only under `docs/assets/notebooks/` when source notebooks change.
+- Do not add generated docs artifacts outside the docs asset folders.
 
 ## CI expectations
 

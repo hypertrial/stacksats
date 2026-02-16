@@ -13,10 +13,15 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
 ## Start Here
 
-Start with the docs at [`docs/framework.md`](docs/framework.md). It is the canonical framework contract and the best first read before using StackSats.
+Start with the hosted docs: <https://hypertrial.github.io/stacksats/>.
 
-For the full docs index, see [`docs/index.md`](docs/index.md).
-Hosted docs site: <https://hypertrial.github.io/stacksats/>.
+Local docs entry points:
+
+- [`docs/index.md`](docs/index.md) for the full map
+- [`docs/start/quickstart.md`](docs/start/quickstart.md) for five-minute setup
+- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
+- [`docs/commands.md`](docs/commands.md) for canonical CLI command reference
+- [`docs/framework.md`](docs/framework.md) for the framework contract
 
 ## Framework Principles
 
@@ -48,74 +53,14 @@ pip install "stacksats[deploy]"
 
 ## Quick Start
 
-Create `my_strategy.py`:
-
-```python
-import pandas as pd
-
-from stacksats import BaseStrategy, StrategyContext, TargetProfile
-
-
-class MyStrategy(BaseStrategy):
-    strategy_id = "my-strategy"
-    version = "1.0.0"
-    description = "Example user strategy."
-
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-
-    def build_signals(
-        self, ctx: StrategyContext, features_df: pd.DataFrame
-    ) -> dict[str, pd.Series]:
-        del ctx
-        value_signal = -features_df["mvrv_zscore"].clip(-4, 4)
-        trend_signal = -features_df["price_vs_ma"].clip(-1, 1)
-        return {"value": value_signal, "trend": trend_signal}
-
-    def build_target_profile(
-        self,
-        ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> TargetProfile:
-        del ctx, features_df
-        preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
-        return TargetProfile(values=preference, mode="preference")
-
-    # Optional alternative hook:
-    # def propose_weight(self, state) -> float:
-    #     return state.uniform_weight
-
-
-if __name__ == "__main__":
-    strategy = MyStrategy()
-    validation = strategy.validate()
-    print(validation.summary())
-    result = strategy.backtest()
-    print(result.summary())
-    result.plot(output_dir="output")
-    result.to_json("output/backtest_result.json")
-```
-
-Run it:
+Run the packaged example strategy:
 
 ```bash
-python my_strategy.py
+python examples/model_example.py
 ```
 
-## Strategy Lifecycle CLI
-
-```bash
-stacksats strategy validate --strategy my_strategy.py:MyStrategy
-stacksats strategy backtest --strategy my_strategy.py:MyStrategy --output-dir output
-stacksats strategy export --strategy my_strategy.py:MyStrategy --output-dir output
-```
-
-Artifacts are written to:
-
-```text
-output/<strategy_id>/<version>/<run_id>/
-```
+For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/commands.md`](docs/commands.md).
+For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 
 ## Public API
 

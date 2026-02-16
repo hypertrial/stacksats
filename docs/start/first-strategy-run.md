@@ -52,10 +52,10 @@ stacksats strategy validate --strategy my_strategy.py:MyStrategy --strict
 
 ## 3) Run backtest and export
 
-```bash
-stacksats strategy backtest --strategy my_strategy.py:MyStrategy --output-dir output
-stacksats strategy export --strategy my_strategy.py:MyStrategy --output-dir output
-```
+Use the canonical command reference for full option sets:
+
+- [Backtest command](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+- [Export command](../commands.md#4-export-strategy-artifacts)
 
 ## 4) Keep strategy responsibilities clean
 

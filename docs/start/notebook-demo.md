@@ -16,9 +16,9 @@ It demonstrates:
 ## Open notebook views
 
 - [Open browser-safe exported notebook](https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook_browser.html)
-- [View browser-safe notebook source (`examples/model_example_notebook_browser.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook_browser.py)
+- [View browser-safe notebook source (`examples/model_example_notebook_browser.py`)](https://github.com/hypertrial/stacksats/tree/main/examples/model_example_notebook_browser.py)
 - [Open full local exported notebook](https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook.html)
-- [View full local notebook source (`examples/model_example_notebook.py`)](https://github.com/hypertrial/stacksats/blob/main/examples/model_example_notebook.py)
+- [View full local notebook source (`examples/model_example_notebook.py`)](https://github.com/hypertrial/stacksats/tree/main/examples/model_example_notebook.py)
 
 ## Run locally
 
