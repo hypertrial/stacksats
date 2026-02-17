@@ -7,19 +7,23 @@ description: Canonical contract separating user strategy scope from framework-en
 
 This document is the canonical strategy contract for StackSats.
 
-## Framework Owns (Non-Negotiable)
+## Framework (Non-Negotiable)
 
 1. Given a fixed budget: generalized to a proportion (total accumulation weight = 1).
 2. Given a fixed allocation span (global config) between 90 and 1460 days (inclusive).
-3. Must define a complete strategy:
+3. Defines a complete strategy that:
    - Initializes all daily accumulation weights over the allocation span such that the sum of all weights equals the total budget (=1).
-   - Day-by-day iterative updates to future weights, reshuffling the fixed budget.
-   - Locked historical weights (past days are immutable).
-4. Total budget must be used by the end of the allocation span (all daily weights must sum to 1).
-5.
-   - Minimum daily weight is `1e-5`.
-   - Maximum daily weight is `0.1`.
-6. Validation guards (`NaN`/`inf`/range checks) and final invariants.
+   - Makes day-by-day iterative updates to future weights, reshuffling the fixed budget.
+   - Locks historical weights (past days are immutable).
+4. Enforced budget management:
+   - Total budget must be used by the end of the allocation span (meaning all daily weights must sum to 1).
+5. Enforced daily accumulation:
+   - Minimum daily weight must be greater than or equal to `1e-5`.
+6. Enforced steady accumulation:
+   - Maximum daily weight must be less than or equal to `0.1`.
+7. No Forward-Looking Data:
+   - Use only current and past data—no peeking into the future.
+8. Validation guards (`NaN`/`inf`/range checks) and final invariants.
 
 ## User Owns (Flexible)
 
