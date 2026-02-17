@@ -9,18 +9,17 @@ This document is the canonical strategy contract for StackSats.
 
 ## Framework Owns (Non-Negotiable)
 
-1. Fixed budget.
-2. Fixed allocation span (global config) between 90 and 1460 days (inclusive).
-3. Complete Strategy:
-   - Initialization of all daily accumulation weights summing to the budget over the allocation span.
+1. Given a fixed budget: generalized to a proportion (total accumulation weight = 1).
+2. Given a fixed allocation span (global config) between 90 and 1460 days (inclusive).
+3. Must define a complete strategy:
+   - Initializes all daily accumulation weights over the allocation span such that the sum of all weights equals the total budget (=1).
    - Day-by-day iterative updates to future weights, reshuffling the fixed budget.
    - Locked historical weights (past days are immutable).
-4. Remaining-budget and allocation-range enforcement:
-   - Total budget must be used by the end of the allocation span.
-   - All daily weights must sum to 1.
+4. Total budget must be used by the end of the allocation span (all daily weights must sum to 1).
+5.
    - Minimum daily weight is `1e-5`.
    - Maximum daily weight is `0.1`.
-5. Validation guards (`NaN`/`inf`/range checks) and final invariants.
+6. Validation guards (`NaN`/`inf`/range checks) and final invariants.
 
 ## User Owns (Flexible)
 
