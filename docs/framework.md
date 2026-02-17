@@ -11,17 +11,16 @@ This document is the canonical strategy contract for StackSats.
 
 1. Fixed budget.
 2. Fixed allocation span (global config) between 90 and 1460 days (inclusive).
-3. Complete Strategy: Initialization of all daily weights.
-4. Day-by-day iterative execution loop.
-5. Daily reinitialization of all future days with the remaining uniform weight.
-6. Locked historical weights (past days are immutable).
-7. Feasibility projection/clipping at the daily handoff boundary.
-8. Remaining-budget and allocation-range enforcement:
+3. Complete Strategy:
+   - Initialization of all daily accumulation weights summing to the budget over the allocation span.
+   - Day-by-day iterative updates to future weights, reshuffling the fixed budget.
+   - Locked historical weights (past days are immutable).
+4. Remaining-budget and allocation-range enforcement:
    - Total budget must be used by the end of the allocation span.
    - All daily weights must sum to 1.
    - Minimum daily weight is `1e-5`.
    - Maximum daily weight is `0.1`.
-9. Validation guards (`NaN`/`inf`/range checks) and final invariants.
+5. Validation guards (`NaN`/`inf`/range checks) and final invariants.
 
 ## User Owns (Flexible)
 
