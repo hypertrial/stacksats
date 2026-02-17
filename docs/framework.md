@@ -11,7 +11,7 @@ This document is the canonical strategy contract for StackSats.
 
 1. Fixed budget.
 2. Fixed allocation span (global config) between 90 and 1460 days (inclusive).
-3. Uniform initialization of all daily weights.
+3. Complete Strategy: Initialization of all daily weights.
 4. Day-by-day iterative execution loop.
 5. Daily reinitialization of all future days with the remaining uniform weight.
 6. Locked historical weights (past days are immutable).
