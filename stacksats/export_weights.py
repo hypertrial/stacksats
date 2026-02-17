@@ -15,6 +15,7 @@ from types import ModuleType
 
 import numpy as np
 import pandas as pd
+
 try:
     import psycopg2
     from psycopg2.extras import execute_values
@@ -26,9 +27,17 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
 from .btc_price_fetcher import fetch_btc_price_robust
 from .export_weights_db import (
     create_table_if_not_exists as _create_table_if_not_exists,
+)
+from .export_weights_db import (
     get_db_connection as _get_db_connection,
+)
+from .export_weights_db import (
     sql_quote as _db_sql_quote,
+)
+from .export_weights_db import (
     table_is_empty as _table_is_empty,
+)
+from .export_weights_db import (
     today_data_exists as _today_data_exists,
 )
 from .framework_contract import validate_span_length
@@ -209,7 +218,9 @@ def load_locked_weights_for_window(
 
     expected_dates = pd.date_range(start=start_ts, end=lock_end_ts, freq="D")
     actual_dates = pd.to_datetime([row[0] for row in rows]).normalize()
-    if len(actual_dates) != len(expected_dates) or not actual_dates.equals(expected_dates):
+    if len(actual_dates) != len(expected_dates) or not actual_dates.equals(
+        expected_dates
+    ):
         missing = expected_dates.difference(actual_dates)
         extra = actual_dates.difference(expected_dates)
         raise ValueError(
@@ -401,36 +412,56 @@ def insert_all_data(conn, df):
             f"Inserting {len(data)} rows in {total_batches} batches of {batch_size}..."
         )
 
-        with conn.cursor() as cur:
-            for i in range(0, len(data), batch_size):
-                batch = data[i : i + batch_size]
-                batch_num = (i // batch_size) + 1
+        failed_batch_num = None
+        failed_batch_size = 0
+        try:
+            with conn.cursor() as cur:
+                for i in range(0, len(data), batch_size):
+                    batch = data[i : i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    failed_batch_num = batch_num
+                    failed_batch_size = len(batch)
 
-                if batch_num % 10 == 0 or batch_num == total_batches:
-                    logging.info(
-                        f"Processing batch {batch_num}/{total_batches} ({len(batch)} rows)..."
+                    if batch_num % 10 == 0 or batch_num == total_batches:
+                        logging.info(
+                            f"Processing batch {batch_num}/{total_batches} ({len(batch)} rows)..."
+                        )
+
+                    # Use execute_values with explicit page_size for better performance
+                    execute_values(
+                        cur,
+                        """
+                        INSERT INTO bitcoin_dca (id, start_date, end_date, DCA_date, btc_usd, weight)
+                        VALUES %s
+                        ON CONFLICT (id, start_date, end_date, DCA_date) DO NOTHING
+                        """,
+                        batch,
+                        page_size=len(batch),  # Process entire batch at once
                     )
 
-                # Use execute_values with explicit page_size for better performance
-                execute_values(
-                    cur,
-                    """
-                    INSERT INTO bitcoin_dca (id, start_date, end_date, DCA_date, btc_usd, weight)
-                    VALUES %s
-                    ON CONFLICT (id, start_date, end_date, DCA_date) DO NOTHING
-                    """,
-                    batch,
-                    page_size=len(batch),  # Process entire batch at once
+                    # Commit every batch (or less frequently for even better performance)
+                    if batch_num % 5 == 0 or batch_num == total_batches:
+                        conn.commit()
+                        if batch_num % 10 == 0 or batch_num == total_batches:
+                            logging.info(f"  ✓ Committed through batch {batch_num}")
+
+            # Final commit
+            conn.commit()
+        except Exception as e:
+            logging.error(
+                "Fallback bulk insert failed at batch %s/%s (%s rows): %s",
+                failed_batch_num,
+                total_batches,
+                failed_batch_size,
+                e,
+            )
+            try:
+                conn.rollback()
+            except Exception as rollback_error:
+                logging.error(
+                    "Rollback failed after fallback insert error: %s", rollback_error
                 )
-
-                # Commit every batch (or less frequently for even better performance)
-                if batch_num % 5 == 0 or batch_num == total_batches:
-                    conn.commit()
-                    if batch_num % 10 == 0 or batch_num == total_batches:
-                        logging.info(f"  ✓ Committed through batch {batch_num}")
-
-        # Final commit
-        conn.commit()
+            raise
 
         # Get final count after insertion
         with conn.cursor() as cur:
@@ -457,7 +488,14 @@ def update_today_weights(conn, df, today_str):
     import logging
     import time
 
-    required_cols = {"day_index", "start_date", "end_date", "date", "price_usd", "weight"}
+    required_cols = {
+        "day_index",
+        "start_date",
+        "end_date",
+        "date",
+        "price_usd",
+        "weight",
+    }
     missing_cols = sorted(col for col in required_cols if col not in df.columns)
     if missing_cols:
         raise ValueError(
@@ -496,7 +534,10 @@ def update_today_weights(conn, df, today_str):
             "Failed to fetch BTC price from all API sources. Will use price from dataframe if available."
         )
         # Fallback to price from dataframe if available
-        day_mask = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+        day_mask = (
+            pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            == today_str
+        )
         today_df_temp = df[day_mask]
         if not today_df_temp.empty:
             current_btc_price = today_df_temp["price_usd"].iloc[0]
@@ -517,7 +558,9 @@ def update_today_weights(conn, df, today_str):
 
     # Filter for today's data
     logging.info(f"Filtering data for date = {today_str}")
-    day_mask = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+    day_mask = (
+        pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+    )
     today_df = df[day_mask].copy()
 
     if today_df.empty:
@@ -585,89 +628,117 @@ def update_today_weights(conn, df, today_str):
         f"Starting bulk weight and BTC price updates in batches of {batch_size}..."
     )
 
-    with conn.cursor() as cur:
-        for i in range(0, len(update_data), batch_size):
-            batch = update_data[i : i + batch_size]
-            batch_num = (i // batch_size) + 1
-            total_batches = (len(update_data) + batch_size - 1) // batch_size
+    total_batches = (len(update_data) + batch_size - 1) // batch_size
+    failed_batch_num = None
+    failed_batch_size = 0
+    update_mode = "weight_and_price" if current_btc_price is not None else "weight_only"
+    try:
+        with conn.cursor() as cur:
+            for i in range(0, len(update_data), batch_size):
+                batch = update_data[i : i + batch_size]
+                batch_num = (i // batch_size) + 1
+                failed_batch_num = batch_num
+                failed_batch_size = len(batch)
 
-            batch_start_time = time.time()
+                batch_start_time = time.time()
 
-            logging.info(
-                f"Processing batch {batch_num}/{total_batches} ({len(batch)} rows)..."
-            )
-
-            if current_btc_price is not None:
-                values_list = []
-                for row in batch:
-                    (
-                        id_val,
-                        start_date_val,
-                        end_date_val,
-                        DCA_date_val,
-                        weight_val,
-                        btc_usd_val,
-                    ) = row
-                    # Properly escape and format values
-                    weight_sql = _sql_quote(weight_val)
-                    btc_usd_sql = _sql_quote(btc_usd_val)
-                    values_list.append(
-                        f"({id_val}, {_sql_quote(start_date_val)}::date, "
-                        f"{_sql_quote(end_date_val)}::date, "
-                        f"{_sql_quote(DCA_date_val)}::date, "
-                        f"{weight_sql}::float, {btc_usd_sql}::float)"
-                    )
-                values_str = ", ".join(values_list)
-
-                cur.execute(
-                    f"""
-                    UPDATE bitcoin_dca AS t
-                    SET weight = v.weight, btc_usd = v.btc_usd
-                    FROM (VALUES {values_str}) AS v(id, start_date, end_date, DCA_date, weight, btc_usd)
-                    WHERE t.id = v.id
-                    AND t.start_date = v.start_date
-                    AND t.end_date = v.end_date
-                    AND t.DCA_date = v.DCA_date
-                    """
-                )
-            else:
-                values_list = []
-                for row in batch:
-                    id_val, start_date_val, end_date_val, DCA_date_val, weight_val = row
-                    # Properly escape and format values
-                    weight_sql = _sql_quote(weight_val)
-                    values_list.append(
-                        f"({id_val}, {_sql_quote(start_date_val)}::date, "
-                        f"{_sql_quote(end_date_val)}::date, "
-                        f"{_sql_quote(DCA_date_val)}::date, "
-                        f"{weight_sql}::float)"
-                    )
-                values_str = ", ".join(values_list)
-
-                cur.execute(
-                    f"""
-                    UPDATE bitcoin_dca AS t
-                    SET weight = v.weight
-                    FROM (VALUES {values_str}) AS v(id, start_date, end_date, DCA_date, weight)
-                    WHERE t.id = v.id
-                    AND t.start_date = v.start_date
-                    AND t.end_date = v.end_date
-                    AND t.DCA_date = v.DCA_date
-                    """
+                logging.info(
+                    f"Processing batch {batch_num}/{total_batches} ({len(batch)} rows)..."
                 )
 
-            batch_updated = cur.rowcount
-            total_updated += batch_updated
+                if current_btc_price is not None:
+                    values_list = []
+                    for row in batch:
+                        (
+                            id_val,
+                            start_date_val,
+                            end_date_val,
+                            DCA_date_val,
+                            weight_val,
+                            btc_usd_val,
+                        ) = row
+                        # Properly escape and format values
+                        weight_sql = _sql_quote(weight_val)
+                        btc_usd_sql = _sql_quote(btc_usd_val)
+                        values_list.append(
+                            f"({id_val}, {_sql_quote(start_date_val)}::date, "
+                            f"{_sql_quote(end_date_val)}::date, "
+                            f"{_sql_quote(DCA_date_val)}::date, "
+                            f"{weight_sql}::float, {btc_usd_sql}::float)"
+                        )
+                    values_str = ", ".join(values_list)
 
-            batch_time = time.time() - batch_start_time
-            logging.info(
-                f"  ✓ Batch {batch_num}/{total_batches} completed: {batch_updated} rows updated in {batch_time:.2f}s"
+                    cur.execute(
+                        f"""
+                        UPDATE bitcoin_dca AS t
+                        SET weight = v.weight, btc_usd = v.btc_usd
+                        FROM (VALUES {values_str}) AS v(id, start_date, end_date, DCA_date, weight, btc_usd)
+                        WHERE t.id = v.id
+                        AND t.start_date = v.start_date
+                        AND t.end_date = v.end_date
+                        AND t.DCA_date = v.DCA_date
+                        """
+                    )
+                else:
+                    values_list = []
+                    for row in batch:
+                        (
+                            id_val,
+                            start_date_val,
+                            end_date_val,
+                            DCA_date_val,
+                            weight_val,
+                        ) = row
+                        # Properly escape and format values
+                        weight_sql = _sql_quote(weight_val)
+                        values_list.append(
+                            f"({id_val}, {_sql_quote(start_date_val)}::date, "
+                            f"{_sql_quote(end_date_val)}::date, "
+                            f"{_sql_quote(DCA_date_val)}::date, "
+                            f"{weight_sql}::float)"
+                        )
+                    values_str = ", ".join(values_list)
+
+                    cur.execute(
+                        f"""
+                        UPDATE bitcoin_dca AS t
+                        SET weight = v.weight
+                        FROM (VALUES {values_str}) AS v(id, start_date, end_date, DCA_date, weight)
+                        WHERE t.id = v.id
+                        AND t.start_date = v.start_date
+                        AND t.end_date = v.end_date
+                        AND t.DCA_date = v.DCA_date
+                        """
+                    )
+
+                batch_updated = cur.rowcount
+                total_updated += batch_updated
+
+                batch_time = time.time() - batch_start_time
+                logging.info(
+                    f"  ✓ Batch {batch_num}/{total_batches} completed: {batch_updated} rows updated in {batch_time:.2f}s"
+                )
+
+            # Final commit
+            logging.info("Committing all weight and BTC price updates...")
+            conn.commit()
+            commit_time = time.time() - start_time
+    except Exception as e:
+        logging.error(
+            "update_today_weights failed in %s mode at batch %s/%s (%s rows): %s",
+            update_mode,
+            failed_batch_num,
+            total_batches,
+            failed_batch_size,
+            e,
+        )
+        try:
+            conn.rollback()
+        except Exception as rollback_error:
+            logging.error(
+                "Rollback failed after update_today_weights error: %s", rollback_error
             )
-
-        # Final commit
-        logging.info("Committing all weight and BTC price updates...")
-        conn.commit()
-        commit_time = time.time() - start_time
+        raise
 
     logging.info(
         f"Update completed. Total rows updated: {total_updated} in {commit_time:.2f}s"
