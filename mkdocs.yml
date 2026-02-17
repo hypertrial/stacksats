@@ -1,5 +1,5 @@
 site_name: StackSats Docs
-site_description: Strategy-first Bitcoin DCA modeling and backtesting documentation.
+site_description: Bitcoin dollar cost averaging (DCA) modeling and backtesting documentation.
 site_url: https://hypertrial.github.io/stacksats/
 repo_url: https://github.com/hypertrial/stacksats
 repo_name: hypertrial/stacksats
@@ -60,7 +60,7 @@ extra:
       name: GitHub Repository
     - icon: fontawesome/solid/globe
       link: https://www.stackingsats.org
-      name: StackingSats Website
+      name: Stackingsats.org
 
 extra_css:
   - stylesheets/extra.css
@@ -101,6 +101,7 @@ nav:
       - Strict Validation: recipes/strict-validation.md
       - Interpret Backtest Metrics: recipes/interpret-backtest.md
   - Reference:
+      - Glossary: glossary.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - Strategy TimeSeries: reference/strategy-timeseries.md

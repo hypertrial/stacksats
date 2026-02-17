@@ -7,9 +7,9 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
 <div class="hero-block">
   <p class="hero-kicker">Strategy-first Bitcoin DCA toolkit</p>
-  <h2>Build, validate, and backtest stacking sats strategies with a sealed allocation framework.</h2>
+  <h2>Build, validate, and backtest Bitcoin dollar cost averaging (DCA) strategies with a sealed allocation framework.</h2>
   <p>
-    StackSats, developed by Hypertrial, is a Python package for strategy-first Bitcoin DCA ("stacking sats") research and execution.
+    StackSats, developed by Hypertrial, is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
     Learn more at <a href="https://www.stackingsats.org">www.stackingsats.org</a>.
   </p>
 </div>

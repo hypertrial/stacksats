@@ -1,6 +1,6 @@
 ---
 title: CLI Commands
-description: Command reference for validating, backtesting, and exporting StackSats strategies.
+description: Command reference for validating, backtesting, and exporting Bitcoin dollar cost averaging (DCA) strategies.
 ---
 
 # Commands for `examples/model_example.py`

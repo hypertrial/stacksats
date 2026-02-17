@@ -14,6 +14,17 @@ This page covers model-side feature engineering and signal composition before fr
 | MVRV value | 70% | Lower MVRV increases buy intensity |
 | Price vs MA | 20% | Below 200-day MA increases buy intensity |
 | 4-year percentile | 10% | Cycle-context signal |
+| --- | --- | --- |
+
+### Key Concepts for Analysts
+
+If you are new to Bitcoin analysis, here are the primary metrics used in this model:
+
+- **MVRV (Market Value to Realized Value):** A ratio that compares Bitcoin's market capitalization (current price × total supply) to its realized capitalization (the value of all coins at the price they last moved).
+    - **High MVRV** suggests the market is in high profit (potential overvaluation).
+    - **Low MVRV** suggests the market is in loss or near "cost basis" (potential undervaluation).
+- **Price vs 200-Day Moving Average:** A standard trend-following metric. Prices below the 200-day MA often indicate long-term "value" zones for accumulation.
+- **Sats (Satoshis):** The smallest unit of Bitcoin (1 BTC = 100,000,000 sats). "Stacking sats" is a community term for regular, small-scale Bitcoin accumulation.
 
 ## Feature construction
 

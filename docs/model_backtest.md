@@ -3,9 +3,9 @@ title: Backtest Runtime
 description: How StackSats runs backtests, computes metrics, and writes artifacts.
 ---
 
-# Bitcoin DCA Backtest System
+# Bitcoin Dollar Cost Averaging (DCA) Backtest System
 
-This document explains how StackSats runs strategy backtests and how to interpret the output metrics.
+This document explains how StackSats runs strategy backtests for Bitcoin dollar cost averaging (DCA) and how to interpret the output metrics.
 
 ## Overview
 
@@ -66,6 +66,26 @@ Primary aggregated metrics:
 - `win_rate`: percentage of windows where `dynamic_percentile > uniform_percentile`
 - `exp_decay_percentile`: recency-weighted mean dynamic percentile
 - `score`: `0.5 * win_rate + 0.5 * exp_decay_percentile`
+
+## Why Sats per Dollar (SPD)? vs ROI/CAGR
+
+Financial analysts often look for **Return on Investment (ROI)** or **Compound Annual Growth Rate (CAGR)** to evaluate performance. However, for a pure accumulation strategy, these metrics can be misleading.
+
+### Accumulation Efficiency vs. Portfolio Value
+
+- **ROI/CAGR** measures how much your *portfolio value (in USD)* has grown. This is heavily dependent on the market price of Bitcoin at the start and end of the period.
+    - *Example:* If Bitcoin price doubles, your ROI doubles, even if your strategy did nothing special.
+- **Sats per Dollar (SPD)** measures your *accumulation efficiency*. It asks: "For every dollar I spent, how much Bitcoin did I get?"
+    - *Formula:* $\text{Total Sats Accumulated} / \text{Total USD Invested}$
+    - *Goal:* In an accumulation strategy, you want to acquire *more* Bitcoin than a simple daily purchase (uniform DCA) would have yielded for the same cost.
+
+### The Analyst's Edge
+
+By maximizing SPD, you are mathematically minimizing your average cost basis. This gives you an "edge" over the market price.
+- **High SPD** = You bought more when price was low (relative to value).
+- **Low SPD** = You bought more when price was high.
+
+A strategy with high SPD will *always* outperform a strategy with low SPD in terms of total Bitcoin holdings, regardless of where the price goes next. This makes it the only controllable metric for long-term conviction holders.
 
 ## Validation Behavior
 
