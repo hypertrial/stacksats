@@ -224,6 +224,8 @@ class TestExportMetricsJson:
         summary = data["summary_metrics"]
         assert "score" in summary
         assert "win_rate" in summary
+        assert "uniform_exp_decay_percentile" in summary
+        assert "exp_decay_multiple_vs_uniform" in summary
 
     def test_window_level_data_count(
         self, sample_spd_df, sample_metrics, temp_output_dir

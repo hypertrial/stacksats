@@ -215,6 +215,8 @@ def sample_metrics():
         "score": 65.5,
         "win_rate": 72.0,
         "exp_decay_percentile": 59.0,
+        "uniform_exp_decay_percentile": 47.5,
+        "exp_decay_multiple_vs_uniform": 1.2421,
         "mean_excess": 5.2,
         "median_excess": 4.8,
         "relative_improvement_pct_mean": 12.5,

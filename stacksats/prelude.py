@@ -367,7 +367,7 @@ def backtest_dynamic_dca(
     strategy_label: str = "strategy",
     start_date: str | None = None,
     end_date: str | None = None,
-) -> tuple[pd.DataFrame, float]:
+) -> tuple[pd.DataFrame, float, float]:
     """Run rolling-window SPD backtest and log aggregated performance metrics.
 
     Unified function that supports both simple usage and shared runtime logic with
@@ -382,7 +382,10 @@ def backtest_dynamic_dca(
         end_date: Optional end date (default: dynamic yesterday)
 
     Returns:
-        Tuple of (SPD table DataFrame, exponential-decay average percentile)
+        Tuple of:
+        - SPD table DataFrame
+        - exponential-decay average dynamic percentile
+        - exponential-decay average uniform percentile
     """
     spd_table = compute_cycle_spd(
         dataframe,
@@ -393,12 +396,14 @@ def backtest_dynamic_dca(
     )
     dynamic_spd = spd_table["dynamic_sats_per_dollar"]
     dynamic_pct = spd_table["dynamic_percentile"]
+    uniform_pct = spd_table["uniform_percentile"]
 
     # Exponential decay weighting (recent windows weighted more)
     N = len(dynamic_spd)
     exp_weights = 0.9 ** np.arange(N - 1, -1, -1)
     exp_weights /= exp_weights.sum()
     exp_avg_pct = (dynamic_pct.values * exp_weights).sum()
+    uniform_exp_avg_pct = (uniform_pct.values * exp_weights).sum()
 
     logging.info(f"Aggregated Metrics for {strategy_label}:")
     logging.info(
@@ -410,5 +415,6 @@ def backtest_dynamic_dca(
         f"mean={dynamic_pct.mean():.2f}%, median={dynamic_pct.median():.2f}%"
     )
     logging.info(f"  Exp-decay avg SPD percentile: {exp_avg_pct:.2f}%")
+    logging.info(f"  Exp-decay avg uniform percentile: {uniform_exp_avg_pct:.2f}%")
 
-    return spd_table, exp_avg_pct
+    return spd_table, exp_avg_pct, uniform_exp_avg_pct

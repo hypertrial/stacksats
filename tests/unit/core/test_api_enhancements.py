@@ -57,11 +57,14 @@ def test_backtest_result_summary_dataframe_and_json(tmp_path: Path):
         exp_decay_percentile=44.2,
         win_rate=66.6,
         score=55.4,
+        uniform_exp_decay_percentile=35.0,
     )
 
     summary = result.summary()
     assert "Score: 55.40%" in summary
     assert "Win Rate: 66.60%" in summary
+    assert "Uniform Exp-Decay: 35.00%" in summary
+    assert "Exp-Decay Multiple: 1.263x" in summary
 
     as_df = result.to_dataframe()
     assert as_df.equals(result.spd_table)
@@ -73,6 +76,8 @@ def test_backtest_result_summary_dataframe_and_json(tmp_path: Path):
     persisted = json.loads(output_path.read_text(encoding="utf-8"))
     assert persisted == payload
     assert payload["summary_metrics"]["score"] == 55.4
+    assert payload["summary_metrics"]["uniform_exp_decay_percentile"] == 35.0
+    assert payload["summary_metrics"]["exp_decay_multiple_vs_uniform"] == 44.2 / 35.0
     assert len(payload["window_level_data"]) == len(result.spd_table)
 
 
@@ -83,6 +88,7 @@ def test_backtest_result_plot_delegates_to_backtest_module(mocker):
         exp_decay_percentile=44.2,
         win_rate=66.6,
         score=55.4,
+        uniform_exp_decay_percentile=35.0,
     )
 
     mocked_calls = [
@@ -98,8 +104,24 @@ def test_backtest_result_plot_delegates_to_backtest_module(mocker):
 
     for mocked in mocked_calls:
         mocked.assert_called_once()
+    metrics_args = mocked_calls[4].call_args.args
+    assert "uniform_exp_decay_percentile" in metrics_args[1]
+    assert "exp_decay_multiple_vs_uniform" in metrics_args[1]
     assert paths["metrics_json"].endswith("my-output/metrics.json")
     assert paths["performance_comparison"].endswith("my-output/performance_comparison.svg")
+
+
+def test_backtest_result_exp_decay_multiple_none_when_uniform_zero() -> None:
+    result = BacktestResult(
+        spd_table=_sample_spd_df(),
+        exp_decay_percentile=44.2,
+        win_rate=66.6,
+        score=55.4,
+        uniform_exp_decay_percentile=0.0,
+    )
+    payload = result.to_json()
+    assert result.exp_decay_multiple_vs_uniform is None
+    assert payload["summary_metrics"]["exp_decay_multiple_vs_uniform"] is None
 
 
 def test_validation_result_summary_format():

@@ -20,17 +20,35 @@ class BacktestResult:
     exp_decay_percentile: float
     win_rate: float
     score: float
+    uniform_exp_decay_percentile: float = 0.0
     strategy_id: str = "unknown"
     strategy_version: str = "0.0.0"
     config_hash: str = ""
     run_id: str = ""
 
+    @property
+    def exp_decay_multiple_vs_uniform(self) -> float | None:
+        """Return dynamic-vs-uniform exp-decay ratio, or None when undefined."""
+        uniform_exp_decay = float(self.uniform_exp_decay_percentile)
+        if not np.isfinite(uniform_exp_decay) or uniform_exp_decay <= 0.0:
+            return None
+        multiple = float(self.exp_decay_percentile) / uniform_exp_decay
+        if not np.isfinite(multiple):
+            return None
+        return multiple
+
     def summary(self) -> str:
         """Return a concise text summary of key metrics."""
+        exp_decay_multiple = self.exp_decay_multiple_vs_uniform
+        exp_decay_multiple_str = (
+            f"{exp_decay_multiple:.3f}x" if exp_decay_multiple is not None else "n/a"
+        )
         return (
             f"Score: {self.score:.2f}% | "
             f"Win Rate: {self.win_rate:.2f}% | "
             f"Exp-Decay Percentile: {self.exp_decay_percentile:.2f}% | "
+            f"Uniform Exp-Decay: {self.uniform_exp_decay_percentile:.2f}% | "
+            f"Exp-Decay Multiple: {exp_decay_multiple_str} | "
             f"Windows: {len(self.spd_table)}"
         )
 
@@ -51,6 +69,8 @@ class BacktestResult:
                 "score": float(self.score),
                 "win_rate": float(self.win_rate),
                 "exp_decay_percentile": float(self.exp_decay_percentile),
+                "uniform_exp_decay_percentile": float(self.uniform_exp_decay_percentile),
+                "exp_decay_multiple_vs_uniform": self.exp_decay_multiple_vs_uniform,
                 "windows": int(len(self.spd_table)),
             },
             "window_level_data": self.spd_table.reset_index().to_dict(orient="records"),
@@ -84,6 +104,8 @@ class BacktestResult:
             "score": float(self.score),
             "win_rate": float(self.win_rate),
             "exp_decay_percentile": float(self.exp_decay_percentile),
+            "uniform_exp_decay_percentile": float(self.uniform_exp_decay_percentile),
+            "exp_decay_multiple_vs_uniform": self.exp_decay_multiple_vs_uniform,
             "mean_excess": float(excess_percentile.mean()),
             "median_excess": float(excess_percentile.median()),
             "relative_improvement_pct_mean": float(relative_improvements.mean()),

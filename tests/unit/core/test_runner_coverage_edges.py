@@ -183,7 +183,7 @@ def test_backtest_strategy_fn_handles_empty_window(monkeypatch: pytest.MonkeyPat
                 "uniform_percentile": [40.0],
             }
         )
-        return spd_table, 50.0
+        return spd_table, 50.0, 45.0
 
     monkeypatch.setattr("stacksats.runner.backtest_dynamic_dca", _fake_backtest_dynamic_dca)
 

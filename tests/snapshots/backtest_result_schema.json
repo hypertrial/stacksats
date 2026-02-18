@@ -14,11 +14,20 @@
     },
     "summary_metrics": {
       "type": "object",
-      "required": ["score", "win_rate", "exp_decay_percentile", "windows"],
+      "required": [
+        "score",
+        "win_rate",
+        "exp_decay_percentile",
+        "uniform_exp_decay_percentile",
+        "exp_decay_multiple_vs_uniform",
+        "windows"
+      ],
       "properties": {
         "score": { "type": "number" },
         "win_rate": { "type": "number" },
         "exp_decay_percentile": { "type": "number" },
+        "uniform_exp_decay_percentile": { "type": "number" },
+        "exp_decay_multiple_vs_uniform": { "type": ["number", "null"] },
         "windows": { "type": "integer" }
       }
     },

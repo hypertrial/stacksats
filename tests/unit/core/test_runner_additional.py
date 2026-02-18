@@ -154,7 +154,7 @@ def test_backtest_raises_when_no_windows_generated(monkeypatch: pytest.MonkeyPat
     strategy = _UniformProposeStrategy()
     monkeypatch.setattr(
         "stacksats.runner.backtest_dynamic_dca",
-        lambda *args, **kwargs: (pd.DataFrame(), 50.0),
+        lambda *args, **kwargs: (pd.DataFrame(), 50.0, 40.0),
     )
 
     with pytest.raises(ValueError, match="No backtest windows were generated"):
@@ -178,7 +178,7 @@ def test_backtest_win_rate_ignores_tiny_float_noise(
     )
     monkeypatch.setattr(
         "stacksats.runner.backtest_dynamic_dca",
-        lambda *args, **kwargs: (spd_table, 50.0),
+        lambda *args, **kwargs: (spd_table, 50.0, 40.0),
     )
 
     result = runner.backtest(
@@ -204,7 +204,7 @@ def test_backtest_win_rate_counts_only_deltas_above_tolerance(
     )
     monkeypatch.setattr(
         "stacksats.runner.backtest_dynamic_dca",
-        lambda *args, **kwargs: (spd_table, 50.0),
+        lambda *args, **kwargs: (spd_table, 50.0, 40.0),
     )
 
     result = runner.backtest(

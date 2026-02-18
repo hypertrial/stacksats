@@ -292,7 +292,7 @@ class StrategyRunner:
             return weights
 
         strategy_label = config.strategy_label or strategy.strategy_id
-        spd_table, exp_decay_percentile = backtest_dynamic_dca(
+        spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
             btc_df,
             _strategy_fn,
             features_df=features_df,
@@ -312,6 +312,7 @@ class StrategyRunner:
         return BacktestResult(
             spd_table=spd_table,
             exp_decay_percentile=exp_decay_percentile,
+            uniform_exp_decay_percentile=uniform_exp_decay_percentile,
             win_rate=win_rate,
             score=score,
             strategy_id=provenance["strategy_id"],

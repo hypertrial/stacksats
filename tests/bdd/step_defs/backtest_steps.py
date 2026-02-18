@@ -108,7 +108,7 @@ def when_run_cycle_spd_tracking(sample_btc_df, bdd_context):
 def when_run_backtest_shared(sample_btc_df, bdd_context):
     """Run full backtest."""
     features_df = bdd_context["features_df"]
-    spd_table, exp_decay_percentile = backtest_dynamic_dca(
+    spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
         sample_btc_df,
         compute_weights_shared,
         features_df=features_df,
@@ -116,6 +116,7 @@ def when_run_backtest_shared(sample_btc_df, bdd_context):
     )
     bdd_context["spd_table"] = spd_table
     bdd_context["exp_decay_percentile"] = exp_decay_percentile
+    bdd_context["uniform_exp_decay_percentile"] = uniform_exp_decay_percentile
 
 
 @when("I compute weights twice for the same window")

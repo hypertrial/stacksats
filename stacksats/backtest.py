@@ -266,12 +266,23 @@ def create_performance_metrics_summary(
     ax.axis("tight")
     ax.axis("off")
 
+    exp_decay_multiple = metrics.get("exp_decay_multiple_vs_uniform")
+    if exp_decay_multiple is None:
+        exp_decay_multiple_text = "n/a"
+    else:
+        exp_decay_multiple_text = f"{float(exp_decay_multiple):.3f}x"
+
     # Prepare table data
     table_data = [
         ["Metric", "Value"],
         ["Final Model Score", f"{metrics['score']:.2f}%"],
         ["Win Rate", f"{metrics['win_rate']:.2f}%"],
         ["Exponential Decay Percentile", f"{metrics['exp_decay_percentile']:.2f}%"],
+        [
+            "Uniform Exponential Decay Percentile",
+            f"{metrics['uniform_exp_decay_percentile']:.2f}%",
+        ],
+        ["Exp-Decay Multiple vs Uniform", exp_decay_multiple_text],
         ["Mean Excess Percentile", f"{metrics['mean_excess']:.2f}%"],
         ["Median Excess Percentile", f"{metrics['median_excess']:.2f}%"],
         [
