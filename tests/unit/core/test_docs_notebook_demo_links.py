@@ -20,11 +20,11 @@ def test_notebook_demo_does_not_embed_iframe() -> None:
 def test_notebook_demo_direct_link_points_to_hosted_notebook_asset() -> None:
     markdown = _notebook_demo_markdown(_repo_root())
     match = re.search(
-        r"\[Open browser-safe exported notebook\]\(([^)]+)\)",
+        r"\[Open exported notebook\]\(([^)]+)\)",
         markdown,
     )
-    assert match, "Notebook demo page must include browser-safe notebook link"
+    assert match, "Notebook demo page must include exported notebook link"
     assert (
         match.group(1)
-        == "https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook_browser.html"
+        == "https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook.html"
     )

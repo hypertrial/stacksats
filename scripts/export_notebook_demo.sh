@@ -11,11 +11,7 @@ export HOME="${MARIMO_HOME:-/tmp}"
 
 marimo export html \
   examples/model_example_notebook.py \
+  -f \
   -o docs/assets/notebooks/model_example_notebook.html
 
-marimo export html \
-  examples/model_example_notebook_browser.py \
-  -o docs/assets/notebooks/model_example_notebook_browser.html
-
 echo "Exported docs/assets/notebooks/model_example_notebook.html"
-echo "Exported docs/assets/notebooks/model_example_notebook_browser.html"
