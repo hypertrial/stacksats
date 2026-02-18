@@ -18,7 +18,20 @@ For consolidated upgrade mappings, see [Migration Guide](migration.md).
 
 ## Latest release
 
+- `0.3.2` (2026-02-18): latest published release on PyPI.
+
+## Recent PyPI releases
+
+- `0.3.2` (2026-02-18)
+- `0.3.1` (2026-02-17)
+- `0.3.0.post1.dev2` (2026-02-17, pre-release)
+- `0.3.0` (2026-02-16)
+- `0.2.3` (2026-02-16)
+- `0.2.2` (2026-02-16)
+- `0.1.1` (2026-02-12)
 - `0.1.0` (2026-02-12): initial public release of StackSats.
+
+Tag-only (not published to PyPI): `0.2.0`, `0.2.1`.
 
 ## Full release history
 
