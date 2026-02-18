@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+WIN_RATE_TOLERANCE = 1e-10
+
 
 @dataclass(slots=True)
 class BacktestResult:
@@ -75,7 +77,7 @@ class BacktestResult:
         )
         uniform_pct_safe = self.spd_table["uniform_percentile"].replace(0, 0.01)
         relative_improvements = excess_percentile / uniform_pct_safe * 100
-        wins = (self.spd_table["dynamic_percentile"] > self.spd_table["uniform_percentile"]).sum()
+        wins = int((excess_percentile > WIN_RATE_TOLERANCE).sum())
         losses = len(self.spd_table) - wins
 
         metrics = {

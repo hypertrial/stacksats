@@ -165,6 +165,58 @@ def test_backtest_raises_when_no_windows_generated(monkeypatch: pytest.MonkeyPat
         )
 
 
+def test_backtest_win_rate_ignores_tiny_float_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    strategy = _UniformProposeStrategy()
+    spd_table = pd.DataFrame(
+        {
+            "dynamic_percentile": [40.0 + 1e-12, 50.0 - 1e-12, 60.0 + 5e-11],
+            "uniform_percentile": [40.0, 50.0, 60.0],
+        }
+    )
+    monkeypatch.setattr(
+        "stacksats.runner.backtest_dynamic_dca",
+        lambda *args, **kwargs: (spd_table, 50.0),
+    )
+
+    result = runner.backtest(
+        strategy,
+        BacktestConfig(start_date="2022-01-01", end_date="2022-12-31"),
+        btc_df=_btc_df(days=500),
+    )
+
+    # Deltas are below win-rate tolerance, so no wins should be counted.
+    assert float(result.win_rate) == 0.0
+
+
+def test_backtest_win_rate_counts_only_deltas_above_tolerance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    strategy = _UniformProposeStrategy()
+    spd_table = pd.DataFrame(
+        {
+            "dynamic_percentile": [40.0 + 1e-8, 50.0 - 1e-8, 60.0 + 2e-10],
+            "uniform_percentile": [40.0, 50.0, 60.0],
+        }
+    )
+    monkeypatch.setattr(
+        "stacksats.runner.backtest_dynamic_dca",
+        lambda *args, **kwargs: (spd_table, 50.0),
+    )
+
+    result = runner.backtest(
+        strategy,
+        BacktestConfig(start_date="2022-01-01", end_date="2022-12-31"),
+        btc_df=_btc_df(days=500),
+    )
+
+    # Two of three windows exceed tolerance.
+    assert result.win_rate == pytest.approx(66.6666666667, rel=0.0, abs=1e-9)
+
+
 def test_validate_reports_win_rate_threshold_failure_message() -> None:
     runner = StrategyRunner()
     strategy = _UniformProposeStrategy()

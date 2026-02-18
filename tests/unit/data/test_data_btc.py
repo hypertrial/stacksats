@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from stacksats.data_btc import BTCDataProvider, _is_cache_usable
+from stacksats.data_btc import BTCDataProvider, DataLoadError, _is_cache_usable
 
 
 PRICE_COL = "PriceUSD_coinmetrics"
@@ -51,6 +51,27 @@ def test_is_cache_usable_false_for_stale_latest_date() -> None:
 
 def test_is_cache_usable_false_for_malformed_bytes() -> None:
     assert _is_cache_usable(b"not-csv", pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-10")) is False
+
+
+def test_is_cache_usable_true_for_past_window_without_recent_requirement() -> None:
+    today = pd.Timestamp("2024-01-10")
+    csv_bytes = _csv_bytes(
+        [
+            {"time": "2023-12-30", "PriceUSD": 42000.0},
+            {"time": "2023-12-31", "PriceUSD": 42100.0},
+        ]
+    )
+
+    assert (
+        _is_cache_usable(
+            csv_bytes,
+            pd.Timestamp("2023-12-01"),
+            today,
+            target_end=pd.Timestamp("2023-12-31"),
+            require_recent=False,
+        )
+        is True
+    )
 
 
 def test_load_uses_fresh_usable_cache_without_network(tmp_path: Path, mocker) -> None:
@@ -139,6 +160,53 @@ def test_load_refreshes_stale_cache_by_age(tmp_path: Path, mocker) -> None:
     assert float(df.loc[pd.Timestamp("2024-01-10"), PRICE_COL]) == 52100.0
 
 
+def test_load_past_only_uses_cache_without_network(tmp_path: Path, mocker) -> None:
+    now = pd.Timestamp("2026-02-17")
+    cache_file = tmp_path / "coinmetrics_btc.csv"
+    cache_file.write_bytes(
+        _csv_bytes(
+            [
+                {"time": "2025-12-30", "PriceUSD": 94000.0, "CapMVRVCur": 2.0},
+                {"time": "2025-12-31", "PriceUSD": 95000.0, "CapMVRVCur": 2.1},
+            ]
+        )
+    )
+    stale_mtime = now.timestamp() - (90 * 24 * 3600)
+    os.utime(cache_file, (stale_mtime, stale_mtime))
+
+    mocked_get = mocker.patch("stacksats.data_btc.requests.get")
+    mocked_get.side_effect = AssertionError("Network should not be used for past-only windows")
+
+    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
+    df = provider.load(backtest_start="2025-12-30", end_date="2025-12-31")
+
+    assert mocked_get.call_count == 0
+    assert float(df.loc[pd.Timestamp("2025-12-31"), PRICE_COL]) == 95000.0
+
+
+def test_load_past_only_raises_when_coinmetrics_has_missing_dates(
+    tmp_path: Path, mocker
+) -> None:
+    now = pd.Timestamp("2024-01-10")
+    cache_file = tmp_path / "coinmetrics_btc.csv"
+    cache_file.write_bytes(
+        _csv_bytes(
+            [
+                {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
+                {"time": "2024-01-03", "PriceUSD": 42000.0, "CapMVRVCur": 2.2},
+            ]
+        )
+    )
+    os.utime(cache_file, (now.timestamp() - 60, now.timestamp() - 60))
+
+    mocked_get = mocker.patch("stacksats.data_btc.requests.get")
+    mocked_get.side_effect = AssertionError("Network should not be used for past-only windows")
+
+    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
+    with pytest.raises(DataLoadError, match="missing dates"):
+        provider.load(backtest_start="2024-01-01", end_date="2024-01-03")
+
+
 def test_load_without_cache_fetches_network(mocker) -> None:
     now = pd.Timestamp("2024-01-02")
     remote_bytes = _csv_bytes(
@@ -168,16 +236,9 @@ def test_load_fills_historical_and_today_gaps(mocker) -> None:
         ]
     )
     mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    historical = mocker.patch("stacksats.data_btc.fetch_btc_price_historical", return_value=41000.0)
-    robust = mocker.patch("stacksats.data_btc.fetch_btc_price_robust", return_value=43000.0)
-
     provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-01")
-
-    assert float(df.loc[pd.Timestamp("2024-01-02"), PRICE_COL]) == 41000.0
-    assert float(df.loc[pd.Timestamp("2024-01-04"), PRICE_COL]) == 43000.0
-    assert historical.call_count == 1
-    assert robust.call_count == 1
+    with pytest.raises(DataLoadError, match="missing dates"):
+        provider.load(backtest_start="2024-01-01")
 
 
 def test_load_falls_back_to_previous_price_when_fetch_returns_none(mocker) -> None:
@@ -189,16 +250,12 @@ def test_load_falls_back_to_previous_price_when_fetch_returns_none(mocker) -> No
         ]
     )
     mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    mocker.patch("stacksats.data_btc.fetch_btc_price_historical", return_value=None)
-    mocker.patch("stacksats.data_btc.fetch_btc_price_robust", return_value=42000.0)
-
     provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-01")
+    with pytest.raises(DataLoadError, match="missing dates"):
+        provider.load(backtest_start="2024-01-01")
 
-    assert float(df.loc[pd.Timestamp("2024-01-02"), PRICE_COL]) == 40000.0
 
-
-def test_load_uses_yesterday_mvrv_when_today_missing(mocker) -> None:
+def test_load_preserves_missing_today_mvrv(mocker) -> None:
     now = pd.Timestamp("2024-01-03")
     remote_bytes = _csv_bytes(
         [
@@ -212,7 +269,7 @@ def test_load_uses_yesterday_mvrv_when_today_missing(mocker) -> None:
     provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
     df = provider.load(backtest_start="2024-01-01")
 
-    assert float(df.loc[pd.Timestamp("2024-01-03"), "CapMVRVCur"]) == 2.1
+    assert pd.isna(df.loc[pd.Timestamp("2024-01-03"), "CapMVRVCur"])
 
 
 def test_load_raises_when_required_prices_remain_missing(mocker) -> None:
@@ -224,9 +281,6 @@ def test_load_raises_when_required_prices_remain_missing(mocker) -> None:
         ]
     )
     mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    mocker.patch("stacksats.data_btc.fetch_btc_price_historical", return_value=None)
-    mocker.patch("stacksats.data_btc.fetch_btc_price_robust", return_value=None)
-
     provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    with pytest.raises(AssertionError, match="Critical error: .*missing BTC-USD prices"):
+    with pytest.raises(DataLoadError, match="missing PriceUSD values"):
         provider.load(backtest_start="2024-01-01")

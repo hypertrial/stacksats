@@ -120,9 +120,11 @@ def test_runner_uses_injected_data_provider_when_no_btc_df() -> None:
     class FakeProvider:
         def __init__(self):
             self.called = False
+            self.end_date = None
 
-        def load(self, *, backtest_start: str):
+        def load(self, *, backtest_start: str, end_date: str | None = None):
             self.called = True
+            self.end_date = end_date
             return _btc_df()
 
     provider = FakeProvider()
@@ -132,4 +134,5 @@ def test_runner_uses_injected_data_provider_when_no_btc_df() -> None:
         BacktestConfig(start_date="2022-01-01", end_date="2024-01-01"),
     )
     assert provider.called is True
+    assert provider.end_date == "2024-01-01"
     assert result.score >= 0.0

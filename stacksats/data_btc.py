@@ -11,14 +11,18 @@ from typing import Callable
 import pandas as pd
 import requests
 
-from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
-
-
 class DataLoadError(RuntimeError):
     """Raised when BTC source data cannot be loaded safely."""
 
 
-def _is_cache_usable(csv_bytes: bytes, backtest_start: pd.Timestamp, today: pd.Timestamp) -> bool:
+def _is_cache_usable(
+    csv_bytes: bytes,
+    backtest_start: pd.Timestamp,
+    today: pd.Timestamp,
+    *,
+    target_end: pd.Timestamp | None = None,
+    require_recent: bool = True,
+) -> bool:
     """Return True when cached CoinMetrics data appears complete and usable."""
     try:
         cached_df = pd.read_csv(BytesIO(csv_bytes), usecols=["time", "PriceUSD"])
@@ -32,10 +36,15 @@ def _is_cache_usable(csv_bytes: bytes, backtest_start: pd.Timestamp, today: pd.T
             return False
 
         latest_date = cached_df["time"].max().normalize()
-        if latest_date < (today - pd.Timedelta(days=3)):
+        window_end = (target_end or today).normalize()
+
+        if require_recent and latest_date < (today - pd.Timedelta(days=3)):
             return False
 
-        in_window = (cached_df["time"] >= backtest_start) & (cached_df["time"] <= today)
+        if latest_date < window_end:
+            return False
+
+        in_window = (cached_df["time"] >= backtest_start) & (cached_df["time"] <= window_end)
         return bool(cached_df.loc[in_window, "PriceUSD"].notna().any())
     except Exception:
         return False
@@ -49,7 +58,7 @@ class BTCDataProvider:
     max_age_hours: int = 24
     clock: Callable[[], pd.Timestamp] = pd.Timestamp.now
 
-    def load(self, *, backtest_start: str = "2018-01-01") -> pd.DataFrame:
+    def load(self, *, backtest_start: str = "2018-01-01", end_date: str | None = None) -> pd.DataFrame:
         url = "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv"
         use_cache = self.cache_dir is not None
 
@@ -59,6 +68,17 @@ class BTCDataProvider:
         now = self.clock()
         today = now.normalize()
         backtest_start_ts = pd.to_datetime(backtest_start)
+        target_end = pd.to_datetime(end_date).normalize() if end_date is not None else today
+        if pd.isna(target_end):
+            raise ValueError(f"Invalid end_date value: {end_date!r}")
+        target_end = min(target_end, today)
+        if target_end < backtest_start_ts:
+            raise ValueError(
+                "end_date must be on or after backtest_start. "
+                f"Received backtest_start={backtest_start_ts.date()} "
+                f"and end_date={target_end.date()}."
+            )
+        past_only_window = target_end < today
 
         def _download_csv(*, cache_available: bool) -> bytes:
             try:
@@ -81,12 +101,30 @@ class BTCDataProvider:
             cache_path = Path(self.cache_dir).expanduser() / "coinmetrics_btc.csv"
             if cache_path.exists():
                 age_hours = (now.timestamp() - cache_path.stat().st_mtime) / 3600.0
-                if age_hours <= self.max_age_hours:
-                    try:
-                        cached_bytes = cache_path.read_bytes()
-                    except OSError:
-                        cached_bytes = b""
-                    if _is_cache_usable(cached_bytes, backtest_start_ts, today):
+                try:
+                    cached_bytes = cache_path.read_bytes()
+                except OSError:
+                    cached_bytes = b""
+
+                cache_usable = _is_cache_usable(
+                    cached_bytes,
+                    backtest_start_ts,
+                    today,
+                    target_end=target_end,
+                    require_recent=not past_only_window,
+                )
+
+                if past_only_window:
+                    if cache_usable:
+                        csv_bytes = cached_bytes
+                    else:
+                        raise DataLoadError(
+                            "Past-only backtest requested but local CoinMetrics cache "
+                            "does not cover the requested window. "
+                            f"Requested end_date={target_end.date()}."
+                        )
+                else:
+                    if age_hours <= self.max_age_hours and cache_usable:
                         csv_bytes = cached_bytes
                     else:
                         csv_bytes = _download_csv(cache_available=True)
@@ -95,14 +133,13 @@ class BTCDataProvider:
                             cache_path.write_bytes(csv_bytes)
                         except OSError as exc:
                             logging.warning("Could not write cache file %s: %s", cache_path, exc)
-                else:
-                    csv_bytes = _download_csv(cache_available=True)
-                    cache_path.parent.mkdir(parents=True, exist_ok=True)
-                    try:
-                        cache_path.write_bytes(csv_bytes)
-                    except OSError as exc:
-                        logging.warning("Could not write cache file %s: %s", cache_path, exc)
             else:
+                if past_only_window:
+                    raise DataLoadError(
+                        "Past-only backtest requested but no local CoinMetrics cache file "
+                        "was found. Set STACKSATS_COINMETRICS_CSV/cache first or run with "
+                        "an end_date that includes today."
+                    )
                 csv_bytes = _download_csv(cache_available=False)
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 try:
@@ -110,6 +147,11 @@ class BTCDataProvider:
                 except OSError as exc:
                     logging.warning("Could not write cache file %s: %s", cache_path, exc)
         else:
+            if past_only_window:
+                raise DataLoadError(
+                    "Past-only backtest requested with cache disabled (cache_dir=None). "
+                    "Enable cache_dir or provide in-memory btc_df."
+                )
             csv_bytes = _download_csv(cache_available=False)
 
         try:
@@ -128,51 +170,44 @@ class BTCDataProvider:
             raise ValueError("PriceUSD column not found in CoinMetrics data")
 
         price_col = "PriceUSD_coinmetrics"
-        mvrv_col = "CapMVRVCur"
         df[price_col] = df["PriceUSD"]
 
-        full_date_range = pd.date_range(start=backtest_start_ts, end=today, freq="D")
-        df = df.reindex(df.index.union(full_date_range)).sort_index()
-        backtest_mask = (df.index >= backtest_start_ts) & (df.index <= today)
-        missing_dates = df.index[backtest_mask & df[price_col].isna()]
-        for date in missing_dates:
-            previous_price = None
-            prev_date = date - pd.Timedelta(days=1)
-            if prev_date in df.index and pd.notna(df.loc[prev_date, price_col]):
-                previous_price = float(df.loc[prev_date, price_col])
-            if date == today:
-                price_usd = fetch_btc_price_robust(previous_price=previous_price)
-            else:
-                price_usd = fetch_btc_price_historical(date, previous_price=previous_price)
-            if price_usd is not None:
-                df.loc[date, price_col] = price_usd
-            elif previous_price is not None:
-                df.loc[date, price_col] = previous_price
+        if df.index.empty:
+            raise DataLoadError("CoinMetrics CSV contained no rows.")
 
-        if mvrv_col in df.columns and today in df.index and pd.isna(df.loc[today, mvrv_col]):
-            yesterday = today - pd.Timedelta(days=1)
-            if yesterday in df.index and pd.notna(df.loc[yesterday, mvrv_col]):
-                df.loc[today, mvrv_col] = df.loc[yesterday, mvrv_col]
-                logging.info(
-                    "Used yesterday's MVRV value (%s) for %s",
-                    f"{df.loc[yesterday, mvrv_col]:.4f}",
-                    today.date(),
-                )
-            else:
-                logging.warning(
-                    "Could not find valid MVRV for %s. Yesterday (%s) not available "
-                    "or also missing MVRV.",
-                    today.date(),
-                    yesterday.date(),
-                )
-
-        remaining_missing = df.loc[backtest_start_ts:today, price_col].isnull()
-        if remaining_missing.any():
-            num_missing = int(remaining_missing.sum())
-            first_missing = df.loc[backtest_start_ts:today][remaining_missing].index.min().date()
-            raise AssertionError(
-                "Critical error: "
-                f"{num_missing} dates still missing BTC-USD prices. "
-                f"First missing: {first_missing}"
+        valid_price_index = df.index[df[price_col].notna()]
+        if len(valid_price_index) == 0:
+            raise DataLoadError("CoinMetrics CSV contains no valid PriceUSD values.")
+        latest_price_date = valid_price_index.max().normalize()
+        available_end = min(target_end, latest_price_date)
+        if available_end < backtest_start_ts:
+            raise DataLoadError(
+                "CoinMetrics CSV does not cover the requested start date. "
+                f"Requested start={backtest_start_ts.date()}, "
+                f"latest available price={latest_price_date.date()}."
             )
-        return df
+
+        window = df.loc[backtest_start_ts:available_end].copy()
+        if window.empty:
+            raise DataLoadError(
+                "No CoinMetrics rows available in the requested backtest window."
+            )
+
+        missing_price = window[price_col].isna()
+        if missing_price.any():
+            first_missing = window.index[missing_price][0].date()
+            raise DataLoadError(
+                "CoinMetrics CSV has missing PriceUSD values in the requested window. "
+                f"First missing date: {first_missing}."
+            )
+
+        expected_index = pd.date_range(start=window.index.min(), end=window.index.max(), freq="D")
+        if not window.index.equals(expected_index):
+            missing_dates = expected_index.difference(window.index)
+            first_missing = missing_dates[0].date()
+            raise DataLoadError(
+                "CoinMetrics CSV has missing dates in the requested window. "
+                f"First missing date: {first_missing}."
+            )
+
+        return window

@@ -38,6 +38,8 @@ from .strategy_types import (
     validate_strategy_contract,
 )
 
+WIN_RATE_TOLERANCE = 1e-10
+
 
 class WeightValidationError(ValueError):
     """Raised when strategy weights violate required constraints."""
@@ -49,10 +51,15 @@ class StrategyRunner:
     def __init__(self, data_provider=None):
         self._data_provider = data_provider or BTCDataProvider()
 
-    def _load_btc_df(self, btc_df: pd.DataFrame | None) -> pd.DataFrame:
+    def _load_btc_df(
+        self,
+        btc_df: pd.DataFrame | None,
+        *,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
         if btc_df is not None:
             return btc_df
-        return self._data_provider.load(backtest_start=BACKTEST_START)
+        return self._data_provider.load(backtest_start=BACKTEST_START, end_date=end_date)
 
     def _validate_strategy_contract(self, strategy: BaseStrategy) -> None:
         validate_strategy_contract(strategy)
@@ -118,6 +125,24 @@ class StrategyRunner:
     @staticmethod
     def _perturb_future_features(features_df: pd.DataFrame, probe: pd.Timestamp) -> pd.DataFrame:
         return perturb_future_features(features_df, probe)
+
+    @staticmethod
+    def _compute_win_rate(
+        spd_table: pd.DataFrame,
+        *,
+        atol: float = WIN_RATE_TOLERANCE,
+    ) -> float:
+        """Compute win rate with tolerance against floating-point noise."""
+        if spd_table.empty:
+            return 0.0
+        dynamic = pd.to_numeric(spd_table["dynamic_percentile"], errors="coerce")
+        uniform = pd.to_numeric(spd_table["uniform_percentile"], errors="coerce")
+        delta = (dynamic - uniform).to_numpy(dtype=float)
+        finite = np.isfinite(delta)
+        if not finite.any():
+            return 0.0
+        wins = delta[finite] > float(atol)
+        return float(wins.mean() * 100.0)
 
     @staticmethod
     def _build_fold_ranges(
@@ -246,7 +271,7 @@ class StrategyRunner:
         from .api import BacktestResult
 
         self._validate_strategy_contract(strategy)
-        btc_df = self._load_btc_df(btc_df)
+        btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
         features_df = precompute_features(btc_df)
 
         def _strategy_fn(df_window: pd.DataFrame) -> pd.Series:
@@ -280,10 +305,7 @@ class StrategyRunner:
                 "No backtest windows were generated for the requested date range."
             )
 
-        win_rate = (
-            (spd_table["dynamic_percentile"] > spd_table["uniform_percentile"]).mean()
-            * 100
-        )
+        win_rate = self._compute_win_rate(spd_table)
         score = (0.5 * win_rate) + (0.5 * exp_decay_percentile)
         provenance = self._provenance(strategy, config)
 
@@ -308,7 +330,7 @@ class StrategyRunner:
         from .api import ValidationResult
 
         self._validate_strategy_contract(strategy)
-        btc_df = self._load_btc_df(btc_df)
+        btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
 
         start_date = config.start_date or BACKTEST_START
         end_date = config.end_date or btc_df.index.max().strftime("%Y-%m-%d")
@@ -679,7 +701,7 @@ class StrategyRunner:
         from .prelude import generate_date_ranges, group_ranges_by_start_date
 
         self._validate_strategy_contract(strategy)
-        btc_df = self._load_btc_df(btc_df)
+        btc_df = self._load_btc_df(btc_df, end_date=config.range_end)
         features_df = precompute_features(btc_df)
         run_date = current_date or pd.Timestamp.now().normalize()
 
