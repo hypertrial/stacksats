@@ -34,14 +34,19 @@ class MVRVPlusStrategy(BaseStrategy):
     def __init__(
         self,
         deep_value_boost: float = 1.18,
-        overheat_dampen: float = 0.66,
+        overheat_dampen: float = 0.62,
         neutral_scale: float = 1.00,
-        high_vol_penalty: float = 0.40,
+        high_vol_penalty: float = 0.34,
         drawdown_penalty: float = 0.24,
-        disagreement_penalty: float = 0.30,
+        disagreement_penalty: float = 0.20,
         confidence_boost: float = 0.16,
-        overlay_scale: float = 0.30,
-        smooth_alpha: float = 0.22,
+        overlay_scale: float = 0.20,
+        smooth_alpha: float = 0.10,
+        risk_budget_base: float = 1.02,
+        risk_budget_min: float = 0.72,
+        risk_budget_max: float = 1.22,
+        miner_pressure_weight: float = 0.20,
+        hash_momentum_weight: float = 0.12,
     ) -> None:
         self.deep_value_boost = deep_value_boost
         self.overheat_dampen = overheat_dampen
@@ -52,8 +57,15 @@ class MVRVPlusStrategy(BaseStrategy):
         self.confidence_boost = confidence_boost
         self.overlay_scale = overlay_scale
         self.smooth_alpha = smooth_alpha
+        self.risk_budget_base = risk_budget_base
+        self.risk_budget_min = risk_budget_min
+        self.risk_budget_max = risk_budget_max
+        self.miner_pressure_weight = miner_pressure_weight
+        self.hash_momentum_weight = hash_momentum_weight
         self.coinmetrics_csv = Path(
-            os.environ.get("STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv")
+            os.environ.get(
+                "STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv"
+            )
         ).expanduser()
         self._coinmetrics_overlays: pd.DataFrame | None = None
 
@@ -120,6 +132,8 @@ class MVRVPlusStrategy(BaseStrategy):
                 "ROI30d",
                 "ROI1yr",
                 "volume_reported_spot_usd_1d",
+                "IssTotUSD",
+                "HashRate",
             ],
         )
 
@@ -128,14 +142,18 @@ class MVRVPlusStrategy(BaseStrategy):
         if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
             cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
             netflow = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
-            features["cm_netflow"] = self._rolling_zscore(netflow.rolling(7, min_periods=3).mean(), 180)
+            features["cm_netflow"] = self._rolling_zscore(
+                netflow.rolling(7, min_periods=3).mean(), 180
+            )
         else:
             features["cm_netflow"] = 0.0
 
         if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
             exchange_share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
             features["cm_exchange_share"] = self._rolling_zscore(exchange_share, 365)
-            features["cm_exchange_share_delta"] = self._rolling_zscore(exchange_share.diff(30), 365)
+            features["cm_exchange_share_delta"] = self._rolling_zscore(
+                exchange_share.diff(30), 365
+            )
         else:
             features["cm_exchange_share"] = 0.0
             features["cm_exchange_share_delta"] = 0.0
@@ -168,8 +186,24 @@ class MVRVPlusStrategy(BaseStrategy):
         else:
             features["cm_liquidity_impulse"] = 0.0
 
+        if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
+            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
+            issuance = raw["IssTotUSD"] / cap
+            features["cm_miner_pressure"] = self._rolling_zscore(issuance, 365)
+        else:
+            features["cm_miner_pressure"] = 0.0
+
+        if "HashRate" in raw.columns:
+            hash_log = np.log(raw["HashRate"].replace(0.0, np.nan))
+            hash_mom = self._rolling_zscore(hash_log.diff(30), 365)
+            features["cm_hash_momentum"] = hash_mom
+        else:
+            features["cm_hash_momentum"] = 0.0
+
         features = features.shift(1)
-        features = features.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-6.0, 6.0)
+        features = (
+            features.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-6.0, 6.0)
+        )
         self._coinmetrics_overlays = features
         return self._coinmetrics_overlays
 
@@ -219,7 +253,9 @@ class MVRVPlusStrategy(BaseStrategy):
             features_df.get("price_vs_ma", pd.Series(0.0, index=features_df.index))
         )
         confidence = self._safe_array(
-            features_df.get("signal_confidence", pd.Series(0.5, index=features_df.index)),
+            features_df.get(
+                "signal_confidence", pd.Series(0.5, index=features_df.index)
+            ),
             fill=0.5,
         )
         confidence = np.where(confidence == 0.0, 0.5, confidence)
@@ -277,12 +313,18 @@ class MVRVPlusStrategy(BaseStrategy):
         vol21_cap = np.clip(vol21 / 0.08, 0.0, 1.0)
         realized_vol_scale = 1.0 - (0.10 * vol21_cap)
 
-        netflow = self._safe_array(features_df.get("cm_netflow", pd.Series(0.0, index=features_df.index)))
+        netflow = self._safe_array(
+            features_df.get("cm_netflow", pd.Series(0.0, index=features_df.index))
+        )
         exchange_share = self._safe_array(
-            features_df.get("cm_exchange_share", pd.Series(0.0, index=features_df.index))
+            features_df.get(
+                "cm_exchange_share", pd.Series(0.0, index=features_df.index)
+            )
         )
         exchange_share_delta = self._safe_array(
-            features_df.get("cm_exchange_share_delta", pd.Series(0.0, index=features_df.index))
+            features_df.get(
+                "cm_exchange_share_delta", pd.Series(0.0, index=features_df.index)
+            )
         )
         activity_div = self._safe_array(
             features_df.get("cm_activity_div", pd.Series(0.0, index=features_df.index))
@@ -291,7 +333,17 @@ class MVRVPlusStrategy(BaseStrategy):
             features_df.get("cm_roi_context", pd.Series(0.0, index=features_df.index))
         )
         liquidity_impulse = self._safe_array(
-            features_df.get("cm_liquidity_impulse", pd.Series(0.0, index=features_df.index))
+            features_df.get(
+                "cm_liquidity_impulse", pd.Series(0.0, index=features_df.index)
+            )
+        )
+        miner_pressure = self._safe_array(
+            features_df.get(
+                "cm_miner_pressure", pd.Series(0.0, index=features_df.index)
+            )
+        )
+        hash_momentum = self._safe_array(
+            features_df.get("cm_hash_momentum", pd.Series(0.0, index=features_df.index))
         )
 
         value_gate = np.where(zone <= -1.0, 1.20, np.where(zone >= 1.0, 0.80, 1.00))
@@ -304,6 +356,8 @@ class MVRVPlusStrategy(BaseStrategy):
             + (0.28 * activity_div * value_gate)
             + (0.26 * roi_context * np.where(zone >= 1.0, 1.10, 0.95))
             + (-0.16 * liquidity_impulse * (0.8 + 0.2 * risk_gate))
+            + (-self.miner_pressure_weight * miner_pressure * risk_gate)
+            + (self.hash_momentum_weight * hash_momentum * value_gate)
         )
         overlay = np.clip(overlay, -6.0, 6.0)
 
@@ -320,7 +374,30 @@ class MVRVPlusStrategy(BaseStrategy):
             1.25,
             np.where(zone <= -1.0, 1.10, 0.85),
         )
-        preference = (base_pref * scale) + (overlay_scale_regime * overlay)
+
+        # Adaptive risk budget scales overall conviction by structural stress.
+        risk_pressure = (
+            (0.40 * high_vol)
+            + (0.30 * dd_severity)
+            + (0.20 * np.clip(netflow / 3.0, -1.0, 1.0))
+            + (0.10 * np.clip(miner_pressure / 3.0, -1.0, 1.0))
+        )
+        risk_support = (
+            (0.45 * np.clip(activity_div / 3.0, -1.0, 1.0))
+            + (0.35 * np.clip(roi_context / 3.0, -1.0, 1.0))
+            + (0.20 * np.clip(hash_momentum / 3.0, -1.0, 1.0))
+        )
+        regime_risk_intensity = np.where(
+            zone >= 1.0, 1.25, np.where(zone <= -1.0, 0.90, 1.00)
+        )
+        risk_budget = self.risk_budget_base + (
+            0.20 * (risk_support - risk_pressure) * regime_risk_intensity
+        )
+        risk_budget = np.clip(risk_budget, self.risk_budget_min, self.risk_budget_max)
+
+        preference = (
+            (base_pref * scale) + (overlay_scale_regime * overlay)
+        ) * risk_budget
         preference = np.clip(preference, -50.0, 50.0)
         smooth_alpha_regime = np.where(
             np.abs(zone) >= 1.0,
@@ -361,12 +438,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the MVRV-plus strategy.")
     parser.add_argument("--start-date", type=str, default=None, help="YYYY-MM-DD")
     parser.add_argument("--end-date", type=str, default=None, help="YYYY-MM-DD")
-    parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
+    parser.add_argument(
+        "--output-dir", type=str, default="output", help="Output directory"
+    )
     parser.add_argument("--strategy-label", type=str, default="mvrv-plus")
     parser.add_argument(
         "--coinmetrics-csv",
         type=str,
-        default=os.environ.get("STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv"),
+        default=os.environ.get(
+            "STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv"
+        ),
         help="Local CoinMetrics BTC CSV path; no network fetch is used.",
     )
     args = parser.parse_args()
@@ -375,7 +456,9 @@ def main() -> None:
     btc_df = _load_coinmetrics_csv(args.coinmetrics_csv)
     csv_end = btc_df.index.max().normalize()
 
-    requested_end = pd.to_datetime(args.end_date).normalize() if args.end_date else csv_end
+    requested_end = (
+        pd.to_datetime(args.end_date).normalize() if args.end_date else csv_end
+    )
     if pd.isna(requested_end):
         raise ValueError(f"Invalid --end-date: {args.end_date!r}")
     effective_end = min(requested_end, csv_end)
@@ -384,7 +467,9 @@ def main() -> None:
     runner = StrategyRunner()
     validation = runner.validate(
         strategy,
-        ValidationConfig(start_date=effective_start, end_date=effective_end.strftime("%Y-%m-%d")),
+        ValidationConfig(
+            start_date=effective_start, end_date=effective_end.strftime("%Y-%m-%d")
+        ),
         btc_df=btc_df,
     )
     print(validation.summary())
