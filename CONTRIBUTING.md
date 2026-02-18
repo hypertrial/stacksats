@@ -30,7 +30,6 @@ Run these before opening a pull request:
 ruff check .
 bash scripts/check_docs_refs.sh
 python scripts/sync_objects_schema_docs.py --check
-bash scripts/export_notebook_demo.sh
 mkdocs build --strict
 pytest tests/ -v
 python -m build

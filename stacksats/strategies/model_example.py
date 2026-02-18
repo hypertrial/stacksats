@@ -15,14 +15,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stacksats import (
+from .. import model_development as model_lib
+from ..strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,
     TargetProfile,
     ValidationConfig,
 )
-from stacksats import model_development as model_lib
 
 
 class ExampleMVRVStrategy(BaseStrategy):

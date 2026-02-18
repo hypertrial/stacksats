@@ -28,7 +28,7 @@ Use this page for a 5-minute first run.
 ## 2) Run the example strategy
 
 ```bash
-python examples/model_example.py
+python -m stacksats.strategies.model_example
 ```
 
 This runs validation and backtest, then writes artifacts under:
@@ -41,9 +41,9 @@ output/<strategy_id>/<version>/<run_id>/
 
 Run lifecycle commands from the canonical reference:
 
-- [Validate Strategy](../commandsmd#2-validate-strategy-via-strategy-lifecycle-cli)
-- [Run Full Backtest](../commandsmd#3-run-full-backtest-via-strategy-lifecycle-cli)
-- [Export Strategy Artifacts](../commandsmd#4-export-strategy-artifacts)
+- [Validate Strategy](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
+- [Run Full Backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+- [Export Strategy Artifacts](../commands.md#4-export-strategy-artifacts)
 
 ## 4) Inspect outputs
 

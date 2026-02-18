@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-EXAMPLE_SPEC = "examples/model_example.py:ExampleMVRVStrategy"
+EXAMPLE_SPEC = "stacksats.strategies.model_example:ExampleMVRVStrategy"
 
 
 def run_step(label: str, cmd: list[str], *, cwd: Path, env: dict[str, str]) -> bool:
@@ -45,12 +45,16 @@ def main() -> int:
     skipped = 0
 
     steps: list[tuple[str, list[str]]] = [
-        ("Quick run (default)", [str(venv_python), "examples/model_example.py"]),
+        (
+            "Quick run (default)",
+            [str(venv_python), "-m", "stacksats.strategies.model_example"],
+        ),
         (
             "Quick run (with options)",
             [
                 str(venv_python),
-                "examples/model_example.py",
+                "-m",
+                "stacksats.strategies.model_example",
                 "--start-date",
                 "2020-01-01",
                 "--end-date",
@@ -63,7 +67,15 @@ def main() -> int:
         ),
         (
             "Validate strategy (basic)",
-            ["stacksats", "strategy", "validate", "--strategy", EXAMPLE_SPEC],
+            [
+                "stacksats",
+                "strategy",
+                "validate",
+                "--strategy",
+                EXAMPLE_SPEC,
+                "--min-win-rate",
+                "25.0",
+            ],
         ),
         (
             "Validate strategy (with options)",

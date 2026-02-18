@@ -56,7 +56,7 @@ pip install "stacksats[deploy]"
 Run the packaged example strategy:
 
 ```bash
-python examples/model_example.py
+python -m stacksats.strategies.model_example
 ```
 
 Artifacts are written under:

@@ -3,11 +3,11 @@ title: CLI Commands
 description: Command reference for validating, backtesting, and exporting Bitcoin dollar cost averaging (DCA) strategies.
 ---
 
-# Commands for `examples/model_example.py`
+# Commands for `stacksats.strategies.model_example`
 
-This file explains how to run checks, backtests, and exports using the standalone strategy file:
+This file explains how to run checks, backtests, and exports using the packaged example strategy module:
 
-- `examples/model_example.py`
+- `stacksats.strategies.model_example`
 - strategy class: `ExampleMVRVStrategy`
 
 Strategy implementations can use either:
@@ -49,24 +49,24 @@ CLI commands that load a strategy use:
 module_or_path:ClassName
 ```
 
-For this example file:
+For this example module:
 
 ```text
-examples/model_example.py:ExampleMVRVStrategy
+stacksats.strategies.model_example:ExampleMVRVStrategy
 ```
 
-## 1) Quick Run (inside `examples/model_example.py`)
+## 1) Quick Run (inside `stacksats.strategies.model_example`)
 
 Run the file directly:
 
 ```bash
-python examples/model_example.py
+python -m stacksats.strategies.model_example
 ```
 
 With custom options:
 
 ```bash
-python examples/model_example.py \
+python -m stacksats.strategies.model_example \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
   --output-dir output \
@@ -83,36 +83,39 @@ What this does:
 Check whether the model passes package validation gates:
 
 ```bash
-stacksats strategy validate --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy validate \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --min-win-rate 25.0
 ```
 
 Common options:
 
 ```bash
 stacksats strategy validate \
-  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
   --strategy-config strategy_config.json \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
   --strict \
-  --min-win-rate 50.0
+  --min-win-rate 25.0
 ```
 
 `--strict` enables additional robustness gates (determinism, mutation, leakage, OOS fold checks, and shuffled baseline checks).
+Default `--min-win-rate` is `50.0`; use it when you explicitly want the stricter default gate.
 
 ## 3) Run Full Backtest via Strategy Lifecycle CLI
 
 Basic:
 
 ```bash
-stacksats strategy backtest --strategy examples/model_example.py:ExampleMVRVStrategy
+stacksats strategy backtest --strategy stacksats.strategies.model_example:ExampleMVRVStrategy
 ```
 
 With options:
 
 ```bash
 stacksats strategy backtest \
-  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
   --strategy-config strategy_config.json \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
@@ -124,7 +127,7 @@ stacksats strategy backtest \
 
 ```bash
 stacksats strategy export \
-  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
   --strategy-config strategy_config.json \
   --start-date 2025-12-01 \
   --end-date 2027-12-31 \
@@ -174,7 +177,7 @@ ruff check .
   Ensure format is exactly `module_or_path:ClassName`.
 
 - **`Class 'ExampleMVRVStrategy' not found`**
-  Check class name spelling and file path.
+  Check class name spelling and module path.
 
 - **`Strategy file not found`**
-  Run from repo root or pass an absolute file path.
+  Use a module spec (recommended) or run from repo root when using a file path.

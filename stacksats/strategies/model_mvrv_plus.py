@@ -13,15 +13,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stacksats import (
+from ..model_development import compute_preference_scores
+from ..runner import StrategyRunner
+from ..strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,
     TargetProfile,
     ValidationConfig,
 )
-from stacksats.model_development import compute_preference_scores
-from stacksats.runner import StrategyRunner
 
 
 class MVRVPlusStrategy(BaseStrategy):

@@ -38,11 +38,11 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Examples:\n"
             "  stacksats strategy validate --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy\n"
+            "stacksats.strategies.model_example:ExampleMVRVStrategy\n"
             "  stacksats strategy backtest --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy --output-dir output\n"
+            "stacksats.strategies.model_example:ExampleMVRVStrategy --output-dir output\n"
             "  stacksats strategy export --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy "
+            "stacksats.strategies.model_example:ExampleMVRVStrategy "
             "--start-date 2025-12-01 --end-date 2027-12-31"
         ),
     )
@@ -56,7 +56,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Strategy spec format:\n"
             "  module_or_path:ClassName\n\n"
             "Example:\n"
-            "  examples/model_example.py:ExampleMVRVStrategy"
+            "  stacksats.strategies.model_example:ExampleMVRVStrategy"
         ),
     )
     strategy_sub = strategy_parser.add_subparsers(dest="strategy_command", required=True)
@@ -68,7 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy validate --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy --strict"
+            "stacksats.strategies.model_example:ExampleMVRVStrategy --strict"
         ),
     )
     validate_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
@@ -93,7 +93,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy backtest --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy "
+            "stacksats.strategies.model_example:ExampleMVRVStrategy "
             "--start-date 2020-01-01 --end-date 2025-01-01"
         ),
     )
@@ -115,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy export --strategy "
-            "examples/model_example.py:ExampleMVRVStrategy "
+            "stacksats.strategies.model_example:ExampleMVRVStrategy "
             "--start-date 2025-12-01 --end-date 2027-12-31"
         ),
     )

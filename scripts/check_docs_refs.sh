@@ -105,7 +105,7 @@ if [[ -s "${blob_links_tmp}" ]]; then
 fi
 
 if command -v rg >/dev/null 2>&1; then
-  rg -n 'stacksats strategy (validate|backtest|export) --strategy examples/model_example\.py:ExampleMVRVStrategy' \
+  rg -n 'stacksats strategy (validate|backtest|export) --strategy stacksats\.strategies\.model_example:ExampleMVRVStrategy' \
     README.md docs \
     > "${dup_cli_tmp}" || true
 fi

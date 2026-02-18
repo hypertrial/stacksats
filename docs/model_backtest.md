@@ -143,7 +143,7 @@ Run a backtest from CLI:
 
 ```bash
 stacksats strategy backtest \
-  --strategy examples/model_example.py:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
   --start-date 2020-01-01 \
   --end-date 2025-01-01 \
   --output-dir output \
@@ -153,7 +153,7 @@ stacksats strategy backtest \
 Run from Python:
 
 ```python
-from examples.model_example import ExampleMVRVStrategy
+from stacksats.strategies.model_example import ExampleMVRVStrategy
 from stacksats import BacktestConfig, ValidationConfig
 
 strategy = ExampleMVRVStrategy()

@@ -10,6 +10,8 @@ from .strategy_time_series import (
     StrategyTimeSeries,
     StrategyTimeSeriesBatch,
 )
+from .strategies.model_example import ExampleMVRVStrategy
+from .strategies.model_mvrv_plus import MVRVPlusStrategy
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     BacktestConfig,
@@ -28,7 +30,9 @@ __all__ = [
     "BaseStrategy",
     "DayState",
     "ExportConfig",
+    "ExampleMVRVStrategy",
     "MVRVStrategy",
+    "MVRVPlusStrategy",
     "ColumnSpec",
     "StrategySeriesMetadata",
     "StrategyTimeSeries",
