@@ -19,8 +19,12 @@ Local docs entry points:
 
 - [`docs/index.md`](docs/index.md) for the full map
 - [`docs/start/quickstart.md`](docs/start/quickstart.md) for five-minute setup
+- [`docs/tasks.md`](docs/tasks.md) for task-first workflows
 - [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
+- [`docs/start/minimal-strategy-examples.md`](docs/start/minimal-strategy-examples.md) for copyable minimal strategy templates
 - [`docs/commands.md`](docs/commands.md) for canonical CLI command reference
+- [`docs/migration.md`](docs/migration.md) for old-to-new breaking-change mappings
+- [`docs/faq.md`](docs/faq.md) for recurring docs and integration questions
 - [`docs/framework.md`](docs/framework.md) for the framework contract
 
 ## Framework Principles
@@ -66,7 +70,19 @@ output/<strategy_id>/<version>/<run_id>/
 ```
 
 For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/commands.md`](docs/commands.md).
+For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
+For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
+
+Export requires explicit date bounds:
+
+```bash
+stacksats strategy export \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --start-date 2025-12-01 \
+  --end-date 2027-12-31 \
+  --output-dir output
+```
 
 ## Public API
 

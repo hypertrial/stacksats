@@ -5,14 +5,46 @@ description: Command reference for validating, backtesting, and exporting Bitcoi
 
 # Commands for `stacksats.strategies.model_example`
 
-This file explains how to run checks, backtests, and exports using the packaged example strategy module:
+This is the canonical source for lifecycle CLI usage.
 
-- `stacksats.strategies.model_example`
+- module: `stacksats.strategies.model_example`
 - strategy class: `ExampleMVRVStrategy`
 
 Strategy implementations can use either:
+
 - `propose_weight(state)` for per-day intent, or
 - `build_target_profile(ctx, features_df, signals)` for batch intent.
+
+## Most Common Commands (copy/paste)
+
+```bash
+# Validate
+stacksats strategy validate \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --start-date 2020-01-01 \
+  --end-date 2025-01-01 \
+  --strict
+
+# Backtest
+stacksats strategy backtest \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --start-date 2020-01-01 \
+  --end-date 2025-01-01 \
+  --output-dir output
+
+# Export (explicit date bounds required)
+stacksats strategy export \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --start-date 2025-12-01 \
+  --end-date 2027-12-31 \
+  --output-dir output
+```
+
+Expected output location for backtest/export artifacts:
+
+```text
+output/<strategy_id>/<version>/<run_id>/
+```
 
 ## Strategy Lifecycle Flow
 
@@ -74,6 +106,7 @@ python -m stacksats.strategies.model_example \
 ```
 
 What this does:
+
 - Runs `strategy.validate(...)`
 - Runs `strategy.backtest(...)`
 - Writes plots + JSON output under `output/<strategy_id>/<version>/<run_id>/`
@@ -100,6 +133,11 @@ stacksats strategy validate \
   --min-win-rate 25.0
 ```
 
+Expected output:
+
+- Terminal summary like `Validation PASSED | ...`.
+- Win-rate threshold status and leakage/constraint checks.
+
 `--strict` enables additional robustness gates (determinism, mutation, leakage, OOS fold checks, and shuffled baseline checks).
 Default `--min-win-rate` is `50.0`; use it when you explicitly want the stricter default gate.
 
@@ -123,6 +161,14 @@ stacksats strategy backtest \
   --strategy-label model-example
 ```
 
+Expected output:
+
+- `backtest_result.json`
+- `metrics.json`
+- plot `.svg` files
+
+All under `output/<strategy_id>/<version>/<run_id>/`.
+
 ## 4) Export Strategy Artifacts
 
 ```bash
@@ -141,12 +187,14 @@ output/<strategy_id>/<version>/<run_id>/
 ```
 
 This includes:
+
 - `weights.csv`
 - `timeseries_schema.md`
 - `artifacts.json` (`strategy_id`, `version`, `config_hash`, `run_id`, file map)
 - canonical `weights.csv` columns: `start_date`, `end_date`, `day_index`, `date`, `price_usd`, `weight`
 
 Notes:
+
 - `stacksats strategy export` is strategy artifact export (filesystem output).
 - `--start-date` and `--end-date` are required for `stacksats strategy export`.
 
@@ -181,3 +229,10 @@ ruff check .
 
 - **`Strategy file not found`**
   Use a module spec (recommended) or run from repo root when using a file path.
+
+- **Export failed due to missing date bounds**
+  Provide both `--start-date` and `--end-date`.
+
+## Feedback
+
+- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+CLI+Commands)

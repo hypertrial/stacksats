@@ -67,6 +67,7 @@ From repository root:
 
 ```bash
 bash scripts/release_check.sh
+python scripts/check_docs_ux.py
 ```
 
 This should run lint, tests, build, and `twine check`.
@@ -118,6 +119,7 @@ The tag is the source of truth for the version. No manual version bump is requir
   - spelling checks
   - link checks
   - docs reference checks
+  - docs UX structure checks
   - strict docs build
 - Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
 

@@ -17,3 +17,6 @@ This section is generated from source code docstrings and signatures.
 
 - API reference documents callable surface area.
 - Conceptual behavior and tradeoffs are documented in the [Concepts](../../model.md) section.
+- Stability boundary:
+  - Treat top-level `stacksats` exports plus documented modules in this section as public API.
+  - Lower-level modules such as `stacksats.backtest`, `stacksats.prelude`, and `stacksats.export_weights` are implementation detail and may change between releases.

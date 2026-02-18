@@ -46,6 +46,18 @@ Backtesting is orchestrated through these modules:
 
 `stacksats/backtest.py` contains plotting/metrics visualization helpers used by `BacktestResult.plot(...)`.
 
+## Migration Notes
+
+If you maintained custom tooling around older backtest internals:
+
+- Removed: `compute_weights_shared(window_feat)`.
+  - Use: `compute_weights_with_features(window_feat, features_df=...)`.
+- Removed: `BACKTEST_END` constant.
+  - Use: `get_backtest_end()` at runtime.
+- Updated signature: `generate_date_ranges(start, end, min_length_days)` -> `generate_date_ranges(start, end)`.
+
+Internal helper modules are not part of the stable public API. Prefer `StrategyRunner`, top-level `stacksats` exports, and CLI commands for long-term integrations.
+
 ## Core Metrics
 
 Per rolling window, StackSats computes:
@@ -137,6 +149,37 @@ Includes:
 - canonical columns: `start_date`, `end_date`, `day_index`, `date`, `price_usd`, `weight`
 - `artifacts.json` (strategy metadata + file map)
 
+## Artifact Previews
+
+Example `metrics.json` (shape):
+
+```json
+{
+  "win_rate": 62.4,
+  "exp_decay_percentile": 58.1,
+  "score": 60.25
+}
+```
+
+Example `weights.csv` header + row:
+
+```csv
+start_date,end_date,day_index,date,price_usd,weight
+2025-12-01,2026-11-30,0,2025-12-01,96250.12,0.0027397260
+```
+
+Example `backtest_result.json` (shape):
+
+```json
+{
+  "summary": {
+    "win_rate": 62.4,
+    "exp_decay_percentile": 58.1
+  },
+  "run_id": "..."
+}
+```
+
 ## Usage
 
 Run a backtest from CLI:
@@ -185,3 +228,7 @@ result.to_json("output/backtest_result.json")
 - Exact performance numbers vary with date range and refreshed source data.
 - Comparing strategies should use the same start/end range and allocation span.
 - Strict-mode diagnostics are intended to catch leakage/overfitting patterns that simple win-rate checks can miss.
+
+## Feedback
+
+- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+Backtest+Runtime)

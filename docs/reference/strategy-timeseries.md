@@ -69,6 +69,33 @@ Canonical `weights.csv` columns:
 - `price_usd`
 - `weight`
 
+## Artifact preview
+
+Example `weights.csv` header and first row:
+
+```csv
+start_date,end_date,day_index,date,price_usd,weight
+2025-12-01,2026-11-30,0,2025-12-01,96250.12,0.0027397260
+```
+
+Example `artifacts.json` (shape):
+
+```json
+{
+  "strategy_id": "example-mvrv",
+  "version": "1.0.0",
+  "run_id": "...",
+  "files": {
+    "weights_csv": "weights.csv",
+    "timeseries_schema": "timeseries_schema.md"
+  }
+}
+```
+
 ## Schema details
 
 See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated column and lineage tables.
+
+## Feedback
+
+- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+Strategy+TimeSeries)

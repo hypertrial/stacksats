@@ -86,10 +86,14 @@ markdown_extensions:
 nav:
   - Getting Started:
       - Welcome: index.md
+      - Task Hub: tasks.md
       - Quickstart: start/quickstart.md
       - First Strategy Run: start/first-strategy-run.md
+      - Minimal Strategy Examples: start/minimal-strategy-examples.md
       - Notebook Demo: start/notebook-demo.md
       - CLI Commands: commands.md
+      - Migration Guide: migration.md
+      - FAQ: faq.md
   - Concepts:
       - Framework Boundary: framework.md
       - Model Overview: model.md
@@ -116,3 +120,4 @@ nav:
       - What's New: whats-new.md
       - Release Guide: release.md
       - Docs Ownership: docs_ownership.md
+      - Docs UX Plan: ux-plan.md

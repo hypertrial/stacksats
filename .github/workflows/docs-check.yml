@@ -50,5 +50,8 @@ jobs:
       - name: Check docs references
         run: bash scripts/check_docs_refs.sh
 
+      - name: Check docs UX structure
+        run: python scripts/check_docs_ux.py
+
       - name: Build docs (strict)
         run: mkdocs build --strict

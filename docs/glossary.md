@@ -51,3 +51,16 @@ The primary efficiency metric for accumulation strategies.
 - **Formula:** $\text{Total Sats Accumulated} / \text{Total USD Invested}$
 - **Meaning:** It represents the weighted average purchasing power of your capital. A higher SPD means you acquired more Bitcoin for the same amount of dollars compared to a benchmark (like uniform DCA).
 - **Why it matters:** In an accumulation strategy, the goal is to lower your average cost basis. Maximizing SPD is mathematically equivalent to minimizing average cost basis.
+
+### Run Artifacts
+Files written by lifecycle commands under:
+
+`output/<strategy_id>/<version>/<run_id>/`
+
+Common artifacts include `backtest_result.json`, `metrics.json`, `weights.csv`, `timeseries_schema.md`, and `artifacts.json`.
+
+### Public API
+Stable interfaces documented in top-level `stacksats` exports and API reference pages (for example `stacksats.runner`, `stacksats.strategy_types`, `stacksats.api`).
+
+### Internal Modules
+Lower-level implementation modules that may change between releases (for example `stacksats.backtest`, `stacksats.prelude`, and `stacksats.export_weights`). Prefer public API surfaces for long-term integrations.
