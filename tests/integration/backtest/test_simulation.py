@@ -16,15 +16,16 @@ from freezegun import freeze_time
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from stacksats.export_weights import (
-    BTC_PRICE_COL,
-    RANGE_END,
-    RANGE_START,
     generate_date_ranges,
     group_ranges_by_start_date,
     process_start_date_batch,
     table_is_empty,
 )
 from stacksats.model_development import MIN_W, precompute_features
+
+DEFAULT_RANGE_START = "2025-12-01"
+DEFAULT_RANGE_END = "2027-12-31"
+BTC_PRICE_COL = "PriceUSD_coinmetrics"
 
 # -----------------------------------------------------------------------------
 # Simulation Test Harness
@@ -56,7 +57,7 @@ class SimulationTestHarness:
         self.weight_history = {}  # Track weights over time for validation
 
         # Generate date ranges for testing
-        self.date_ranges = generate_date_ranges(RANGE_START, RANGE_END, 120)
+        self.date_ranges = generate_date_ranges(DEFAULT_RANGE_START, DEFAULT_RANGE_END)
         self.grouped_ranges = group_ranges_by_start_date(self.date_ranges)
 
     def get_current_date(self, day_offset):

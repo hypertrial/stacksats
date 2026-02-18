@@ -21,10 +21,16 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_shared
+from stacksats.backtest import compute_weights_with_features
 from stacksats.model_development import compute_weights_fast, precompute_features
 from stacksats.prelude import compute_cycle_spd
+
+
+def _shared_strategy(features_df):
+    return lambda window_feat: compute_weights_with_features(
+        window_feat,
+        features_df=features_df,
+    )
 
 # -----------------------------------------------------------------------------
 # Market Regime Generators
@@ -325,10 +331,10 @@ class TestBullMarketPerformance:
 
     def test_bull_market_backtest_runs(self, bull_market_df, bull_market_features):
         """Verify backtest runs successfully in bull market."""
-        backtest._FEATURES_DF = bull_market_features
-
         spd_table = compute_cycle_spd(
-            bull_market_df, compute_weights_shared, features_df=bull_market_features
+            bull_market_df,
+            _shared_strategy(bull_market_features),
+            features_df=bull_market_features,
         )
 
         assert len(spd_table) > 0, "Should produce SPD results"
@@ -343,10 +349,10 @@ class TestBullMarketPerformance:
         In bull market, DCA generally underperforms lump sum, but dynamic DCA
         should not be dramatically worse than uniform DCA.
         """
-        backtest._FEATURES_DF = bull_market_features
-
         spd_table = compute_cycle_spd(
-            bull_market_df, compute_weights_shared, features_df=bull_market_features
+            bull_market_df,
+            _shared_strategy(bull_market_features),
+            features_df=bull_market_features,
         )
 
         # Filter out NaN rows (edge cases)
@@ -385,10 +391,10 @@ class TestBearMarketPerformance:
 
     def test_bear_market_backtest_runs(self, bear_market_df, bear_market_features):
         """Verify backtest runs successfully in bear market."""
-        backtest._FEATURES_DF = bear_market_features
-
         spd_table = compute_cycle_spd(
-            bear_market_df, compute_weights_shared, features_df=bear_market_features
+            bear_market_df,
+            _shared_strategy(bear_market_features),
+            features_df=bear_market_features,
         )
 
         assert len(spd_table) > 0, "Should produce SPD results"
@@ -399,10 +405,10 @@ class TestBearMarketPerformance:
         We expect the strategy to have positive excess percentile on average
         in bear markets.
         """
-        backtest._FEATURES_DF = bear_market_features
-
         spd_table = compute_cycle_spd(
-            bear_market_df, compute_weights_shared, features_df=bear_market_features
+            bear_market_df,
+            _shared_strategy(bear_market_features),
+            features_df=bear_market_features,
         )
 
         # Filter out NaN rows
@@ -440,11 +446,9 @@ class TestSidewaysMarketPerformance:
         self, sideways_market_df, sideways_market_features
     ):
         """Verify backtest runs successfully in sideways market."""
-        backtest._FEATURES_DF = sideways_market_features
-
         spd_table = compute_cycle_spd(
             sideways_market_df,
-            compute_weights_shared,
+            _shared_strategy(sideways_market_features),
             features_df=sideways_market_features,
         )
 
@@ -454,11 +458,9 @@ class TestSidewaysMarketPerformance:
         self, sideways_market_df, sideways_market_features
     ):
         """In sideways markets, performance should be relatively stable."""
-        backtest._FEATURES_DF = sideways_market_features
-
         spd_table = compute_cycle_spd(
             sideways_market_df,
-            compute_weights_shared,
+            _shared_strategy(sideways_market_features),
             features_df=sideways_market_features,
         )
 
@@ -499,11 +501,9 @@ class TestHighVolatilityPerformance:
         self, high_volatility_df, high_volatility_features
     ):
         """Verify backtest runs successfully in high volatility market."""
-        backtest._FEATURES_DF = high_volatility_features
-
         spd_table = compute_cycle_spd(
             high_volatility_df,
-            compute_weights_shared,
+            _shared_strategy(high_volatility_features),
             features_df=high_volatility_features,
         )
 
@@ -547,11 +547,9 @@ class TestCrashRecoveryPerformance:
         self, crash_recovery_df, crash_recovery_features
     ):
         """Verify backtest runs successfully during crash and recovery."""
-        backtest._FEATURES_DF = crash_recovery_features
-
         spd_table = compute_cycle_spd(
             crash_recovery_df,
-            compute_weights_shared,
+            _shared_strategy(crash_recovery_features),
             features_df=crash_recovery_features,
         )
 
@@ -564,11 +562,9 @@ class TestCrashRecoveryPerformance:
 
         The strategy shouldn't catastrophically fail during extreme moves.
         """
-        backtest._FEATURES_DF = crash_recovery_features
-
         spd_table = compute_cycle_spd(
             crash_recovery_df,
-            compute_weights_shared,
+            _shared_strategy(crash_recovery_features),
             features_df=crash_recovery_features,
         )
 
@@ -680,10 +676,10 @@ class TestCrossRegimeComparison:
         mean_excesses = []
 
         for regime_name, (df, features) in regimes.items():
-            backtest._FEATURES_DF = features
-
             spd_table = compute_cycle_spd(
-                df, compute_weights_shared, features_df=features
+                df,
+                _shared_strategy(features),
+                features_df=features,
             )
             valid_rows = spd_table["excess_percentile"].dropna()
 

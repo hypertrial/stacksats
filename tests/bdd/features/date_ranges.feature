@@ -28,7 +28,7 @@ Feature: Date Range Generation
     Then grouped ranges should preserve all end dates
 
   Scenario: Empty ranges for impossible configuration
-    Given date range from "2025-01-05" to "2025-02-02" with min length 120
+    Given date range from "2025-01-05" to "2025-02-02"
     When I generate date ranges
     Then date ranges should be empty
 

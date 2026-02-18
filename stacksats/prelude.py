@@ -1,11 +1,14 @@
 import logging
-from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
 
+from .btc_api.coinmetrics_btc_csv import (
+    COINMETRICS_BTC_CSV_URL,
+    parse_coinmetrics_btc_csv_bytes,
+)
 from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from .model_development import precompute_features
@@ -15,6 +18,7 @@ BACKTEST_START = "2018-01-01"
 # Fixed allocation span used across modules.
 WINDOW_DAYS = ALLOCATION_SPAN_DAYS
 WINDOW_OFFSET = ALLOCATION_WINDOW_OFFSET
+DATE_FREQ = "D"
 
 # Tolerance for weight sum validation (small leniency for floating-point precision)
 WEIGHT_SUM_TOLERANCE = 1e-5
@@ -25,20 +29,16 @@ def get_backtest_end() -> str:
     return (pd.Timestamp.now().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-# Backward-compatible constant for callers/tests that import this symbol directly.
-BACKTEST_END = get_backtest_end()
-
-
 def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: int = 24):
     """Load BTC data from CoinMetrics CSV with optional local caching.
 
-    This keeps legacy prelude behavior:
+    Behavior includes:
     - fresh/stale cache handling
     - gap filling for missing historical ``PriceUSD`` values
     - best-effort inclusion of today's row
     - MVRV fallback from yesterday when today's value is missing
     """
-    url = "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv"
+    url = COINMETRICS_BTC_CSV_URL
     now = pd.Timestamp.now().normalize()
     backtest_start_ts = pd.to_datetime(BACKTEST_START)
 
@@ -66,11 +66,7 @@ def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: in
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_bytes(csv_bytes)
 
-    df = pd.read_csv(BytesIO(csv_bytes))
-    df["time"] = pd.to_datetime(df["time"])
-    df.set_index("time", inplace=True)
-    df.index = df.index.normalize().tz_localize(None)
-    df = df.loc[~df.index.duplicated(keep="last")].sort_index()
+    df = parse_coinmetrics_btc_csv_bytes(csv_bytes)
 
     if "PriceUSD" not in df.columns:
         raise ValueError("PriceUSD column not found in CoinMetrics data")
@@ -149,7 +145,8 @@ def parse_window_dates(window_label: str) -> pd.Timestamp:
 
 
 def generate_date_ranges(
-    range_start: str, range_end: str, min_length_days: int = 120
+    range_start: str,
+    range_end: str,
 ) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
     """Generate date ranges where each start_date has fixed-span end_date.
 
@@ -160,15 +157,13 @@ def generate_date_ranges(
     Args:
         range_start: Start of the date range (YYYY-MM-DD format)
         range_end: End of the date range (YYYY-MM-DD format)
-        min_length_days: Minimum range length in days (default 120)
 
     Returns:
         List of (start_date, end_date) tuples
     """
-    del min_length_days
     start, end = pd.to_datetime(range_start), pd.to_datetime(range_end)
     max_start_date = end - WINDOW_OFFSET
-    start_dates = pd.date_range(start=start, end=max_start_date, freq="D")
+    start_dates = pd.date_range(start=start, end=max_start_date, freq=DATE_FREQ)
 
     def _window_end(start_date: pd.Timestamp) -> pd.Timestamp:
         return start_date + WINDOW_OFFSET
@@ -220,7 +215,7 @@ def compute_cycle_spd(
         strategy_function: Function that takes features DataFrame and returns weights
         features_df: Optional precomputed features. If None, computes them internally.
         start_date: Optional start date (default: BACKTEST_START)
-        end_date: Optional end date (default: BACKTEST_END)
+        end_date: Optional end date (default: dynamic yesterday)
         validate_weights: Whether to validate that weights sum to 1.0 (default: True)
 
     Returns:
@@ -253,12 +248,12 @@ def compute_cycle_spd(
     def _window_end(start_dt: pd.Timestamp) -> pd.Timestamp:
         return start_dt + WINDOW_OFFSET
 
-    # Generate start dates daily (matching export_weights.py DATE_FREQ)
+    # Generate start dates using the shared date-frequency constant.
     max_start_date = pd.to_datetime(end) - WINDOW_OFFSET
     start_dates = pd.date_range(
         start=pd.to_datetime(start),
         end=max_start_date,
-        freq="D",  # Daily frequency for consistency
+        freq=DATE_FREQ,
     )
 
     if len(start_dates) > 0:

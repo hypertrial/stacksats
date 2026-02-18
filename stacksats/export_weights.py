@@ -1,6 +1,5 @@
 """Export daily model weights and BTC prices for multiple date ranges.
 
-Generates weights for every day from RANGE_START to RANGE_END.
 Core business logic that can run locally or be imported by runtime functions.
 
 Weight computation strategy:
@@ -40,6 +39,12 @@ from .export_weights_db import (
 from .export_weights_db import (
     today_data_exists as _today_data_exists,
 )
+from .export_weights_sql import (
+    build_insert_rows,
+    build_update_rows,
+    build_values_sql,
+    prepare_copy_dataframe,
+)
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
 from .prelude import generate_date_ranges, group_ranges_by_start_date  # noqa: F401
@@ -65,14 +70,6 @@ try:
 except ImportError:
     # Fallback if python-dotenv is not available
     pass
-
-# Configuration constants
-RANGE_START = "2025-12-01"  # First day of December 2025
-RANGE_END = "2027-12-31"  # Last day of 2027
-MIN_RANGE_LENGTH_DAYS = 120  # Minimum range length
-DATE_FREQ = "D"  # Daily frequency
-BTC_PRICE_COL = "PriceUSD_coinmetrics"  # Use CoinMetrics PriceUSD data
-
 
 def _require_deploy_dependency(name: str, imported_obj):
     """Raise a consistent error when deploy-only dependencies are missing."""
@@ -313,20 +310,7 @@ def insert_all_data(conn, df):
         # Use pandas to_csv for efficient conversion
         buffer = StringIO()
         # Select and format columns for COPY
-        copy_df = df[
-            ["day_index", "start_date", "end_date", "date", "price_usd", "weight"]
-        ].copy()
-        copy_df = copy_df.rename(
-            columns={
-                "day_index": "id",
-                "date": "DCA_date",
-                "price_usd": "btc_usd",
-            }
-        )
-        # Convert to proper types and handle NaN
-        copy_df["id"] = copy_df["id"].astype(int)
-        copy_df["btc_usd"] = copy_df["btc_usd"].where(pd.notna(copy_df["btc_usd"]), "")
-        copy_df["weight"] = copy_df["weight"].where(pd.notna(copy_df["weight"]), "")
+        copy_df = prepare_copy_dataframe(df)
         # Write as tab-separated (no header, no index)
         copy_df.to_csv(buffer, sep="\t", header=False, index=False, na_rep="")
         buffer.seek(0)
@@ -392,17 +376,7 @@ def insert_all_data(conn, df):
 
         # Prepare data for insertion
         logging.info("Preparing data for bulk insertion...")
-        data = [
-            (
-                int(row["day_index"]),
-                row["start_date"],
-                row["end_date"],
-                row["date"],
-                float(row["price_usd"]) if pd.notna(row["price_usd"]) else None,
-                float(row["weight"]) if pd.notna(row["weight"]) else None,
-            )
-            for _, row in df.iterrows()
-        ]
+        data = build_insert_rows(df)
 
         # Use larger batches and commit less frequently for better performance
         batch_size = 50000  # Increased from 10,000 for better throughput
@@ -594,31 +568,7 @@ def update_today_weights(conn, df, today_str):
     start_time = time.time()
 
     # Prepare data for bulk update
-    if current_btc_price is not None:
-        # Prepare tuples: (id, start_date, end_date, DCA_date, weight, btc_usd)
-        update_data = [
-            (
-                int(row["day_index"]),
-                row["start_date"],
-                row["end_date"],
-                row["date"],
-                float(row["weight"]) if pd.notna(row["weight"]) else None,
-                current_btc_price,
-            )
-            for _, row in today_df.iterrows()
-        ]
-    else:
-        # Fallback: only update weight if BTC price fetch failed
-        update_data = [
-            (
-                int(row["day_index"]),
-                row["start_date"],
-                row["end_date"],
-                row["date"],
-                float(row["weight"]) if pd.notna(row["weight"]) else None,
-            )
-            for _, row in today_df.iterrows()
-        ]
+    update_data = build_update_rows(today_df, current_btc_price=current_btc_price)
 
     # Use bulk UPDATE with VALUES clause for efficiency
     batch_size = 10000  # Larger batch size since we're using bulk operations
@@ -647,26 +597,11 @@ def update_today_weights(conn, df, today_str):
                 )
 
                 if current_btc_price is not None:
-                    values_list = []
-                    for row in batch:
-                        (
-                            id_val,
-                            start_date_val,
-                            end_date_val,
-                            DCA_date_val,
-                            weight_val,
-                            btc_usd_val,
-                        ) = row
-                        # Properly escape and format values
-                        weight_sql = _sql_quote(weight_val)
-                        btc_usd_sql = _sql_quote(btc_usd_val)
-                        values_list.append(
-                            f"({id_val}, {_sql_quote(start_date_val)}::date, "
-                            f"{_sql_quote(end_date_val)}::date, "
-                            f"{_sql_quote(DCA_date_val)}::date, "
-                            f"{weight_sql}::float, {btc_usd_sql}::float)"
-                        )
-                    values_str = ", ".join(values_list)
+                    values_str = build_values_sql(
+                        batch,
+                        include_price=True,
+                        sql_quote=_sql_quote,
+                    )
 
                     cur.execute(
                         f"""
@@ -680,24 +615,11 @@ def update_today_weights(conn, df, today_str):
                         """
                     )
                 else:
-                    values_list = []
-                    for row in batch:
-                        (
-                            id_val,
-                            start_date_val,
-                            end_date_val,
-                            DCA_date_val,
-                            weight_val,
-                        ) = row
-                        # Properly escape and format values
-                        weight_sql = _sql_quote(weight_val)
-                        values_list.append(
-                            f"({id_val}, {_sql_quote(start_date_val)}::date, "
-                            f"{_sql_quote(end_date_val)}::date, "
-                            f"{_sql_quote(DCA_date_val)}::date, "
-                            f"{weight_sql}::float)"
-                        )
-                    values_str = ", ".join(values_list)
+                    values_str = build_values_sql(
+                        batch,
+                        include_price=False,
+                        sql_quote=_sql_quote,
+                    )
 
                     cur.execute(
                         f"""

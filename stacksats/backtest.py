@@ -13,37 +13,19 @@ import seaborn as sns
 from .model_development import compute_window_weights
 from .prelude import parse_window_dates
 
-# Global variable to store precomputed features (shared runtime)
-_FEATURES_DF = None
-
-
-def compute_weights_shared(df_window: pd.DataFrame) -> pd.Series:
-    """Wrapper using compute_window_weights for validation.
-
-    Uses precomputed features stored in _FEATURES_DF.
-
-    For backtesting historical data, current_date is set to end_date since
-    all dates in the window are in the "past" (we have price data for them).
-
-    This implementation uses the shared compute_window_weights() from
-    model_development.py to ensure backtest results match production behavior.
-    """
-    global _FEATURES_DF
-
-    if _FEATURES_DF is None:
-        raise ValueError("Features not precomputed. Call precompute_features() first.")
-
+def compute_weights_with_features(
+    df_window: pd.DataFrame,
+    *,
+    features_df: pd.DataFrame,
+) -> pd.Series:
+    """Compute window weights with explicit feature input."""
     if df_window.empty:
         return pd.Series(dtype=float)
 
     start_date = df_window.index.min()
     end_date = df_window.index.max()
-
-    # For backtesting, current_date = end_date (all dates are in the past)
-    # This means all weights come from the model (no uniform future weights)
     current_date = end_date
-
-    return compute_window_weights(_FEATURES_DF, start_date, end_date, current_date)
+    return compute_window_weights(features_df, start_date, end_date, current_date)
 
 
 def create_performance_comparison_chart(

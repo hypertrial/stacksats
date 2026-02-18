@@ -250,7 +250,7 @@ class TestBatchProcessingBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        result = benchmark(generate_date_ranges, "2025-12-01", "2027-12-31", 120)
+        result = benchmark(generate_date_ranges, "2025-12-01", "2027-12-31")
 
         assert len(result) > 0
 

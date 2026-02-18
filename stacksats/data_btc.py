@@ -11,6 +11,12 @@ from typing import Callable
 import pandas as pd
 import requests
 
+from .btc_api.coinmetrics_btc_csv import (
+    COINMETRICS_BTC_CSV_URL,
+    parse_coinmetrics_btc_csv_bytes,
+)
+
+
 class DataLoadError(RuntimeError):
     """Raised when BTC source data cannot be loaded safely."""
 
@@ -59,7 +65,7 @@ class BTCDataProvider:
     clock: Callable[[], pd.Timestamp] = pd.Timestamp.now
 
     def load(self, *, backtest_start: str = "2018-01-01", end_date: str | None = None) -> pd.DataFrame:
-        url = "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv"
+        url = COINMETRICS_BTC_CSV_URL
         use_cache = self.cache_dir is not None
 
         logging.info("Loading CoinMetrics BTC data...")
@@ -155,16 +161,12 @@ class BTCDataProvider:
             csv_bytes = _download_csv(cache_available=False)
 
         try:
-            df = pd.read_csv(BytesIO(csv_bytes))
+            df = parse_coinmetrics_btc_csv_bytes(csv_bytes)
         except Exception as exc:
             raise DataLoadError(
                 "Downloaded CoinMetrics data could not be parsed as CSV."
                 " If the issue persists, remove the local cache file and retry."
             ) from exc
-        df["time"] = pd.to_datetime(df["time"])
-        df.set_index("time", inplace=True)
-        df.index = df.index.normalize().tz_localize(None)
-        df = df.loc[~df.index.duplicated(keep="last")].sort_index()
 
         if "PriceUSD" not in df.columns:
             raise ValueError("PriceUSD column not found in CoinMetrics data")

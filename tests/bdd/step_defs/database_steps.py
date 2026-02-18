@@ -12,10 +12,6 @@ from pytest_bdd import given, parsers, then, when
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from stacksats.export_weights import (
-    DATE_FREQ,
-    MIN_RANGE_LENGTH_DAYS,
-    RANGE_END,
-    RANGE_START,
     create_table_if_not_exists,
     generate_date_ranges,
     get_db_connection,
@@ -25,7 +21,11 @@ from stacksats.export_weights import (
     today_data_exists,
 )
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
+from stacksats.prelude import DATE_FREQ
 from tests.test_helpers import PRICE_COL
+
+DEFAULT_RANGE_START = "2025-12-01"
+DEFAULT_RANGE_END = "2027-12-31"
 
 # -----------------------------------------------------------------------------
 # Given Steps - Database Setup
@@ -68,19 +68,15 @@ def given_today_data_count(count, bdd_context):
 @given("default date range configuration")
 def given_default_date_config(bdd_context):
     """Store default date range config."""
-    bdd_context["range_start"] = RANGE_START
-    bdd_context["range_end"] = RANGE_END
-    bdd_context["min_range_length"] = MIN_RANGE_LENGTH_DAYS
+    bdd_context["range_start"] = DEFAULT_RANGE_START
+    bdd_context["range_end"] = DEFAULT_RANGE_END
 
 
-@given(
-    parsers.parse('date range from "{start}" to "{end}" with min length {min_len:d}')
-)
-def given_custom_date_range(start, end, min_len, bdd_context):
+@given(parsers.parse('date range from "{start}" to "{end}"'))
+def given_custom_date_range(start, end, bdd_context):
     """Set custom date range configuration."""
     bdd_context["range_start"] = start
     bdd_context["range_end"] = end
-    bdd_context["min_range_length"] = min_len
 
 
 # -----------------------------------------------------------------------------
@@ -94,7 +90,6 @@ def when_generate_ranges(bdd_context):
     ranges = generate_date_ranges(
         bdd_context["range_start"],
         bdd_context["range_end"],
-        bdd_context["min_range_length"],
     )
     bdd_context["date_ranges"] = ranges
 

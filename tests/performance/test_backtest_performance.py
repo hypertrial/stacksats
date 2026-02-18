@@ -17,11 +17,17 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_shared
+from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import compute_weights_fast, precompute_features
 from stacksats.prelude import compute_cycle_spd
+
+
+def _shared_strategy(features_df):
+    return lambda window_feat: compute_weights_with_features(
+        window_feat, features_df=features_df
+    )
+
 
 # -----------------------------------------------------------------------------
 # Feature Precomputation Performance Tests
@@ -118,9 +124,8 @@ class TestWeightComputationPerformance:
             f"100 window computations took {elapsed:.2f}s, threshold: 5.0s"
         )
 
-    def test_compute_weights_shared_performance(self, sample_features_df):
-        """Benchmark: compute_weights_shared should be < 100ms per window."""
-        backtest._FEATURES_DF = sample_features_df
+    def test_compute_weights_with_features_performance(self, sample_features_df):
+        """Benchmark: explicit-feature shared computation should be < 100ms per window."""
 
         start_date = pd.Timestamp("2024-01-01")
         end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
@@ -133,15 +138,15 @@ class TestWeightComputationPerformance:
         window_feat = sample_features_df.loc[start_date:end_date]
 
         # Warm-up
-        compute_weights_shared(window_feat)
+        compute_weights_with_features(window_feat, features_df=sample_features_df)
 
         # Timed run
         start = time.time()
-        compute_weights_shared(window_feat)
+        compute_weights_with_features(window_feat, features_df=sample_features_df)
         elapsed = time.time() - start
 
         assert elapsed < 0.1, (
-            f"compute_weights_shared took {elapsed * 1000:.1f}ms, threshold: 100ms"
+            f"compute_weights_with_features took {elapsed * 1000:.1f}ms, threshold: 100ms"
         )
 
 
@@ -162,11 +167,11 @@ class TestFullBacktestPerformance:
         Note: This test uses sample data which may have fewer windows
         than production. The threshold is set conservatively.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         start = time.time()
         spd_table = compute_cycle_spd(
-            sample_btc_df, compute_weights_shared, features_df=sample_features_df
+            sample_btc_df,
+            _shared_strategy(sample_features_df),
+            features_df=sample_features_df,
         )
         elapsed = time.time() - start
 

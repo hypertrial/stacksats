@@ -24,6 +24,29 @@ COINMETRICS_BTC_CSV_URL = (
 )
 
 
+def normalize_coinmetrics_btc_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize raw CoinMetrics rows to daily, unique, sorted time index."""
+    if "time" not in df.columns:
+        raise ValueError("CSV missing required 'time' column")
+
+    normalized = df.copy()
+    normalized["time"] = pd.to_datetime(normalized["time"])
+    normalized.set_index("time", inplace=True)
+    normalized.index = normalized.index.normalize().tz_localize(None)
+    normalized = normalized.loc[~normalized.index.duplicated(keep="last")].sort_index()
+    return normalized
+
+
+def parse_coinmetrics_btc_csv_bytes(csv_bytes: bytes) -> pd.DataFrame:
+    """Parse CoinMetrics CSV bytes and normalize index semantics."""
+    try:
+        raw_df = pd.read_csv(BytesIO(csv_bytes))
+    except Exception as e:
+        logging.error(f"Failed to parse CSV data: {e}")
+        raise ValueError(f"Invalid CSV data: {e}") from e
+    return normalize_coinmetrics_btc_dataframe(raw_df)
+
+
 def fetch_coinmetrics_btc_csv(
     url: Optional[str] = None, save_path: Optional[str | Path] = None
 ) -> pd.DataFrame:
@@ -54,26 +77,11 @@ def fetch_coinmetrics_btc_csv(
         logging.error(f"Failed to fetch CoinMetrics CSV: {e}")
         raise
 
-    # Parse CSV from response content
-    try:
-        df = pd.read_csv(BytesIO(response.content))
-    except Exception as e:
-        logging.error(f"Failed to parse CSV data: {e}")
-        raise ValueError(f"Invalid CSV data: {e}") from e
+    df = parse_coinmetrics_btc_csv_bytes(response.content)
 
     # Validate required columns
-    if "time" not in df.columns:
-        raise ValueError("CSV missing required 'time' column")
     if "PriceUSD" not in df.columns:
         raise ValueError("CSV missing required 'PriceUSD' column")
-
-    # Set time as index and normalize
-    df["time"] = pd.to_datetime(df["time"])
-    df.set_index("time", inplace=True)
-    df.index = df.index.normalize().tz_localize(None)
-
-    # Remove duplicates and sort
-    df = df.loc[~df.index.duplicated(keep="last")].sort_index()
 
     # Save to file if requested
     if save_path is not None:

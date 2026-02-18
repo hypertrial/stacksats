@@ -21,8 +21,7 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_shared
+from stacksats.backtest import compute_weights_with_features
 from stacksats.model_development import (
     DYNAMIC_STRENGTH,
     FEATS,
@@ -30,6 +29,13 @@ from stacksats.model_development import (
     precompute_features,
 )
 from stacksats.prelude import compute_cycle_spd
+
+
+def _shared_strategy(features_df):
+    return lambda window_feat: compute_weights_with_features(
+        window_feat,
+        features_df=features_df,
+    )
 
 # -----------------------------------------------------------------------------
 # Randomized Baseline Tests
@@ -45,8 +51,6 @@ class TestRandomizedBaseline:
         This is a critical test: if the strategy works on shuffled prices,
         it's likely overfitting or has look-ahead bias.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         # Store excess percentiles from multiple random shuffles
         excess_percentiles = []
 
@@ -62,7 +66,9 @@ class TestRandomizedBaseline:
             try:
                 # Run backtest with shuffled prices
                 spd_table = compute_cycle_spd(
-                    shuffled_df, compute_weights_shared, features_df=sample_features_df
+                    shuffled_df,
+                    _shared_strategy(sample_features_df),
+                    features_df=sample_features_df,
                 )
 
                 # Get mean excess percentile (filter out NaN from edge cases)
@@ -92,8 +98,6 @@ class TestRandomizedBaseline:
 
         This tests whether the strategy is actually using temporal patterns.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         # Reverse prices (time reversal)
         reversed_df = sample_btc_df.copy()
         reversed_df["PriceUSD_coinmetrics"] = sample_btc_df[
@@ -102,7 +106,9 @@ class TestRandomizedBaseline:
 
         try:
             spd_table = compute_cycle_spd(
-                reversed_df, compute_weights_shared, features_df=sample_features_df
+                reversed_df,
+                _shared_strategy(sample_features_df),
+                features_df=sample_features_df,
             )
 
             # Just verify it runs - performance may differ
@@ -116,15 +122,15 @@ class TestRandomizedBaseline:
 
         When all prices are identical, there's no way to outperform uniform DCA.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         # Set all prices to constant
         constant_df = sample_btc_df.copy()
         constant_df["PriceUSD_coinmetrics"] = 50000.0  # Constant price
 
         try:
             spd_table = compute_cycle_spd(
-                constant_df, compute_weights_shared, features_df=sample_features_df
+                constant_df,
+                _shared_strategy(sample_features_df),
+                features_df=sample_features_df,
             )
 
             # With constant prices, span = 0, so percentiles should be NaN
@@ -205,10 +211,10 @@ class TestOverfittingDetection:
         A strategy that performs identically across all market conditions
         is likely overfitted or has a bug.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         spd_table = compute_cycle_spd(
-            sample_btc_df, compute_weights_shared, features_df=sample_features_df
+            sample_btc_df,
+            _shared_strategy(sample_features_df),
+            features_df=sample_features_df,
         )
 
         if len(spd_table) < 5:
@@ -306,8 +312,6 @@ class TestOutOfSample:
 
         Large discrepancy suggests overfitting to one period.
         """
-        backtest._FEATURES_DF = sample_features_df
-
         # Split data in half
         mid_point = len(sample_btc_df) // 2
         mid_date = sample_btc_df.index[mid_point]
@@ -320,14 +324,16 @@ class TestOutOfSample:
 
         # Run backtests on each half
         try:
-            backtest._FEATURES_DF = first_half_features
             spd_first = compute_cycle_spd(
-                first_half, compute_weights_shared, features_df=first_half_features
+                first_half,
+                _shared_strategy(first_half_features),
+                features_df=first_half_features,
             )
 
-            backtest._FEATURES_DF = second_half_features
             spd_second = compute_cycle_spd(
-                second_half, compute_weights_shared, features_df=second_half_features
+                second_half,
+                _shared_strategy(second_half_features),
+                features_df=second_half_features,
             )
 
             # Compare mean excess percentiles
@@ -343,9 +349,6 @@ class TestOutOfSample:
             )
         except Exception as e:
             pytest.skip(f"Train/test split test skipped: {e}")
-        finally:
-            # Restore original features
-            backtest._FEATURES_DF = sample_features_df
 
 
 # -----------------------------------------------------------------------------

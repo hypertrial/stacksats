@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from uuid import uuid4
 
@@ -39,6 +39,20 @@ from .strategy_types import (
 )
 
 WIN_RATE_TOLERANCE = 1e-10
+STRICT_MUTATION_MESSAGE = "Strict check failed: strategy mutated ctx.features_df in-place."
+STRICT_PROFILE_MUTATION_MESSAGE = (
+    "Strict check failed: strategy mutated ctx.features_df during profile build."
+)
+
+
+@dataclass
+class _ValidationState:
+    messages: list[str]
+    forward_leakage_ok: bool = True
+    weight_constraints_ok: bool = True
+    strict_checks_ok: bool = True
+    mutation_safe: bool = True
+    deterministic_ok: bool = True
 
 
 class WeightValidationError(ValueError):
@@ -261,6 +275,347 @@ class StrategyRunner:
         )
         return ok, messages
 
+    @staticmethod
+    def _mark_mutation_failure(
+        state: _ValidationState,
+        *,
+        message: str = STRICT_MUTATION_MESSAGE,
+    ) -> None:
+        state.mutation_safe = False
+        state.strict_checks_ok = False
+        state.messages.append(message)
+
+    def _compute_with_mutation_guard(
+        self,
+        strategy: BaseStrategy,
+        ctx: StrategyContext,
+        *,
+        strict_mode: bool,
+    ) -> tuple[pd.Series, bool]:
+        if not strict_mode:
+            return strategy.compute_weights(ctx), False
+        before = self._frame_signature(ctx.features_df)
+        weights = strategy.compute_weights(ctx)
+        after = self._frame_signature(ctx.features_df)
+        return weights, before != after
+
+    def _build_profile_with_mutation_guard(
+        self,
+        strategy: BaseStrategy,
+        ctx: StrategyContext,
+        *,
+        strict_mode: bool,
+    ) -> tuple[pd.Series, bool]:
+        before = self._frame_signature(ctx.features_df) if strict_mode else ()
+        profile_features = strategy.transform_features(ctx)
+        profile_signals = strategy.build_signals(ctx, profile_features)
+        profile = strategy.build_target_profile(ctx, profile_features, profile_signals)
+        after = self._frame_signature(ctx.features_df) if strict_mode else before
+        return self._profile_values(profile), before != after
+
+    def _run_forward_leakage_checks(
+        self,
+        *,
+        strategy: BaseStrategy,
+        features_df: pd.DataFrame,
+        backtest_idx: pd.DatetimeIndex,
+        start_ts: pd.Timestamp,
+        strict_mode: bool,
+        has_propose_hook: bool,
+        has_profile_hook: bool,
+        probe_step: int,
+        state: _ValidationState,
+    ) -> None:
+        for probe in backtest_idx[::probe_step]:
+            window_start = max(start_ts, probe - WINDOW_OFFSET)
+            if window_start > probe:
+                continue
+
+            full_ctx = StrategyContext(
+                features_df=features_df.copy(deep=True),
+                start_date=window_start,
+                end_date=probe,
+                current_date=probe,
+            )
+            full_weights, full_mutated = self._compute_with_mutation_guard(
+                strategy,
+                full_ctx,
+                strict_mode=strict_mode,
+            )
+            if strict_mode and full_mutated:
+                self._mark_mutation_failure(state)
+                break
+
+            if strict_mode:
+                repeat_ctx = StrategyContext(
+                    features_df=features_df.copy(deep=True),
+                    start_date=window_start,
+                    end_date=probe,
+                    current_date=probe,
+                )
+                repeat_weights, repeat_mutated = self._compute_with_mutation_guard(
+                    strategy,
+                    repeat_ctx,
+                    strict_mode=True,
+                )
+                if repeat_mutated:
+                    self._mark_mutation_failure(state)
+                    break
+                if not self._weights_match(full_weights, repeat_weights):
+                    state.deterministic_ok = False
+                    state.strict_checks_ok = False
+                    state.messages.append(
+                        "Strict check failed: strategy is non-deterministic for identical inputs."
+                    )
+                    break
+
+            masked_features = features_df.copy(deep=True)
+            masked_features.loc[masked_features.index > probe, :] = np.nan
+            masked_ctx = StrategyContext(
+                features_df=masked_features,
+                start_date=window_start,
+                end_date=probe,
+                current_date=probe,
+            )
+            masked_weights, masked_mutated = self._compute_with_mutation_guard(
+                strategy,
+                masked_ctx,
+                strict_mode=strict_mode,
+            )
+            if strict_mode and masked_mutated:
+                self._mark_mutation_failure(state)
+                break
+
+            perturbed_ctx = StrategyContext(
+                features_df=self._perturb_future_features(features_df, probe),
+                start_date=window_start,
+                end_date=probe,
+                current_date=probe,
+            )
+            perturbed_weights, perturbed_mutated = self._compute_with_mutation_guard(
+                strategy,
+                perturbed_ctx,
+                strict_mode=strict_mode,
+            )
+            if strict_mode and perturbed_mutated:
+                self._mark_mutation_failure(state)
+                break
+
+            prefix_idx = full_weights.index[full_weights.index <= probe]
+            if len(prefix_idx) == 0:
+                continue
+            full_prefix = full_weights.loc[prefix_idx]
+            masked_prefix = masked_weights.reindex(prefix_idx)
+            perturbed_prefix = perturbed_weights.reindex(prefix_idx)
+
+            if not self._weights_match(full_prefix, masked_prefix):
+                state.forward_leakage_ok = False
+                state.messages.append(
+                    "Forward leakage detected near "
+                    f"{probe.strftime('%Y-%m-%d')}: masked-future weights diverge."
+                )
+                break
+            if not self._weights_match(full_prefix, perturbed_prefix):
+                state.forward_leakage_ok = False
+                state.messages.append(
+                    "Forward leakage detected near "
+                    f"{probe.strftime('%Y-%m-%d')}: perturbed-future weights diverge."
+                )
+                break
+
+            if has_profile_hook and not has_propose_hook:
+                profile_full_ctx = StrategyContext(
+                    features_df=features_df.copy(deep=True),
+                    start_date=window_start,
+                    end_date=probe,
+                    current_date=probe,
+                )
+                profile_masked_features = features_df.copy(deep=True)
+                profile_masked_features.loc[profile_masked_features.index > probe, :] = np.nan
+                profile_masked_ctx = StrategyContext(
+                    features_df=profile_masked_features,
+                    start_date=window_start,
+                    end_date=probe,
+                    current_date=probe,
+                )
+                profile_perturbed_ctx = StrategyContext(
+                    features_df=self._perturb_future_features(features_df, probe),
+                    start_date=window_start,
+                    end_date=probe,
+                    current_date=probe,
+                )
+                full_profile_series, full_profile_mutated = self._build_profile_with_mutation_guard(
+                    strategy,
+                    profile_full_ctx,
+                    strict_mode=strict_mode,
+                )
+                (
+                    masked_profile_series,
+                    masked_profile_mutated,
+                ) = self._build_profile_with_mutation_guard(
+                    strategy,
+                    profile_masked_ctx,
+                    strict_mode=strict_mode,
+                )
+                (
+                    perturbed_profile_series,
+                    perturbed_profile_mutated,
+                ) = self._build_profile_with_mutation_guard(
+                    strategy,
+                    profile_perturbed_ctx,
+                    strict_mode=strict_mode,
+                )
+                if strict_mode and (
+                    full_profile_mutated or masked_profile_mutated or perturbed_profile_mutated
+                ):
+                    self._mark_mutation_failure(
+                        state,
+                        message=STRICT_PROFILE_MUTATION_MESSAGE,
+                    )
+                    break
+
+                full_profile_prefix = full_profile_series.reindex(prefix_idx)
+                masked_profile_prefix = masked_profile_series.reindex(prefix_idx)
+                perturbed_profile_prefix = perturbed_profile_series.reindex(prefix_idx)
+                if not self._weights_match(full_profile_prefix, masked_profile_prefix):
+                    state.forward_leakage_ok = False
+                    state.messages.append(
+                        "Forward leakage detected near "
+                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (masked-future)."
+                    )
+                    break
+                if not self._weights_match(full_profile_prefix, perturbed_profile_prefix):
+                    state.forward_leakage_ok = False
+                    state.messages.append(
+                        "Forward leakage detected near "
+                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (perturbed-future)."
+                    )
+                    break
+
+    def _run_weight_constraint_checks(
+        self,
+        *,
+        strategy: BaseStrategy,
+        features_df: pd.DataFrame,
+        start_ts: pd.Timestamp,
+        end_ts: pd.Timestamp,
+        strict_mode: bool,
+        config: ValidationConfig,
+        state: _ValidationState,
+    ) -> pd.Timestamp:
+        max_window_start = end_ts - WINDOW_OFFSET
+        boundary_hits = 0
+        boundary_total = 0
+        if start_ts <= max_window_start:
+            window_starts = pd.date_range(start=start_ts, end=max_window_start, freq="D")
+            for window_start in window_starts:
+                window_end = window_start + WINDOW_OFFSET
+                ctx = StrategyContext(
+                    features_df=features_df.copy(deep=True) if strict_mode else features_df,
+                    start_date=window_start,
+                    end_date=window_end,
+                    current_date=window_end,
+                )
+                weights, mutated = self._compute_with_mutation_guard(
+                    strategy,
+                    ctx,
+                    strict_mode=strict_mode,
+                )
+                if strict_mode and mutated:
+                    self._mark_mutation_failure(state)
+                    break
+                if weights.empty:
+                    continue
+                try:
+                    self._validate_weights(weights, window_start, window_end)
+                except WeightValidationError as exc:
+                    state.weight_constraints_ok = False
+                    state.messages.append(str(exc))
+                    break
+                if strict_mode and len(weights) == ALLOCATION_SPAN_DAYS:
+                    arr = weights.to_numpy(dtype=float)
+                    at_bounds = np.isclose(arr, MIN_DAILY_WEIGHT, atol=1e-12) | np.isclose(
+                        arr,
+                        MAX_DAILY_WEIGHT,
+                        atol=1e-12,
+                    )
+                    boundary_hits += int(at_bounds.sum())
+                    boundary_total += int(len(arr))
+
+        if strict_mode and boundary_total > 0:
+            boundary_hit_rate = boundary_hits / boundary_total
+            state.messages.append(
+                "Strict boundary diagnostics: "
+                f"{boundary_hit_rate * 100:.2f}% of days hit MIN/MAX bounds."
+            )
+            if boundary_hit_rate > float(config.max_boundary_hit_rate):
+                state.strict_checks_ok = False
+                state.messages.append(
+                    "Strict check failed: boundary hit rate "
+                    f"{boundary_hit_rate * 100:.2f}% exceeds "
+                    f"{config.max_boundary_hit_rate * 100:.2f}%."
+                )
+        return max_window_start
+
+    def _run_locked_prefix_check(
+        self,
+        *,
+        strategy: BaseStrategy,
+        features_df: pd.DataFrame,
+        start_ts: pd.Timestamp,
+        max_window_start: pd.Timestamp,
+        strict_mode: bool,
+        state: _ValidationState,
+    ) -> None:
+        if not (strict_mode and state.strict_checks_ok and start_ts <= max_window_start):
+            return
+
+        lock_start = start_ts
+        lock_end = lock_start + WINDOW_OFFSET
+        lock_mid_offset = max(ALLOCATION_SPAN_DAYS // 2 - 1, 0)
+        lock_current = min(lock_start + pd.Timedelta(days=lock_mid_offset), lock_end)
+        base_lock_ctx = StrategyContext(
+            features_df=features_df.copy(deep=True),
+            start_date=lock_start,
+            end_date=lock_end,
+            current_date=lock_current,
+        )
+        base_lock_weights, base_mutated = self._compute_with_mutation_guard(
+            strategy,
+            base_lock_ctx,
+            strict_mode=True,
+        )
+        if base_mutated:
+            self._mark_mutation_failure(state)
+            return
+        if base_lock_weights.empty:
+            return
+
+        n_past = int((base_lock_weights.index <= lock_current).sum())
+        locked_prefix = base_lock_weights.iloc[:n_past].to_numpy(dtype=float)
+        locked_ctx = StrategyContext(
+            features_df=self._perturb_future_features(features_df, lock_current),
+            start_date=lock_start,
+            end_date=lock_end,
+            current_date=lock_current,
+            locked_weights=locked_prefix,
+        )
+        locked_run_weights, locked_mutated = self._compute_with_mutation_guard(
+            strategy,
+            locked_ctx,
+            strict_mode=True,
+        )
+        if locked_mutated:
+            self._mark_mutation_failure(state)
+            return
+        if n_past > 0:
+            observed_prefix = locked_run_weights.iloc[:n_past].to_numpy(dtype=float)
+            if not np.allclose(observed_prefix, locked_prefix, atol=1e-12, rtol=0.0):
+                state.strict_checks_ok = False
+                state.messages.append(
+                    "Strict check failed: locked prefix was not preserved exactly."
+                )
+
     def backtest(
         self,
         strategy: BaseStrategy,
@@ -340,13 +695,8 @@ class StrategyRunner:
         end_ts = pd.to_datetime(end_date)
         backtest_idx = btc_df.loc[start_ts:end_ts].index
 
-        messages: list[str] = []
-        forward_leakage_ok = True
-        weight_constraints_ok = True
-        strict_checks_ok = True
         strict_mode = bool(config.strict)
-        mutation_safe = True
-        deterministic_ok = True
+        state = _ValidationState(messages=[])
 
         if len(backtest_idx) == 0:
             return ValidationResult(
@@ -365,270 +715,34 @@ class StrategyRunner:
         has_profile_hook = (
             strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
         )
-
-        def _compute_with_mutation_guard(ctx: StrategyContext) -> tuple[pd.Series, bool]:
-            if not strict_mode:
-                return strategy.compute_weights(ctx), False
-            before = self._frame_signature(ctx.features_df)
-            weights = strategy.compute_weights(ctx)
-            after = self._frame_signature(ctx.features_df)
-            return weights, before != after
-
-        for probe in backtest_idx[::probe_step]:
-            window_start = max(start_ts, probe - WINDOW_OFFSET)
-            if window_start > probe:
-                continue
-
-            full_ctx = StrategyContext(
-                features_df=features_df.copy(deep=True),
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
-            )
-            full_weights, full_mutated = _compute_with_mutation_guard(full_ctx)
-            if strict_mode and full_mutated:
-                mutation_safe = False
-                strict_checks_ok = False
-                messages.append(
-                    "Strict check failed: strategy mutated ctx.features_df in-place."
-                )
-                break
-
-            if strict_mode:
-                repeat_ctx = StrategyContext(
-                    features_df=features_df.copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                )
-                repeat_weights, repeat_mutated = _compute_with_mutation_guard(repeat_ctx)
-                if repeat_mutated:
-                    mutation_safe = False
-                    strict_checks_ok = False
-                    messages.append(
-                        "Strict check failed: strategy mutated ctx.features_df in-place."
-                    )
-                    break
-                if not self._weights_match(full_weights, repeat_weights):
-                    deterministic_ok = False
-                    strict_checks_ok = False
-                    messages.append(
-                        "Strict check failed: strategy is non-deterministic for identical inputs."
-                    )
-                    break
-
-            masked_features = features_df.copy(deep=True)
-            masked_features.loc[masked_features.index > probe, :] = np.nan
-            masked_ctx = StrategyContext(
-                features_df=masked_features,
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
-            )
-            masked_weights, masked_mutated = _compute_with_mutation_guard(masked_ctx)
-            if strict_mode and masked_mutated:
-                mutation_safe = False
-                strict_checks_ok = False
-                messages.append(
-                    "Strict check failed: strategy mutated ctx.features_df in-place."
-                )
-                break
-
-            perturbed_ctx = StrategyContext(
-                features_df=self._perturb_future_features(features_df, probe),
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
-            )
-            perturbed_weights, perturbed_mutated = _compute_with_mutation_guard(perturbed_ctx)
-            if strict_mode and perturbed_mutated:
-                mutation_safe = False
-                strict_checks_ok = False
-                messages.append(
-                    "Strict check failed: strategy mutated ctx.features_df in-place."
-                )
-                break
-
-            prefix_idx = full_weights.index[full_weights.index <= probe]
-            if len(prefix_idx) == 0:
-                continue
-            full_prefix = full_weights.loc[prefix_idx]
-            masked_prefix = masked_weights.reindex(prefix_idx)
-            perturbed_prefix = perturbed_weights.reindex(prefix_idx)
-
-            if not self._weights_match(full_prefix, masked_prefix):
-                forward_leakage_ok = False
-                messages.append(
-                    "Forward leakage detected near "
-                    f"{probe.strftime('%Y-%m-%d')}: masked-future weights diverge."
-                )
-                break
-            if not self._weights_match(full_prefix, perturbed_prefix):
-                forward_leakage_ok = False
-                messages.append(
-                    "Forward leakage detected near "
-                    f"{probe.strftime('%Y-%m-%d')}: perturbed-future weights diverge."
-                )
-                break
-
-            if has_profile_hook and not has_propose_hook:
-                profile_full_ctx = StrategyContext(
-                    features_df=features_df.copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                )
-                profile_masked_features = features_df.copy(deep=True)
-                profile_masked_features.loc[profile_masked_features.index > probe, :] = np.nan
-                profile_masked_ctx = StrategyContext(
-                    features_df=profile_masked_features,
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                )
-                profile_perturbed_ctx = StrategyContext(
-                    features_df=self._perturb_future_features(features_df, probe),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                )
-
-                def _build_profile(ctx: StrategyContext) -> tuple[pd.Series, bool]:
-                    before = self._frame_signature(ctx.features_df)
-                    profile_features = strategy.transform_features(ctx)
-                    profile_signals = strategy.build_signals(ctx, profile_features)
-                    profile = strategy.build_target_profile(
-                        ctx, profile_features, profile_signals
-                    )
-                    after = self._frame_signature(ctx.features_df)
-                    return self._profile_values(profile), before != after
-
-                full_profile_series, full_profile_mutated = _build_profile(profile_full_ctx)
-                masked_profile_series, masked_profile_mutated = _build_profile(profile_masked_ctx)
-                perturbed_profile_series, perturbed_profile_mutated = _build_profile(
-                    profile_perturbed_ctx
-                )
-                if strict_mode and (
-                    full_profile_mutated or masked_profile_mutated or perturbed_profile_mutated
-                ):
-                    mutation_safe = False
-                    strict_checks_ok = False
-                    messages.append(
-                        "Strict check failed: strategy mutated ctx.features_df during profile build."
-                    )
-                    break
-
-                full_profile_prefix = full_profile_series.reindex(prefix_idx)
-                masked_profile_prefix = masked_profile_series.reindex(prefix_idx)
-                perturbed_profile_prefix = perturbed_profile_series.reindex(prefix_idx)
-                if not self._weights_match(full_profile_prefix, masked_profile_prefix):
-                    forward_leakage_ok = False
-                    messages.append(
-                        "Forward leakage detected near "
-                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (masked-future)."
-                    )
-                    break
-                if not self._weights_match(full_profile_prefix, perturbed_profile_prefix):
-                    forward_leakage_ok = False
-                    messages.append(
-                        "Forward leakage detected near "
-                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (perturbed-future)."
-                    )
-                    break
-
-        max_window_start = end_ts - WINDOW_OFFSET
-        boundary_hits = 0
-        boundary_total = 0
-        if start_ts <= max_window_start:
-            window_starts = pd.date_range(start=start_ts, end=max_window_start, freq="D")
-            for window_start in window_starts:
-                window_end = window_start + WINDOW_OFFSET
-                ctx = StrategyContext(
-                    features_df=features_df.copy(deep=True) if strict_mode else features_df,
-                    start_date=window_start,
-                    end_date=window_end,
-                    current_date=window_end,
-                )
-                weights, mutated = _compute_with_mutation_guard(ctx)
-                if strict_mode and mutated:
-                    mutation_safe = False
-                    strict_checks_ok = False
-                    messages.append(
-                        "Strict check failed: strategy mutated ctx.features_df in-place."
-                    )
-                    break
-                if weights.empty:
-                    continue
-                try:
-                    self._validate_weights(weights, window_start, window_end)
-                except WeightValidationError as exc:
-                    weight_constraints_ok = False
-                    messages.append(str(exc))
-                    break
-                if strict_mode and len(weights) == ALLOCATION_SPAN_DAYS:
-                    arr = weights.to_numpy(dtype=float)
-                    at_bounds = np.isclose(arr, MIN_DAILY_WEIGHT, atol=1e-12) | np.isclose(
-                        arr, MAX_DAILY_WEIGHT, atol=1e-12
-                    )
-                    boundary_hits += int(at_bounds.sum())
-                    boundary_total += int(len(arr))
-
-        if strict_mode and boundary_total > 0:
-            boundary_hit_rate = boundary_hits / boundary_total
-            messages.append(
-                "Strict boundary diagnostics: "
-                f"{boundary_hit_rate * 100:.2f}% of days hit MIN/MAX bounds."
-            )
-            if boundary_hit_rate > float(config.max_boundary_hit_rate):
-                strict_checks_ok = False
-                messages.append(
-                    "Strict check failed: boundary hit rate "
-                    f"{boundary_hit_rate * 100:.2f}% exceeds "
-                    f"{config.max_boundary_hit_rate * 100:.2f}%."
-                )
-
-        if strict_mode and strict_checks_ok and start_ts <= max_window_start:
-            lock_start = start_ts
-            lock_end = lock_start + WINDOW_OFFSET
-            lock_mid_offset = max(ALLOCATION_SPAN_DAYS // 2 - 1, 0)
-            lock_current = min(lock_start + pd.Timedelta(days=lock_mid_offset), lock_end)
-            base_lock_ctx = StrategyContext(
-                features_df=features_df.copy(deep=True),
-                start_date=lock_start,
-                end_date=lock_end,
-                current_date=lock_current,
-            )
-            base_lock_weights, base_mutated = _compute_with_mutation_guard(base_lock_ctx)
-            if base_mutated:
-                mutation_safe = False
-                strict_checks_ok = False
-                messages.append(
-                    "Strict check failed: strategy mutated ctx.features_df in-place."
-                )
-            elif not base_lock_weights.empty:
-                n_past = int((base_lock_weights.index <= lock_current).sum())
-                locked_prefix = base_lock_weights.iloc[:n_past].to_numpy(dtype=float)
-                locked_ctx = StrategyContext(
-                    features_df=self._perturb_future_features(features_df, lock_current),
-                    start_date=lock_start,
-                    end_date=lock_end,
-                    current_date=lock_current,
-                    locked_weights=locked_prefix,
-                )
-                locked_run_weights, locked_mutated = _compute_with_mutation_guard(locked_ctx)
-                if locked_mutated:
-                    mutation_safe = False
-                    strict_checks_ok = False
-                    messages.append(
-                        "Strict check failed: strategy mutated ctx.features_df in-place."
-                    )
-                elif n_past > 0:
-                    observed_prefix = locked_run_weights.iloc[:n_past].to_numpy(dtype=float)
-                    if not np.allclose(observed_prefix, locked_prefix, atol=1e-12, rtol=0.0):
-                        strict_checks_ok = False
-                        messages.append(
-                            "Strict check failed: locked prefix was not preserved exactly."
-                        )
+        self._run_forward_leakage_checks(
+            strategy=strategy,
+            features_df=features_df,
+            backtest_idx=backtest_idx,
+            start_ts=start_ts,
+            strict_mode=strict_mode,
+            has_propose_hook=has_propose_hook,
+            has_profile_hook=has_profile_hook,
+            probe_step=probe_step,
+            state=state,
+        )
+        max_window_start = self._run_weight_constraint_checks(
+            strategy=strategy,
+            features_df=features_df,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            strict_mode=strict_mode,
+            config=config,
+            state=state,
+        )
+        self._run_locked_prefix_check(
+            strategy=strategy,
+            features_df=features_df,
+            start_ts=start_ts,
+            max_window_start=max_window_start,
+            strict_mode=strict_mode,
+            state=state,
+        )
 
         backtest_result = self.backtest(
             strategy,
@@ -641,12 +755,12 @@ class StrategyRunner:
         )
         win_rate_ok = backtest_result.win_rate >= config.min_win_rate
         if not win_rate_ok:
-            messages.append(
+            state.messages.append(
                 f"Win rate below threshold: {backtest_result.win_rate:.2f}% < "
                 f"{config.min_win_rate:.2f}%."
             )
 
-        if strict_mode and strict_checks_ok:
+        if strict_mode and state.strict_checks_ok:
             fold_ok, fold_messages = self._strict_fold_checks(
                 strategy=strategy,
                 btc_df=btc_df,
@@ -654,8 +768,8 @@ class StrategyRunner:
                 end_ts=end_ts,
                 config=config,
             )
-            strict_checks_ok = strict_checks_ok and fold_ok
-            messages.extend(fold_messages)
+            state.strict_checks_ok = state.strict_checks_ok and fold_ok
+            state.messages.extend(fold_messages)
 
             shuffled_days = max(ALLOCATION_SPAN_DAYS * 2, 730)
             shuffled_start = max(start_ts, end_ts - pd.Timedelta(days=shuffled_days - 1))
@@ -666,27 +780,27 @@ class StrategyRunner:
                 end_ts=end_ts,
                 config=config,
             )
-            strict_checks_ok = strict_checks_ok and shuffled_ok
-            messages.extend(shuffled_messages)
+            state.strict_checks_ok = state.strict_checks_ok and shuffled_ok
+            state.messages.extend(shuffled_messages)
 
-        if strict_mode and not mutation_safe:
-            strict_checks_ok = False
-        if strict_mode and not deterministic_ok:
-            strict_checks_ok = False
+        if strict_mode and not state.mutation_safe:
+            state.strict_checks_ok = False
+        if strict_mode and not state.deterministic_ok:
+            state.strict_checks_ok = False
 
-        if not messages:
-            messages.append("All validation checks passed.")
+        if not state.messages:
+            state.messages.append("All validation checks passed.")
 
         return ValidationResult(
-            passed=forward_leakage_ok
-            and weight_constraints_ok
+            passed=state.forward_leakage_ok
+            and state.weight_constraints_ok
             and win_rate_ok
-            and (strict_checks_ok if strict_mode else True),
-            forward_leakage_ok=forward_leakage_ok,
-            weight_constraints_ok=weight_constraints_ok,
+            and (state.strict_checks_ok if strict_mode else True),
+            forward_leakage_ok=state.forward_leakage_ok,
+            weight_constraints_ok=state.weight_constraints_ok,
             win_rate=float(backtest_result.win_rate),
             win_rate_ok=win_rate_ok,
-            messages=messages,
+            messages=state.messages,
             min_win_rate=float(config.min_win_rate),
         )
 

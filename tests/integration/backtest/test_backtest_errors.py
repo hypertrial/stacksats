@@ -13,48 +13,21 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_shared
+from stacksats.backtest import compute_weights_with_features
 from stacksats.model_development import precompute_features
 
 # -----------------------------------------------------------------------------
-# compute_weights_shared Error Tests
+# Shared Helper Error Tests
 # -----------------------------------------------------------------------------
 
 
 class TestComputeWeightsSharedErrors:
-    """Tests for error conditions in compute_weights_shared."""
-
-    def test_features_not_precomputed_raises_error(self):
-        """Test that compute_weights_shared raises error when _FEATURES_DF is None."""
-        # Save original state
-        original_features = backtest._FEATURES_DF
-
-        try:
-            # Set to None to simulate uninitialized state
-            backtest._FEATURES_DF = None
-
-            # Create a dummy DataFrame
-            dummy_df = pd.DataFrame(
-                {"col1": [1, 2, 3]},
-                index=pd.date_range("2024-01-01", periods=3, freq="D"),
-            )
-
-            with pytest.raises(ValueError, match="Features not precomputed"):
-                compute_weights_shared(dummy_df)
-
-        finally:
-            # Restore original state
-            backtest._FEATURES_DF = original_features
+    """Tests for error conditions in explicit shared helper."""
 
     def test_empty_window_returns_empty_series(self, sample_features_df):
         """Test that empty window input returns empty Series."""
-        backtest._FEATURES_DF = sample_features_df
-
-        # Create empty DataFrame
         empty_df = pd.DataFrame(index=pd.DatetimeIndex([]))
-
-        result = compute_weights_shared(empty_df)
+        result = compute_weights_with_features(empty_df, features_df=sample_features_df)
 
         assert len(result) == 0
         assert isinstance(result, pd.Series)
@@ -160,8 +133,6 @@ class TestBoundaryConditions:
 
     def test_very_short_date_range(self, sample_features_df):
         """Very short ranges should fail strict span validation."""
-        backtest._FEATURES_DF = sample_features_df
-
         # Two-day window
         start_date = pd.Timestamp("2024-01-01")
         end_date = pd.Timestamp("2024-01-02")
@@ -170,18 +141,16 @@ class TestBoundaryConditions:
 
         if len(window_feat) > 0:
             with pytest.raises(ValueError, match="configured fixed span"):
-                compute_weights_shared(window_feat)
+                compute_weights_with_features(window_feat, features_df=sample_features_df)
 
     def test_date_range_at_data_boundaries(self, sample_btc_df, sample_features_df):
         """Boundary windows must still respect the configured fixed span contract."""
-        backtest._FEATURES_DF = sample_features_df
-
         # Use dates at the start of features
         first_date = sample_features_df.index.min()
         window_feat = sample_features_df.loc[first_date : first_date + pd.Timedelta(days=364)]
 
         if len(window_feat) > 0:
-            result = compute_weights_shared(window_feat)
+            result = compute_weights_with_features(window_feat, features_df=sample_features_df)
             assert len(result) > 0
 
     def test_non_daily_frequency_handling(self):

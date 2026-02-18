@@ -10,10 +10,9 @@ from pytest_bdd import given, parsers, then, when
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import stacksats.backtest as backtest
-from stacksats.backtest import compute_weights_shared
+from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
-from stacksats.prelude import BACKTEST_END, backtest_dynamic_dca, compute_cycle_spd
+from stacksats.prelude import backtest_dynamic_dca, compute_cycle_spd, get_backtest_end
 
 # -----------------------------------------------------------------------------
 # Given Steps - Backtest Setup
@@ -22,8 +21,7 @@ from stacksats.prelude import BACKTEST_END, backtest_dynamic_dca, compute_cycle_
 
 @given("backtest features are initialized")
 def given_backtest_features(sample_features_df, bdd_context):
-    """Initialize backtest features global."""
-    backtest._FEATURES_DF = sample_features_df
+    """Initialize backtest features context."""
     bdd_context["features_df"] = sample_features_df
 
 
@@ -34,7 +32,10 @@ def given_tracking_strategy(bdd_context):
 
     def tracking_strategy(window_feat):
         received_dates.append(window_feat.index.max())
-        return compute_weights_shared(window_feat)
+        return compute_weights_with_features(
+            window_feat,
+            features_df=bdd_context["features_df"],
+        )
 
     bdd_context["tracking_strategy"] = tracking_strategy
     bdd_context["received_dates"] = received_dates
@@ -76,24 +77,32 @@ def when_extract_window(bdd_context):
     bdd_context["window_feat"] = features_df.loc[start:end]
 
 
-@when("I compute weights for the window using compute_weights_shared")
-def when_compute_weights_shared(bdd_context):
-    """Compute weights using shared runtime function."""
+@when("I compute weights for the window using explicit feature weights")
+def when_compute_weights_with_features(bdd_context):
+    """Compute weights using explicit feature inputs."""
     window_feat = bdd_context["window_feat"]
-    bdd_context["weights"] = compute_weights_shared(window_feat)
+    bdd_context["weights"] = compute_weights_with_features(
+        window_feat,
+        features_df=bdd_context["features_df"],
+    )
 
 
-@when("I run compute_cycle_spd_shared")
+@when("I run compute_cycle_spd")
 def when_run_cycle_spd(sample_btc_df, bdd_context):
     """Run full SPD computation."""
     features_df = bdd_context["features_df"]
     spd_table = compute_cycle_spd(
-        sample_btc_df, compute_weights_shared, features_df=features_df
+        sample_btc_df,
+        lambda window_feat: compute_weights_with_features(
+            window_feat,
+            features_df=features_df,
+        ),
+        features_df=features_df,
     )
     bdd_context["spd_table"] = spd_table
 
 
-@when("I run compute_cycle_spd_shared with tracking strategy")
+@when("I run compute_cycle_spd with tracking strategy")
 def when_run_cycle_spd_tracking(sample_btc_df, bdd_context):
     """Run SPD computation with tracking strategy."""
     features_df = bdd_context["features_df"]
@@ -104,13 +113,16 @@ def when_run_cycle_spd_tracking(sample_btc_df, bdd_context):
     bdd_context["spd_table"] = spd_table
 
 
-@when("I run backtest_dynamic_dca_shared")
+@when("I run backtest_dynamic_dca")
 def when_run_backtest_shared(sample_btc_df, bdd_context):
     """Run full backtest."""
     features_df = bdd_context["features_df"]
     spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
         sample_btc_df,
-        compute_weights_shared,
+        lambda window_feat: compute_weights_with_features(
+            window_feat,
+            features_df=features_df,
+        ),
         features_df=features_df,
         strategy_label="Test Strategy",
     )
@@ -123,8 +135,14 @@ def when_run_backtest_shared(sample_btc_df, bdd_context):
 def when_compute_weights_twice(bdd_context):
     """Compute weights twice for determinism check."""
     window_feat = bdd_context["window_feat"]
-    bdd_context["weights1"] = compute_weights_shared(window_feat)
-    bdd_context["weights2"] = compute_weights_shared(window_feat)
+    bdd_context["weights1"] = compute_weights_with_features(
+        window_feat,
+        features_df=bdd_context["features_df"],
+    )
+    bdd_context["weights2"] = compute_weights_with_features(
+        window_feat,
+        features_df=bdd_context["features_df"],
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -150,14 +168,14 @@ def then_weight_index_matches(bdd_context):
     assert weights.index.max() == end, "Weight index end mismatch"
 
 
-@then("no received dates should exceed BACKTEST_END")
+@then("no received dates should exceed configured backtest end")
 def then_no_future_dates(bdd_context):
     """Assert no dates exceed backtest end."""
     received_dates = bdd_context["received_dates"]
     max_received = max(received_dates)
-    backtest_end = pd.to_datetime(BACKTEST_END)
+    backtest_end = pd.to_datetime(get_backtest_end())
     assert max_received <= backtest_end, (
-        f"Received date {max_received} > BACKTEST_END {backtest_end}"
+        f"Received date {max_received} > configured backtest end {backtest_end}"
     )
 
 
