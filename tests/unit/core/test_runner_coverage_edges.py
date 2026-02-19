@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import builtins
 from types import SimpleNamespace
 
 import numpy as np
@@ -67,21 +65,10 @@ def test_perturb_future_features_reverses_non_numeric_columns() -> None:
     assert list(perturbed.loc[idx[2]:, "label"]) == ["d", "c"]
 
 
-def test_build_fold_ranges_returns_empty_when_max_folds_below_two(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    original_min = builtins.min
-
-    def _fake_min(a, b):
-        if a == 4 and isinstance(b, int):
-            return 1
-        return original_min(a, b)
-
-    monkeypatch.setattr(builtins, "min", _fake_min)
-
+def test_build_fold_ranges_returns_empty_when_history_is_too_short() -> None:
     folds = StrategyRunner._build_fold_ranges(
-        start_ts=pd.Timestamp("2022-01-01"),
-        end_ts=pd.Timestamp("2025-01-01"),
+        start_ts=pd.Timestamp("2024-01-01"),
+        end_ts=pd.Timestamp("2024-12-31"),
     )
     assert folds == []
 
@@ -90,7 +77,7 @@ def test_build_fold_ranges_skips_non_increasing_boundaries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "stacksats.runner.np.linspace",
+        "stacksats.runner_helpers.np.linspace",
         lambda *args, **kwargs: np.array([0, 0, 10, 20, 30], dtype=int),
     )
 
@@ -147,7 +134,7 @@ def test_strict_shuffled_check_skips_when_no_runs_complete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
-    monkeypatch.setattr("stacksats.runner.range", lambda *args: [], raising=False)
+    monkeypatch.setattr(StrategyRunner, "ITER_RANGE", lambda *args: [])
 
     ok, messages = runner._strict_shuffled_check(
         strategy=_UniformStrategy(),
@@ -201,7 +188,7 @@ def test_validate_continues_when_window_start_exceeds_probe(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", -pd.Timedelta(days=1))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", -pd.Timedelta(days=1))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     result = runner.validate(
@@ -218,7 +205,7 @@ def test_validate_strict_repeat_pass_mutation_branch(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     counter = {"n": 0}
@@ -245,7 +232,7 @@ def test_validate_strict_masked_pass_mutation_branch(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     def _compute(ctx: StrategyContext) -> pd.Series:
@@ -269,7 +256,7 @@ def test_validate_strict_perturbed_pass_mutation_branch(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     def _compute(ctx: StrategyContext) -> pd.Series:
@@ -294,7 +281,7 @@ def test_validate_leakage_loop_skips_when_prefix_is_empty(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     def _future_only_weights(ctx: StrategyContext) -> pd.Series:
@@ -316,7 +303,7 @@ def test_validate_weight_loop_skips_empty_weight_vectors(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
     monkeypatch.setattr(
         strategy,
@@ -338,7 +325,7 @@ def test_validate_weight_loop_records_weight_validation_errors(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     def _invalid_weights(ctx: StrategyContext) -> pd.Series:
@@ -361,7 +348,7 @@ def test_validate_strict_lock_base_mutation_branch(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     counter = {"n": 0}
@@ -388,7 +375,7 @@ def test_validate_strict_lock_perturbed_mutation_branch(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr("stacksats.runner.WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     counter = {"n": 0}

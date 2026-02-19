@@ -67,8 +67,6 @@ def build_fold_ranges(
     if len(all_days) < (ALLOCATION_SPAN_DAYS * 2):
         return []
     max_folds = min(4, len(all_days) // ALLOCATION_SPAN_DAYS)
-    if max_folds < 2:
-        return []
     boundaries = np.linspace(0, len(all_days), num=max_folds + 1, dtype=int)
     folds: list[tuple[pd.Timestamp, pd.Timestamp]] = []
     for i in range(max_folds):
