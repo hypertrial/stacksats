@@ -7,7 +7,7 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the release landing pointer.
 
-## Unreleased highlights
+## 0.4.0 highlights
 
 - Export return types and schema docs were modernized around `StrategyTimeSeriesBatch`.
 - Legacy backtest compatibility helpers/constants were removed in favor of explicit runtime APIs.
@@ -18,10 +18,11 @@ For consolidated upgrade mappings, see [Migration Guide](migration.md).
 
 ## Latest release
 
-- `0.3.2` (2026-02-18): latest published release on PyPI.
+- `0.4.0` (2026-02-18): latest published release on PyPI.
 
 ## Recent PyPI releases
 
+- `0.4.0` (2026-02-18)
 - `0.3.2` (2026-02-18)
 - `0.3.1` (2026-02-17)
 - `0.3.0.post1.dev2` (2026-02-17, pre-release)
