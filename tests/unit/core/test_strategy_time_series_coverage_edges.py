@@ -445,3 +445,97 @@ def test_strategy_time_series_returns_diagnostics_reports_drawdown_metrics() -> 
     assert diagnostics["max_drawdown_date"] == "2024-01-02T00:00:00"
     assert diagnostics["best_day_date"] == "2024-01-03T00:00:00"
     assert diagnostics["worst_day_date"] == "2024-01-02T00:00:00"
+
+
+def test_strategy_time_series_rolling_statistics_rejects_invalid_windows() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="windows must contain only positive integers"):
+        series.rolling_statistics(windows=(0, 7))
+
+
+def test_strategy_time_series_rolling_statistics_rejects_unknown_price_column() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="Unknown price column"):
+        series.rolling_statistics(price_col="unknown_price")
+
+
+def test_strategy_time_series_autocorrelation_rejects_invalid_lags() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="lags must contain only positive integers"):
+        series.autocorrelation(lags=(1, 0))
+
+
+def test_strategy_time_series_autocorrelation_rejects_unknown_series() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="series must be one of"):
+        series.autocorrelation(series="unknown")
+
+
+def test_strategy_time_series_autocorrelation_returns_none_for_large_lag() -> None:
+    series = _window()
+    acf = series.autocorrelation(lags=(10,), series="returns")
+    assert acf["autocorrelation"]["10"] is None
+
+
+def test_strategy_time_series_drawdown_table_rejects_invalid_top_n() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="top_n must be > 0"):
+        series.drawdown_table(top_n=0)
+
+
+def test_strategy_time_series_drawdown_table_returns_empty_when_no_drawdowns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [100.0, 101.0, 102.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_end=pd.Timestamp("2024-01-03")),
+        data=data,
+    )
+
+    drawdowns = series.drawdown_table()
+
+    assert drawdowns.empty
+    assert list(drawdowns.columns) == [
+        "peak_date",
+        "trough_date",
+        "recovery_date",
+        "max_drawdown",
+        "days_to_trough",
+        "days_to_recovery",
+        "duration_days",
+        "recovered",
+    ]
+
+
+def test_strategy_time_series_seasonality_profile_rejects_invalid_frequency() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="freq must be one of"):
+        series.seasonality_profile(freq="quarter")
+
+
+def test_strategy_time_series_seasonality_profile_month_returns_12_rows() -> None:
+    data = pd.DataFrame(
+        {
+            "date": ["2024-01-01", "2024-02-01"],
+            "weight": [0.4, 0.6],
+            "price_usd": [100.0, 110.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_end=pd.Timestamp("2024-02-01")),
+        data=data,
+    )
+
+    profile = series.seasonality_profile(freq="month", series="price")
+
+    assert len(profile) == 12
+    jan = profile.loc[profile["period_label"] == "Jan"].iloc[0]
+    feb = profile.loc[profile["period_label"] == "Feb"].iloc[0]
+    mar = profile.loc[profile["period_label"] == "Mar"].iloc[0]
+    assert int(jan["count"]) == 1
+    assert int(feb["count"]) == 1
+    assert int(mar["count"]) == 0

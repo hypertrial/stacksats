@@ -258,3 +258,118 @@ def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
     assert report.iloc[0]["date"] == pd.Timestamp("2024-01-05")
     assert np.isclose(report.iloc[0]["value"], 1000.0)
     assert report.iloc[0]["method"] == "mad"
+
+
+def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_values() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
+            "weight": [0.1, 0.2, 0.3, 0.4],
+            "price_usd": [100.0, 110.0, 120.0, 130.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-04"),
+        ),
+        data=data,
+    )
+
+    stats = series.rolling_statistics(windows=(2,))
+
+    assert "price_usd_mean_2" in stats.columns
+    assert "return_std_2" in stats.columns
+    assert np.isclose(stats.loc[1, "price_usd_mean_2"], 105.0)
+    assert np.isclose(stats.loc[3, "price_usd_mean_2"], 125.0)
+
+
+def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "weight": [0.1, 0.2, 0.2, 0.2, 0.3],
+            "price_usd": [100.0, 110.0, 100.0, 110.0, 100.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-05"),
+        ),
+        data=data,
+    )
+
+    acf = series.autocorrelation(lags=(1, 2), series="returns")
+
+    assert acf["series"] == "returns"
+    assert acf["lags"] == [1, 2]
+    assert acf["observations"] == 4
+    assert set(acf["autocorrelation"].keys()) == {"1", "2"}
+    assert acf["autocorrelation"]["1"] is not None
+
+
+def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
+            "weight": [0.1, 0.2, 0.3, 0.4],
+            "price_usd": [100.0, 90.0, 95.0, 100.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-04"),
+        ),
+        data=data,
+    )
+
+    drawdowns = series.drawdown_table(top_n=3)
+
+    assert len(drawdowns) == 1
+    assert np.isclose(float(drawdowns.loc[0, "max_drawdown"]), -0.1)
+    assert bool(drawdowns.loc[0, "recovered"]) is True
+    assert drawdowns.loc[0, "peak_date"] == pd.Timestamp("2024-01-01")
+    assert drawdowns.loc[0, "recovery_date"] == pd.Timestamp("2024-01-04")
+
+
+def test_strategy_time_series_seasonality_profile_weekday_returns_expected_counts() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=7, freq="D"),
+            "weight": [1 / 7] * 7,
+            "price_usd": [100.0, 101.0, 99.0, 102.0, 100.0, 103.0, 104.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-07"),
+        ),
+        data=data,
+    )
+
+    profile = series.seasonality_profile(freq="weekday", series="returns")
+
+    assert len(profile) == 7
+    monday = profile.loc[profile["period_label"] == "Mon"].iloc[0]
+    assert int(monday["count"]) == 0
+    tuesday = profile.loc[profile["period_label"] == "Tue"].iloc[0]
+    assert int(tuesday["count"]) == 1

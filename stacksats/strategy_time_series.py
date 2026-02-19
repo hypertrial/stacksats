@@ -533,6 +533,263 @@ class StrategyTimeSeries:
             return result
         return result.sort_values(["column", "date"], kind="stable").reset_index(drop=True)
 
+    def _eda_price_series(self, price_col: str = "price_usd") -> pd.Series:
+        """Return clean numeric price series indexed by dataframe row."""
+        if price_col not in self.data.columns:
+            raise ValueError(f"Unknown price column: {price_col}")
+        return pd.to_numeric(self.data[price_col], errors="coerce")
+
+    def _eda_value_series(self, series: str, price_col: str = "price_usd") -> pd.Series:
+        """Return named EDA series for analysis helpers."""
+        key = series.lower()
+        if key == "price":
+            return self._eda_price_series(price_col=price_col)
+        if key in {"returns", "simple_returns"}:
+            prices = self._eda_price_series(price_col=price_col)
+            prev = prices.shift(1)
+            valid_step = prices.notna() & prev.notna() & (prev != 0)
+            out = pd.Series(np.nan, index=prices.index, dtype=float)
+            out.loc[valid_step] = (prices.loc[valid_step] / prev.loc[valid_step]) - 1.0
+            return out
+        if key == "log_returns":
+            prices = self._eda_price_series(price_col=price_col)
+            prev = prices.shift(1)
+            positive_step = prices.notna() & prev.notna() & (prices > 0) & (prev > 0)
+            out = pd.Series(np.nan, index=prices.index, dtype=float)
+            out.loc[positive_step] = np.log(prices.loc[positive_step] / prev.loc[positive_step])
+            return out
+        if key == "weight":
+            return pd.to_numeric(self.data["weight"], errors="coerce")
+        raise ValueError("series must be one of: price, returns, simple_returns, log_returns, weight")
+
+    @staticmethod
+    def _normalize_positive_ints(values: Iterable[int], field_name: str) -> list[int]:
+        normalized: list[int] = []
+        for value in values:
+            ivalue = int(value)
+            if ivalue <= 0:
+                raise ValueError(f"{field_name} must contain only positive integers.")
+            normalized.append(ivalue)
+        return sorted(set(normalized))
+
+    def rolling_statistics(
+        self,
+        windows: tuple[int, ...] = (7, 30, 90),
+        *,
+        price_col: str = "price_usd",
+    ) -> pd.DataFrame:
+        """Return rolling time-series statistics for price and returns."""
+        normalized_windows = self._normalize_positive_ints(windows, "windows")
+        prices = self._eda_price_series(price_col=price_col)
+        returns = self._eda_value_series("returns", price_col=price_col)
+        out = pd.DataFrame({"date": pd.to_datetime(self.data["date"], errors="coerce")})
+        for window in normalized_windows:
+            out[f"{price_col}_mean_{window}"] = prices.rolling(window, min_periods=1).mean()
+            out[f"{price_col}_std_{window}"] = prices.rolling(window, min_periods=1).std(ddof=0)
+            out[f"return_mean_{window}"] = returns.rolling(window, min_periods=1).mean()
+            out[f"return_std_{window}"] = returns.rolling(window, min_periods=1).std(ddof=0)
+            out[f"vol_annualized_{window}"] = out[f"return_std_{window}"] * np.sqrt(365.0)
+        return out
+
+    def autocorrelation(
+        self,
+        lags: tuple[int, ...] = (1, 7, 30),
+        *,
+        series: str = "returns",
+        price_col: str = "price_usd",
+    ) -> dict[str, Any]:
+        """Return autocorrelation values at selected lags."""
+        normalized_lags = self._normalize_positive_ints(lags, "lags")
+        values = self._eda_value_series(series=series, price_col=price_col).dropna()
+        acf: dict[str, float | None] = {}
+        for lag in normalized_lags:
+            if lag >= int(values.shape[0]):
+                acf[str(lag)] = None
+            else:
+                acf[str(lag)] = self._native_float(values.autocorr(lag=lag))
+        return {
+            "series": series.lower(),
+            "lags": normalized_lags,
+            "observations": int(values.shape[0]),
+            "autocorrelation": acf,
+        }
+
+    def drawdown_table(self, top_n: int = 5, *, price_col: str = "price_usd") -> pd.DataFrame:
+        """Return top drawdown episodes ranked by severity."""
+        if int(top_n) <= 0:
+            raise ValueError("top_n must be > 0")
+
+        prices = self._eda_price_series(price_col=price_col)
+        dates = pd.to_datetime(self.data["date"], errors="coerce")
+        valid = prices.notna() & dates.notna()
+        if not bool(valid.any()):
+            return pd.DataFrame(
+                columns=[
+                    "peak_date",
+                    "trough_date",
+                    "recovery_date",
+                    "max_drawdown",
+                    "days_to_trough",
+                    "days_to_recovery",
+                    "duration_days",
+                    "recovered",
+                ]
+            )
+
+        prices_valid = prices.loc[valid].reset_index(drop=True)
+        dates_valid = dates.loc[valid].reset_index(drop=True)
+        running_max = prices_valid.cummax()
+        drawdown = (prices_valid / running_max) - 1.0
+
+        peak_idx = 0
+        episodes: list[dict[str, Any]] = []
+        in_drawdown = False
+        start_idx = 0
+        trough_idx = 0
+
+        for idx in range(len(prices_valid)):
+            if prices_valid.iloc[idx] >= running_max.iloc[idx]:
+                peak_idx = idx
+
+            dd = float(drawdown.iloc[idx])
+            if dd < 0 and not in_drawdown:
+                in_drawdown = True
+                start_idx = peak_idx
+                trough_idx = idx
+            if in_drawdown and dd < float(drawdown.iloc[trough_idx]):
+                trough_idx = idx
+            if in_drawdown and dd >= 0:
+                peak_date = pd.Timestamp(dates_valid.iloc[start_idx])
+                trough_date = pd.Timestamp(dates_valid.iloc[trough_idx])
+                recovery_date = pd.Timestamp(dates_valid.iloc[idx])
+                episodes.append(
+                    {
+                        "peak_date": peak_date,
+                        "trough_date": trough_date,
+                        "recovery_date": recovery_date,
+                        "max_drawdown": self._native_float(drawdown.iloc[trough_idx]),
+                        "days_to_trough": int((trough_date - peak_date).days),
+                        "days_to_recovery": int((recovery_date - trough_date).days),
+                        "duration_days": int((recovery_date - peak_date).days),
+                        "recovered": True,
+                    }
+                )
+                in_drawdown = False
+
+        if in_drawdown:
+            peak_date = pd.Timestamp(dates_valid.iloc[start_idx])
+            trough_date = pd.Timestamp(dates_valid.iloc[trough_idx])
+            end_date = pd.Timestamp(dates_valid.iloc[len(dates_valid) - 1])
+            episodes.append(
+                {
+                    "peak_date": peak_date,
+                    "trough_date": trough_date,
+                    "recovery_date": pd.NaT,
+                    "max_drawdown": self._native_float(drawdown.iloc[trough_idx]),
+                    "days_to_trough": int((trough_date - peak_date).days),
+                    "days_to_recovery": None,
+                    "duration_days": int((end_date - peak_date).days),
+                    "recovered": False,
+                }
+            )
+
+        if not episodes:
+            return pd.DataFrame(
+                columns=[
+                    "peak_date",
+                    "trough_date",
+                    "recovery_date",
+                    "max_drawdown",
+                    "days_to_trough",
+                    "days_to_recovery",
+                    "duration_days",
+                    "recovered",
+                ]
+            )
+
+        out = pd.DataFrame(episodes)
+        out = out.sort_values(["max_drawdown", "peak_date"], ascending=[True, True], kind="stable")
+        return out.head(int(top_n)).reset_index(drop=True)
+
+    def seasonality_profile(
+        self,
+        *,
+        freq: str = "weekday",
+        series: str = "returns",
+        price_col: str = "price_usd",
+    ) -> pd.DataFrame:
+        """Return calendar-seasonality summary statistics."""
+        frequency = freq.lower()
+        if frequency not in {"weekday", "month"}:
+            raise ValueError("freq must be one of: weekday, month")
+
+        values = self._eda_value_series(series=series, price_col=price_col)
+        dates = pd.to_datetime(self.data["date"], errors="coerce")
+        frame = pd.DataFrame({"date": dates, "value": values})
+        frame = frame.dropna(subset=["date", "value"]).reset_index(drop=True)
+
+        if frequency == "weekday":
+            frame["period_id"] = frame["date"].dt.dayofweek
+            labels = {
+                0: "Mon",
+                1: "Tue",
+                2: "Wed",
+                3: "Thu",
+                4: "Fri",
+                5: "Sat",
+                6: "Sun",
+            }
+            expected_periods = list(labels.keys())
+        else:
+            frame["period_id"] = frame["date"].dt.month
+            labels = {
+                1: "Jan",
+                2: "Feb",
+                3: "Mar",
+                4: "Apr",
+                5: "May",
+                6: "Jun",
+                7: "Jul",
+                8: "Aug",
+                9: "Sep",
+                10: "Oct",
+                11: "Nov",
+                12: "Dec",
+            }
+            expected_periods = list(labels.keys())
+
+        grouped = frame.groupby("period_id", sort=True)["value"]
+        rows: list[dict[str, Any]] = []
+        for period_id in expected_periods:
+            if period_id in grouped.indices:
+                subset = grouped.get_group(period_id)
+                rows.append(
+                    {
+                        "period_id": period_id,
+                        "period_label": labels[period_id],
+                        "count": int(subset.shape[0]),
+                        "mean": self._native_float(subset.mean()),
+                        "median": self._native_float(subset.median()),
+                        "std": self._native_float(subset.std(ddof=0)),
+                        "min": self._native_float(subset.min()),
+                        "max": self._native_float(subset.max()),
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "period_id": period_id,
+                        "period_label": labels[period_id],
+                        "count": 0,
+                        "mean": None,
+                        "median": None,
+                        "std": None,
+                        "min": None,
+                        "max": None,
+                    }
+                )
+        return pd.DataFrame(rows)
+
 
 __all__ = [
     "ColumnSpec",

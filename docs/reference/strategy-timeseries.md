@@ -32,6 +32,10 @@ description: Metadata, guarantees, and export semantics for StrategyTimeSeries a
 - `weight_diagnostics(top_k=5)`: returns weight concentration/distribution diagnostics including `hhi`, `effective_n`, summary quantiles, and top weighted rows.
 - `returns_diagnostics()`: returns return/risk diagnostics derived from `price_usd` (observation counts, cumulative return, mean/std returns, annualized volatility, drawdown, best/worst day).
 - `outlier_report(columns=None, method="mad", threshold=None)`: returns a tidy dataframe with `date`, `column`, `value`, `score`, `method`, and `threshold` for detected numeric outliers.
+- `rolling_statistics(windows=(7, 30, 90), price_col="price_usd")`: returns rolling means/std for price and returns, including annualized rolling volatility.
+- `autocorrelation(lags=(1, 7, 30), series="returns", price_col="price_usd")`: returns lagged autocorrelation values for `price`, `returns`, `simple_returns`, `log_returns`, or `weight`.
+- `drawdown_table(top_n=5, price_col="price_usd")`: returns ranked drawdown episodes with peak/trough/recovery dates and duration metrics.
+- `seasonality_profile(freq="weekday", series="returns", price_col="price_usd")`: returns weekday or month summary statistics (`count`, `mean`, `median`, `std`, `min`, `max`) for a selected series.
 
 ## Validation guarantees
 
