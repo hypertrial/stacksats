@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from abc import ABC
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -85,6 +86,16 @@ class TargetProfile:
 
     values: pd.Series
     mode: Literal["preference", "absolute"] = "preference"
+
+
+@dataclass(frozen=True)
+class StrategyRunResult:
+    """Composite result for a full strategy lifecycle run."""
+
+    validation: "ValidationResult"
+    backtest: "BacktestResult"
+    export_batch: "StrategyTimeSeriesBatch | None" = None
+    output_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -274,6 +285,14 @@ class BaseStrategy(ABC):
     def default_export_config(self) -> ExportConfig:
         return ExportConfig()
 
+    def hook_status(self) -> tuple[bool, bool]:
+        """Return which intent hooks this strategy overrides."""
+        return strategy_hook_status(self.__class__)
+
+    def validate_contract(self) -> tuple[bool, bool]:
+        """Validate framework contract compliance for this strategy instance."""
+        return validate_strategy_contract(self)
+
     def validate_weights(self, weights: pd.Series, ctx: StrategyContext) -> None:
         """Optional strategy-specific weight checks."""
         del ctx
@@ -319,6 +338,77 @@ class BaseStrategy(ABC):
 
         runner = StrategyRunner()
         return runner.export(self, config or self.default_export_config(), **kwargs)
+
+    def export(
+        self,
+        config: ExportConfig | None = None,
+        **kwargs,
+    ) -> "StrategyTimeSeriesBatch":
+        """Alias for export_weights for lifecycle API consistency."""
+        return self.export_weights(config=config, **kwargs)
+
+    def backtest_and_save(
+        self,
+        config: BacktestConfig | None = None,
+        *,
+        output_dir: str | None = None,
+        write_plots: bool = True,
+        write_json: bool = True,
+        **kwargs,
+    ) -> tuple["BacktestResult", str]:
+        """Run backtest and persist standard artifacts to disk."""
+        result = self.backtest(config=config, **kwargs)
+        root = (
+            Path(output_dir or (config.output_dir if config else "output"))
+            / result.strategy_id
+            / result.strategy_version
+            / result.run_id
+        )
+        root.mkdir(parents=True, exist_ok=True)
+        if write_plots:
+            result.plot(output_dir=str(root))
+        if write_json:
+            result.to_json(root / "backtest_result.json")
+        return result, str(root)
+
+    def run(
+        self,
+        *,
+        validation_config: ValidationConfig | None = None,
+        backtest_config: BacktestConfig | None = None,
+        export_config: ExportConfig | None = None,
+        include_export: bool = False,
+        save_backtest_artifacts: bool = False,
+        output_dir: str | None = None,
+        btc_df: pd.DataFrame | None = None,
+        current_date: pd.Timestamp | None = None,
+    ) -> StrategyRunResult:
+        """Run validate + backtest, with optional export and artifact persistence."""
+        validation = self.validate(config=validation_config, btc_df=btc_df)
+        if save_backtest_artifacts:
+            backtest, saved_output_dir = self.backtest_and_save(
+                config=backtest_config,
+                output_dir=output_dir,
+                btc_df=btc_df,
+            )
+        else:
+            backtest = self.backtest(config=backtest_config, btc_df=btc_df)
+            saved_output_dir = None
+
+        export_batch = None
+        if include_export:
+            export_batch = self.export(
+                config=export_config,
+                btc_df=btc_df,
+                current_date=current_date,
+            )
+
+        return StrategyRunResult(
+            validation=validation,
+            backtest=backtest,
+            export_batch=export_batch,
+            output_dir=saved_output_dir,
+        )
 
 
 def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:

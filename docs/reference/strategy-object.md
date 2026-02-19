@@ -10,6 +10,7 @@ A strategy subclasses `BaseStrategy` (`stacksats/strategy_types.py`) and defines
 - identity: `strategy_id`, `version`, `description`
 - hooks: `transform_features`, `build_signals`
 - intent path: `propose_weight(...)` or `build_target_profile(...)`
+- lifecycle helpers: `validate(...)`, `backtest(...)`, `export(...)`, `run(...)`
 
 ## Ownership model
 
@@ -38,6 +39,19 @@ class MyStrategy(BaseStrategy):
     def build_target_profile(self, ctx: StrategyContext, features_df: pd.DataFrame, signals: dict[str, pd.Series]) -> TargetProfile:
         ...
 ```
+
+## Lifecycle methods
+
+`BaseStrategy` includes convenience methods for common runtime flows:
+
+- `validate(config=None, **kwargs)`: returns `ValidationResult`
+- `backtest(config=None, **kwargs)`: returns `BacktestResult`
+- `export(config=None, **kwargs)`: returns `StrategyTimeSeriesBatch`
+- `export_weights(config=None, **kwargs)`: backward-compatible alias for `export(...)`
+- `backtest_and_save(config=None, output_dir=..., ...)`: runs backtest and writes standard artifacts under `output/<strategy_id>/<version>/<run_id>/`
+- `run(...)`: runs validate + backtest, with optional export and optional artifact writing
+- `hook_status()`: returns which intent hook path is implemented
+- `validate_contract()`: checks framework contract compliance for the strategy instance
 
 ## Related docs
 

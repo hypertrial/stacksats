@@ -20,6 +20,7 @@ from .strategy_types import (
     ExportConfig,
     StrategyArtifactSet,
     StrategyContext,
+    StrategyRunResult,
     TargetProfile,
     ValidationConfig,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "StrategyTimeSeriesBatch",
     "StrategyArtifactSet",
     "StrategyContext",
+    "StrategyRunResult",
     "TargetProfile",
     "ValidationResult",
     "ValidationConfig",

@@ -61,6 +61,25 @@ Use the canonical command reference for full option sets:
 - [Backtest command](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
 - [Export command](../commands.md#4-export-strategy-artifacts)
 
+You can also run lifecycle helpers from Python directly:
+
+```python
+from stacksats import BacktestConfig, ValidationConfig
+
+strategy = MyStrategy()
+
+run = strategy.run(
+    validation_config=ValidationConfig(start_date="2020-01-01", end_date="2025-01-01"),
+    backtest_config=BacktestConfig(start_date="2020-01-01", end_date="2025-01-01"),
+    include_export=False,
+    save_backtest_artifacts=True,
+    output_dir="output",
+)
+print(run.validation.summary())
+print(run.backtest.summary())
+print(run.output_dir)
+```
+
 Expected output location:
 
 ```text
