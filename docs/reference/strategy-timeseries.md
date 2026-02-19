@@ -26,6 +26,13 @@ description: Metadata, guarantees, and export semantics for StrategyTimeSeries a
 - `validate()`
 - `to_dataframe()`
 
+## EDA methods
+
+- `profile()`: returns dataset-level and per-column summary metadata (counts, null rates, dtype, and numeric stats where applicable).
+- `weight_diagnostics(top_k=5)`: returns weight concentration/distribution diagnostics including `hhi`, `effective_n`, summary quantiles, and top weighted rows.
+- `returns_diagnostics()`: returns return/risk diagnostics derived from `price_usd` (observation counts, cumulative return, mean/std returns, annualized volatility, drawdown, best/worst day).
+- `outlier_report(columns=None, method="mad", threshold=None)`: returns a tidy dataframe with `date`, `column`, `value`, `score`, `method`, and `threshold` for detected numeric outliers.
+
 ## Validation guarantees
 
 - required columns exist

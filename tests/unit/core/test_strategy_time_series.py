@@ -162,3 +162,99 @@ def test_strategy_time_series_batch_rejects_duplicate_windows() -> None:
             config_hash=md.config_hash,
             windows=(window, window),
         )
+
+
+def test_strategy_time_series_profile_returns_dataset_summary() -> None:
+    data = pd.DataFrame(
+        {
+            "day_index": [0, 1, 2],
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [42000.0, 43000.0, np.nan],
+            "SplyCur": [100.0, np.nan, 102.0],
+        }
+    )
+    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+
+    profile = series.profile()
+
+    assert profile["row_count"] == 3
+    assert profile["column_count"] == 5
+    assert profile["date_start"] == "2024-01-01T00:00:00"
+    assert profile["date_end"] == "2024-01-03T00:00:00"
+    assert "weight" in profile["numeric_columns"]
+    assert profile["columns_profile"]["price_usd"]["null_count"] == 1
+    assert profile["columns_profile"]["SplyCur"]["numeric_summary"]["count"] == 2
+
+
+def test_strategy_time_series_weight_diagnostics_returns_expected_metrics() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [100.0, 110.0, 120.0],
+        }
+    )
+    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+
+    diagnostics = series.weight_diagnostics(top_k=2)
+
+    assert diagnostics["sample_size"] == 3
+    assert np.isclose(diagnostics["sum"], 1.0)
+    assert np.isclose(diagnostics["hhi"], 0.38)
+    assert np.isclose(diagnostics["effective_n"], 1.0 / 0.38)
+    assert len(diagnostics["top_weights"]) == 2
+    assert diagnostics["top_weights"][0]["date"] == "2024-01-03T00:00:00"
+    assert np.isclose(diagnostics["top_weights"][0]["weight"], 0.5)
+
+
+def test_strategy_time_series_returns_diagnostics_returns_expected_metrics() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [100.0, 110.0, 121.0],
+        }
+    )
+    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+
+    diagnostics = series.returns_diagnostics()
+
+    assert diagnostics["price_observations"] == 3
+    assert diagnostics["return_observations"] == 2
+    assert np.isclose(diagnostics["cumulative_return"], 0.21)
+    assert np.isclose(diagnostics["mean_simple_return"], 0.1)
+    assert diagnostics["best_day_date"] == "2024-01-02T00:00:00"
+    assert diagnostics["worst_day_date"] == "2024-01-02T00:00:00"
+    assert np.isclose(diagnostics["max_drawdown"], 0.0)
+
+
+def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "weight": [0.05, 0.1, 0.1, 0.15, 0.6],
+            "price_usd": [100.0, 101.0, 102.0, 103.0, 1000.0],
+            "SplyCur": [10.0, 10.0, 10.0, 10.0, 10.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-05"),
+        ),
+        data=data,
+    )
+
+    report = series.outlier_report(columns=["price_usd"], method="mad", threshold=3.5)
+
+    assert list(report.columns) == ["date", "column", "value", "score", "method", "threshold"]
+    assert len(report) == 1
+    assert report.iloc[0]["column"] == "price_usd"
+    assert report.iloc[0]["date"] == pd.Timestamp("2024-01-05")
+    assert np.isclose(report.iloc[0]["value"], 1000.0)
+    assert report.iloc[0]["method"] == "mad"

@@ -338,3 +338,110 @@ def test_batch_for_window_raises_key_error_when_missing() -> None:
     )
     with pytest.raises(KeyError, match="Window not found"):
         batch.for_window("2030-01-01", "2030-01-02")
+
+
+def test_strategy_time_series_outlier_report_rejects_unknown_method() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="method must be one of"):
+        series.outlier_report(method="bogus")
+
+
+def test_strategy_time_series_outlier_report_rejects_unknown_columns() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="Unknown columns"):
+        series.outlier_report(columns=["unknown_col"])
+
+
+def test_strategy_time_series_outlier_report_returns_empty_with_constant_numeric_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [1 / 3, 1 / 3, 1 / 3],
+            "price_usd": [100.0, 100.0, 100.0],
+            "SplyCur": [10.0, 10.0, 10.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_end=pd.Timestamp("2024-01-03")),
+        data=data,
+    )
+
+    report = series.outlier_report(method="zscore")
+
+    assert report.empty
+    assert list(report.columns) == ["date", "column", "value", "score", "method", "threshold"]
+
+
+def test_strategy_time_series_returns_diagnostics_handles_short_or_invalid_prices() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "weight": [0.4, 0.6],
+            "price_usd": [40000.0, np.nan],
+        }
+    )
+    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+
+    diagnostics = series.returns_diagnostics()
+
+    assert diagnostics["price_observations"] == 1
+    assert diagnostics["return_observations"] == 0
+    assert diagnostics["cumulative_return"] is None
+    assert diagnostics["std_simple_return"] is None
+    assert diagnostics["annualized_volatility"] is None
+
+
+def test_strategy_time_series_outlier_report_rejects_non_positive_threshold() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="threshold must be > 0"):
+        series.outlier_report(threshold=0.0)
+
+
+def test_strategy_time_series_outlier_report_iqr_uses_default_threshold_and_case_insensitive_method() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "weight": [0.2, 0.2, 0.2, 0.2, 0.2],
+            "price_usd": [100.0, 101.0, 102.0, 103.0, 1000.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_end=pd.Timestamp("2024-01-05")),
+        data=data,
+    )
+
+    report = series.outlier_report(method="IQR")
+
+    assert len(report) == 1
+    assert report.iloc[0]["method"] == "iqr"
+    assert np.isclose(report.iloc[0]["threshold"], 1.5)
+
+
+def test_strategy_time_series_weight_diagnostics_handles_negative_top_k() -> None:
+    series = _window()
+
+    diagnostics = series.weight_diagnostics(top_k=-5)
+
+    assert diagnostics["sample_size"] == 2
+    assert diagnostics["top_weights"] == []
+
+
+def test_strategy_time_series_returns_diagnostics_reports_drawdown_metrics() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [100.0, 90.0, 95.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_end=pd.Timestamp("2024-01-03")),
+        data=data,
+    )
+
+    diagnostics = series.returns_diagnostics()
+
+    assert np.isclose(diagnostics["max_drawdown"], -0.1)
+    assert diagnostics["max_drawdown_date"] == "2024-01-02T00:00:00"
+    assert diagnostics["best_day_date"] == "2024-01-03T00:00:00"
+    assert diagnostics["worst_day_date"] == "2024-01-02T00:00:00"
