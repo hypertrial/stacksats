@@ -36,6 +36,14 @@ description: Metadata, guarantees, and export semantics for StrategyTimeSeries a
 - `autocorrelation(lags=(1, 7, 30), series="returns", price_col="price_usd")`: returns lagged autocorrelation values for `price`, `returns`, `simple_returns`, `log_returns`, or `weight`.
 - `drawdown_table(top_n=5, price_col="price_usd")`: returns ranked drawdown episodes with peak/trough/recovery dates and duration metrics.
 - `seasonality_profile(freq="weekday", series="returns", price_col="price_usd")`: returns weekday or month summary statistics (`count`, `mean`, `median`, `std`, `min`, `max`) for a selected series.
+- `resample(freq, agg="mean")`: returns a date-indexed resampled dataframe for numeric series using the specified aggregation.
+- `decompose(model="additive", period=..., series="price", price_col="price_usd")`: returns classical trend/seasonal/residual decomposition for a selected series.
+- `detrend(method="linear"|"difference", columns=None)`: removes linear trend or applies first differences on selected numeric columns.
+- `difference(order=1, seasonal_order=0, seasonal_period=None, columns=None)`: applies regular and optional seasonal differencing to selected numeric columns.
+- `acf_pacf(lags=..., series="returns", price_col="price_usd")`: returns lag-wise ACF and PACF diagnostics.
+- `cross_correlation(other_series, max_lag=..., series="returns", price_col="price_usd")`: returns lead/lag cross-correlation between the base and comparison series.
+- `spectral_density(method="periodogram", series="returns", price_col="price_usd")`: returns frequency-domain power spectral density estimates.
+- `integration_order(columns=None, max_order=2, acf_threshold=0.8)`: returns a heuristic order-of-integration estimate per numeric column using lag-1 autocorrelation after differencing.
 
 ## Validation guarantees
 

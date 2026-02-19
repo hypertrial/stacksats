@@ -539,3 +539,65 @@ def test_strategy_time_series_seasonality_profile_month_returns_12_rows() -> Non
     assert int(jan["count"]) == 1
     assert int(feb["count"]) == 1
     assert int(mar["count"]) == 0
+
+
+def test_strategy_time_series_resample_rejects_empty_frequency() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="freq must be a non-empty"):
+        series.resample("")
+
+
+def test_strategy_time_series_decompose_rejects_invalid_model() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="model must be one of"):
+        series.decompose(period=2, model="invalid")
+
+
+def test_strategy_time_series_decompose_rejects_invalid_period() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="period must be an integer > 1"):
+        series.decompose(period=1)
+
+
+def test_strategy_time_series_detrend_rejects_unknown_column() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="Unknown columns for detrend"):
+        series.detrend(columns=["unknown_col"])
+
+
+def test_strategy_time_series_difference_rejects_invalid_orders() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="order must be >= 0"):
+        series.difference(order=-1)
+    with pytest.raises(ValueError, match="seasonal_order must be >= 0"):
+        series.difference(seasonal_order=-1)
+    with pytest.raises(ValueError, match="seasonal_period must be a positive integer"):
+        series.difference(seasonal_order=1, seasonal_period=0)
+
+
+def test_strategy_time_series_acf_pacf_rejects_invalid_lags() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="lags must be > 0"):
+        series.acf_pacf(lags=0)
+
+
+def test_strategy_time_series_cross_correlation_rejects_invalid_max_lag() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="max_lag must be >= 0"):
+        series.cross_correlation("price", max_lag=-1)
+
+
+def test_strategy_time_series_spectral_density_rejects_invalid_method() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="method must be 'periodogram'"):
+        series.spectral_density(method="fft")
+
+
+def test_strategy_time_series_integration_order_rejects_invalid_arguments() -> None:
+    series = _window()
+    with pytest.raises(ValueError, match="max_order must be >= 0"):
+        series.integration_order(max_order=-1)
+    with pytest.raises(ValueError, match="acf_threshold must be between 0 and 1"):
+        series.integration_order(acf_threshold=1.0)
+    with pytest.raises(ValueError, match="Unknown columns for integration_order"):
+        series.integration_order(columns=["unknown_col"])

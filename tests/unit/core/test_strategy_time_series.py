@@ -373,3 +373,219 @@ def test_strategy_time_series_seasonality_profile_weekday_returns_expected_count
     assert int(monday["count"]) == 0
     tuesday = profile.loc[profile["period_label"] == "Tue"].iloc[0]
     assert int(tuesday["count"]) == 1
+
+
+def test_strategy_time_series_resample_returns_expected_frequency_shape() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=10, freq="D"),
+            "weight": [0.1] * 10,
+            "price_usd": np.arange(100.0, 110.0),
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-10"),
+        ),
+        data=data,
+    )
+
+    weekly = series.resample("W", agg="mean")
+
+    assert "date" in weekly.columns
+    assert "price_usd" in weekly.columns
+    assert len(weekly) >= 2
+
+
+def test_strategy_time_series_decompose_additive_returns_expected_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=12, freq="D"),
+            "weight": [1 / 12] * 12,
+            "price_usd": [100.0, 102.0, 104.0, 103.0, 105.0, 107.0, 106.0, 108.0, 110.0, 109.0, 111.0, 113.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-12"),
+        ),
+        data=data,
+    )
+
+    decomposition = series.decompose(period=3, model="additive", series="price")
+
+    assert set(["observed", "trend", "seasonal", "residual", "model", "period", "series"]).issubset(
+        decomposition.columns
+    )
+    assert decomposition["model"].iloc[0] == "additive"
+
+
+def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "weight": [0.1, 0.15, 0.2, 0.25, 0.3],
+            "price_usd": [100.0, 101.0, 102.0, 103.0, 104.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-05"),
+        ),
+        data=data,
+    )
+
+    detrended = series.detrend(method="linear")
+
+    assert "price_usd_detrended" in detrended.columns
+    assert "weight_detrended" in detrended.columns
+    assert detrended["price_usd_detrended"].notna().any()
+
+
+def test_strategy_time_series_difference_returns_expected_shape() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=6, freq="D"),
+            "weight": [0.1, 0.15, 0.2, 0.2, 0.15, 0.2],
+            "price_usd": [100.0, 103.0, 106.0, 109.0, 112.0, 115.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-06"),
+        ),
+        data=data,
+    )
+
+    diffed = series.difference(order=1)
+
+    assert "price_usd_diff" in diffed.columns
+    assert pd.isna(diffed.loc[0, "price_usd_diff"])
+    assert np.isclose(diffed.loc[2, "price_usd_diff"], 3.0)
+
+
+def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "weight": [0.05, 0.1, 0.15, 0.2, 0.15, 0.1, 0.1, 0.15],
+            "price_usd": [100.0, 102.0, 101.0, 103.0, 102.0, 104.0, 103.0, 105.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-08"),
+        ),
+        data=data,
+    )
+
+    diagnostics = series.acf_pacf(lags=3, series="returns")
+
+    assert list(diagnostics["lag"]) == [1, 2, 3]
+    assert set(["acf", "pacf", "series", "observations"]).issubset(diagnostics.columns)
+
+
+def test_strategy_time_series_cross_correlation_returns_lag_window() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "weight": [0.05, 0.1, 0.15, 0.2, 0.15, 0.1, 0.1, 0.15],
+            "price_usd": [100.0, 101.0, 102.0, 103.0, 102.0, 101.0, 102.0, 103.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-08"),
+        ),
+        data=data,
+    )
+
+    ccf = series.cross_correlation("price", max_lag=2, series="returns")
+
+    assert list(ccf["lag"]) == [-2, -1, 0, 1, 2]
+    assert "correlation" in ccf.columns
+    assert "observations" in ccf.columns
+
+
+def test_strategy_time_series_spectral_density_periodogram_returns_expected_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=16, freq="D"),
+            "weight": [1 / 16] * 16,
+            "price_usd": [100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-16"),
+        ),
+        data=data,
+    )
+
+    spectrum = series.spectral_density(series="price")
+
+    assert set(["frequency", "power", "series", "method", "observations"]).issubset(spectrum.columns)
+    assert spectrum["method"].iloc[0] == "periodogram"
+
+
+def test_strategy_time_series_integration_order_returns_per_column_output() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=10, freq="D"),
+            "weight": [0.1] * 10,
+            "price_usd": np.linspace(100.0, 110.0, 10),
+            "SplyCur": [10.0] * 10,
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-10"),
+        ),
+        data=data,
+    )
+
+    integration = series.integration_order(max_order=2)
+
+    assert set(["column", "integration_order", "detected", "method"]).issubset(integration.columns)
+    assert "price_usd" in set(integration["column"])
+    assert "SplyCur" in set(integration["column"])
