@@ -35,7 +35,12 @@ def _is_cache_usable(
         if cached_df.empty:
             return False
 
-        cached_df["time"] = pd.to_datetime(cached_df["time"], errors="coerce")
+        cached_df["time"] = pd.to_datetime(
+            cached_df["time"],
+            errors="coerce",
+            format="mixed",
+            utc=True,
+        ).dt.tz_convert(None)
         cached_df["PriceUSD"] = pd.to_numeric(cached_df["PriceUSD"], errors="coerce")
         cached_df = cached_df.dropna(subset=["time"]).sort_values("time")
         if cached_df.empty:

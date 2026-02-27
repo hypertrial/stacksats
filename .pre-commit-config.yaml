@@ -26,7 +26,7 @@ repos:
 
       - id: schema-sync-check
         name: docs schema sync check
-        entry: bash -lc 'PYTHONPATH=. python scripts/sync_objects_schema_docs.py --check'
+        entry: env PYTHONPATH=. python scripts/sync_objects_schema_docs.py --check
         language: system
         pass_filenames: false
 
