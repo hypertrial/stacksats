@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Added
+- New idempotent daily execution lifecycle command: `stacksats strategy run-daily`.
+- New daily execution APIs/types: `RunDailyConfig`, `DailyOrderRequest`, `DailyOrderReceipt`, `DailyRunResult`, and `BaseStrategy.run_daily(...)`.
+- New SQLite-backed daily run ledger and weight snapshot state for replay-safe execution (`.stacksats/run_state.sqlite3` by default).
+- New execution adapter interface plus deterministic built-in `PaperExecutionAdapter`.
+
 ### Changed
 - Removed the stale exported notebook asset from docs and updated the notebook demo page to use maintained CLI workflows.
 - `stacksats.load_data(...)` now delegates to `BTCDataProvider` strict source-only semantics and accepts optional `end_date`.

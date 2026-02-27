@@ -101,6 +101,39 @@ stacksats strategy export \
 
 - Review schema guarantees: [Strategy TimeSeries](reference/strategy-timeseries.md).
 
+## I want to run daily execution safely
+
+### Prerequisites
+
+- Strategy loads successfully.
+- You know your canonical total window budget in USD.
+- Optional for live mode: an adapter class implementing `submit_order(...)`.
+
+### Command
+
+```bash
+stacksats strategy run-daily \
+  --strategy my_strategy.py:MyStrategy \
+  --total-window-budget-usd 1000 \
+  --mode paper
+```
+
+### Expected output
+
+- Structured JSON summary with run metadata and order fields.
+- Status line: `EXECUTED`, `NO-OP (idempotent)`, or `FAILED`.
+- Ledger state written to `.stacksats/run_state.sqlite3` by default.
+
+### Troubleshooting
+
+- Live mode requires `--adapter module_or_path:ClassName`.
+- Reruns with changed parameters require `--force`.
+- Missing run-date BTC price coverage causes deterministic failure.
+
+### Next step
+
+- Inspect generated artifact JSON under `output/<strategy_id>/<version>/daily/<run_date>/`.
+
 ## I want to migrate from removed legacy internals
 
 ### Prerequisites

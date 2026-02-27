@@ -1,6 +1,12 @@
 """StackSats package public API."""
 
-from .api import BacktestResult, ValidationResult
+from .api import (
+    BacktestResult,
+    DailyOrderReceipt,
+    DailyOrderRequest,
+    DailyRunResult,
+    ValidationResult,
+)
 from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
@@ -18,6 +24,7 @@ from .strategy_types import (
     BaseStrategy,
     DayState,
     ExportConfig,
+    RunDailyConfig,
     StrategyArtifactSet,
     StrategyContext,
     StrategyRunResult,
@@ -29,11 +36,15 @@ __all__ = [
     "BacktestResult",
     "BacktestConfig",
     "BaseStrategy",
+    "DailyOrderReceipt",
+    "DailyOrderRequest",
+    "DailyRunResult",
     "DayState",
     "ExportConfig",
     "ExampleMVRVStrategy",
     "MVRVStrategy",
     "MVRVPlusStrategy",
+    "RunDailyConfig",
     "ColumnSpec",
     "StrategySeriesMetadata",
     "StrategyTimeSeries",

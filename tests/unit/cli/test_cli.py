@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from stacksats import cli
+from stacksats.strategy_types import RunDailyConfig
 
 
 def test_cli_help() -> None:
@@ -178,6 +179,119 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
     out = capsys.readouterr().out
     assert '"rows": 2' in out
     assert '"windows": 1' in out
+
+
+def test_cli_strategy_run_daily_maps_config(monkeypatch, capsys, tmp_path) -> None:
+    class FakeRunResult:
+        status = "executed"
+
+        def to_json(self):
+            return {"status": "executed", "run_key": "rk-1"}
+
+    class FakeRunner:
+        def run_daily(self, strategy, config):
+            del strategy
+            assert isinstance(config, RunDailyConfig)
+            assert config.total_window_budget_usd == 1000.0
+            assert config.mode == "paper"
+            return FakeRunResult()
+
+    class FakeStrategy:
+        strategy_id = "fake-strategy"
+        version = "1.0.0"
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "run-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--total-window-budget-usd",
+            "1000",
+            "--state-db-path",
+            str(tmp_path / "state.sqlite3"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert '"status": "executed"' in out
+    assert "Status: EXECUTED" in out
+
+
+def test_cli_strategy_run_daily_failure_exits_nonzero(monkeypatch) -> None:
+    class FakeRunResult:
+        status = "failed"
+
+        def to_json(self):
+            return {"status": "failed"}
+
+    class FakeRunner:
+        def run_daily(self, strategy, config):
+            del strategy, config
+            return FakeRunResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "run-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--total-window-budget-usd",
+            "1000",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+
+
+def test_cli_strategy_run_daily_live_without_adapter_exits_user_error(
+    monkeypatch, capsys
+) -> None:
+    class FakeRunner:
+        def run_daily(self, strategy, config):
+            del strategy
+            if config.mode == "live" and config.adapter_spec is None:
+                raise ValueError("Live mode requires --adapter.")
+            raise AssertionError("Expected invalid config to fail before execution.")
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "run-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--total-window-budget-usd",
+            "1000",
+            "--mode",
+            "live",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "Live mode requires --adapter." in err
 
 
 def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:

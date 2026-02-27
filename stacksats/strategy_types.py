@@ -13,7 +13,7 @@ import pandas as pd
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 
 if TYPE_CHECKING:
-    from .api import BacktestResult, ValidationResult
+    from .api import BacktestResult, DailyRunResult, ValidationResult
     from .strategy_time_series import StrategyTimeSeriesBatch
 
 
@@ -65,6 +65,22 @@ class ExportConfig:
     range_start: str = field(default_factory=_default_export_range_start)
     range_end: str = field(default_factory=_default_export_range_end)
     output_dir: str = "output"
+    btc_price_col: str = "PriceUSD_coinmetrics"
+
+
+def _default_state_db_path() -> str:
+    return str(Path(".stacksats") / "run_state.sqlite3")
+
+
+@dataclass(frozen=True)
+class RunDailyConfig:
+    run_date: str | None = None
+    total_window_budget_usd: float = 1000.0
+    mode: Literal["paper", "live"] = "paper"
+    state_db_path: str = field(default_factory=_default_state_db_path)
+    output_dir: str = "output"
+    adapter_spec: str | None = None
+    force: bool = False
     btc_price_col: str = "PriceUSD_coinmetrics"
 
 
@@ -401,6 +417,16 @@ class BaseStrategy(ABC):
             export_batch=export_batch,
             output_dir=saved_output_dir,
         )
+
+    def run_daily(
+        self,
+        config: RunDailyConfig | None = None,
+        **kwargs,
+    ) -> "DailyRunResult":
+        from .runner import StrategyRunner
+
+        runner = StrategyRunner()
+        return runner.run_daily(self, config or RunDailyConfig(), **kwargs)
 
 
 def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:

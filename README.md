@@ -74,6 +74,17 @@ For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
 For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 
+Run idempotent daily execution (paper mode):
+
+```bash
+stacksats strategy run-daily \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --total-window-budget-usd 1000 \
+  --mode paper
+```
+
+Daily state is persisted by default to `.stacksats/run_state.sqlite3`.
+
 Export requires explicit date bounds:
 
 ```bash
@@ -90,9 +101,10 @@ Top-level exports:
 
 - `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`
+- `RunDailyConfig`
 - `StrategyArtifactSet`
 - `StrategyTimeSeries`, `StrategyTimeSeriesBatch`
-- `BacktestResult`, `ValidationResult`
+- `BacktestResult`, `ValidationResult`, `DailyRunResult`
 - `load_strategy()`, `load_data()`, `precompute_features()`
 - `MVRVStrategy`
 

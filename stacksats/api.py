@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -171,3 +171,71 @@ class ValidationResult:
             f"Weight Constraints: {self.weight_constraints_ok} | "
             f"Win Rate: {self.win_rate:.2f}% (>={self.min_win_rate:.2f}%: {self.win_rate_ok})"
         )
+
+
+@dataclass(frozen=True, slots=True)
+class DailyOrderRequest:
+    """Execution request for a single strategy daily order."""
+
+    strategy_id: str
+    strategy_version: str
+    run_date: str
+    mode: str
+    weight_today: float
+    notional_usd: float
+    price_usd: float
+    quantity_btc: float
+    btc_price_col: str
+
+
+@dataclass(frozen=True, slots=True)
+class DailyOrderReceipt:
+    """Execution receipt for a submitted daily order."""
+
+    status: str
+    external_order_id: str | None
+    filled_notional_usd: float
+    filled_quantity_btc: float
+    fill_price_usd: float
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class DailyRunResult:
+    """Structured result for a daily strategy execution."""
+
+    status: str
+    strategy_id: str
+    strategy_version: str
+    run_date: str
+    run_key: str
+    mode: str
+    idempotency_hit: bool
+    forced_rerun: bool
+    weight_today: float | None
+    order_notional_usd: float | None
+    btc_quantity: float | None
+    price_usd: float | None
+    adapter_name: str
+    state_db_path: str
+    artifact_path: str | None
+    message: str
+    order_receipt: DailyOrderReceipt | None = None
+    bootstrap: bool = False
+
+    def summary(self) -> str:
+        """Return concise daily run status summary."""
+        return (
+            f"Daily Run {self.status.upper()} | Strategy: {self.strategy_id}@{self.strategy_version} | "
+            f"Date: {self.run_date} | Mode: {self.mode} | Run Key: {self.run_key} | "
+            f"Idempotency Hit: {self.idempotency_hit}"
+        )
+
+    def to_json(self, path: str | Path | None = None) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        payload = asdict(self)
+        if path is not None:
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return payload

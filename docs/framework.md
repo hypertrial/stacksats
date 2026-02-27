@@ -53,6 +53,8 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 
 ## Production Daily Lifecycle
 
+Canonical entrypoint: `stacksats strategy run-daily`.
+
 1. Load locked historical weights for the active allocation span.
 2. Build lagged features/signals using information available up to `current_date`.
 3. Collect user daily intent (`proposed_weight_today` or profile-derived intent).

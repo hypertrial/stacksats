@@ -13,7 +13,7 @@ import requests
 from .data_btc import DataLoadError
 from .loader import load_strategy
 from .runner import StrategyRunner
-from .strategy_types import BacktestConfig, ExportConfig, ValidationConfig
+from .strategy_types import BacktestConfig, ExportConfig, RunDailyConfig, ValidationConfig
 
 
 class _HelpFormatter(
@@ -43,7 +43,10 @@ def _build_parser() -> argparse.ArgumentParser:
             "stacksats.strategies.model_example:ExampleMVRVStrategy --output-dir output\n"
             "  stacksats strategy export --strategy "
             "stacksats.strategies.model_example:ExampleMVRVStrategy "
-            "--start-date 2025-12-01 --end-date 2027-12-31"
+            "--start-date 2025-12-01 --end-date 2027-12-31\n"
+            "  stacksats strategy run-daily --strategy "
+            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "--total-window-budget-usd 1000"
         ),
     )
     root = parser.add_subparsers(dest="command", required=True)
@@ -128,6 +131,37 @@ def _build_parser() -> argparse.ArgumentParser:
     export_cmd.add_argument("--start-date", required=True)
     export_cmd.add_argument("--end-date", required=True)
     export_cmd.add_argument("--output-dir", default="output")
+
+    run_daily_cmd = strategy_sub.add_parser(
+        "run-daily",
+        help="Run idempotent daily execution",
+        formatter_class=_HelpFormatter,
+        epilog=(
+            "Example:\n"
+            "  stacksats strategy run-daily --strategy "
+            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "--total-window-budget-usd 1000 --mode paper"
+        ),
+    )
+    run_daily_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
+    run_daily_cmd.add_argument(
+        "--strategy-config",
+        default=None,
+        help="JSON config path for feature/signal/daily-intent parameters",
+    )
+    run_daily_cmd.add_argument("--run-date", default=None)
+    run_daily_cmd.add_argument(
+        "--total-window-budget-usd",
+        required=True,
+        type=float,
+        help="Total USD budget associated with the full allocation window.",
+    )
+    run_daily_cmd.add_argument("--mode", choices=("paper", "live"), default="paper")
+    run_daily_cmd.add_argument("--adapter", default=None)
+    run_daily_cmd.add_argument("--state-db-path", default=".stacksats/run_state.sqlite3")
+    run_daily_cmd.add_argument("--output-dir", default="output")
+    run_daily_cmd.add_argument("--btc-price-col", default="PriceUSD_coinmetrics")
+    run_daily_cmd.add_argument("--force", action="store_true")
     return parser
 
 
@@ -204,6 +238,30 @@ def main() -> None:
             print(json.dumps(meta, indent=2))
             print(f"Saved: {output_root}")
             return
+
+        if args.strategy_command == "run-daily":
+            result = runner.run_daily(
+                strategy,
+                RunDailyConfig(
+                    run_date=args.run_date,
+                    total_window_budget_usd=args.total_window_budget_usd,
+                    mode=args.mode,
+                    state_db_path=args.state_db_path,
+                    output_dir=args.output_dir,
+                    adapter_spec=args.adapter,
+                    force=args.force,
+                    btc_price_col=args.btc_price_col,
+                ),
+            )
+            print(json.dumps(result.to_json(), indent=2))
+            if result.status == "executed":
+                print("Status: EXECUTED")
+                return
+            if result.status == "noop":
+                print("Status: NO-OP (idempotent)")
+                return
+            print("Status: FAILED")
+            raise SystemExit(1)
 
         parser.error("Unsupported command.")
     except JSONDecodeError as exc:

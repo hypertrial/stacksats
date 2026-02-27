@@ -1,6 +1,6 @@
 ---
 title: CLI Commands
-description: Command reference for validating, backtesting, and exporting Bitcoin dollar cost averaging (DCA) strategies.
+description: Command reference for validating, backtesting, exporting, and daily execution of Bitcoin DCA strategies.
 ---
 
 # Commands for `stacksats.strategies.model_example`
@@ -38,6 +38,12 @@ stacksats strategy export \
   --start-date 2025-12-01 \
   --end-date 2027-12-31 \
   --output-dir output
+
+# Run daily execution (paper mode by default)
+stacksats strategy run-daily \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --total-window-budget-usd 1000 \
+  --mode paper
 ```
 
 Expected output location for backtest/export artifacts:
@@ -52,7 +58,8 @@ output/<strategy_id>/<version>/<run_id>/
 flowchart LR
     A["strategy validate"] --> B["strategy backtest"]
     B --> C["strategy export"]
-    C --> D["output/<strategy_id>/<version>/<run_id>/"]
+    C --> D["strategy run-daily"]
+    D --> E["output/<strategy_id>/<version>/daily/<run_date>/<run_key>.json"]
 ```
 
 ## Prerequisites
@@ -198,7 +205,40 @@ Notes:
 - `stacksats strategy export` is strategy artifact export (filesystem output).
 - `--start-date` and `--end-date` are required for `stacksats strategy export`.
 
-## 5) Useful Development Commands
+## 5) Run Idempotent Daily Execution
+
+Paper execution:
+
+```bash
+stacksats strategy run-daily \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --total-window-budget-usd 1000 \
+  --mode paper
+```
+
+Live adapter interface (bring your own adapter class):
+
+```bash
+stacksats strategy run-daily \
+  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --total-window-budget-usd 1000 \
+  --mode live \
+  --adapter my_broker_adapter.py:MyBrokerAdapter
+```
+
+Defaults and behavior:
+
+- `--state-db-path` defaults to `.stacksats/run_state.sqlite3`.
+- rerunning the same strategy/date/mode/config is a no-op unless `--force` is set.
+- order notional formula: `weight_today * total_window_budget_usd`.
+
+Expected status lines:
+
+- `Status: EXECUTED`
+- `Status: NO-OP (idempotent)`
+- `Status: FAILED`
+
+## 6) Useful Development Commands
 
 Verify this document's example commands end-to-end:
 
@@ -232,6 +272,9 @@ ruff check .
 
 - **Export failed due to missing date bounds**
   Provide both `--start-date` and `--end-date`.
+
+- **Live mode failed with adapter error**
+  Ensure `--adapter module_or_path:ClassName` is provided and returns `DailyOrderReceipt`.
 
 ## Feedback
 
