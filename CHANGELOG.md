@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-02-27
+
 ### Added
 - New idempotent daily execution lifecycle command: `stacksats strategy run-daily`.
 - New daily execution APIs/types: `RunDailyConfig`, `DailyOrderRequest`, `DailyOrderReceipt`, `DailyRunResult`, and `BaseStrategy.run_daily(...)`.

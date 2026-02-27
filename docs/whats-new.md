@@ -7,21 +7,24 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the release landing pointer.
 
-## 0.4.0 highlights
+## 0.5.1 highlights
 
-- Export return types and schema docs were modernized around `StrategyTimeSeriesBatch`.
-- Legacy backtest compatibility helpers/constants were removed in favor of explicit runtime APIs.
-- Export requires explicit `--start-date` and `--end-date`.
+- Added idempotent daily execution via `stacksats strategy run-daily`.
+- Added durable SQLite state for replay-safe daily runs and a pluggable execution adapter interface.
+- Unified `stacksats.load_data(...)` to strict source-only CoinMetrics semantics with optional `end_date`.
+- Removed compatibility APIs `stacksats.model_development.softmax(...)` and `BaseStrategy.export_weights(...)`.
 
 For full details and migration notes, see [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 For consolidated upgrade mappings, see [Migration Guide](migration.md).
 
 ## Latest release
 
-- `0.4.0` (2026-02-18): latest published release on PyPI.
+- `0.5.1` (2026-02-27): latest published release on PyPI.
 
 ## Recent PyPI releases
 
+- `0.5.1` (2026-02-27)
+- `0.4.1` (2026-02-19)
 - `0.4.0` (2026-02-18)
 - `0.3.2` (2026-02-18)
 - `0.3.1` (2026-02-17)
