@@ -264,6 +264,19 @@ def compute_cycle_spd(
             f"✓ Validated weight sums for {validated_windows} windows (all sum to 1.0)"
         )
 
+    if not results:
+        return pd.DataFrame(
+            columns=[
+                "window",
+                "min_sats_per_dollar",
+                "max_sats_per_dollar",
+                "uniform_sats_per_dollar",
+                "dynamic_sats_per_dollar",
+                "uniform_percentile",
+                "dynamic_percentile",
+                "excess_percentile",
+            ]
+        ).set_index("window")
     return pd.DataFrame(results).set_index("window")
 
 

@@ -4,6 +4,7 @@ import builtins
 import importlib
 import runpy
 import sys
+import warnings
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -179,6 +180,12 @@ def test_plot_weights_module_dunder_main_executes(
     monkeypatch.setattr("psycopg2.connect", lambda _url: conn)
     monkeypatch.setattr(sys, "argv", ["plot_weights.py", "--list"])
 
-    runpy.run_module("stacksats.plot_weights", run_name="__main__")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        runpy.run_module("stacksats.plot_weights", run_name="__main__")
 
     assert conn.close.called

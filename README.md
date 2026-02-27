@@ -116,6 +116,7 @@ Top-level exports:
 pytest tests/ -v
 ruff check .
 bash scripts/check_docs_refs.sh
+bash scripts/check_coverage.sh
 ```
 
 For command examples using the packaged strategy template, see `docs/commands.md`.

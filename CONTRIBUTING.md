@@ -33,6 +33,7 @@ python scripts/check_docs_ux.py
 python scripts/sync_objects_schema_docs.py --check
 mkdocs build --strict
 pytest tests/ -v
+bash scripts/check_coverage.sh
 python -m build
 python -m twine check dist/*
 ```
@@ -59,6 +60,7 @@ bash scripts/release_check.sh
 - Keep behavior changes explicit and documented.
 - Prefer small, reviewable PRs over large mixed changes.
 - Include test coverage for fixes/features when practical.
+- Package coverage for `stacksats/*` is enforced at 100% in CI (`bash scripts/check_coverage.sh`).
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 

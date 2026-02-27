@@ -340,6 +340,61 @@ def test_batch_for_window_raises_key_error_when_missing() -> None:
         batch.for_window("2030-01-01", "2030-01-02")
 
 
+def test_native_helpers_and_empty_numeric_summary_paths() -> None:
+    assert StrategyTimeSeries._native_float(None) is None
+    assert StrategyTimeSeries._native_float(float("inf")) is None
+    assert StrategyTimeSeries._native_timestamp(pd.NaT) is None
+    summary = StrategyTimeSeries._series_numeric_summary(pd.Series([np.nan, np.nan]))
+    assert summary["count"] == 0
+    assert summary["mean"] is None
+
+
+def test_diagnostics_edge_paths_empty_and_outlier_branches() -> None:
+    data = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "weight": [0.2, 0.3, 0.5],
+            "price_usd": [100.0, 110.0, 120.0],
+            "SplyCur": [10.0, 10.0, 10.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=StrategySeriesMetadata(
+            strategy_id="test-strategy",
+            strategy_version="1.2.3",
+            run_id="run-1",
+            config_hash="abc123",
+            window_start=pd.Timestamp("2024-01-01"),
+            window_end=pd.Timestamp("2024-01-03"),
+        ),
+        data=data,
+    )
+
+    series.data["weight"] = np.nan
+    weight_diag = series.weight_diagnostics()
+    assert weight_diag["sample_size"] == 0
+
+    series.data["price_usd"] = np.nan
+    ret_diag = series.returns_diagnostics()
+    assert ret_diag["price_observations"] == 0
+
+    # valid.shape[0] < 2 branch
+    series.data["SplyCur"] = [np.nan, np.nan, 10.0]
+    out_short = series.outlier_report(columns=["SplyCur"], method="mad")
+    assert out_short.empty
+
+    # mad == 0 branch
+    series.data["SplyCur"] = [10.0, 10.0, 10.0]
+    out_mad_zero = series.outlier_report(columns=["SplyCur"], method="mad")
+    assert out_mad_zero.empty
+
+    # z-score branch with finite std and computed mask.
+    series.data["price_usd"] = [100.0, 101.0, 1000.0]
+    out_z = series.outlier_report(columns=["price_usd"], method="zscore", threshold=0.5)
+    assert not out_z.empty
+    assert set(out_z["method"]) == {"zscore"}
+
+
 def test_strategy_time_series_outlier_report_rejects_unknown_method() -> None:
     series = _window()
     with pytest.raises(ValueError, match="method must be one of"):

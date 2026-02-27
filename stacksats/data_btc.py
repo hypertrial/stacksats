@@ -79,9 +79,16 @@ class BTCDataProvider:
         now = self.clock()
         today = now.normalize()
         backtest_start_ts = pd.to_datetime(backtest_start)
-        target_end = pd.to_datetime(end_date).normalize() if end_date is not None else today
-        if pd.isna(target_end):
-            raise ValueError(f"Invalid end_date value: {end_date!r}")
+        if end_date is not None:
+            try:
+                parsed_end = pd.to_datetime(end_date)
+            except Exception as exc:
+                raise ValueError(f"Invalid end_date value: {end_date!r}") from exc
+            if pd.isna(parsed_end):
+                raise ValueError(f"Invalid end_date value: {end_date!r}")
+            target_end = parsed_end.normalize()
+        else:
+            target_end = today
         target_end = min(target_end, today)
         if target_end < backtest_start_ts:
             raise ValueError(

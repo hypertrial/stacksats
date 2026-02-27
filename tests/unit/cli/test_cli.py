@@ -4,6 +4,7 @@ import json
 import runpy
 import subprocess
 import sys
+import warnings
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -348,4 +349,10 @@ def test_cli_module_dunder_main_executes(monkeypatch) -> None:
         ],
     )
 
-    runpy.run_module("stacksats.cli", run_name="__main__")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        runpy.run_module("stacksats.cli", run_name="__main__")

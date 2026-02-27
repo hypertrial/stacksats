@@ -10,6 +10,7 @@ Tests cover:
 
 import os
 import runpy
+import warnings
 import pytest
 import responses
 import requests
@@ -717,7 +718,13 @@ def test_module_dunder_main_executes_without_network(
         raise AssertionError(f"Unexpected URL: {url}")
 
     monkeypatch.setattr("requests.get", _fake_get)
-    runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
 
 
 def test_module_dunder_main_prints_failure_when_all_sources_raise(
@@ -728,7 +735,13 @@ def test_module_dunder_main_prints_failure_when_all_sources_raise(
         raise requests.exceptions.RequestException("network down")
 
     monkeypatch.setattr("requests.get", _always_fail_get)
-    runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
 
     output = capsys.readouterr().out
     assert "Error - network down" in output

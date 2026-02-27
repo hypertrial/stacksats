@@ -456,11 +456,16 @@ def main() -> None:
     btc_df = _load_coinmetrics_csv(args.coinmetrics_csv)
     csv_end = btc_df.index.max().normalize()
 
-    requested_end = (
-        pd.to_datetime(args.end_date).normalize() if args.end_date else csv_end
-    )
-    if pd.isna(requested_end):
-        raise ValueError(f"Invalid --end-date: {args.end_date!r}")
+    if args.end_date:
+        try:
+            parsed_end = pd.to_datetime(args.end_date)
+        except Exception as exc:
+            raise ValueError(f"Invalid --end-date: {args.end_date!r}") from exc
+        if pd.isna(parsed_end):
+            raise ValueError(f"Invalid --end-date: {args.end_date!r}")
+        requested_end = parsed_end.normalize()
+    else:
+        requested_end = csv_end
     effective_end = min(requested_end, csv_end)
     effective_start = args.start_date
 

@@ -564,12 +564,14 @@ def test_strategy_time_series_spectral_density_periodogram_returns_expected_colu
 
 
 def test_strategy_time_series_integration_order_returns_per_column_output() -> None:
+    weights = np.linspace(1.0, 2.0, 10)
+    weights = weights / weights.sum()
     data = pd.DataFrame(
         {
             "date": pd.date_range("2024-01-01", periods=10, freq="D"),
-            "weight": [0.1] * 10,
+            "weight": weights,
             "price_usd": np.linspace(100.0, 110.0, 10),
-            "SplyCur": [10.0] * 10,
+            "SplyCur": np.linspace(10.0, 11.0, 10),
         }
     )
     series = StrategyTimeSeries(
