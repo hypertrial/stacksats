@@ -27,6 +27,9 @@ class MinimalProposeWeightStrategy(BaseStrategy):
     version = "1.0.0"
     description = "Minimal strategy using propose_weight(state)."
 
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ()
+
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
 
@@ -62,6 +65,9 @@ class MinimalTargetProfileStrategy(BaseStrategy):
     strategy_id = "minimal-target-profile"
     version = "1.0.0"
     description = "Minimal strategy using build_target_profile(...)."
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ("mvrv_zscore", "price_vs_ma")
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
@@ -103,8 +109,15 @@ stacksats strategy validate \
 A successful run for either style should show:
 
 - strategy loads with no import/spec errors
+- `spec()` reports stable metadata, intent mode, and params
 - validation summary prints pass/fail with gate details
 - no forward-leakage or weight-constraint failures for a sane configuration
+
+## Contract Notes
+
+- Keep long-lived config in public attrs or override `params()`.
+- Keep runtime caches private (for example `_cache`), so they are excluded from the stable strategy contract.
+- If you implement both intent hooks, set `intent_preference` explicitly.
 
 ## Next Steps
 

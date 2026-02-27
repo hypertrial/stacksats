@@ -6,6 +6,8 @@ import pytest
 
 from stacksats.execution_state import IdempotencyConflictError
 from stacksats.runner import StrategyRunner
+from stacksats.strategies.model_example import ExampleMVRVStrategy
+from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy
 from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext
 
 
@@ -140,3 +142,33 @@ def test_run_daily_reuses_prior_snapshot_for_locked_prefix(tmp_path) -> None:
     assert second.status == "executed"
     assert strategy.locked_prefix_len is not None
     assert strategy.locked_prefix_len == 364
+
+
+def test_daily_run_fingerprint_ignores_example_strategy_runtime_cache(tmp_path) -> None:
+    runner = StrategyRunner()
+    strategy = ExampleMVRVStrategy()
+    strategy.coinmetrics_cache_path = tmp_path / "missing_coinmetrics.csv"
+
+    before = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
+    strategy._load_coinmetrics_features()
+    after = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
+
+    assert before == after
+
+
+def test_daily_run_fingerprint_ignores_mvrv_plus_runtime_cache_but_tracks_params(tmp_path) -> None:
+    runner = StrategyRunner()
+    strategy = MVRVPlusStrategy(overlay_scale=0.20)
+    strategy.coinmetrics_csv = tmp_path / "missing_coinmetrics.csv"
+
+    before = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
+    strategy._load_coinmetrics_overlays()
+    after_cache = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
+    changed = runner._daily_run_fingerprint(
+        MVRVPlusStrategy(overlay_scale=0.35),
+        _config(tmp_path),
+        "2024-12-31",
+    )
+
+    assert before == after_cache
+    assert before != changed

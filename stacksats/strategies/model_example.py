@@ -56,6 +56,9 @@ class ExampleMVRVStrategy(BaseStrategy):
     def __init__(self) -> None:
         self._coinmetrics_features: pd.DataFrame | None = None
 
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return tuple(model_lib.FEATS)
+
     @staticmethod
     def _clean_array(values: pd.Series) -> np.ndarray:
         arr = values.to_numpy(dtype=float)

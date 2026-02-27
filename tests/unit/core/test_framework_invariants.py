@@ -130,6 +130,8 @@ def test_nan_inf_rejection_in_propose_hook() -> None:
 
 
 class _BothHooksStrategy(BaseStrategy):
+    intent_preference = "propose"
+
     def propose_weight(self, state) -> float:
         return state.uniform_weight
 

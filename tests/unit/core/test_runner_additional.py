@@ -84,6 +84,29 @@ class _ProfileMutationStrategy(BaseStrategy):
         return pd.Series(np.ones(len(features_df), dtype=float), index=features_df.index)
 
 
+class _DualHookProfilePreferredLeakStrategy(BaseStrategy):
+    strategy_id = "runner-dual-profile-leak"
+    version = "1.0.0"
+    intent_preference = "profile"
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+
+    def build_target_profile(
+        self,
+        ctx: StrategyContext,
+        features_df: pd.DataFrame,
+        signals: dict[str, pd.Series],
+    ) -> pd.Series:
+        del signals
+        future = ctx.features_df.loc[
+            ctx.features_df.index > ctx.end_date, "PriceUSD_coinmetrics"
+        ].dropna()
+        offset = float(future.mean()) if not future.empty else 0.0
+        base = np.linspace(-1.0, 1.0, len(features_df), dtype=float)
+        return pd.Series(base + offset, index=features_df.index, dtype=float)
+
+
 def _btc_df(days: int = 900) -> pd.DataFrame:
     idx = pd.date_range("2021-01-01", periods=days, freq="D")
     return pd.DataFrame(
@@ -461,6 +484,30 @@ def test_validate_reports_profile_masked_future_divergence(monkeypatch: pytest.M
 
     result = runner.validate(
         _ProfileOffsetLeakStrategy(),
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2023-12-31",
+            min_win_rate=0.0,
+        ),
+        btc_df=_btc_df(days=1200),
+    )
+
+    assert bool(result.forward_leakage_ok) is False
+    assert any("profile values diverge (masked-future)" in msg for msg in result.messages)
+
+
+def test_validate_uses_profile_checks_for_dual_hook_profile_preference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    monkeypatch.setattr(
+        runner,
+        "backtest",
+        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
+    )
+
+    result = runner.validate(
+        _DualHookProfilePreferredLeakStrategy(),
         ValidationConfig(
             start_date="2022-01-01",
             end_date="2023-12-31",

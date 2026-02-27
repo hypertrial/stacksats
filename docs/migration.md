@@ -16,6 +16,7 @@ This page covers migration for:
 - export/date-range signature changes
 - compatibility API removals
 - strict source-only loader behavior
+- strategy contract hardening for metadata, params, and intent selection
 
 ## Old -> New Mapping
 
@@ -29,6 +30,8 @@ This page covers migration for:
 | `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
 | `BaseStrategy.export_weights(config=None, **kwargs)` | `BaseStrategy.export(config=None, **kwargs)` |
 | `stacksats.load_data(cache_dir=..., max_age_hours=...)` with gap-fill assumptions | `stacksats.load_data(cache_dir=..., max_age_hours=..., end_date=...)` with strict CoinMetrics source-only validation |
+| raw `strategy_id` / `version` / public attrs as the informal contract | `strategy.spec()` as the canonical public contract |
+| implicit dual-hook precedence | explicit `intent_preference = "propose"` or `"profile"` when both hooks exist |
 
 ## Code Replacements
 
@@ -101,6 +104,29 @@ df = load_data(cache_dir="~/.stacksats/cache", end_date="2025-12-31")
 - no historical date gap filling
 - no MVRV fallback substitution
 
+### 7) Strategy contract hardening
+
+```python
+# old (informal)
+class MyStrategy(BaseStrategy):
+    strategy_id = "my-strategy"
+    version = "1.0.0"
+
+# new (canonical contract still supports class attrs, but spec() is the durable surface)
+class MyStrategy(BaseStrategy):
+    strategy_id = "my-strategy"
+    version = "1.0.0"
+    intent_preference = "profile"
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ("price_vs_ma", "mvrv_zscore")
+```
+
+Notes:
+- `metadata()` and `params()` now back durable provenance/idempotency behavior
+- runtime caches should stay private (for example `_cache`)
+- if both intent hooks exist and `intent_preference` is unset, StackSats currently warns and falls back to `propose_weight(state)`
+
 ## Upgrade Checklist
 
 1. Replace removed helpers/constants/APIs using the mapping above.
@@ -108,7 +134,9 @@ df = load_data(cache_dir="~/.stacksats/cache", end_date="2025-12-31")
 3. Replace `strategy.export_weights(...)` call sites with `strategy.export(...)`.
 4. Ensure export calls provide explicit `--start-date` and `--end-date`.
 5. Validate `load_data(...)` consumers against strict source-only behavior.
-6. Re-run tests:
+6. If your strategy implements both intent hooks, set `intent_preference` explicitly.
+7. Move runtime caches to private attrs and override `params()` if you expose non-serializable public config.
+8. Re-run tests:
 
 ```bash
 pytest -q

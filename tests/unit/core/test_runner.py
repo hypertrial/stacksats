@@ -136,3 +136,31 @@ def test_runner_uses_injected_data_provider_when_no_btc_df() -> None:
     assert provider.called is True
     assert provider.end_date == "2024-01-01"
     assert result.score >= 0.0
+
+
+def test_runner_backtest_does_not_require_params_serialization_for_runtime_execution() -> None:
+    class RuntimeOnlyParamStrategy(BaseStrategy):
+        strategy_id = "runtime-only-param"
+        version = "1.0.0"
+        runtime_model = object()
+
+        def build_target_profile(
+            self,
+            ctx: StrategyContext,
+            features_df: pd.DataFrame,
+            signals: dict[str, pd.Series],
+        ) -> TargetProfile:
+            del ctx, signals
+            return TargetProfile(
+                values=pd.Series(np.ones(len(features_df.index)), index=features_df.index),
+                mode="absolute",
+            )
+
+    runner = StrategyRunner()
+    result = runner.backtest(
+        RuntimeOnlyParamStrategy(),
+        BacktestConfig(start_date="2022-01-01", end_date="2024-01-01"),
+        btc_df=_btc_df(),
+    )
+
+    assert result.strategy_id == "runtime-only-param"

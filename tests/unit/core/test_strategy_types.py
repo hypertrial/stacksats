@@ -8,6 +8,8 @@ from stacksats.strategy_types import (
     BacktestConfig,
     ExportConfig,
     StrategyArtifactSet,
+    StrategyMetadata,
+    StrategySpec,
     StrategyContext,
     ValidationConfig,
 )
@@ -46,6 +48,19 @@ def test_strategy_artifact_set_fields() -> None:
         files={"weights_csv": "weights.csv"},
     )
     assert artifacts.files["weights_csv"] == "weights.csv"
+
+
+def test_strategy_metadata_and_spec_dataclasses() -> None:
+    metadata = StrategyMetadata(strategy_id="my-strategy", version="1.0.0", description="demo")
+    spec = StrategySpec(
+        metadata=metadata,
+        intent_mode="profile",
+        params={"alpha": 1},
+        required_feature_columns=("price_vs_ma",),
+    )
+
+    assert spec.metadata.strategy_id == "my-strategy"
+    assert spec.params["alpha"] == 1
 
 
 def test_strategy_context_is_frozen() -> None:

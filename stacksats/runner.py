@@ -59,12 +59,13 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: BacktestConfig | ValidationConfig | ExportConfig,
     ) -> dict[str, str]:
+        metadata = strategy.metadata()
         config_hash = hashlib.sha256(
             json.dumps(asdict(config), sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()[:12]
         return {
-            "strategy_id": strategy.strategy_id,
-            "version": strategy.version,
+            "strategy_id": metadata.strategy_id,
+            "version": metadata.version,
             "config_hash": config_hash,
             "run_id": str(uuid4()),
         }
@@ -75,12 +76,14 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         config: RunDailyConfig,
         run_date: str,
     ) -> str:
+        spec = strategy.spec()
         payload = {
-            "strategy_id": strategy.strategy_id,
-            "strategy_version": strategy.version,
+            "strategy_metadata": asdict(spec.metadata),
+            "strategy_params": spec.params,
+            "strategy_intent_mode": spec.intent_mode,
+            "required_feature_columns": list(spec.required_feature_columns),
             "strategy_class": strategy.__class__.__name__,
             "strategy_module": strategy.__class__.__module__,
-            "strategy_state": vars(strategy),
             "run_date": run_date,
             "mode": config.mode,
             "total_window_budget_usd": float(config.total_window_budget_usd),
@@ -101,6 +104,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         from .api import BacktestResult
 
         self._validate_strategy_contract(strategy)
+        metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
         features_df = precompute_features(btc_df)
 
@@ -121,7 +125,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             strategy.validate_weights(weights, ctx)
             return weights
 
-        strategy_label = config.strategy_label or strategy.strategy_id
+        strategy_label = config.strategy_label or metadata.strategy_id
         spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
             btc_df,
             _strategy_fn,
@@ -185,11 +189,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
 
         probe_step = 1 if strict_mode else max(len(backtest_idx) // 50, 1)
-        strategy_cls = strategy.__class__
-        has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
-        has_profile_hook = (
-            strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
-        )
+        active_intent_mode = strategy.intent_mode()
+        has_propose_hook = active_intent_mode == "propose"
+        has_profile_hook = active_intent_mode == "profile"
         self._run_forward_leakage_checks(
             strategy=strategy,
             features_df=features_df,
@@ -291,6 +293,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
+        metadata = strategy.metadata()
         budget = float(config.total_window_budget_usd)
         if not pd.notna(budget) or budget <= 0.0:
             raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
@@ -309,8 +312,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         state_store = SQLiteExecutionStateStore(config.state_db_path)
         fingerprint = self._daily_run_fingerprint(strategy, config, run_date)
         claim = state_store.claim_run(
-            strategy_id=strategy.strategy_id,
-            strategy_version=strategy.version,
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
             run_date=run_date,
             mode=config.mode,
             run_key=run_key,
@@ -337,8 +340,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 )
             return DailyRunResult(
                 status="noop",
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 run_key=existing.run_key,
                 mode=config.mode,
@@ -392,8 +395,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
             features_df = precompute_features(btc_df_loaded)
             locked_prefix = state_store.load_locked_prefix(
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 mode=config.mode,
                 run_date=run_date,
                 window_start=window_start,
@@ -427,8 +430,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 adapter = load_execution_adapter(config.adapter_spec or "")
             adapter_name = adapter.__class__.__name__
             order_request = DailyOrderRequest(
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 mode=config.mode,
                 weight_today=weight_today,
@@ -445,8 +448,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
             output_root = (
                 Path(config.output_dir)
-                / strategy.strategy_id
-                / strategy.version
+                / metadata.strategy_id
+                / metadata.version
                 / "daily"
                 / run_date
             )
@@ -454,8 +457,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             artifact_path = output_root / f"{run_key}.json"
             result = DailyRunResult(
                 status="executed",
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 run_key=run_key,
                 mode=config.mode,
@@ -478,8 +481,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
             result_payload = result.to_json(path=artifact_path)
             state_store.mark_run_success_with_snapshot(
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 mode=config.mode,
                 payload=result_payload,
@@ -495,16 +498,16 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             error_message = str(exc)
             failure_payload = {
                 "status": "failed",
-                "strategy_id": strategy.strategy_id,
-                "strategy_version": strategy.version,
+                "strategy_id": metadata.strategy_id,
+                "strategy_version": metadata.version,
                 "run_date": run_date,
                 "run_key": run_key,
                 "mode": config.mode,
                 "error": error_message,
             }
             state_store.mark_run_failure(
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 mode=config.mode,
                 payload=failure_payload,
@@ -512,8 +515,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
             return DailyRunResult(
                 status="failed",
-                strategy_id=strategy.strategy_id,
-                strategy_version=strategy.version,
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
                 run_date=run_date,
                 run_key=run_key,
                 mode=config.mode,
@@ -545,6 +548,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         from .prelude import generate_date_ranges, group_ranges_by_start_date
 
         self._validate_strategy_contract(strategy)
+        metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.range_end)
         features_df = precompute_features(btc_df)
         run_date = current_date or pd.Timestamp.now().normalize()
@@ -579,8 +583,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         )
         output_root = (
             Path(config.output_dir)
-            / strategy.strategy_id
-            / strategy.version
+            / metadata.strategy_id
+            / metadata.version
             / provenance["run_id"]
         )
         output_root.mkdir(parents=True, exist_ok=True)
@@ -589,9 +593,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         export_df.to_csv(result_path, index=False)
         schema_path = output_root / "timeseries_schema.md"
         schema_path.write_text(series_batch.schema_markdown(), encoding="utf-8")
-        metadata = StrategyArtifactSet(
-            strategy_id=strategy.strategy_id,
-            version=strategy.version,
+        artifact_metadata = StrategyArtifactSet(
+            strategy_id=provenance["strategy_id"],
+            version=provenance["version"],
             config_hash=provenance["config_hash"],
             run_id=provenance["run_id"],
             output_dir=str(output_root),
@@ -601,7 +605,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             },
         )
         (output_root / "artifacts.json").write_text(
-            json.dumps(asdict(metadata), indent=2),
+            json.dumps(asdict(artifact_metadata), indent=2),
             encoding="utf-8",
         )
         return series_batch

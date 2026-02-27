@@ -15,6 +15,9 @@ class UniformStrategy(BaseStrategy):
     version = "1.0.0"
     description = "Uniform baseline strategy."
 
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ()
+
     def propose_weight(self, state: DayState) -> float:
         # Framework enforces clipping, remaining budget, and lock semantics.
         return float(state.uniform_weight)
@@ -30,6 +33,9 @@ class SimpleZScoreStrategy(BaseStrategy):
     strategy_id = "simple-zscore"
     version = "1.0.0"
     description = "Toy strategy that overweights lower MVRV z-score days."
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ()
 
     def build_target_profile(
         self,
@@ -55,6 +61,9 @@ class MomentumStrategy(BaseStrategy):
     strategy_id = "momentum"
     version = "1.0.0"
     description = "Simple momentum strategy with contrarian tilt."
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ("PriceUSD_coinmetrics",)
 
     def build_target_profile(
         self,

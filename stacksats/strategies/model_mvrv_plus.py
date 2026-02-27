@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..model_development import compute_preference_scores
+from ..model_development import FEATS, compute_preference_scores
 from ..runner import StrategyRunner
 from ..strategy_types import (
     BacktestConfig,
@@ -68,6 +68,9 @@ class MVRVPlusStrategy(BaseStrategy):
             )
         ).expanduser()
         self._coinmetrics_overlays: pd.DataFrame | None = None
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ("PriceUSD_coinmetrics", *FEATS)
 
     @staticmethod
     def _safe_array(values: pd.Series, fill: float = 0.0) -> np.ndarray:

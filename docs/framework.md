@@ -30,9 +30,13 @@ This document is the canonical strategy contract for StackSats.
 1. Feature engineering from lagged/base data
 2. Signal definitions/formulas
 3. Signal weights and hyperparameters
-4. Daily intent output:
+4. Stable strategy identity/config surfaced through `metadata()`, `params()`, and `spec()`
+5. Daily intent output:
    - `propose_weight(state)` for per-day proposals, or
    - `build_target_profile(...)` for a full-window intent series
+
+When both intent hooks are implemented, `intent_preference` should be set explicitly.
+Current compatibility fallback warns and selects `propose_weight(state)`.
 
 ## Handoff Boundary
 
@@ -50,6 +54,8 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 1. Users can strongly influence allocation each day through features/signals/intent.
 2. Users cannot alter iteration mechanics or rewrite past allocations.
 3. Local, backtest, and production run the same sealed allocation kernel.
+4. Hard-required transformed columns should be declared via `required_feature_columns()`.
+5. Durable strategy configuration should come from `params()`, not runtime caches.
 
 ## Production Daily Lifecycle
 

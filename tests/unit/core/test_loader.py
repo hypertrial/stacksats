@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from stacksats.loader import load_strategy
-from stacksats.strategy_types import BaseStrategy
+from stacksats.strategy_types import BaseStrategy, StrategyContractWarning
 
 
 def _write_module(path: Path, source: str) -> Path:
@@ -221,6 +221,25 @@ class MissingStrategyId(BaseStrategy):
         load_strategy(f"{strategy_path}:MissingStrategyId")
 
 
+def test_load_strategy_requires_non_empty_version(tmp_path: Path) -> None:
+    strategy_path = _write_module(
+        tmp_path / "missing_version.py",
+        """
+from stacksats.strategy_types import BaseStrategy
+
+class MissingVersionStrategy(BaseStrategy):
+    strategy_id = "missing-version"
+    version = ""
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+
+    with pytest.raises(ValueError, match="non-empty version"):
+        load_strategy(f"{strategy_path}:MissingVersionStrategy")
+
+
 def test_load_strategy_merges_inline_and_file_config(tmp_path: Path) -> None:
     strategy_path = _write_module(
         tmp_path / "configurable.py",
@@ -249,6 +268,72 @@ class ConfigurableStrategy(BaseStrategy):
 
     assert strategy.alpha == 10
     assert strategy.beta == 99
+
+
+def test_load_strategy_rejects_unsupported_public_params(tmp_path: Path) -> None:
+    strategy_path = _write_module(
+        tmp_path / "bad_params.py",
+        """
+from stacksats.strategy_types import BaseStrategy
+
+class BadParamsStrategy(BaseStrategy):
+    strategy_id = "bad-params"
+    version = "1.0.0"
+    bad = object()
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+
+    with pytest.raises(TypeError, match="Unsupported strategy param value"):
+        load_strategy(f"{strategy_path}:BadParamsStrategy")
+
+
+def test_load_strategy_rejects_non_finite_public_params(tmp_path: Path) -> None:
+    strategy_path = _write_module(
+        tmp_path / "nan_params.py",
+        """
+from stacksats.strategy_types import BaseStrategy
+
+class NanParamsStrategy(BaseStrategy):
+    strategy_id = "nan-params"
+    version = "1.0.0"
+    bad = float("nan")
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+
+    with pytest.raises(TypeError, match="finite JSON-serializable"):
+        load_strategy(f"{strategy_path}:NanParamsStrategy")
+
+
+def test_load_strategy_warns_for_ambiguous_dual_hook_contract(tmp_path: Path) -> None:
+    strategy_path = _write_module(
+        tmp_path / "dual_hook_strategy.py",
+        """
+import pandas as pd
+from stacksats.strategy_types import BaseStrategy
+
+class DualHookStrategy(BaseStrategy):
+    strategy_id = "dual-hook"
+    version = "1.0.0"
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+
+    def build_target_profile(self, ctx, features_df, signals):
+        del ctx, signals
+        return pd.Series(1.0, index=features_df.index)
+""",
+    )
+
+    with pytest.warns(StrategyContractWarning, match="Current fallback uses propose_weight"):
+        strategy = load_strategy(f"{strategy_path}:DualHookStrategy")
+
+    assert isinstance(strategy, BaseStrategy)
 
 
 def test_load_strategy_cleans_sys_modules_on_import_failure(tmp_path: Path) -> None:

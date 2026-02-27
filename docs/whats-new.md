@@ -13,6 +13,8 @@ Use this page as the release landing pointer.
 - Added durable SQLite state for replay-safe daily runs and a pluggable execution adapter interface.
 - Unified `stacksats.load_data(...)` to strict source-only CoinMetrics semantics with optional `end_date`.
 - Removed compatibility APIs `stacksats.model_development.softmax(...)` and `BaseStrategy.export_weights(...)`.
+- Hardened `BaseStrategy` with canonical `metadata()`, `params()`, `spec()`, and `intent_mode()` surfaces.
+- Added warning-first handling for ambiguous dual-hook strategies and explicit `required_feature_columns()` validation.
 
 For full details and migration notes, see [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 For consolidated upgrade mappings, see [Migration Guide](migration.md).

@@ -32,6 +32,7 @@ Local docs entry points:
 - The framework owns budget math, iteration, feasibility clipping, and lock semantics.
 - Users own features, signals, hyperparameters, and daily intent.
 - Strategy hooks support either day-level intent (`propose_weight(state)`) or batch intent (`build_target_profile(...)`).
+- `BaseStrategy.spec()` is the canonical strategy contract for stable metadata, params, intent mode, and required columns.
 - The same sealed allocation kernel runs in local, backtest, and production.
 
 See [`docs/framework.md`](docs/framework.md) for the canonical contract.
@@ -102,6 +103,7 @@ Top-level exports:
 - `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`
 - `RunDailyConfig`
+- `StrategyMetadata`, `StrategySpec`, `StrategyContractWarning`
 - `StrategyArtifactSet`
 - `StrategyTimeSeries`, `StrategyTimeSeriesBatch`
 - `BacktestResult`, `ValidationResult`, `DailyRunResult`

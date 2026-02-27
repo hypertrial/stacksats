@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ..model_development import compute_preference_scores
+from ..model_development import FEATS, compute_preference_scores
 from ..strategy_types import BaseStrategy, StrategyContext
 
 
@@ -14,6 +14,9 @@ class MVRVStrategy(BaseStrategy):
     strategy_id = "mvrv"
     version = "1.0.0"
     description = "Built-in MVRV + MA allocation strategy."
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return tuple(FEATS)
 
     def build_target_profile(
         self,

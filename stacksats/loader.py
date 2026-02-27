@@ -77,7 +77,14 @@ def load_strategy(
         raise TypeError(
             f"Strategy '{class_name}' must subclass {base_name}."
         )
-    has_propose_hook, has_profile_hook = validate_strategy_contract(strategy)
+    try:
+        metadata = strategy.metadata()
+        params = strategy.params()
+        has_propose_hook, has_profile_hook = validate_strategy_contract(strategy)
+        strategy.intent_mode()
+    except Exception as exc:
+        error_type = ValueError if isinstance(exc, ValueError) else TypeError
+        raise error_type(f"Strategy '{class_name}' contract error: {exc}") from exc
     if has_propose_hook:
         propose_weight = getattr(strategy, "propose_weight", None)
         if not callable(propose_weight):
@@ -100,8 +107,10 @@ def load_strategy(
                 "build_target_profile must use signature: "
                 "build_target_profile(self, ctx, features_df, signals)"
             )
-    if not getattr(strategy, "strategy_id", None):
-        raise ValueError(
-            f"Strategy '{class_name}' must define non-empty strategy_id metadata."
-        )
+    if not metadata.strategy_id:
+        raise ValueError(f"Strategy '{class_name}' must define non-empty strategy_id metadata.")
+    if not metadata.version:
+        raise ValueError(f"Strategy '{class_name}' must define non-empty version metadata.")
+    if not isinstance(params, dict):
+        raise TypeError(f"Strategy '{class_name}' params() must return a dict.")
     return strategy
