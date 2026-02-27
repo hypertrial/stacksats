@@ -1,19 +1,37 @@
 ---
 title: Notebook Demo
-description: Interactive marimo notebook demo for StackSats model strategy logic, metrics, and charts.
+description: Lightweight interactive workflow using maintained StackSats CLI and strategy examples.
 ---
 
 # Notebook Demo
 
-Use this marimo notebook demo to see a StackSats model strategy workflow end-to-end.
+Use this page for a lightweight interactive workflow without exported notebook assets.
 
 It demonstrates:
 
 - package installation and environment setup
-- loading market data via the framework
-- strategy signal and dynamic DCA policy logic
-- backtest summary metrics and visualizations using the package API
+- running the packaged strategy entry point
+- validating, backtesting, and exporting with CLI commands
+- inspecting generated artifacts under `output/<strategy_id>/<version>/<run_id>/`
 
-## Open notebook views
+## Suggested interactive flow
 
-- [Open exported notebook](https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook.html)
+1. Follow [Quickstart](quickstart.md) to install and verify environment.
+2. Run the packaged example strategy:
+
+```bash
+python -m stacksats.strategies.model_example
+```
+
+3. Run the lifecycle commands from [CLI Commands](../commands.md):
+   - `stacksats strategy validate ...`
+   - `stacksats strategy backtest ...`
+   - `stacksats strategy export ...`
+
+## Why no hosted notebook export?
+
+Notebook exports were removed from the maintained docs flow to avoid stale generated assets and outdated paths.
+
+## Next step
+
+- Use [First Strategy Run](first-strategy-run.md) to implement your own strategy class.

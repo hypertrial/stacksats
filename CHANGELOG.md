@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Changed
+- Removed the stale exported notebook asset from docs and updated the notebook demo page to use maintained CLI workflows.
+
 ## [0.4.0] - 2026-02-18
 
 ### Added

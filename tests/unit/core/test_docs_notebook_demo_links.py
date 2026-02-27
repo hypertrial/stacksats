@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -17,14 +16,12 @@ def test_notebook_demo_does_not_embed_iframe() -> None:
     assert "<iframe" not in markdown
 
 
-def test_notebook_demo_direct_link_points_to_hosted_notebook_asset() -> None:
+def test_notebook_demo_does_not_link_removed_hosted_notebook_asset() -> None:
     markdown = _notebook_demo_markdown(_repo_root())
-    match = re.search(
-        r"\[Open exported notebook\]\(([^)]+)\)",
-        markdown,
-    )
-    assert match, "Notebook demo page must include exported notebook link"
-    assert (
-        match.group(1)
-        == "https://hypertrial.github.io/stacksats/assets/notebooks/model_example_notebook.html"
-    )
+    assert "model_example_notebook.html" not in markdown
+
+
+def test_notebook_demo_points_to_maintained_workflow_docs() -> None:
+    markdown = _notebook_demo_markdown(_repo_root())
+    assert "[Quickstart](quickstart.md)" in markdown
+    assert "[CLI Commands](../commands.md)" in markdown
