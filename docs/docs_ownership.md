@@ -42,7 +42,7 @@ Update docs in the same PR when any of these change:
 ## Generated artifact policy
 
 - `site/` is generated output from `mkdocs build` and must not be committed.
-- Keep generated notebook exports only under `docs/assets/notebooks/` when source notebooks change.
+- Keep generated notebook exports only under `docs/assets/` when source notebooks change.
 - Do not add generated docs artifacts outside the docs asset folders.
 
 ## CI expectations
