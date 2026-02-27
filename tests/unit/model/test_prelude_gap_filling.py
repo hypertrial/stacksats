@@ -1,102 +1,70 @@
-"""Tests for gap filling logic in prelude.py."""
+"""Tests for strict prelude.load_data delegation contract."""
 
-import pytest
+from __future__ import annotations
+
 import pandas as pd
-import responses
-from io import BytesIO
-from unittest.mock import patch
+import pytest
 
+from stacksats.data_btc import DataLoadError
 from stacksats.prelude import load_data
 
-@pytest.fixture
-def mock_coinmetrics_csv():
-    """Create a mock CoinMetrics CSV with a gap."""
-    dates = pd.date_range(start="2024-01-01", end="2024-01-05", freq="D")
-    df = pd.DataFrame(index=dates)
-    df["PriceUSD"] = [40000.0, 41000.0, None, 43000.0, 44000.0]  # Hole on Jan 3rd
-    df["CapMVRVCur"] = 2.0
-    df.index.name = "time"
 
-    csv_buf = BytesIO()
-    df.to_csv(csv_buf)
-    csv_buf.seek(0)
-    return csv_buf.read()
+def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
+    expected_df = pd.DataFrame(
+        {
+            "PriceUSD": [40000.0, 41000.0],
+            "PriceUSD_coinmetrics": [40000.0, 41000.0],
+        },
+        index=pd.date_range("2024-01-01", periods=2, freq="D"),
+    )
+    load_mock = mocker.Mock(return_value=expected_df)
+    provider_instance = mocker.Mock(load=load_mock)
+    provider_cls = mocker.Mock(return_value=provider_instance)
+    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
 
-class TestPreludeGapFilling:
-    """Tests for load_data() gap filling behavior."""
+    df = load_data()
 
-    @responses.activate
-    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
-    @patch("stacksats.prelude.fetch_btc_price_historical")
-    @patch("stacksats.prelude.fetch_btc_price_robust")
-    def test_load_data_fills_historical_gap(self, mock_robust, mock_historical, mock_coinmetrics_csv):
-        """Test that load_data identifies and fills a gap in historical data."""
-        # Mock CoinMetrics response
-        responses.add(
-            responses.GET,
-            "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv",
-            body=mock_coinmetrics_csv,
-            status=200,
+    provider_cls.assert_called_once_with(cache_dir="~/.stacksats/cache", max_age_hours=24)
+    load_mock.assert_called_once_with(backtest_start="2018-01-01", end_date=None)
+    assert df is expected_df
+
+
+def test_load_data_propagates_missing_price_failure(mocker) -> None:
+    provider_instance = mocker.Mock(
+        load=mocker.Mock(side_effect=DataLoadError("missing PriceUSD values"))
+    )
+    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+
+    with pytest.raises(DataLoadError, match="missing PriceUSD values"):
+        load_data(cache_dir=None)
+
+
+def test_load_data_propagates_missing_dates_failure(mocker) -> None:
+    provider_instance = mocker.Mock(
+        load=mocker.Mock(side_effect=DataLoadError("missing dates"))
+    )
+    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+
+    with pytest.raises(DataLoadError, match="missing dates"):
+        load_data(cache_dir=None)
+
+
+def test_load_data_propagates_past_only_cache_failure(mocker) -> None:
+    provider_instance = mocker.Mock(
+        load=mocker.Mock(
+            side_effect=DataLoadError(
+                "Past-only backtest requested but no local CoinMetrics cache file was found."
+            )
         )
+    )
+    provider_cls = mocker.Mock(return_value=provider_instance)
+    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
 
-        # Jan 3rd is missing
-        gap_date = pd.Timestamp("2024-01-03")
-        mock_historical.return_value = 42000.0
+    with pytest.raises(DataLoadError, match="Past-only backtest requested"):
+        load_data(cache_dir="~/.stacksats/cache", end_date="2020-12-31")
 
-        # Mock robust fetcher for "today" (even if Jan 5 is latest in CSV, pd.Timestamp.now() will be later)
-        mock_robust.return_value = 45000.0
-
-        df = load_data(cache_dir=None)
-
-        # Verify Jan 3rd was filled
-        assert df.loc[gap_date, "PriceUSD_coinmetrics"] == 42000.0
-        assert mock_historical.called
-
-        # Verify no NaNs in backtest range
-        assert not df.loc["2024-01-01":"2024-01-03", "PriceUSD_coinmetrics"].isna().any()
-
-    @responses.activate
-    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
-    @patch("stacksats.prelude.fetch_btc_price_historical")
-    def test_load_data_forward_fill_fallback(self, mock_historical, mock_coinmetrics_csv):
-        """Test that load_data forward-fills if API fetching fails."""
-        responses.add(
-            responses.GET,
-            "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv",
-            body=mock_coinmetrics_csv,
-            status=200,
-        )
-
-        # Mock API failure for historical fetch
-        mock_historical.return_value = None
-
-        # Previous price before hole (Jan 3) is Jan 2nd ($41000)
-        df = load_data(cache_dir=None)
-
-        gap_date = pd.Timestamp("2024-01-03")
-        # Should have forward-filled from Jan 2nd (41000)
-        assert df.loc[gap_date, "PriceUSD_coinmetrics"] == 41000.0
-
-    @responses.activate
-    @patch("stacksats.prelude.BACKTEST_START", "2024-01-01")
-    def test_load_data_assertion_on_unresolvable_gap(self):
-        """Test that load_data raises AssertionError if a gap is truly unresolvable (e.g., first date missing)."""
-        # Create CSV where the VERY FIRST date is missing PriceUSD
-        df_bad = pd.DataFrame({
-            "time": ["2024-01-01", "2024-01-02"],
-            "PriceUSD": [None, 40000.0],
-            "CapMVRVCur": [2.0, 2.0]
-        })
-        csv_buf = BytesIO()
-        df_bad.to_csv(csv_buf, index=False)
-
-        responses.add(
-            responses.GET,
-            "https://raw.githubusercontent.com/coinmetrics/data/refs/heads/master/csv/btc.csv",
-            body=csv_buf.getvalue(),
-            status=200,
-        )
-
-        with patch("stacksats.prelude.fetch_btc_price_historical", return_value=None):
-            with pytest.raises(AssertionError, match="dates still missing BTC-USD prices"):
-                load_data(cache_dir=None)
+    provider_cls.assert_called_once_with(cache_dir="~/.stacksats/cache", max_age_hours=24)
+    provider_instance.load.assert_called_once_with(
+        backtest_start="2018-01-01",
+        end_date="2020-12-31",
+    )

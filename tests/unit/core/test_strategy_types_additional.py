@@ -200,8 +200,8 @@ def test_strategy_wrapper_methods_delegate_to_runner(monkeypatch: pytest.MonkeyP
 
     assert strategy.backtest() is backtest_result
     assert strategy.validate() is validation_result
-    assert strategy.export_weights() is export_result
     assert strategy.export() is export_result
+    assert not hasattr(strategy, "export_weights")
 
 
 def test_strategy_contract_helper_methods_reflect_hook_status() -> None:

@@ -8,6 +8,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Changed
 - Removed the stale exported notebook asset from docs and updated the notebook demo page to use maintained CLI workflows.
+- `stacksats.load_data(...)` now delegates to `BTCDataProvider` strict source-only semantics and accepts optional `end_date`.
+- Schema sync script and pre-commit hook now resolve repository-local imports robustly without manual `PYTHONPATH` workarounds.
+- Runtime modules no longer execute dotenv or matplotlib backend/style setup at import time.
+
+### Removed
+- Compatibility API `stacksats.model_development.softmax(...)` (use `stacksats.model_development_helpers.softmax(...)`).
+- Compatibility API `BaseStrategy.export_weights(...)` (use `BaseStrategy.export(...)`).
 
 ## [0.4.0] - 2026-02-18
 

@@ -60,6 +60,25 @@ Use explicit replacements from [Migration Guide](migration.md):
 - `compute_weights_shared(...)` -> `compute_weights_with_features(..., features_df=...)`
 - `BACKTEST_END` -> `get_backtest_end()`
 
+### My code used `model_development.softmax` or `strategy.export_weights(...)`. What now?
+
+Both compatibility APIs were removed:
+
+- `stacksats.model_development.softmax(...)` -> `stacksats.model_development_helpers.softmax(...)`
+- `BaseStrategy.export_weights(...)` -> `BaseStrategy.export(...)`
+
+See: [Migration Guide](migration.md).
+
+### Did `load_data(...)` behavior change?
+
+Yes. `stacksats.load_data(...)` now follows strict `BTCDataProvider` source-only semantics:
+
+- no synthetic "today" row
+- no historical gap filling
+- no MVRV fallback substitution
+
+Use `end_date=...` when you need an explicit end bound.
+
 ### Which modules are stable public API?
 
 Use top-level `stacksats` exports and documented API modules. Lower-level modules (`stacksats.backtest`, `stacksats.prelude`, `stacksats.export_weights`) are implementation details and may change.

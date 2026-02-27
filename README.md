@@ -96,6 +96,8 @@ Top-level exports:
 - `load_strategy()`, `load_data()`, `precompute_features()`
 - `MVRVStrategy`
 
+`load_data()` uses strict source-only CoinMetrics validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
+
 ## Development
 
 ```bash

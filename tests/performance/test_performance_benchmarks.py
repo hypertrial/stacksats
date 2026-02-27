@@ -26,8 +26,8 @@ from stacksats.model_development import (
     compute_dynamic_multiplier,
     compute_weights_fast,
     precompute_features,
-    softmax,
 )
+from stacksats.model_development_helpers import softmax
 
 
 def _span_end(start_date: pd.Timestamp) -> pd.Timestamp:

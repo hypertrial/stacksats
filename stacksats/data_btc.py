@@ -58,7 +58,7 @@ def _is_cache_usable(
 
 @dataclass
 class BTCDataProvider:
-    """BTC-only data provider with cache/fetch/gap-fill behavior."""
+    """BTC-only data provider with strict source-only validation."""
 
     cache_dir: str | None = "~/.stacksats/cache"
     max_age_hours: int = 24

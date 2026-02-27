@@ -329,7 +329,7 @@ class BaseStrategy(ABC):
         runner = StrategyRunner()
         return runner.validate(self, config or self.default_validation_config(), **kwargs)
 
-    def export_weights(
+    def export(
         self,
         config: ExportConfig | None = None,
         **kwargs,
@@ -338,14 +338,6 @@ class BaseStrategy(ABC):
 
         runner = StrategyRunner()
         return runner.export(self, config or self.default_export_config(), **kwargs)
-
-    def export(
-        self,
-        config: ExportConfig | None = None,
-        **kwargs,
-    ) -> "StrategyTimeSeriesBatch":
-        """Alias for export_weights for lifecycle API consistency."""
-        return self.export_weights(config=config, **kwargs)
 
     def backtest_and_save(
         self,

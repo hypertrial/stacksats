@@ -62,14 +62,15 @@ if not hasattr(psycopg2, "connect"):
     psycopg2.connect = _missing_psycopg2
 
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
+def _load_dotenv_if_available() -> None:
+    """Best-effort dotenv loading for runtime DB entrypoints."""
+    try:
+        from dotenv import load_dotenv
 
-    load_dotenv()
-except ImportError:
-    # Fallback if python-dotenv is not available
-    pass
+        load_dotenv()
+    except ImportError:
+        pass
+
 
 def _require_deploy_dependency(name: str, imported_obj):
     """Raise a consistent error when deploy-only dependencies are missing."""
@@ -231,6 +232,7 @@ def load_locked_weights_for_window(
 
 def get_db_connection():
     """Get database connection using DATABASE_URL environment variable."""
+    _load_dotenv_if_available()
     if psycopg2 is None:
         _missing_psycopg2()
     return _get_db_connection(psycopg2)

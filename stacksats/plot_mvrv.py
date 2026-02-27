@@ -5,9 +5,9 @@ This script fetches Bitcoin data from CoinMetrics and creates line plots for:
 - CapMVRVZ: MVRV Z-Score
 
 Usage:
-    python plot_mvrv.py                    # Creates plots with default settings
-    python plot_mvrv.py --start 2020-01-01  # Filter by start date
-    python plot_mvrv.py --output mvrv.png   # Custom output filename
+    stacksats-plot-mvrv                     # Creates plots with default settings
+    stacksats-plot-mvrv --start 2020-01-01 # Filter by start date
+    stacksats-plot-mvrv --output mvrv.png  # Custom output filename
 """
 
 import argparse
@@ -17,10 +17,6 @@ from typing import Optional
 
 from .matplotlib_setup import configure_matplotlib_env
 
-configure_matplotlib_env()
-
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -34,10 +30,17 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# Set seaborn style for all plots
-sns.set_style("whitegrid")
-plt.rcParams["figure.dpi"] = 100
-plt.rcParams["savefig.dpi"] = 300
+
+def _init_plot_env() -> None:
+    configure_matplotlib_env()
+    try:
+        plt.switch_backend("Agg")
+    except Exception:
+        # Backend may already be configured by the runtime.
+        pass
+    sns.set_style("whitegrid")
+    plt.rcParams["figure.dpi"] = 100
+    plt.rcParams["savefig.dpi"] = 300
 
 
 def plot_mvrv_metrics(
@@ -57,6 +60,7 @@ def plot_mvrv_metrics(
     Raises:
         ValueError: If CapMVRVCur column is missing from the DataFrame
     """
+    _init_plot_env()
     # Validate required column exists
     if "CapMVRVCur" not in df.columns:
         available_cols = [
@@ -310,15 +314,16 @@ def plot_mvrv_metrics(
 
 def main() -> None:
     """Main function to fetch data and create MVRV plots."""
+    _init_plot_env()
     parser = argparse.ArgumentParser(
         description="Plot CoinMetrics MVRV metrics (CapMVRVCur and CapMVRVZ) over time",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python plot_mvrv.py                           # Create plots with all available data
-  python plot_mvrv.py --start 2020-01-01        # Filter from start date
-  python plot_mvrv.py --start 2020-01-01 --end 2024-12-31  # Filter date range
-  python plot_mvrv.py --output mvrv_analysis.png # Custom output filename
+  stacksats-plot-mvrv                           # Create plots with all available data
+  stacksats-plot-mvrv --start 2020-01-01        # Filter from start date
+  stacksats-plot-mvrv --start 2020-01-01 --end 2024-12-31  # Filter date range
+  stacksats-plot-mvrv --output mvrv_analysis.png # Custom output filename
         """,
     )
     parser.add_argument(

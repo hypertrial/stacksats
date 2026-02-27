@@ -7,9 +7,9 @@ from stacksats.model_development import (
     classify_mvrv_zone,
     compute_signal_confidence,
     rolling_percentile,
-    softmax,
     zscore,
 )
+from stacksats.model_development_helpers import softmax
 
 
 class TestModelDevelopmentHelpers:

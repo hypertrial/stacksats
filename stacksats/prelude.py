@@ -1,15 +1,9 @@
 import logging
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import requests
 
-from .btc_api.coinmetrics_btc_csv import (
-    COINMETRICS_BTC_CSV_URL,
-    parse_coinmetrics_btc_csv_bytes,
-)
-from .btc_price_fetcher import fetch_btc_price_historical, fetch_btc_price_robust
+from .data_btc import BTCDataProvider
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from .model_development import precompute_features
 
@@ -29,102 +23,21 @@ def get_backtest_end() -> str:
     return (pd.Timestamp.now().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def load_data(*, cache_dir: str | None = "~/.stacksats/cache", max_age_hours: int = 24):
-    """Load BTC data from CoinMetrics CSV with optional local caching.
+def load_data(
+    *,
+    cache_dir: str | None = "~/.stacksats/cache",
+    max_age_hours: int = 24,
+    end_date: str | None = None,
+):
+    """Load strict CoinMetrics BTC data through the canonical provider path.
 
-    Behavior includes:
-    - fresh/stale cache handling
-    - gap filling for missing historical ``PriceUSD`` values
-    - best-effort inclusion of today's row
-    - MVRV fallback from yesterday when today's value is missing
+    This path intentionally enforces source-only data integrity:
+    - no synthetic today row
+    - no historical gap filling
+    - no MVRV fallback
     """
-    url = COINMETRICS_BTC_CSV_URL
-    now = pd.Timestamp.now().normalize()
-    backtest_start_ts = pd.to_datetime(BACKTEST_START)
-
-    def _download_csv() -> bytes:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.content
-
-    cache_path: Path | None = None
-    if cache_dir is not None:
-        cache_path = Path(cache_dir).expanduser() / "coinmetrics_btc.csv"
-
-    csv_bytes: bytes
-    if cache_path is not None and cache_path.exists():
-        age_hours = (pd.Timestamp.now().timestamp() - cache_path.stat().st_mtime) / 3600.0
-        if age_hours <= max_age_hours:
-            csv_bytes = cache_path.read_bytes()
-        else:
-            csv_bytes = _download_csv()
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_bytes(csv_bytes)
-    else:
-        csv_bytes = _download_csv()
-        if cache_path is not None:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_bytes(csv_bytes)
-
-    df = parse_coinmetrics_btc_csv_bytes(csv_bytes)
-
-    if "PriceUSD" not in df.columns:
-        raise ValueError("PriceUSD column not found in CoinMetrics data")
-    df["PriceUSD"] = pd.to_numeric(df["PriceUSD"], errors="coerce")
-    # True only where CoinMetrics provided a concrete price in the raw CSV.
-    df["PriceUSD_source_exists"] = df["PriceUSD"].notna()
-    df["PriceUSD_coinmetrics"] = df["PriceUSD"]
-    window = df.loc[df.index >= backtest_start_ts].copy()
-
-    price_col = "PriceUSD_coinmetrics"
-    # Fill historical holes in existing rows first.
-    for hole_date in window.index[window[price_col].isna()]:
-        prev_series = window.loc[window.index < hole_date, price_col].dropna()
-        prev_price = float(prev_series.iloc[-1]) if len(prev_series) else None
-        fetched = fetch_btc_price_historical(hole_date, previous_price=prev_price)
-        if fetched is not None:
-            window.at[hole_date, price_col] = float(fetched)
-        elif prev_price is not None:
-            window.at[hole_date, price_col] = prev_price
-
-    # Ensure today exists in index; use robust fetch, then fallback to previous known price.
-    if now not in window.index:
-        window.loc[now] = pd.NA
-        window.at[now, "PriceUSD_source_exists"] = False
-    if pd.isna(window.at[now, price_col]):
-        prev_series = window.loc[window.index < now, price_col].dropna()
-        prev_price = float(prev_series.iloc[-1]) if len(prev_series) else None
-        today_price = fetch_btc_price_robust(previous_price=prev_price)
-        if today_price is None:
-            today_price = prev_price
-        if today_price is not None:
-            window.at[now, price_col] = float(today_price)
-
-    # Strict guard: unresolved gaps are a hard failure for prelude consumers.
-    missing_dates = window.index[window[price_col].isna()]
-    if len(missing_dates):
-        raise AssertionError(
-            "CoinMetrics dates still missing BTC-USD prices after gap-fill attempts: "
-            f"{missing_dates[0].date()}"
-        )
-
-    # MVRV fallback: if today's value is missing, copy yesterday when available.
-    if "CapMVRVCur" in window.columns and now in window.index:
-        today_mvrv = window.at[now, "CapMVRVCur"]
-        if pd.isna(today_mvrv):
-            yesterday = now - pd.Timedelta(days=1)
-            if yesterday in window.index and pd.notna(window.at[yesterday, "CapMVRVCur"]):
-                window.at[now, "CapMVRVCur"] = window.at[yesterday, "CapMVRVCur"]
-                logging.info(
-                    "Used yesterday's MVRV value for today (%s).",
-                    now.date(),
-                )
-            else:
-                logging.warning(
-                    "Could not find valid MVRV for yesterday; today's MVRV remains missing."
-                )
-
-    return window.sort_index()
+    provider = BTCDataProvider(cache_dir=cache_dir, max_age_hours=max_age_hours)
+    return provider.load(backtest_start=BACKTEST_START, end_date=end_date)
 
 
 def _make_window_label(start: pd.Timestamp, end: pd.Timestamp) -> str:

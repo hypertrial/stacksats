@@ -4,9 +4,9 @@ This script connects to the NeonDB database and creates a visualization of the D
 Can be run with specific start_date and end_date arguments, or automatically uses the oldest range.
 
 Usage:
-    python plot_oldest_weights.py                           # Uses oldest range
-    python plot_oldest_weights.py 2025-01-01 2025-12-31    # Uses specified range
-    python plot_oldest_weights.py --help                    # Shows help
+    stacksats-plot-weights                           # Uses oldest range
+    stacksats-plot-weights 2025-01-01 2025-12-31    # Uses specified range
+    stacksats-plot-weights --help                    # Shows help
 """
 
 import argparse
@@ -17,10 +17,6 @@ from typing import Tuple
 
 from .matplotlib_setup import configure_matplotlib_env
 
-configure_matplotlib_env()
-
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -39,23 +35,30 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     psycopg2.connect = _missing_connect
     sys.modules.setdefault("psycopg2", psycopg2)
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
+def _load_dotenv_if_available() -> None:
+    try:
+        from dotenv import load_dotenv
 
-    load_dotenv()
-except ImportError:
-    # Fallback if python-dotenv is not available
-    pass
+        load_dotenv()
+    except ImportError:
+        pass
 
-# Set seaborn style for all plots
-sns.set_style("whitegrid")
-plt.rcParams["figure.dpi"] = 100
-plt.rcParams["savefig.dpi"] = 300
+
+def _init_plot_env() -> None:
+    configure_matplotlib_env()
+    try:
+        plt.switch_backend("Agg")
+    except Exception:
+        # Backend may already be configured by the runtime.
+        pass
+    sns.set_style("whitegrid")
+    plt.rcParams["figure.dpi"] = 100
+    plt.rcParams["savefig.dpi"] = 300
 
 
 def get_db_connection():
     """Get database connection using DATABASE_URL environment variable."""
+    _load_dotenv_if_available()
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError("DATABASE_URL environment variable is not set")
@@ -172,6 +175,7 @@ def plot_dca_weights(
         end_date: End date string for plot title
         output_path: Path to save the plot
     """
+    _init_plot_env()
     # Ensure weights sum to 1.0 (normalize if necessary due to database update issues)
     original_weight_sum = df["weight"].sum()
     if original_weight_sum > 0 and abs(original_weight_sum - 1.0) > 1e-10:
@@ -423,14 +427,15 @@ def plot_dca_weights(
 
 def main():
     """Main function to plot DCA weights for specified or oldest date range."""
+    _init_plot_env()
     parser = argparse.ArgumentParser(
         description="Plot DCA weights for a specified start_date and end_date pair from NeonDB",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python plot_oldest_weights.py                           # Uses oldest range
-  python plot_oldest_weights.py 2025-01-01 2025-12-31    # Uses specified range
-  python plot_oldest_weights.py --list                    # Lists all available ranges
+  stacksats-plot-weights                           # Uses oldest range
+  stacksats-plot-weights 2025-01-01 2025-12-31    # Uses specified range
+  stacksats-plot-weights --list                    # Lists all available ranges
         """,
     )
     parser.add_argument(
