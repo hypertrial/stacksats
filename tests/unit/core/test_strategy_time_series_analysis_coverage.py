@@ -44,8 +44,9 @@ def test_eda_series_variants_and_errors() -> None:
 
 def test_drawdown_branches_no_valid_and_unrecovered() -> None:
     ts = _series()
-    ts.data["price_usd"] = np.nan
-    empty = ts.drawdown_table()
+    empty_df = ts.to_dataframe()
+    empty_df["price_usd"] = np.nan
+    empty = StrategyTimeSeries(metadata=ts.metadata, data=empty_df).drawdown_table()
     assert empty.empty
 
     unrecovered = _series([100.0, 90.0, 80.0, 70.0, 60.0, 50.0]).drawdown_table(top_n=3)
@@ -74,9 +75,11 @@ def test_pacf_edge_paths() -> None:
 
 def test_resample_and_decompose_error_paths() -> None:
     ts = _series()
-    ts.data["weight"] = ts.data["weight"].astype(str)
-    ts.data["price_usd"] = ts.data["price_usd"].astype(str)
-    ts.data["CapMVRVCur"] = ts.data["CapMVRVCur"].astype(str)
+    non_numeric = ts.to_dataframe()
+    non_numeric["weight"] = non_numeric["weight"].astype(str)
+    non_numeric["price_usd"] = non_numeric["price_usd"].astype(str)
+    non_numeric["CapMVRVCur"] = non_numeric["CapMVRVCur"].astype(str)
+    object.__setattr__(ts, "_data", non_numeric)
     out = ts.resample("D")
     assert list(out.columns) == ["date"]
 
@@ -99,8 +102,11 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
     assert "price_usd_detrended" in diffed.columns
 
     ts_single = _series()
-    ts_single.data["CapMVRVCur"] = [np.nan, np.nan, np.nan, np.nan, np.nan, 1.0]
-    detrended = ts_single.detrend(method="linear", columns=["CapMVRVCur"])
+    sparse_metric = ts_single.to_dataframe()
+    sparse_metric["CapMVRVCur"] = [np.nan, np.nan, np.nan, np.nan, np.nan, 1.0]
+    detrended = StrategyTimeSeries(metadata=ts_single.metadata, data=sparse_metric).detrend(
+        method="linear", columns=["CapMVRVCur"]
+    )
     assert detrended["CapMVRVCur_detrended"].isna().all()
 
     with pytest.raises(ValueError, match="Unknown columns for difference"):
@@ -118,8 +124,11 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
     assert pd.isna(row_high["pacf"])
 
     ts_nan = _series([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
-    ts_nan.data["price_usd"] = np.nan
-    empty_spec = ts_nan.spectral_density(series="returns")
+    nan_prices = ts_nan.to_dataframe()
+    nan_prices["price_usd"] = np.nan
+    empty_spec = StrategyTimeSeries(metadata=ts_nan.metadata, data=nan_prices).spectral_density(
+        series="returns"
+    )
     assert empty_spec.empty
 
     assert StrategyTimeSeries._stationarity_proxy(pd.Series([1.0, 2.0]), acf_threshold=0.8)
@@ -129,10 +138,12 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
 
 def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_lag(monkeypatch) -> None:
     ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
-    ts.data["price_usd"] = np.nan
+    nan_prices = ts.to_dataframe()
+    nan_prices["price_usd"] = np.nan
+    ts_all_nan = StrategyTimeSeries(metadata=ts.metadata, data=nan_prices)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Mean of empty slice", category=RuntimeWarning)
-        dec = ts.decompose(period=2, model="multiplicative", series="price")
+        dec = ts_all_nan.decompose(period=2, model="multiplicative", series="price")
     assert "seasonal" in dec.columns
     assert len(dec) == len(ts.data)
 

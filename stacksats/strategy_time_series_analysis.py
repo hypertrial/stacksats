@@ -14,9 +14,9 @@ class StrategyTimeSeriesAnalysisMixin:
 
     def _eda_price_series(self, price_col: str = "price_usd") -> pd.Series:
         """Return clean numeric price series indexed by dataframe row."""
-        if price_col not in self.data.columns:
+        if price_col not in self._data.columns:
             raise ValueError(f"Unknown price column: {price_col}")
-        return pd.to_numeric(self.data[price_col], errors="coerce")
+        return pd.to_numeric(self._data[price_col], errors="coerce")
 
     def _eda_value_series(self, series: str, price_col: str = "price_usd") -> pd.Series:
         """Return named EDA series for analysis helpers."""
@@ -38,7 +38,7 @@ class StrategyTimeSeriesAnalysisMixin:
             out.loc[positive_step] = np.log(prices.loc[positive_step] / prev.loc[positive_step])
             return out
         if key == "weight":
-            return pd.to_numeric(self.data["weight"], errors="coerce")
+            return pd.to_numeric(self._data["weight"], errors="coerce")
         raise ValueError("series must be one of: price, returns, simple_returns, log_returns, weight")
 
     @staticmethod
@@ -61,7 +61,7 @@ class StrategyTimeSeriesAnalysisMixin:
         normalized_windows = self._normalize_positive_ints(windows, "windows")
         prices = self._eda_price_series(price_col=price_col)
         returns = self._eda_value_series("returns", price_col=price_col)
-        out = pd.DataFrame({"date": pd.to_datetime(self.data["date"], errors="coerce")})
+        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
         for window in normalized_windows:
             out[f"{price_col}_mean_{window}"] = prices.rolling(window, min_periods=1).mean()
             out[f"{price_col}_std_{window}"] = prices.rolling(window, min_periods=1).std(ddof=0)
@@ -99,7 +99,7 @@ class StrategyTimeSeriesAnalysisMixin:
             raise ValueError("top_n must be > 0")
 
         prices = self._eda_price_series(price_col=price_col)
-        dates = pd.to_datetime(self.data["date"], errors="coerce")
+        dates = pd.to_datetime(self._data["date"], errors="coerce")
         valid = prices.notna() & dates.notna()
         if not bool(valid.any()):
             return pd.DataFrame(
@@ -203,7 +203,7 @@ class StrategyTimeSeriesAnalysisMixin:
             raise ValueError("freq must be one of: weekday, month")
 
         values = self._eda_value_series(series=series, price_col=price_col)
-        dates = pd.to_datetime(self.data["date"], errors="coerce")
+        dates = pd.to_datetime(self._data["date"], errors="coerce")
         frame = pd.DataFrame({"date": dates, "value": values})
         frame = frame.dropna(subset=["date", "value"]).reset_index(drop=True)
 
@@ -286,13 +286,13 @@ class StrategyTimeSeriesAnalysisMixin:
         if isinstance(series_like, pd.Series):
             values = pd.to_numeric(series_like, errors="coerce")
             values = values.reset_index(drop=True)
-            target_len = int(self.data.shape[0])
+            target_len = int(self._data.shape[0])
             if values.shape[0] < target_len:
                 values = values.reindex(range(target_len))
             return values.iloc[:target_len]
 
-        if series_like in self.data.columns:
-            return pd.to_numeric(self.data[series_like], errors="coerce")
+        if series_like in self._data.columns:
+            return pd.to_numeric(self._data[series_like], errors="coerce")
         return self._eda_value_series(series=series_like, price_col=default_price_col)
 
     @staticmethod
@@ -326,7 +326,7 @@ class StrategyTimeSeriesAnalysisMixin:
         """Resample to a coarser/finer frequency with controlled aggregation."""
         if not isinstance(freq, str) or not freq:
             raise ValueError("freq must be a non-empty pandas offset alias string.")
-        frame = self.data.copy(deep=True)
+        frame = self._data.copy(deep=True)
         frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
         frame = frame.dropna(subset=["date"]).set_index("date")
         numeric_columns = frame.select_dtypes(include=[np.number]).columns.tolist()
@@ -379,7 +379,7 @@ class StrategyTimeSeriesAnalysisMixin:
 
         return pd.DataFrame(
             {
-                "date": pd.to_datetime(self.data["date"], errors="coerce"),
+                "date": pd.to_datetime(self._data["date"], errors="coerce"),
                 "observed": values,
                 "trend": trend,
                 "seasonal": seasonal,
@@ -401,18 +401,18 @@ class StrategyTimeSeriesAnalysisMixin:
         if method_name not in {"linear", "difference"}:
             raise ValueError("method must be one of: linear, difference")
 
-        out = pd.DataFrame({"date": pd.to_datetime(self.data["date"], errors="coerce")})
+        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
         candidate_columns = columns or [
             col
-            for col in self.data.columns
-            if pd.api.types.is_numeric_dtype(self.data[col]) and col != "day_index"
+            for col in self._data.columns
+            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
         ]
-        unknown = [col for col in candidate_columns if col not in self.data.columns]
+        unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for detrend: " + ", ".join(unknown))
 
         for column in candidate_columns:
-            values = pd.to_numeric(self.data[column], errors="coerce")
+            values = pd.to_numeric(self._data[column], errors="coerce")
             if method_name == "difference":
                 out[f"{column}_detrended"] = values.diff()
                 continue
@@ -444,18 +444,18 @@ class StrategyTimeSeriesAnalysisMixin:
         if seasonal_order > 0 and (seasonal_period is None or int(seasonal_period) <= 0):
             raise ValueError("seasonal_period must be a positive integer when seasonal_order > 0")
 
-        out = pd.DataFrame({"date": pd.to_datetime(self.data["date"], errors="coerce")})
+        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
         candidate_columns = columns or [
             col
-            for col in self.data.columns
-            if pd.api.types.is_numeric_dtype(self.data[col]) and col != "day_index"
+            for col in self._data.columns
+            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
         ]
-        unknown = [col for col in candidate_columns if col not in self.data.columns]
+        unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for difference: " + ", ".join(unknown))
 
         for column in candidate_columns:
-            values = pd.to_numeric(self.data[column], errors="coerce")
+            values = pd.to_numeric(self._data[column], errors="coerce")
             transformed = values.copy()
             for _ in range(int(order)):
                 transformed = transformed.diff()
@@ -573,16 +573,16 @@ class StrategyTimeSeriesAnalysisMixin:
 
         candidate_columns = columns or [
             col
-            for col in self.data.columns
-            if pd.api.types.is_numeric_dtype(self.data[col]) and col != "day_index"
+            for col in self._data.columns
+            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
         ]
-        unknown = [col for col in candidate_columns if col not in self.data.columns]
+        unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for integration_order: " + ", ".join(unknown))
 
         rows: list[dict[str, Any]] = []
         for column in candidate_columns:
-            base = pd.to_numeric(self.data[column], errors="coerce")
+            base = pd.to_numeric(self._data[column], errors="coerce")
             found_order: int | None = None
             lag1_at_found: float | None = None
             for d in range(int(max_order) + 1):

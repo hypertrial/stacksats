@@ -13,14 +13,14 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
     def profile(self) -> dict[str, Any]:
         """Return an EDA summary of the normalized payload."""
-        rows = int(self.data.shape[0])
-        columns = [str(col) for col in self.data.columns]
-        date_series = pd.to_datetime(self.data["date"], errors="coerce")
+        rows = int(self._data.shape[0])
+        columns = [str(col) for col in self._data.columns]
+        date_series = pd.to_datetime(self._data["date"], errors="coerce")
 
         column_profiles: dict[str, dict[str, Any]] = {}
         numeric_columns: list[str] = []
         for column in columns:
-            raw = self.data[column]
+            raw = self._data[column]
             null_count = int(raw.isna().sum())
             profile: dict[str, Any] = {
                 "dtype": str(raw.dtype),
@@ -50,7 +50,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
         return {
             "row_count": rows,
-            "column_count": int(self.data.shape[1]),
+            "column_count": int(self._data.shape[1]),
             "columns": columns,
             "numeric_columns": numeric_columns,
             "date_start": (
@@ -68,7 +68,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
     def weight_diagnostics(self, top_k: int = 5) -> dict[str, Any]:
         """Return concentration and dispersion diagnostics for `weight`."""
-        weights = pd.to_numeric(self.data["weight"], errors="coerce")
+        weights = pd.to_numeric(self._data["weight"], errors="coerce")
         non_null = weights.dropna()
         sample_size = int(non_null.shape[0])
         if sample_size == 0:
@@ -95,7 +95,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
         top_count = max(int(top_k), 0)
         top_rows = (
-            self.data.assign(_weight=weights)
+            self._data.assign(_weight=weights)
             .sort_values("_weight", ascending=False)
             .head(top_count)
             .loc[:, ["date", "_weight"]]
@@ -126,7 +126,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
     def returns_diagnostics(self) -> dict[str, Any]:
         """Return basic return/risk diagnostics derived from `price_usd`."""
-        prices = pd.to_numeric(self.data["price_usd"], errors="coerce")
+        prices = pd.to_numeric(self._data["price_usd"], errors="coerce")
         prev = prices.shift(1)
         valid_step = prices.notna() & prev.notna() & (prev != 0)
 
@@ -145,7 +145,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
             return {
                 "price_observations": 0,
                 "return_observations": 0,
-                "periods": int(self.data.shape[0]),
+                "periods": int(self._data.shape[0]),
                 "cumulative_return": None,
                 "mean_simple_return": None,
                 "std_simple_return": None,
@@ -180,7 +180,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
         return {
             "price_observations": int(price_valid.shape[0]),
             "return_observations": int(valid_simple.shape[0]),
-            "periods": int(self.data.shape[0]),
+            "periods": int(self._data.shape[0]),
             "cumulative_return": cumulative_return,
             "mean_simple_return": (
                 self._native_float(valid_simple.mean()) if not valid_simple.empty else None
@@ -196,12 +196,12 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 self._native_float(valid_log.std(ddof=1)) if valid_log.shape[0] >= 2 else None
             ),
             "max_drawdown": self._native_float(drawdown.min()),
-            "max_drawdown_date": self._native_timestamp(pd.Timestamp(self.data.loc[dd_idx, "date"])),
+            "max_drawdown_date": self._native_timestamp(pd.Timestamp(self._data.loc[dd_idx, "date"])),
             "best_day_return": (
                 self._native_float(valid_simple.loc[best_idx]) if best_idx is not None else None
             ),
             "best_day_date": (
-                self._native_timestamp(pd.Timestamp(self.data.loc[best_idx, "date"]))
+                self._native_timestamp(pd.Timestamp(self._data.loc[best_idx, "date"]))
                 if best_idx is not None
                 else None
             ),
@@ -209,7 +209,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 self._native_float(valid_simple.loc[worst_idx]) if worst_idx is not None else None
             ),
             "worst_day_date": (
-                self._native_timestamp(pd.Timestamp(self.data.loc[worst_idx, "date"]))
+                self._native_timestamp(pd.Timestamp(self._data.loc[worst_idx, "date"]))
                 if worst_idx is not None
                 else None
             ),
@@ -235,17 +235,17 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
         numeric_columns = [
             col
-            for col in self.data.columns
-            if pd.api.types.is_numeric_dtype(self.data[col]) and col != "day_index"
+            for col in self._data.columns
+            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
         ]
         selected_columns = columns if columns is not None else numeric_columns
-        unknown = [col for col in selected_columns if col not in self.data.columns]
+        unknown = [col for col in selected_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for outlier detection: " + ", ".join(unknown))
 
         rows: list[dict[str, Any]] = []
         for column in selected_columns:
-            numeric = pd.to_numeric(self.data[column], errors="coerce")
+            numeric = pd.to_numeric(self._data[column], errors="coerce")
             valid = numeric.dropna()
             if valid.shape[0] < 2:
                 continue
@@ -283,7 +283,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
             for idx in numeric.index[flagged]:
                 rows.append(
                     {
-                        "date": pd.Timestamp(self.data.loc[idx, "date"]),
+                        "date": pd.Timestamp(self._data.loc[idx, "date"]),
                         "column": str(column),
                         "value": self._native_float(numeric.loc[idx]),
                         "score": self._native_float(scores.loc[idx]),

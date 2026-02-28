@@ -7,6 +7,9 @@ description: Generated schema and CoinMetrics lineage tables for StrategyTimeSer
 
 This page is generated from runtime schema definitions in code.
 
+It documents the core framework schema.
+If a strategy exports additional columns, those must be declared explicitly via `extra_schema`; they are merged at runtime but are not listed here unless you render schema markdown from an instance or batch carrying that extension.
+
 Refresh with:
 
 `python scripts/sync_objects_schema_docs.py`

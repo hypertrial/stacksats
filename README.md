@@ -96,6 +96,9 @@ stacksats strategy export \
   --output-dir output
 ```
 
+Exported `StrategyTimeSeries` objects are read-only validated artifacts.
+If you need to reload an export later, use `StrategyTimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
+
 ## Public API
 
 Top-level exports:

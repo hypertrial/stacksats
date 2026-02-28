@@ -82,11 +82,44 @@ def test_strategy_time_series_rejects_duplicate_dates() -> None:
         StrategyTimeSeries(metadata=_metadata(), data=duplicated)
 
 
-def test_strategy_time_series_rejects_unsorted_dates() -> None:
+def test_strategy_time_series_data_returns_copy() -> None:
     series = _window()
-    series.data.loc[:, "date"] = [pd.Timestamp("2024-01-02"), pd.Timestamp("2024-01-01")]
-    with pytest.raises(ValueError, match="must be sorted ascending"):
-        series.validate()
+    copied = series.data
+    copied.loc[:, "date"] = [pd.Timestamp("2024-01-02"), pd.Timestamp("2024-01-01")]
+    assert list(series.to_dataframe()["date"]) == list(pd.date_range("2024-01-01", periods=2, freq="D"))
+
+
+def test_strategy_time_series_rejects_missing_interior_dates_with_bounds() -> None:
+    missing_gap = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-03")],
+            "weight": [0.4, 0.6],
+            "price_usd": [40000.0, 41000.0],
+        }
+    )
+    with pytest.raises(ValueError, match="must exactly match the daily range"):
+        StrategyTimeSeries(
+            metadata=_metadata(
+                window_start=pd.Timestamp("2024-01-01"),
+                window_end=pd.Timestamp("2024-01-03"),
+            ),
+            data=missing_gap,
+        )
+
+
+def test_strategy_time_series_allows_non_daily_dates_without_bounds() -> None:
+    sparse = pd.DataFrame(
+        {
+            "date": [pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-03")],
+            "weight": [0.4, 0.6],
+            "price_usd": [40000.0, 41000.0],
+        }
+    )
+    series = StrategyTimeSeries(
+        metadata=_metadata(window_start=None, window_end=None),
+        data=sparse,
+    )
+    assert series.row_count == 2
 
 
 def test_strategy_time_series_rejects_window_start_mismatch() -> None:
@@ -120,11 +153,11 @@ def test_strategy_time_series_rejects_negative_weights() -> None:
 
 
 def test_strategy_time_series_rejects_nonnumeric_price_usd() -> None:
-    series = _window()
-    series.data["price_usd"] = series.data["price_usd"].astype(object)
-    series.data["price_usd"] = [40000.0, "bad"]
+    bad_price = _valid_data()
+    bad_price["price_usd"] = bad_price["price_usd"].astype(object)
+    bad_price["price_usd"] = [40000.0, "bad"]
     with pytest.raises(ValueError, match="price_usd' must be numeric"):
-        series.validate()
+        StrategyTimeSeries(metadata=_metadata(), data=bad_price)
 
 
 def test_strategy_time_series_rejects_nonfinite_price_usd() -> None:
@@ -370,26 +403,36 @@ def test_diagnostics_edge_paths_empty_and_outlier_branches() -> None:
         data=data,
     )
 
-    series.data["weight"] = np.nan
+    weightless = series.to_dataframe()
+    weightless["weight"] = np.nan
+    object.__setattr__(series, "_data", weightless)
     weight_diag = series.weight_diagnostics()
     assert weight_diag["sample_size"] == 0
 
-    series.data["price_usd"] = np.nan
+    no_price = series.to_dataframe()
+    no_price["price_usd"] = np.nan
+    object.__setattr__(series, "_data", no_price)
     ret_diag = series.returns_diagnostics()
     assert ret_diag["price_observations"] == 0
 
     # valid.shape[0] < 2 branch
-    series.data["SplyCur"] = [np.nan, np.nan, 10.0]
+    short_metric = series.to_dataframe()
+    short_metric["SplyCur"] = [np.nan, np.nan, 10.0]
+    object.__setattr__(series, "_data", short_metric)
     out_short = series.outlier_report(columns=["SplyCur"], method="mad")
     assert out_short.empty
 
     # mad == 0 branch
-    series.data["SplyCur"] = [10.0, 10.0, 10.0]
+    flat_metric = series.to_dataframe()
+    flat_metric["SplyCur"] = [10.0, 10.0, 10.0]
+    object.__setattr__(series, "_data", flat_metric)
     out_mad_zero = series.outlier_report(columns=["SplyCur"], method="mad")
     assert out_mad_zero.empty
 
     # z-score branch with finite std and computed mask.
-    series.data["price_usd"] = [100.0, 101.0, 1000.0]
+    outlier_price = series.to_dataframe()
+    outlier_price["price_usd"] = [100.0, 101.0, 1000.0]
+    object.__setattr__(series, "_data", outlier_price)
     out_z = series.outlier_report(columns=["price_usd"], method="zscore", threshold=0.5)
     assert not out_z.empty
     assert set(out_z["method"]) == {"zscore"}
@@ -581,7 +624,7 @@ def test_strategy_time_series_seasonality_profile_month_returns_12_rows() -> Non
         }
     )
     series = StrategyTimeSeries(
-        metadata=_metadata(window_end=pd.Timestamp("2024-02-01")),
+        metadata=_metadata(window_start=None, window_end=None),
         data=data,
     )
 

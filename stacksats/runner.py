@@ -600,8 +600,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             run_id=provenance["run_id"],
             output_dir=str(output_root),
             files={
-                "weights_csv": str(result_path),
-                "timeseries_schema_md": str(schema_path),
+                "weights_csv": result_path.name,
+                "timeseries_schema_md": schema_path.name,
             },
         )
         (output_root / "artifacts.json").write_text(

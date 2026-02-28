@@ -5,9 +5,12 @@ description: Metadata, guarantees, and export semantics for StrategyTimeSeries a
 
 # Strategy TimeSeries
 
-`StrategyTimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated output object.
+`StrategyTimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated export object used by `strategy export`.
+`StrategyTimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
 
 ## Required metadata
+
+Every window carries normalized `StrategySeriesMetadata`:
 
 - `strategy_id`
 - `strategy_version`
@@ -18,50 +21,110 @@ description: Metadata, guarantees, and export semantics for StrategyTimeSeries a
 - `window_start`
 - `window_end`
 
+Metadata invariants:
+
+- required string fields must be non-empty
+- `generated_at` is normalized to UTC
+- `window_start` / `window_end` are normalized to daily timestamps
+- `window_start <= window_end` when both are present
+
+## Read-only object contract
+
+`StrategyTimeSeries` is immutable after construction.
+
+- the internal payload is stored privately
+- `data` returns a defensive copy
+- `to_dataframe()` returns a deep copy
+- analysis and diagnostics methods operate on the validated internal payload, not on copied frames
+
+If you need to transform data, do it outside the object and construct a new `StrategyTimeSeries`.
+
 ## Core methods
+
+Single-window object:
 
 - `schema()`
 - `schema_markdown()`
 - `validate_schema_coverage()`
 - `validate()`
 - `to_dataframe()`
+- `to_csv(path)`
+- `from_dataframe(...)`
+- `from_csv(...)`
+- `columns`
+- `row_count`
+- `date_index()`
+- `window_key()`
 
-## EDA methods
+Batch object:
 
-- `profile()`: returns dataset-level and per-column summary metadata (counts, null rates, dtype, and numeric stats where applicable).
-- `weight_diagnostics(top_k=5)`: returns weight concentration/distribution diagnostics including `hhi`, `effective_n`, summary quantiles, and top weighted rows.
-- `returns_diagnostics()`: returns return/risk diagnostics derived from `price_usd` (observation counts, cumulative return, mean/std returns, annualized volatility, drawdown, best/worst day).
-- `outlier_report(columns=None, method="mad", threshold=None)`: returns a tidy dataframe with `date`, `column`, `value`, `score`, `method`, and `threshold` for detected numeric outliers.
-- `rolling_statistics(windows=(7, 30, 90), price_col="price_usd")`: returns rolling means/std for price and returns, including annualized rolling volatility.
-- `autocorrelation(lags=(1, 7, 30), series="returns", price_col="price_usd")`: returns lagged autocorrelation values for `price`, `returns`, `simple_returns`, `log_returns`, or `weight`.
-- `drawdown_table(top_n=5, price_col="price_usd")`: returns ranked drawdown episodes with peak/trough/recovery dates and duration metrics.
-- `seasonality_profile(freq="weekday", series="returns", price_col="price_usd")`: returns weekday or month summary statistics (`count`, `mean`, `median`, `std`, `min`, `max`) for a selected series.
-- `resample(freq, agg="mean")`: returns a date-indexed resampled dataframe for numeric series using the specified aggregation.
-- `decompose(model="additive", period=..., series="price", price_col="price_usd")`: returns classical trend/seasonal/residual decomposition for a selected series.
-- `detrend(method="linear"|"difference", columns=None)`: removes linear trend or applies first differences on selected numeric columns.
-- `difference(order=1, seasonal_order=0, seasonal_period=None, columns=None)`: applies regular and optional seasonal differencing to selected numeric columns.
-- `acf_pacf(lags=..., series="returns", price_col="price_usd")`: returns lag-wise ACF and PACF diagnostics.
-- `cross_correlation(other_series, max_lag=..., series="returns", price_col="price_usd")`: returns lead/lag cross-correlation between the base and comparison series.
-- `spectral_density(method="periodogram", series="returns", price_col="price_usd")`: returns frequency-domain power spectral density estimates.
-- `integration_order(columns=None, max_order=2, acf_threshold=0.8)`: returns a heuristic order-of-integration estimate per numeric column using lag-1 autocorrelation after differencing.
+- `to_dataframe()`
+- `to_csv(path)`
+- `from_flat_dataframe(...)`
+- `from_csv(...)`
+- `from_artifact_dir(...)`
+- `schema_markdown()`
+- `iter_windows()`
+- `for_window(start_date, end_date)`
+- `window_keys()`
+- `date_span()`
 
 ## Validation guarantees
 
+Core guarantees:
+
 - required columns exist
+- all columns must be covered by either the core schema or explicit `extra_schema`
 - `date` is valid, unique, and ascending
+- if both `window_start` and `window_end` exist, `date` must exactly equal the full daily range between them
 - `weight` is finite, non-negative, and sums to `1.0` (tolerance)
 - `price_usd` is finite when present
-- schema and lineage coverage stays synchronized
+- schema and CoinMetrics lineage coverage stay synchronized
 
-## Batch object
+Important detail:
 
-`StrategyTimeSeriesBatch` is a multi-window container returned by export APIs.
+- exact daily coverage is enforced only when metadata bounds are present
+- if a window intentionally has sparse dates, omit `window_start` and `window_end`
 
-### Batch guarantees
+## Extensible schema
 
-- contains one or more windows
+The framework schema stays strict by default.
+Strategy-specific columns must be declared explicitly with `extra_schema`.
+
+Example:
+
+```python
+from stacksats import ColumnSpec, StrategyTimeSeries
+
+extra_schema = (
+    ColumnSpec(
+        name="custom_signal",
+        dtype="float64",
+        required=False,
+        description="Strategy-owned export score.",
+        constraints=("finite when present",),
+        source="strategy",
+    ),
+)
+
+series = StrategyTimeSeries(metadata=metadata, data=df, extra_schema=extra_schema)
+```
+
+Rules:
+
+- undeclared extra columns fail validation
+- extra-schema names cannot collide with core schema names
+- duplicate extra-schema names are rejected
+
+## Batch guarantees
+
+`StrategyTimeSeriesBatch` guarantees:
+
+- one or more windows
 - unique `(window_start, window_end)` per window
-- per-window provenance aligns with batch-level provenance
+- one coherent `generated_at` shared by the batch and all windows
+- batch-level provenance matches every window
+- all windows share the same `extra_schema`
 
 ## Export contract
 
@@ -88,6 +151,28 @@ Canonical `weights.csv` columns:
 - `price_usd`
 - `weight`
 
+## Artifact reconstruction
+
+Rebuild a batch object from export artifacts:
+
+```python
+from stacksats import StrategyTimeSeriesBatch
+
+batch = StrategyTimeSeriesBatch.from_artifact_dir("output/example-mvrv/1.0.0/<run_id>")
+```
+
+Or from a flattened CSV directly:
+
+```python
+batch = StrategyTimeSeriesBatch.from_csv(
+    "weights.csv",
+    strategy_id="example-mvrv",
+    strategy_version="1.0.0",
+    run_id="run-123",
+    config_hash="abc123",
+)
+```
+
 ## Artifact preview
 
 Example `weights.csv` header and first row:
@@ -103,17 +188,18 @@ Example `artifacts.json` (shape):
 {
   "strategy_id": "example-mvrv",
   "version": "1.0.0",
+  "config_hash": "abc123",
   "run_id": "...",
   "files": {
     "weights_csv": "weights.csv",
-    "timeseries_schema": "timeseries_schema.md"
+    "timeseries_schema_md": "timeseries_schema.md"
   }
 }
 ```
 
 ## Schema details
 
-See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated column and lineage tables.
+See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and CoinMetrics lineage tables.
 
 ## Feedback
 

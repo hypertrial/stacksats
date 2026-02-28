@@ -19,6 +19,30 @@ class ColumnSpec:
     source: str = "framework"
     formula: str | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("ColumnSpec.name must be a non-empty string.")
+        if not isinstance(self.dtype, str) or not self.dtype.strip():
+            raise ValueError(f"ColumnSpec.dtype must be a non-empty string for {self.name!r}.")
+        if not isinstance(self.required, bool):
+            raise TypeError(f"ColumnSpec.required must be boolean for {self.name!r}.")
+        if not isinstance(self.description, str) or not self.description.strip():
+            raise ValueError(
+                f"ColumnSpec.description must be a non-empty string for {self.name!r}."
+            )
+        if self.unit is not None and not isinstance(self.unit, str):
+            raise TypeError(f"ColumnSpec.unit must be a string or None for {self.name!r}.")
+        if not isinstance(self.constraints, tuple):
+            raise TypeError(f"ColumnSpec.constraints must be a tuple for {self.name!r}.")
+        if any(not isinstance(item, str) or not item.strip() for item in self.constraints):
+            raise ValueError(
+                f"ColumnSpec.constraints must contain only non-empty strings for {self.name!r}."
+            )
+        if not isinstance(self.source, str) or not self.source.strip():
+            raise ValueError(f"ColumnSpec.source must be a non-empty string for {self.name!r}.")
+        if self.formula is not None and not isinstance(self.formula, str):
+            raise TypeError(f"ColumnSpec.formula must be a string or None for {self.name!r}.")
+
 
 @dataclass(frozen=True, slots=True)
 class CoinMetricsLineageSpec:
@@ -603,6 +627,42 @@ def schema_specs() -> tuple[ColumnSpec, ...]:
 def schema_dict(specs: Iterable[ColumnSpec] | None = None) -> dict[str, ColumnSpec]:
     target_specs = tuple(specs) if specs is not None else schema_specs()
     return {spec.name: spec for spec in target_specs}
+
+
+def validate_schema_specs(
+    extra_specs: Iterable[ColumnSpec],
+    *,
+    forbid_core_name_collisions: bool = True,
+) -> tuple[ColumnSpec, ...]:
+    specs = tuple(extra_specs)
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for spec in specs:
+        if spec.name in seen:
+            duplicates.append(spec.name)
+        seen.add(spec.name)
+    if duplicates:
+        names = ", ".join(sorted(set(duplicates)))
+        raise ValueError(f"Schema specs contain duplicate column names: {names}")
+
+    if forbid_core_name_collisions:
+        core_names = {spec.name for spec in schema_specs()}
+        collisions = sorted(name for name in seen if name in core_names)
+        if collisions:
+            raise ValueError(
+                "Extra schema columns collide with core StrategyTimeSeries schema: "
+                + ", ".join(collisions)
+            )
+    return specs
+
+
+def merge_schema_specs(
+    core_specs: Iterable[ColumnSpec],
+    extra_specs: Iterable[ColumnSpec],
+) -> tuple[ColumnSpec, ...]:
+    core = tuple(core_specs)
+    extra = validate_schema_specs(extra_specs, forbid_core_name_collisions=True)
+    return core + extra
 
 
 def validate_coinmetrics_lineage_coverage(

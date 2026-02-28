@@ -204,6 +204,8 @@ Notes:
 
 - `stacksats strategy export` is strategy artifact export (filesystem output).
 - `--start-date` and `--end-date` are required for `stacksats strategy export`.
+- exported windows are validated against the exact daily range between `start_date` and `end_date`.
+- you can reconstruct the batch object later with `StrategyTimeSeriesBatch.from_artifact_dir(...)`.
 
 ## 5) Run Idempotent Daily Execution
 
