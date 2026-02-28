@@ -7,24 +7,24 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the release landing pointer.
 
-## 0.5.1 highlights
+## 0.5.2 highlights
 
-- Added idempotent daily execution via `stacksats strategy run-daily`.
-- Added durable SQLite state for replay-safe daily runs and a pluggable execution adapter interface.
-- Unified `stacksats.load_data(...)` to strict source-only CoinMetrics semantics with optional `end_date`.
-- Removed compatibility APIs `stacksats.model_development.softmax(...)` and `BaseStrategy.export_weights(...)`.
-- Hardened `BaseStrategy` with canonical `metadata()`, `params()`, `spec()`, and `intent_mode()` surfaces.
-- Added warning-first handling for ambiguous dual-hook strategies and explicit `required_feature_columns()` validation.
+- Hardened `StrategyTimeSeries` into a read-only validated artifact object.
+- Enforced exact daily-window coverage when export metadata defines `window_start` and `window_end`.
+- Added explicit `extra_schema` support for strategy-owned export columns without weakening the core schema contract.
+- Added `StrategyTimeSeriesBatch.from_artifact_dir(...)` and related CSV helpers for direct artifact reconstruction.
+- Unified batch/window provenance and made export artifact file references portable within the artifact directory.
 
 For full details and migration notes, see [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 For consolidated upgrade mappings, see [Migration Guide](migration.md).
 
 ## Latest release
 
-- `0.5.1` (2026-02-27): latest published release on PyPI.
+- `0.5.2` (2026-02-28): latest published release on PyPI.
 
 ## Recent PyPI releases
 
+- `0.5.2` (2026-02-28)
 - `0.5.1` (2026-02-27)
 - `0.4.1` (2026-02-19)
 - `0.4.0` (2026-02-18)

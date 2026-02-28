@@ -6,6 +6,20 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-02-28
+
+### Added
+- Added `StrategyTimeSeries` / `StrategyTimeSeriesBatch` artifact reload helpers (`from_csv(...)`, `from_artifact_dir(...)`, `to_csv(...)`) plus convenience accessors for window/date inspection.
+- Added explicit extensible schema support for strategy-owned export columns via `extra_schema`.
+- Added dedicated artifact and schema hardening coverage for StrategyTimeSeries exports.
+
+### Changed
+- Hardened `StrategyTimeSeries` into a read-only validated object backed by a private normalized payload.
+- Enforced exact daily-window coverage whenever `window_start` and `window_end` are present in `StrategySeriesMetadata`.
+- Normalized and validated `StrategySeriesMetadata` at construction time, including UTC `generated_at` and daily-normalized window bounds.
+- Unified batch/window provenance so one batch shares one coherent `generated_at`.
+- Export artifacts now record local file names so `artifacts.json` can be reloaded portably from the artifact directory.
+
 ## [0.5.1] - 2026-02-27
 
 ### Added
