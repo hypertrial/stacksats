@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY, FeatureRegistry
-from stacksats.feature_providers import FeatureProvider
 from stacksats.strategy_types import BaseStrategy
 
 
@@ -105,4 +104,3 @@ def test_provider_missing_required_columns_fails() -> None:
             end_date=pd.Timestamp("2024-01-05"),
             current_date=pd.Timestamp("2024-01-05"),
         )
-

@@ -37,7 +37,7 @@ Framework-owned behavior remains sealed:
 Class attributes remain supported for strategy author ergonomics, but runtime caches are not part of the canonical contract.
 
 - `params()` includes stable public config values from class attrs and instance attrs
-- private attrs such as `_cache`, `_coinmetrics_features`, or `_coinmetrics_overlays` are excluded
+- private attrs such as `_cache`, `_coinmetrics_features_cache`, or `_coinmetrics_overlay_cache` are excluded
 - unsupported public values must be normalized by overriding `params()`
 
 Use `spec()` when you need a durable view of strategy identity and configuration.

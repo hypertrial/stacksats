@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from types import MethodType
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd

@@ -25,13 +25,17 @@ Use this page for a 5-minute first run.
     pip install stacksats
     ```
 
-## 2) Run the example strategy
+## 2) Run an example strategy
 
 ```bash
-python -m stacksats.strategies.model_example
+stacksats strategy backtest \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --output-dir output
 ```
 
-This runs validation and backtest, then writes artifacts under:
+This runs a packaged example through the canonical lifecycle and writes artifacts under:
 
 ```text
 output/<strategy_id>/<version>/<run_id>/

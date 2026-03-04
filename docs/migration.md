@@ -136,13 +136,13 @@ Notes:
 5. Validate `load_data(...)` consumers against strict source-only behavior.
 6. If your strategy implements both intent hooks, set `intent_preference` explicitly.
 7. Move runtime caches to private attrs and override `params()` if you expose non-serializable public config.
-8. Re-run tests:
+8. Re-run fast tests:
 
 ```bash
-pytest -q
+venv/bin/python -m pytest -q
 ```
 
-7. Rebuild docs:
+9. Rebuild docs:
 
 ```bash
 mkdocs build --strict

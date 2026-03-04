@@ -187,25 +187,25 @@ Run a backtest from CLI:
 
 ```bash
 stacksats strategy backtest \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output \
-  --strategy-label model-example
+  --strategy-label simple-zscore
 ```
 
 Run from Python:
 
 ```python
-from stacksats.strategies.model_example import ExampleMVRVStrategy
+from stacksats.strategies.examples import SimpleZScoreStrategy
 from stacksats import BacktestConfig, ValidationConfig
 
-strategy = ExampleMVRVStrategy()
+strategy = SimpleZScoreStrategy()
 
 validation = strategy.validate(
     ValidationConfig(
-        start_date="2020-01-01",
-        end_date="2025-01-01",
+        start_date="2024-01-01",
+        end_date="2024-12-31",
         min_win_rate=50.0,
         strict=True,
     )
@@ -214,9 +214,9 @@ print(validation.summary())
 
 result = strategy.backtest(
     BacktestConfig(
-        start_date="2020-01-01",
-        end_date="2025-01-01",
-        strategy_label="model-example",
+        start_date="2024-01-01",
+        end_date="2024-12-31",
+        strategy_label="simple-zscore",
     )
 )
 print(result.summary())

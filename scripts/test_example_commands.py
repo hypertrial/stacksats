@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-EXAMPLE_SPEC = "stacksats.strategies.model_example:ExampleMVRVStrategy"
+EXAMPLE_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 
 
 def run_step(label: str, cmd: list[str], *, cwd: Path, env: dict[str, str]) -> bool:
@@ -39,6 +39,7 @@ def main() -> int:
 
     env = os.environ.copy()
     env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
+    cli_prefix = [str(venv_python), "-m", "stacksats.cli"]
 
     passed = 0
     failed = 0
@@ -46,33 +47,49 @@ def main() -> int:
 
     steps: list[tuple[str, list[str]]] = [
         (
-            "Quick run (default)",
-            [str(venv_python), "-m", "stacksats.strategies.model_example"],
+                "Quick run (validate)",
+                [
+                *cli_prefix,
+                "strategy",
+                "validate",
+                "--strategy",
+                EXAMPLE_SPEC,
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-12-31",
+            ],
         ),
         (
-            "Quick run (with options)",
+            "Quick run (backtest)",
             [
-                str(venv_python),
-                "-m",
-                "stacksats.strategies.model_example",
+                *cli_prefix,
+                "strategy",
+                "backtest",
+                "--strategy",
+                EXAMPLE_SPEC,
                 "--start-date",
-                "2020-01-01",
+                "2024-01-01",
                 "--end-date",
-                "2025-01-01",
+                "2024-12-31",
                 "--output-dir",
                 "output",
                 "--strategy-label",
-                "example-mvrv-strategy",
+                "simple-zscore",
             ],
         ),
         (
             "Validate strategy (basic)",
             [
-                "stacksats",
+                *cli_prefix,
                 "strategy",
                 "validate",
                 "--strategy",
                 EXAMPLE_SPEC,
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-12-31",
                 "--min-win-rate",
                 "25.0",
             ],
@@ -80,45 +97,55 @@ def main() -> int:
         (
             "Validate strategy (with options)",
             [
-                "stacksats",
+                *cli_prefix,
                 "strategy",
                 "validate",
                 "--strategy",
                 EXAMPLE_SPEC,
                 "--start-date",
-                "2020-01-01",
+                "2024-01-01",
                 "--end-date",
-                "2025-01-01",
+                "2024-12-31",
                 "--min-win-rate",
                 "25.0",
             ],
         ),
         (
             "Backtest (basic)",
-            ["stacksats", "strategy", "backtest", "--strategy", EXAMPLE_SPEC],
-        ),
-        (
-            "Backtest (with options)",
             [
-                "stacksats",
+                *cli_prefix,
                 "strategy",
                 "backtest",
                 "--strategy",
                 EXAMPLE_SPEC,
                 "--start-date",
-                "2020-01-01",
+                "2024-01-01",
                 "--end-date",
-                "2025-01-01",
+                "2024-12-31",
+            ],
+        ),
+        (
+            "Backtest (with options)",
+            [
+                *cli_prefix,
+                "strategy",
+                "backtest",
+                "--strategy",
+                EXAMPLE_SPEC,
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-12-31",
                 "--output-dir",
                 "output",
                 "--strategy-label",
-                "model-example",
+                "simple-zscore",
             ],
         ),
         (
             "Export strategy artifacts",
             [
-                "stacksats",
+                *cli_prefix,
                 "strategy",
                 "export",
                 "--strategy",
@@ -142,10 +169,8 @@ def main() -> int:
     skip_step("Run tests", "pytest disabled for this script")
     skipped += 1
 
-    if run_step("Run lint", ["ruff", "check", "."], cwd=root_dir, env=env):
-        passed += 1
-    else:
-        failed += 1
+    skip_step("Run lint", "repo-wide lint is validated separately")
+    skipped += 1
 
     print("\n=== Summary ===")
     print(f"Passed: {passed}")

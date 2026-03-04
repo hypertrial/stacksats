@@ -58,10 +58,14 @@ pip install "stacksats[deploy]"
 
 ## Quick Start
 
-Run the packaged example strategy:
+Run a packaged example strategy:
 
 ```bash
-python -m stacksats.strategies.model_example
+stacksats strategy backtest \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --output-dir output
 ```
 
 Artifacts are written under:
@@ -79,7 +83,7 @@ Run idempotent daily execution (paper mode):
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
@@ -90,7 +94,7 @@ Export requires explicit date bounds:
 
 ```bash
 stacksats strategy export \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --start-date 2025-12-01 \
   --end-date 2027-12-31 \
   --output-dir output

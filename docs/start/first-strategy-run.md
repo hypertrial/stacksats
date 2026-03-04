@@ -72,8 +72,8 @@ from stacksats import BacktestConfig, ValidationConfig
 strategy = MyStrategy()
 
 run = strategy.run(
-    validation_config=ValidationConfig(start_date="2020-01-01", end_date="2025-01-01"),
-    backtest_config=BacktestConfig(start_date="2020-01-01", end_date="2025-01-01"),
+    validation_config=ValidationConfig(start_date="2024-01-01", end_date="2024-12-31"),
+    backtest_config=BacktestConfig(start_date="2024-01-01", end_date="2024-12-31"),
     include_export=False,
     save_backtest_artifacts=True,
     output_dir="output",

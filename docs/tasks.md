@@ -19,8 +19,8 @@ Use this page to jump directly to the workflow you need.
 ```bash
 stacksats strategy validate \
   --strategy my_strategy.py:MyStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict
 ```
 
@@ -51,8 +51,8 @@ stacksats strategy validate \
 ```bash
 stacksats strategy backtest \
   --strategy my_strategy.py:MyStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 ```
 
@@ -154,7 +154,7 @@ stacksats strategy run-daily \
 
 ### Next step
 
-- Re-run tests and docs checks (`pytest -q`, `mkdocs build --strict`).
+- Re-run fast tests and docs checks (`venv/bin/python -m pytest -q`, `mkdocs build --strict`).
 
 ## I want minimal strategy code templates
 

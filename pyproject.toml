@@ -74,6 +74,9 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/integration/backtest/*.py" = ["E402"]
+
 [project.scripts]
 stacksats = "stacksats.cli:main"
 stacksats-plot-mvrv = "stacksats.plot_mvrv:main"

@@ -158,7 +158,7 @@ Rebuild a batch object from export artifacts:
 ```python
 from stacksats import StrategyTimeSeriesBatch
 
-batch = StrategyTimeSeriesBatch.from_artifact_dir("output/example-mvrv/1.0.0/<run_id>")
+batch = StrategyTimeSeriesBatch.from_artifact_dir("output/simple-zscore/1.0.0/<run_id>")
 ```
 
 Or from a flattened CSV directly:
@@ -166,7 +166,7 @@ Or from a flattened CSV directly:
 ```python
 batch = StrategyTimeSeriesBatch.from_csv(
     "weights.csv",
-    strategy_id="example-mvrv",
+    strategy_id="simple-zscore",
     strategy_version="1.0.0",
     run_id="run-123",
     config_hash="abc123",
@@ -186,7 +186,7 @@ Example `artifacts.json` (shape):
 
 ```json
 {
-  "strategy_id": "example-mvrv",
+  "strategy_id": "simple-zscore",
   "version": "1.0.0",
   "config_hash": "abc123",
   "run_id": "...",

@@ -20,8 +20,8 @@ Typical strict run:
 ```bash
 stacksats strategy validate \
   --strategy my_strategy.py:MyStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict \
   --min-win-rate 50.0
 ```

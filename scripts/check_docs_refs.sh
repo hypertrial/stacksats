@@ -105,15 +105,15 @@ if [[ -s "${blob_links_tmp}" ]]; then
 fi
 
 if command -v rg >/dev/null 2>&1; then
-  rg -n 'stacksats strategy (validate|backtest|export) --strategy stacksats\.strategies\.model_example:ExampleMVRVStrategy' \
+  rg -n 'stacksats strategy (validate|backtest|export) --strategy stacksats\.strategies\.examples:SimpleZScoreStrategy' \
     README.md docs \
     > "${dup_cli_tmp}" || true
 fi
 
 if [[ -s "${dup_cli_tmp}" ]]; then
-  filtered_dup_cli="$(rg -v '^docs/commands\.md:' "${dup_cli_tmp}" || true)"
+  filtered_dup_cli="$(rg -v '^(README\.md|docs/commands\.md|docs/start/quickstart\.md|docs/start/notebook-demo\.md):' "${dup_cli_tmp}" || true)"
   if [[ -n "${filtered_dup_cli}" ]]; then
-    echo "Canonical example strategy CLI commands should only live in docs/commands.md:"
+    echo "Canonical example strategy CLI commands should only live in README.md, docs/commands.md, or quickstart entry pages:"
     while IFS= read -r line; do
       [[ -z "${line}" ]] && continue
       echo " - ${line}"

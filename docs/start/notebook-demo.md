@@ -10,17 +10,21 @@ Use this page for a lightweight interactive workflow without exported notebook a
 It demonstrates:
 
 - package installation and environment setup
-- running the packaged strategy entry point
+- running a packaged example strategy via CLI
 - validating, backtesting, and exporting with CLI commands
 - inspecting generated artifacts under `output/<strategy_id>/<version>/<run_id>/`
 
 ## Suggested interactive flow
 
 1. Follow [Quickstart](quickstart.md) to install and verify environment.
-2. Run the packaged example strategy:
+2. Run a packaged example strategy:
 
 ```bash
-python -m stacksats.strategies.model_example
+stacksats strategy backtest \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --output-dir output
 ```
 
 3. Run the lifecycle commands from [CLI Commands](../commands.md):

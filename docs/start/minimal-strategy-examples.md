@@ -49,8 +49,8 @@ Run:
 ```bash
 stacksats strategy validate \
   --strategy my_strategy.py:MinimalProposeWeightStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict
 ```
 
@@ -105,8 +105,8 @@ Run:
 ```bash
 stacksats strategy validate \
   --strategy my_strategy.py:MinimalTargetProfileStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict
 ```
 

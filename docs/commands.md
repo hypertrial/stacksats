@@ -3,12 +3,12 @@ title: CLI Commands
 description: Command reference for validating, backtesting, exporting, and daily execution of Bitcoin DCA strategies.
 ---
 
-# Commands for `stacksats.strategies.model_example`
+# Commands for `stacksats.strategies.examples:SimpleZScoreStrategy`
 
 This is the canonical source for lifecycle CLI usage.
 
-- module: `stacksats.strategies.model_example`
-- strategy class: `ExampleMVRVStrategy`
+- module: `stacksats.strategies.examples`
+- strategy class: `SimpleZScoreStrategy`
 
 Strategy implementations can use either:
 
@@ -20,28 +20,28 @@ Strategy implementations can use either:
 ```bash
 # Validate
 stacksats strategy validate \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict
 
 # Backtest
 stacksats strategy backtest \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 
 # Export (explicit date bounds required)
 stacksats strategy export \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --start-date 2025-12-01 \
   --end-date 2027-12-31 \
   --output-dir output
 
 # Run daily execution (paper mode by default)
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
@@ -91,31 +91,34 @@ module_or_path:ClassName
 For this example module:
 
 ```text
-stacksats.strategies.model_example:ExampleMVRVStrategy
+stacksats.strategies.examples:SimpleZScoreStrategy
 ```
 
-## 1) Quick Run (inside `stacksats.strategies.model_example`)
+## 1) Quick Run (via lifecycle CLI)
 
-Run the file directly:
+Run a fast validation:
 
 ```bash
-python -m stacksats.strategies.model_example
+stacksats strategy validate \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31
 ```
 
-With custom options:
+Then run a backtest:
 
 ```bash
-python -m stacksats.strategies.model_example \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+stacksats strategy backtest \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output \
-  --strategy-label example-mvrv-strategy
+  --strategy-label simple-zscore
 ```
 
 What this does:
 
-- Runs `strategy.validate(...)`
-- Runs `strategy.backtest(...)`
+- Runs the canonical strategy lifecycle without relying on legacy module entry points.
 - Writes plots + JSON output under `output/<strategy_id>/<version>/<run_id>/`
 
 ## 2) Validate Strategy via Strategy Lifecycle CLI
@@ -124,7 +127,9 @@ Check whether the model passes package validation gates:
 
 ```bash
 stacksats strategy validate \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --min-win-rate 25.0
 ```
 
@@ -132,10 +137,10 @@ Common options:
 
 ```bash
 stacksats strategy validate \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --strategy-config strategy_config.json \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --strict \
   --min-win-rate 25.0
 ```
@@ -153,19 +158,22 @@ Default `--min-win-rate` is `50.0`; use it when you explicitly want the stricter
 Basic:
 
 ```bash
-stacksats strategy backtest --strategy stacksats.strategies.model_example:ExampleMVRVStrategy
+stacksats strategy backtest \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31
 ```
 
 With options:
 
 ```bash
 stacksats strategy backtest \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --strategy-config strategy_config.json \
-  --start-date 2020-01-01 \
-  --end-date 2025-01-01 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output \
-  --strategy-label model-example
+  --strategy-label simple-zscore
 ```
 
 Expected output:
@@ -180,7 +188,7 @@ All under `output/<strategy_id>/<version>/<run_id>/`.
 
 ```bash
 stacksats strategy export \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --strategy-config strategy_config.json \
   --start-date 2025-12-01 \
   --end-date 2027-12-31 \
@@ -213,7 +221,7 @@ Paper execution:
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
@@ -222,7 +230,7 @@ Live adapter interface (bring your own adapter class):
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.model_example:ExampleMVRVStrategy \
+  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --total-window-budget-usd 1000 \
   --mode live \
   --adapter my_broker_adapter.py:MyBrokerAdapter
@@ -252,7 +260,8 @@ python scripts/test_example_commands.py
 Run tests:
 
 ```bash
-pytest tests/ -v
+venv/bin/python -m pytest -q
+venv/bin/python -m pytest -m "slow or integration or performance" -q
 ```
 
 Run lint:
@@ -266,7 +275,7 @@ ruff check .
 - **`Invalid strategy spec`**
   Ensure format is exactly `module_or_path:ClassName`.
 
-- **`Class 'ExampleMVRVStrategy' not found`**
+- **`Class 'SimpleZScoreStrategy' not found`**
   Check class name spelling and module path.
 
 - **`Strategy file not found`**
