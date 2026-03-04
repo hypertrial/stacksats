@@ -118,10 +118,14 @@ Top-level exports:
 ## Development
 
 ```bash
-pytest tests/ -v
+venv/bin/python -m pytest -q
+venv/bin/python -m pytest -m "slow or integration or performance" -q
+venv/bin/python -m pre_commit install -t pre-commit -t pre-push
 ruff check .
 bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh
 ```
+
+If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.
 
 For command examples using the packaged strategy template, see `docs/commands.md`.
