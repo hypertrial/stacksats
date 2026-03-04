@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
 import stacksats.prelude as prelude_module
 from stacksats.model_development import (
@@ -21,8 +22,8 @@ from stacksats.strategy_types import (
 )
 
 
-def _btc_df(days: int = 1600) -> pd.DataFrame:
-    idx = pd.date_range("2021-01-01", periods=days, freq="D")
+def _btc_df() -> pd.DataFrame:
+    idx = pd.date_range("2023-01-01", "2024-12-31", freq="D")
     return pd.DataFrame(
         {
             "PriceUSD_coinmetrics": np.linspace(10000.0, 60000.0, len(idx)),
@@ -74,21 +75,22 @@ def test_runner_validate_weights_accepts_empty_series() -> None:
     )
 
 
-def test_runner_validate_detects_profile_only_forward_leakage() -> None:
+def test_runner_validate_observed_only_profile_input_blocks_profile_peeking() -> None:
     runner = StrategyRunner()
+    runner.backtest = lambda *args, **kwargs: SimpleNamespace(win_rate=100.0)
     result = runner.validate(
         _LeakyProfileStrategy(),
         ValidationConfig(
-            start_date="2022-01-01",
+            start_date="2024-01-01",
             end_date="2024-12-31",
             min_win_rate=0.0,
         ),
         btc_df=_btc_df(),
     )
 
-    assert bool(result.forward_leakage_ok) is False
-    assert bool(result.passed) is False
-    assert any("Forward leakage detected near" in message for message in result.messages)
+    assert bool(result.forward_leakage_ok) is True
+    assert bool(result.passed) is True
+    assert not any("Forward leakage detected" in message for message in result.messages)
 
 
 def _single_window_data() -> tuple[pd.DataFrame, pd.DataFrame]:

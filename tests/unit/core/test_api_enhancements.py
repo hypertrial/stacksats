@@ -210,8 +210,8 @@ def test_validate_strategy_fails_weight_constraints_for_bad_strategy():
         )
 
 
-def test_validate_strategy_fails_forward_leakage_for_peeking_strategy():
-    """Validation should detect a strategy that peeks beyond window end."""
+def test_validate_strategy_observed_only_input_blocks_peeking_strategy():
+    """Observed-only context should remove access to rows beyond the decision date."""
     btc_df = _sample_btc_df()
 
     class LeakyStrategy(BaseStrategy):
@@ -244,9 +244,7 @@ def test_validate_strategy_fails_forward_leakage_for_peeking_strategy():
         ),
         btc_df=btc_df,
     )
-    assert result.forward_leakage_ok is False
-    assert result.passed is False
-    assert any("Forward leakage detected" in msg for msg in result.messages)
+    assert result.forward_leakage_ok is True
 
 
 def test_example_strategies_return_valid_weight_vectors():

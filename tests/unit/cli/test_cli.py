@@ -15,7 +15,7 @@ from stacksats.strategy_types import RunDailyConfig
 
 
 def test_cli_help() -> None:
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parents[3]
     proc = subprocess.run(
         [sys.executable, "-m", "stacksats.cli", "--help"],
         cwd=str(repo_root),

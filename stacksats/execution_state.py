@@ -55,12 +55,21 @@ class SQLiteExecutionStateStore:
     """Durable idempotency and snapshot state for daily strategy runs."""
 
     def __init__(self, db_path: str):
-        path = Path(db_path).expanduser()
-        self.db_path = path if path.is_absolute() else Path.cwd() / path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._in_memory = db_path == ":memory:"
+        if self._in_memory:
+            self.db_path = Path(":memory:")
+            self._memory_connection = sqlite3.connect(":memory:", timeout=30.0)
+            self._memory_connection.row_factory = sqlite3.Row
+        else:
+            path = Path(db_path).expanduser()
+            self.db_path = path if path.is_absolute() else Path.cwd() / path
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._memory_connection = None
         self._initialize_schema()
 
     def _connect(self) -> sqlite3.Connection:
+        if self._memory_connection is not None:
+            return self._memory_connection
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         return conn

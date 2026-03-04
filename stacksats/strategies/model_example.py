@@ -9,6 +9,7 @@ to the sealed framework kernel.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -70,6 +71,13 @@ class ExampleMVRVStrategy(BaseStrategy):
         return ("core_model_features_v1", "coinmetrics_overlay_v1")
 
     @staticmethod
+    def _to_numeric(frame: pd.DataFrame, columns: list[str] | tuple[str, ...]) -> pd.DataFrame:
+        for column in columns:
+            if column in frame.columns:
+                frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        return frame
+
+    @staticmethod
     def _clean_array(values: pd.Series) -> np.ndarray:
         arr = values.to_numpy(dtype=float)
         return np.where(np.isfinite(arr), arr, 0.0)
@@ -83,8 +91,148 @@ class ExampleMVRVStrategy(BaseStrategy):
             z = (series - mean) / std
         return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
+    def _load_coinmetrics_features(self) -> pd.DataFrame:
+        cache_path = Path(
+            getattr(self, "coinmetrics_cache_path", "~/.stacksats/cache/coinmetrics_btc.csv")
+        ).expanduser()
+        cached_path = getattr(self, "_coinmetrics_features_cache_path", None)
+        cached_frame = getattr(self, "_coinmetrics_features_cache", None)
+        if cached_frame is not None and cached_path == cache_path:
+            return cached_frame
+        if not cache_path.exists():
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_features_cache_path = cache_path
+            self._coinmetrics_features_cache = empty
+            return empty
+
+        raw = pd.read_csv(cache_path)
+        if "time" not in raw.columns:
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_features_cache_path = cache_path
+            self._coinmetrics_features_cache = empty
+            return empty
+
+        raw["time"] = pd.to_datetime(raw["time"], errors="coerce")
+        raw = raw.dropna(subset=["time"]).set_index("time")
+        raw.index = pd.DatetimeIndex(raw.index).normalize().tz_localize(None)
+        raw = raw.loc[~raw.index.duplicated(keep="last")].sort_index()
+        if raw.empty:
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_features_cache_path = cache_path
+            self._coinmetrics_features_cache = empty
+            return empty
+
+        self._to_numeric(
+            raw,
+            [
+                "PriceUSD",
+                "CapMrktCurUSD",
+                "FlowInExUSD",
+                "FlowOutExUSD",
+                "AdrActCnt",
+                "TxCnt",
+                "FeeTotNtv",
+                "volume_reported_spot_usd_1d",
+                "SplyExNtv",
+                "SplyCur",
+                "IssTotUSD",
+                "HashRate",
+                "ROI30d",
+                "ROI1yr",
+            ],
+        )
+
+        features = pd.DataFrame(index=raw.index)
+
+        if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
+            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
+            flow_ratio = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
+            flow_fast = flow_ratio.rolling(7, min_periods=3).mean()
+            flow_slow = flow_ratio.rolling(30, min_periods=10).mean()
+            features["cm_netflow_fast"] = self._rolling_zscore(flow_fast, 120)
+            features["cm_netflow_slow"] = self._rolling_zscore(flow_slow, 240)
+            features["cm_netflow_slope"] = self._rolling_zscore(flow_fast - flow_slow, 180)
+        else:
+            features["cm_netflow_fast"] = 0.0
+            features["cm_netflow_slow"] = 0.0
+            features["cm_netflow_slope"] = 0.0
+
+        activity_parts: list[pd.Series] = []
+        for column in ("AdrActCnt", "TxCnt", "FeeTotNtv"):
+            if column in raw.columns:
+                activity_parts.append(self._rolling_zscore(np.log1p(raw[column]), 365))
+        if "PriceUSD" in raw.columns:
+            price_log = np.log(raw["PriceUSD"].replace(0.0, np.nan))
+            mom_30 = self._rolling_zscore(price_log.diff(30), 365)
+            mom_90 = self._rolling_zscore(price_log.diff(90), 365)
+        else:
+            mom_30 = pd.Series(0.0, index=raw.index, dtype=float)
+            mom_90 = pd.Series(0.0, index=raw.index, dtype=float)
+        if activity_parts:
+            activity = sum(activity_parts) / float(len(activity_parts))
+            features["cm_activity_level"] = activity
+            features["cm_activity_div_fast"] = activity - mom_30
+            features["cm_activity_div_slow"] = activity - mom_90
+        else:
+            features["cm_activity_level"] = 0.0
+            features["cm_activity_div_fast"] = 0.0
+            features["cm_activity_div_slow"] = 0.0
+
+        if "volume_reported_spot_usd_1d" in raw.columns:
+            vol_log = np.log1p(raw["volume_reported_spot_usd_1d"])
+            features["cm_liquidity_level"] = self._rolling_zscore(vol_log, 180)
+            features["cm_liquidity_impulse"] = self._rolling_zscore(vol_log.diff(7), 120)
+        else:
+            features["cm_liquidity_level"] = 0.0
+            features["cm_liquidity_impulse"] = 0.0
+
+        if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
+            exchange_share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
+            features["cm_exchange_share_level"] = self._rolling_zscore(exchange_share, 240)
+            features["cm_exchange_share_delta"] = self._rolling_zscore(
+                exchange_share.diff(30), 240
+            )
+        else:
+            features["cm_exchange_share_level"] = 0.0
+            features["cm_exchange_share_delta"] = 0.0
+
+        if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
+            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
+            features["cm_miner_pressure"] = self._rolling_zscore(raw["IssTotUSD"] / cap, 365)
+        else:
+            features["cm_miner_pressure"] = 0.0
+
+        if "HashRate" in raw.columns:
+            hash_log = np.log(raw["HashRate"].replace(0.0, np.nan))
+            hash_fast = self._rolling_zscore(hash_log.diff(30), 365)
+            hash_slow = self._rolling_zscore(hash_log.diff(90), 365)
+            features["cm_hash_momentum"] = (0.6 * hash_fast) + (0.4 * hash_slow)
+        else:
+            features["cm_hash_momentum"] = 0.0
+
+        if "ROI30d" in raw.columns:
+            features["cm_roi30"] = self._rolling_zscore(raw["ROI30d"], 365)
+        else:
+            features["cm_roi30"] = mom_30
+        if "ROI1yr" in raw.columns:
+            features["cm_roi1y"] = self._rolling_zscore(raw["ROI1yr"], 365)
+        else:
+            features["cm_roi1y"] = mom_90
+
+        features = features.shift(1)
+        features = features.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-6.0, 6.0)
+        self._coinmetrics_features_cache_path = cache_path
+        self._coinmetrics_features_cache = features
+        return features
+
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        return ctx.features_df.copy().fillna(0.0)
+        window = ctx.features_df.copy()
+        if window.empty:
+            return window
+        coinmetrics = self._load_coinmetrics_features()
+        if not coinmetrics.empty:
+            window = window.join(coinmetrics.reindex(window.index).fillna(0.0), how="left")
+        return window.fillna(0.0)
 
     def build_signals(
         self,

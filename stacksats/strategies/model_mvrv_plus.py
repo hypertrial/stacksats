@@ -7,6 +7,8 @@ lightweight, lagged gating to reduce over-allocation in adverse regimes.
 from __future__ import annotations
 
 import argparse
+import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -107,8 +109,139 @@ class MVRVPlusStrategy(BaseStrategy):
             out[i] = (a * float(values[i])) + ((1.0 - a) * out[i - 1])
         return out
 
+    def _load_coinmetrics_overlays(self) -> pd.DataFrame:
+        csv_path = Path(
+            getattr(self, "coinmetrics_csv", "~/.stacksats/cache/coinmetrics_btc.csv")
+        ).expanduser()
+        cached_path = getattr(self, "_coinmetrics_overlay_cache_path", None)
+        cached_frame = getattr(self, "_coinmetrics_overlay_cache", None)
+        if cached_frame is not None and cached_path == csv_path:
+            return cached_frame
+        if not csv_path.exists():
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_overlay_cache_path = csv_path
+            self._coinmetrics_overlay_cache = empty
+            return empty
+
+        raw = pd.read_csv(csv_path)
+        if "time" not in raw.columns:
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_overlay_cache_path = csv_path
+            self._coinmetrics_overlay_cache = empty
+            return empty
+
+        raw["time"] = pd.to_datetime(raw["time"], errors="coerce")
+        raw = raw.dropna(subset=["time"]).set_index("time")
+        raw.index = pd.DatetimeIndex(raw.index).normalize().tz_localize(None)
+        raw = raw.loc[~raw.index.duplicated(keep="last")].sort_index()
+        if raw.empty:
+            empty = pd.DataFrame(index=pd.DatetimeIndex([], dtype="datetime64[ns]"))
+            self._coinmetrics_overlay_cache_path = csv_path
+            self._coinmetrics_overlay_cache = empty
+            return empty
+
+        numeric_columns = (
+            "PriceUSD",
+            "CapMrktCurUSD",
+            "FlowInExUSD",
+            "FlowOutExUSD",
+            "SplyExNtv",
+            "SplyCur",
+            "AdrActCnt",
+            "TxCnt",
+            "TxTfrCnt",
+            "ROI30d",
+            "ROI1yr",
+            "volume_reported_spot_usd_1d",
+            "IssTotUSD",
+            "HashRate",
+        )
+        for column in numeric_columns:
+            if column in raw.columns:
+                raw[column] = pd.to_numeric(raw[column], errors="coerce")
+
+        overlays = pd.DataFrame(index=raw.index)
+
+        if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
+            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
+            flow_ratio = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
+            flow_fast = flow_ratio.rolling(7, min_periods=3).mean()
+            overlays["cm_netflow"] = self._rolling_zscore(flow_fast, 180)
+        else:
+            overlays["cm_netflow"] = 0.0
+
+        if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
+            exchange_share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
+            overlays["cm_exchange_share"] = self._rolling_zscore(exchange_share, 365)
+            overlays["cm_exchange_share_delta"] = self._rolling_zscore(
+                exchange_share.diff(30), 240
+            )
+        else:
+            overlays["cm_exchange_share"] = 0.0
+            overlays["cm_exchange_share_delta"] = 0.0
+
+        activity_parts: list[pd.Series] = []
+        for column in ("AdrActCnt", "TxCnt", "TxTfrCnt"):
+            if column in raw.columns:
+                activity_parts.append(self._rolling_zscore(np.log1p(raw[column]), 365))
+        if "PriceUSD" in raw.columns:
+            price_log = np.log(raw["PriceUSD"].replace(0.0, np.nan))
+            mom_30 = self._rolling_zscore(price_log.diff(30), 365)
+            mom_90 = self._rolling_zscore(price_log.diff(90), 365)
+        else:
+            mom_30 = pd.Series(0.0, index=raw.index, dtype=float)
+            mom_90 = pd.Series(0.0, index=raw.index, dtype=float)
+        if activity_parts:
+            activity = sum(activity_parts) / float(len(activity_parts))
+            overlays["cm_activity_div"] = activity - mom_30
+        else:
+            overlays["cm_activity_div"] = 0.0
+
+        if "ROI30d" in raw.columns:
+            roi30 = self._rolling_zscore(raw["ROI30d"], 365)
+        else:
+            roi30 = mom_30
+        if "ROI1yr" in raw.columns:
+            roi1y = self._rolling_zscore(raw["ROI1yr"], 365)
+        else:
+            roi1y = mom_90
+        overlays["cm_roi_context"] = (-0.65 * roi30) + (-0.35 * roi1y)
+
+        if "volume_reported_spot_usd_1d" in raw.columns:
+            vol_log = np.log1p(raw["volume_reported_spot_usd_1d"])
+            overlays["cm_liquidity_impulse"] = self._rolling_zscore(vol_log.diff(7), 120)
+        else:
+            overlays["cm_liquidity_impulse"] = 0.0
+
+        if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
+            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
+            overlays["cm_miner_pressure"] = self._rolling_zscore(raw["IssTotUSD"] / cap, 365)
+        else:
+            overlays["cm_miner_pressure"] = 0.0
+
+        if "HashRate" in raw.columns:
+            hash_log = np.log(raw["HashRate"].replace(0.0, np.nan))
+            hash_fast = self._rolling_zscore(hash_log.diff(30), 365)
+            hash_slow = self._rolling_zscore(hash_log.diff(90), 365)
+            overlays["cm_hash_momentum"] = (0.6 * hash_fast) + (0.4 * hash_slow)
+        else:
+            overlays["cm_hash_momentum"] = 0.0
+
+        overlays = overlays.shift(1)
+        overlays = overlays.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-6.0, 6.0)
+        self._coinmetrics_overlay_cache_path = csv_path
+        self._coinmetrics_overlay_cache = overlays
+        return overlays
+
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         window = ctx.features_df.copy()
+        if window.empty:
+            return window
+        start_date = pd.Timestamp(ctx.start_date).normalize()
+        end_date = pd.Timestamp(ctx.end_date).normalize()
+        if start_date > end_date:
+            return window.iloc[0:0].copy()
+        window = window.loc[(window.index >= start_date) & (window.index <= end_date)].copy()
         if window.empty:
             return window
 
@@ -121,6 +254,9 @@ class MVRVPlusStrategy(BaseStrategy):
         # Shift by one day to avoid using same-day information.
         window["plus_vol21"] = rolling_vol.shift(1).fillna(0.0)
         window["plus_drawdown90"] = drawdown.shift(1).fillna(0.0)
+        overlays = self._load_coinmetrics_overlays()
+        if not overlays.empty:
+            window = window.join(overlays.reindex(window.index).fillna(0.0), how="left")
         window = window.fillna(0.0)
         return window
 

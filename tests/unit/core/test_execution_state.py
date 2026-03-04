@@ -26,6 +26,27 @@ def test_state_store_initializes_schema(tmp_path: Path) -> None:
     assert "weight_snapshots" in tables
 
 
+def test_state_store_memory_path_uses_true_sqlite_memory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = SQLiteExecutionStateStore(":memory:")
+    claim = store.claim_run(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_date="2025-01-01",
+        mode="paper",
+        run_key="run-1",
+        fingerprint="fingerprint-a",
+        force=False,
+    )
+
+    assert claim.status == "claimed"
+    assert store.db_path == Path(":memory:")
+    assert not (tmp_path / ":memory:").exists()
+
+
 def test_claim_or_noop_behavior_for_same_fingerprint(tmp_path: Path) -> None:
     store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
     claim = store.claim_run(
