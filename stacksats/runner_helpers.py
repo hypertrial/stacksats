@@ -59,6 +59,23 @@ def perturb_future_features(features_df: pd.DataFrame, probe: pd.Timestamp) -> p
     return perturbed
 
 
+def perturb_future_source_data(btc_df: pd.DataFrame, probe: pd.Timestamp) -> pd.DataFrame:
+    """Perturb future source rows while preserving the observed prefix."""
+    perturbed = btc_df.copy(deep=True)
+    future_mask = perturbed.index > probe
+    if not bool(future_mask.any()):
+        return perturbed
+    future = perturbed.loc[future_mask].copy()
+    numeric_cols = list(future.select_dtypes(include=[np.number]).columns)
+    if numeric_cols:
+        numeric = future[numeric_cols].to_numpy(dtype=float)
+        ramp = np.linspace(0.5, 1.5, numeric.shape[0], dtype=float).reshape(-1, 1)
+        shifted = np.where(np.isfinite(numeric), (-2.0 * numeric) + ramp, 0.0)
+        future.loc[:, numeric_cols] = shifted
+    perturbed.loc[future_mask, :] = future
+    return perturbed
+
+
 def build_fold_ranges(
     start_ts: pd.Timestamp,
     end_ts: pd.Timestamp,

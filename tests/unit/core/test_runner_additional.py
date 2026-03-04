@@ -474,7 +474,9 @@ def test_validate_reports_perturbed_future_weight_divergence(monkeypatch: pytest
     assert any("perturbed-future weights diverge" in msg for msg in result.messages)
 
 
-def test_validate_reports_profile_masked_future_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_observed_only_profile_input_blocks_future_offset_leak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = StrategyRunner()
     monkeypatch.setattr(
         runner,
@@ -492,8 +494,8 @@ def test_validate_reports_profile_masked_future_divergence(monkeypatch: pytest.M
         btc_df=_btc_df(days=1200),
     )
 
-    assert bool(result.forward_leakage_ok) is False
-    assert any("profile values diverge (masked-future)" in msg for msg in result.messages)
+    assert bool(result.forward_leakage_ok) is True
+    assert any("All validation checks passed." in msg for msg in result.messages)
 
 
 def test_validate_uses_profile_checks_for_dual_hook_profile_preference(
@@ -516,8 +518,8 @@ def test_validate_uses_profile_checks_for_dual_hook_profile_preference(
         btc_df=_btc_df(days=1200),
     )
 
-    assert bool(result.forward_leakage_ok) is False
-    assert any("profile values diverge (masked-future)" in msg for msg in result.messages)
+    assert bool(result.forward_leakage_ok) is True
+    assert any("All validation checks passed." in msg for msg in result.messages)
 
 
 def test_validate_strict_passes_and_emits_fold_and_shuffled_diagnostics(
@@ -533,8 +535,8 @@ def test_validate_strict_passes_and_emits_fold_and_shuffled_diagnostics(
     result = runner.validate(
         _UniformProposeStrategy(),
         ValidationConfig(
-            start_date="2022-01-01",
-            end_date="2024-12-31",
+            start_date="2019-01-01",
+            end_date="2025-12-31",
             min_win_rate=0.0,
             strict=True,
             min_fold_win_rate=20.0,
@@ -542,7 +544,7 @@ def test_validate_strict_passes_and_emits_fold_and_shuffled_diagnostics(
             max_shuffled_win_rate=80.0,
             shuffled_trials=3,
         ),
-        btc_df=_btc_df(days=2000),
+        btc_df=_btc_df(days=3200),
     )
 
     assert bool(result.passed) is True

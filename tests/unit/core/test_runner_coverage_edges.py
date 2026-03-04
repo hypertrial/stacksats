@@ -234,9 +234,11 @@ def test_validate_strict_masked_pass_mutation_branch(
     strategy = _UniformStrategy()
     monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
+    counter = {"n": 0}
 
     def _compute(ctx: StrategyContext) -> pd.Series:
-        if ctx.features_df.isna().any().any():
+        counter["n"] += 1
+        if counter["n"] == 3:
             ctx.features_df["__masked_mutation__"] = 1.0
         return _uniform_weights(ctx)
 
@@ -258,10 +260,11 @@ def test_validate_strict_perturbed_pass_mutation_branch(
     strategy = _UniformStrategy()
     monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
+    counter = {"n": 0}
 
     def _compute(ctx: StrategyContext) -> pd.Series:
-        numeric = ctx.features_df.select_dtypes(include=[np.number]).to_numpy(dtype=float)
-        if np.isfinite(numeric).any() and np.nanmin(numeric) < 0.0:
+        counter["n"] += 1
+        if counter["n"] == 4:
             ctx.features_df["__perturbed_mutation__"] = 1.0
         return _uniform_weights(ctx)
 

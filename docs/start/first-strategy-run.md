@@ -22,8 +22,11 @@ class MyStrategy(BaseStrategy):
     version = "1.0.0"
     description = "First custom strategy."
 
+    def required_feature_sets(self) -> tuple[str, ...]:
+        return ("core_model_features_v1",)
+
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+        return ctx.features_df.copy()
 
     def build_signals(
         self, ctx: StrategyContext, features_df: pd.DataFrame
@@ -89,13 +92,14 @@ output/<strategy_id>/<version>/<run_id>/
 ## 4) Keep strategy responsibilities clean
 
 !!! info "Contract summary"
-    You own features, signals, and intent. The framework owns iteration, clipping, and lock semantics.
+    You own transforms, signals, and intent over observed data only. The framework owns feature sourcing, as-of materialization, iteration, clipping, and lock semantics.
 
 Read [Framework Boundary](../framework.md) before increasing strategy complexity.
 
 ## 5) Troubleshooting
 
 - If validation fails on constraints, check [Validation Checklist](../validation_checklist.md).
+- If validation fails on lint or feature sourcing, confirm `required_feature_sets()` is provider-backed and remove direct file/network access from the strategy class.
 - If outputs look unexpected, compare runs with [CLI Commands](../commands.md).
 - If upgrading older code, use [Migration Guide](../migration.md).
 - If you want copyable templates for both hook styles, use [Minimal Strategy Examples](minimal-strategy-examples.md).

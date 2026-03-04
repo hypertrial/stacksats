@@ -161,6 +161,7 @@ class ValidationResult:
     win_rate_ok: bool
     messages: list[str]
     min_win_rate: float = 50.0
+    diagnostics: dict[str, object] = field(default_factory=dict)
 
     def summary(self) -> str:
         """Return a concise validation summary string."""
@@ -222,6 +223,10 @@ class DailyRunResult:
     message: str
     order_receipt: DailyOrderReceipt | None = None
     bootstrap: bool = False
+    validation_receipt_id: int | None = None
+    validation_passed: bool | None = None
+    data_hash: str = ""
+    feature_snapshot_hash: str = ""
 
     def summary(self) -> str:
         """Return concise daily run status summary."""

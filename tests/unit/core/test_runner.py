@@ -164,3 +164,33 @@ def test_runner_backtest_does_not_require_params_serialization_for_runtime_execu
     )
 
     assert result.strategy_id == "runtime-only-param"
+
+
+def test_runner_backtest_materializes_features_per_window_end(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    seen_current_dates: list[pd.Timestamp] = []
+    btc_df = _btc_df()
+    original_materialize = runner._materialize_strategy_features
+
+    def _wrapped_materialize(strategy, btc_df_arg, *, start_date, end_date, current_date):
+        seen_current_dates.append(pd.Timestamp(current_date))
+        return original_materialize(
+            strategy,
+            btc_df_arg,
+            start_date=start_date,
+            end_date=end_date,
+            current_date=current_date,
+        )
+
+    monkeypatch.setattr(runner, "_materialize_strategy_features", _wrapped_materialize)
+
+    runner.backtest(
+        UniformBaseStrategy(),
+        BacktestConfig(start_date="2023-01-01", end_date="2024-01-01"),
+        btc_df=btc_df,
+    )
+
+    assert seen_current_dates
+    assert len(set(seen_current_dates)) > 1

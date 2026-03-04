@@ -11,8 +11,9 @@ from uuid import uuid4
 import pandas as pd
 
 from .data_btc import BTCDataProvider
+from .feature_materialization import hash_dataframe
+from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
-from .model_development import precompute_features
 from .prelude import BACKTEST_START, backtest_dynamic_dca
 from .runner_validation import (
     STRICT_MUTATION_MESSAGE,
@@ -33,6 +34,7 @@ from .strategy_types import (
     ValidationConfig,
     validate_strategy_contract,
 )
+from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 
 class StrategyRunner(StrategyRunnerValidationMixin):
@@ -40,6 +42,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
     def __init__(self, data_provider=None):
         self._data_provider = data_provider or BTCDataProvider()
+        self._feature_registry = DEFAULT_FEATURE_REGISTRY
 
     def _load_btc_df(
         self,
@@ -53,6 +56,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
     def _validate_strategy_contract(self, strategy: BaseStrategy) -> None:
         validate_strategy_contract(strategy)
+
+    def _strategy_lint_warnings(self, strategy: BaseStrategy) -> list[str]:
+        _, warnings = summarize_lint_findings(lint_strategy_class(strategy.__class__))
+        return warnings
 
     def _provenance(
         self,
@@ -82,6 +89,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             "strategy_params": spec.params,
             "strategy_intent_mode": spec.intent_mode,
             "required_feature_columns": list(spec.required_feature_columns),
+            "required_feature_sets": list(strategy.required_feature_sets()),
             "strategy_class": strategy.__class__.__name__,
             "strategy_module": strategy.__class__.__module__,
             "run_date": run_date,
@@ -92,6 +100,12 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+
+    @staticmethod
+    def _config_hash(config: ValidationConfig) -> str:
+        return hashlib.sha256(
+            json.dumps(asdict(config), sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
 
     def backtest(
@@ -106,7 +120,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
-        features_df = precompute_features(btc_df)
+        start_ts = pd.Timestamp(config.start_date or BACKTEST_START)
+        end_ts = pd.Timestamp(config.end_date or btc_df.index.max()).normalize()
+        full_features_df = self._materialize_strategy_features(
+            strategy,
+            btc_df,
+            start_date=start_ts,
+            end_date=end_ts,
+            current_date=end_ts,
+        )
 
         def _strategy_fn(df_window: pd.DataFrame) -> pd.Series:
             if df_window.empty:
@@ -114,8 +136,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
             window_start = df_window.index.min()
             window_end = df_window.index.max()
+            window_features = self._materialize_strategy_features(
+                strategy,
+                btc_df,
+                start_date=window_start,
+                end_date=window_end,
+                current_date=window_end,
+            )
             ctx = StrategyContext(
-                features_df=features_df,
+                features_df=window_features,
                 start_date=window_start,
                 end_date=window_end,
                 current_date=window_end,
@@ -129,7 +158,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
             btc_df,
             _strategy_fn,
-            features_df=features_df,
+            features_df=full_features_df,
             strategy_label=strategy_label,
             start_date=config.start_date,
             end_date=config.end_date,
@@ -164,18 +193,32 @@ class StrategyRunner(StrategyRunnerValidationMixin):
     ):
         from .api import ValidationResult
 
-        self._validate_strategy_contract(strategy)
+        try:
+            self._validate_strategy_contract(strategy)
+        except (TypeError, ValueError) as exc:
+            return ValidationResult(
+                passed=False,
+                forward_leakage_ok=False,
+                weight_constraints_ok=False,
+                win_rate=0.0,
+                win_rate_ok=False,
+                messages=[str(exc)],
+                min_win_rate=float(config.min_win_rate),
+                diagnostics={},
+            )
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
 
         start_date = config.start_date or BACKTEST_START
         end_date = config.end_date or btc_df.index.max().strftime("%Y-%m-%d")
-        features_df = precompute_features(btc_df)
         start_ts = pd.to_datetime(start_date)
         end_ts = pd.to_datetime(end_date)
         backtest_idx = btc_df.loc[start_ts:end_ts].index
 
         strict_mode = bool(config.strict)
-        state = _ValidationState(messages=[])
+        state = _ValidationState(messages=[], diagnostics={})
+        state.messages.extend(
+            f"Strategy lint warning: {warning}" for warning in self._strategy_lint_warnings(strategy)
+        )
 
         if len(backtest_idx) == 0:
             return ValidationResult(
@@ -186,15 +229,30 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 win_rate_ok=False,
                 messages=["No data available in the requested date range."],
                 min_win_rate=float(config.min_win_rate),
+                diagnostics={},
             )
 
-        probe_step = 1 if strict_mode else max(len(backtest_idx) // 50, 1)
+        features_df = self._materialize_strategy_features(
+            strategy,
+            btc_df,
+            start_date=start_ts,
+            end_date=end_ts,
+            current_date=end_ts,
+        )
+        if strict_mode:
+            probe_step = 1 if len(backtest_idx) <= (ALLOCATION_SPAN_DAYS * 2) else max(
+                len(backtest_idx) // 100,
+                1,
+            )
+        else:
+            probe_step = max(len(backtest_idx) // 50, 1)
         active_intent_mode = strategy.intent_mode()
         has_propose_hook = active_intent_mode == "propose"
         has_profile_hook = active_intent_mode == "profile"
         self._run_forward_leakage_checks(
             strategy=strategy,
-            features_df=features_df,
+            btc_df=btc_df,
+            full_features_df=features_df,
             backtest_idx=backtest_idx,
             start_ts=start_ts,
             strict_mode=strict_mode,
@@ -205,6 +263,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         )
         max_window_start = self._run_weight_constraint_checks(
             strategy=strategy,
+            btc_df=btc_df,
             features_df=features_df,
             start_ts=start_ts,
             end_ts=end_ts,
@@ -214,6 +273,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         )
         self._run_locked_prefix_check(
             strategy=strategy,
+            btc_df=btc_df,
             features_df=features_df,
             start_ts=start_ts,
             max_window_start=max_window_start,
@@ -259,6 +319,16 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
             state.strict_checks_ok = state.strict_checks_ok and shuffled_ok
             state.messages.extend(shuffled_messages)
+            self._strict_statistical_checks(
+                strategy=strategy,
+                btc_df=btc_df,
+                features_df=features_df,
+                start_ts=start_ts,
+                end_ts=end_ts,
+                config=config,
+                state=state,
+                backtest_result=backtest_result,
+            )
 
         if strict_mode and not state.mutation_safe:
             state.strict_checks_ok = False
@@ -279,6 +349,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             win_rate_ok=win_rate_ok,
             messages=state.messages,
             min_win_rate=float(config.min_win_rate),
+            diagnostics=state.diagnostics or {},
         )
 
     def run_daily(
@@ -375,9 +446,20 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 message="Existing completed run reused via idempotency ledger.",
                 order_receipt=order_receipt,
                 bootstrap=bool(payload.get("bootstrap", False)),
+                validation_receipt_id=(
+                    int(payload["validation_receipt_id"])
+                    if payload.get("validation_receipt_id") is not None
+                    else None
+                ),
+                validation_passed=payload.get("validation_passed"),
+                data_hash=str(payload.get("data_hash", "")),
+                feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
             )
 
         bootstrap = False
+        validation_receipt_id: int | None = None
+        data_hash = ""
+        feature_snapshot_hash = ""
         try:
             btc_df_loaded = self._load_btc_df(btc_df, end_date=run_date)
             if config.btc_price_col not in btc_df_loaded.columns:
@@ -393,7 +475,48 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                     "Missing BTC price data for required allocation window ending on run_date."
                 )
 
-            features_df = precompute_features(btc_df_loaded)
+            validation_config = ValidationConfig(
+                start_date=window_start.strftime("%Y-%m-%d"),
+                end_date=window_end.strftime("%Y-%m-%d"),
+                strict=True,
+            )
+            validation_result = self.validate(
+                strategy,
+                validation_config,
+                btc_df=btc_df_loaded,
+            )
+            provider_hash = self._feature_registry.provider_fingerprint(strategy)
+            observed_features, feature_snapshot_hash = self._feature_registry.materialization_fingerprint(
+                strategy,
+                btc_df_loaded,
+                start_date=window_start,
+                end_date=window_end,
+                current_date=window_end,
+            )
+            data_hash = hash_dataframe(btc_df_loaded.loc[:window_end].copy())
+            validation_receipt = state_store.create_validation_receipt(
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
+                run_date=run_date,
+                fingerprint=fingerprint,
+                data_hash=data_hash,
+                provider_hash=provider_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+                config_hash=self._config_hash(validation_config),
+                passed=bool(validation_result.passed),
+                diagnostics={
+                    "summary": validation_result.summary(),
+                    "messages": validation_result.messages,
+                    "diagnostics": validation_result.diagnostics,
+                },
+            )
+            validation_receipt_id = validation_receipt.receipt_id
+            if not validation_result.passed:
+                raise ValueError(
+                    "Strict validation failed before daily execution: "
+                    + "; ".join(validation_result.messages)
+                )
+
             locked_prefix = state_store.load_locked_prefix(
                 strategy_id=metadata.strategy_id,
                 strategy_version=metadata.version,
@@ -404,7 +527,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             if locked_prefix is None:
                 bootstrap = True
             ctx = StrategyContext(
-                features_df=features_df,
+                features_df=observed_features,
                 start_date=window_start,
                 end_date=window_end,
                 current_date=window_end,
@@ -478,6 +601,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 ),
                 order_receipt=receipt,
                 bootstrap=bootstrap,
+                validation_receipt_id=validation_receipt_id,
+                validation_passed=True,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
             )
             result_payload = result.to_json(path=artifact_path)
             state_store.mark_run_success_with_snapshot(
@@ -490,6 +617,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 force_flag=bool(config.force or claim.forced_overwrite),
                 snapshot_date=run_date,
                 weights=weights,
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
             )
             return result
         except IdempotencyConflictError:
@@ -512,6 +642,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 mode=config.mode,
                 payload=failure_payload,
                 force_flag=bool(config.force or claim.forced_overwrite),
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
             )
             return DailyRunResult(
                 status="failed",
@@ -534,7 +667,79 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 message=f"Daily execution failed: {error_message}",
                 order_receipt=None,
                 bootstrap=bootstrap,
+                validation_receipt_id=validation_receipt_id,
+                validation_passed=False if validation_receipt_id is not None else None,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
             )
+
+    def reconcile_daily_run(
+        self,
+        strategy: BaseStrategy,
+        *,
+        run_date: str,
+        mode: str = "paper",
+        state_db_path: str = ".stacksats/run_state.sqlite3",
+        btc_df: pd.DataFrame | None = None,
+    ) -> dict[str, object]:
+        from .execution_state import SQLiteExecutionStateStore
+
+        self._validate_strategy_contract(strategy)
+        metadata = strategy.metadata()
+        state_store = SQLiteExecutionStateStore(state_db_path)
+        stored = state_store.get_run(
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            mode=mode,
+        )
+        if stored is None:
+            raise ValueError("No stored daily run exists for the requested key.")
+        btc_df_loaded = self._load_btc_df(btc_df, end_date=run_date)
+        run_ts = pd.Timestamp(run_date).normalize()
+        window_end = run_ts
+        window_start = window_end - ALLOCATION_WINDOW_OFFSET
+        locked_prefix = state_store.load_locked_prefix(
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            mode=mode,
+            run_date=run_date,
+            window_start=window_start,
+        )
+        features_df, feature_snapshot_hash = self._feature_registry.materialization_fingerprint(
+            strategy,
+            btc_df_loaded,
+            start_date=window_start,
+            end_date=window_end,
+            current_date=window_end,
+        )
+        weights = strategy.compute_weights(
+            StrategyContext(
+                features_df=features_df,
+                start_date=window_start,
+                end_date=window_end,
+                current_date=window_end,
+                locked_weights=locked_prefix,
+            )
+        )
+        weight_today = float(weights.loc[run_ts]) if run_ts in weights.index else None
+        prior_weight = stored.payload.get("weight_today")
+        if prior_weight is None or weight_today is None:
+            status = "stable"
+        elif abs(float(prior_weight) - float(weight_today)) <= 1e-12:
+            if stored.payload.get("feature_snapshot_hash", "") == feature_snapshot_hash:
+                status = "stable"
+            else:
+                status = "data_revised_no_decision_change"
+        else:
+            status = "decision_changed_due_to_revision"
+        return {
+            "status": status,
+            "previous_weight_today": prior_weight,
+            "recomputed_weight_today": weight_today,
+            "previous_feature_snapshot_hash": stored.payload.get("feature_snapshot_hash", ""),
+            "recomputed_feature_snapshot_hash": feature_snapshot_hash,
+        }
 
     def export(
         self,
@@ -550,8 +755,14 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.range_end)
-        features_df = precompute_features(btc_df)
         run_date = current_date or pd.Timestamp.now().normalize()
+        features_df = self._materialize_strategy_features(
+            strategy,
+            btc_df,
+            start_date=pd.Timestamp(config.range_start),
+            end_date=pd.Timestamp(config.range_end),
+            current_date=run_date,
+        )
 
         date_ranges = generate_date_ranges(config.range_start, config.range_end)
         grouped_ranges = group_ranges_by_start_date(date_ranges)

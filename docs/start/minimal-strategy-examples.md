@@ -27,11 +27,14 @@ class MinimalProposeWeightStrategy(BaseStrategy):
     version = "1.0.0"
     description = "Minimal strategy using propose_weight(state)."
 
+    def required_feature_sets(self) -> tuple[str, ...]:
+        return ("core_model_features_v1",)
+
     def required_feature_columns(self) -> tuple[str, ...]:
         return ()
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+        return ctx.features_df.copy()
 
     def propose_weight(self, state: DayState) -> float:
         # Simple bias: buy slightly more when MVRV is lower.
@@ -66,11 +69,14 @@ class MinimalTargetProfileStrategy(BaseStrategy):
     version = "1.0.0"
     description = "Minimal strategy using build_target_profile(...)."
 
+    def required_feature_sets(self) -> tuple[str, ...]:
+        return ("core_model_features_v1",)
+
     def required_feature_columns(self) -> tuple[str, ...]:
         return ("mvrv_zscore", "price_vs_ma")
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+        return ctx.features_df.copy()
 
     def build_signals(
         self, ctx: StrategyContext, features_df: pd.DataFrame
@@ -117,6 +123,7 @@ A successful run for either style should show:
 
 - Keep long-lived config in public attrs or override `params()`.
 - Keep runtime caches private (for example `_cache`), so they are excluded from the stable strategy contract.
+- Use `required_feature_sets()` for framework-owned provider inputs; do not load files or network data in strategy methods.
 - If you implement both intent hooks, set `intent_preference` explicitly.
 
 ## Next Steps

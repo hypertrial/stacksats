@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
+from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
     from .api import BacktestResult, DailyRunResult, ValidationResult
@@ -53,6 +55,13 @@ class ValidationConfig:
     max_shuffled_win_rate: float = 80.0
     shuffled_trials: int = 3
     max_boundary_hit_rate: float = 0.85
+    block_size: int = 30
+    bootstrap_trials: int = 500
+    permutation_trials: int = 200
+    max_permutation_pvalue: float = 0.10
+    min_bootstrap_ci_lower_excess: float = 0.0
+    max_feature_psi: float = 0.25
+    max_feature_ks: float = 0.25
 
 
 def _default_export_range_start() -> str:
@@ -104,7 +113,8 @@ class StrategySpec:
     metadata: StrategyMetadata
     intent_mode: Literal["propose", "profile"]
     params: dict[str, object]
-    required_feature_columns: tuple[str, ...]
+    required_feature_sets: tuple[str, ...] = ()
+    required_feature_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -279,6 +289,7 @@ class BaseStrategy(ABC):
             metadata=self.metadata(),
             intent_mode=self.intent_mode(),
             params=self.params(),
+            required_feature_sets=tuple(self.required_feature_sets()),
             required_feature_columns=tuple(self.required_feature_columns()),
         )
 
@@ -309,9 +320,13 @@ class BaseStrategy(ABC):
         """Return transformed feature columns required for this strategy."""
         return ()
 
+    def required_feature_sets(self) -> tuple[str, ...]:
+        """Return framework-owned feature provider IDs required by this strategy."""
+        return ("core_model_features_v1",)
+
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         """Hook for user-defined feature transforms on the active window."""
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+        return ctx.features_df.copy()
 
     def build_signals(
         self,
@@ -396,12 +411,14 @@ class BaseStrategy(ABC):
         from .framework_contract import compute_n_past
 
         expected_index = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
+        observed_end = min(pd.Timestamp(ctx.current_date), pd.Timestamp(ctx.end_date))
+        observed_index = pd.date_range(ctx.start_date, observed_end, freq="D")
         features_df = self.transform_features(ctx)
         if not isinstance(features_df, pd.DataFrame):
             raise TypeError("transform_features must return a pandas DataFrame.")
         if len(expected_index) == 0:
             return pd.Series(dtype=float)
-        features_df = features_df.reindex(expected_index).ffill().fillna(0.0)
+        features_df = features_df.reindex(observed_index).ffill().fillna(0.0)
         _validate_required_feature_columns(self, features_df)
 
         signals = self.build_signals(ctx, features_df)
@@ -410,7 +427,7 @@ class BaseStrategy(ABC):
         validated_signals: dict[str, pd.Series] = {}
         for key, series in signals.items():
             validated_signals[key] = self._validate_series(
-                series, name=f"signal '{key}'", expected_index=expected_index
+                series, name=f"signal '{key}'", expected_index=observed_index
             )
 
         n_past = compute_n_past(expected_index, ctx.current_date)
@@ -436,7 +453,7 @@ class BaseStrategy(ABC):
             values = profile
 
         target_series = self._validate_series(
-            values, name="target profile", expected_index=expected_index
+            values, name="target profile", expected_index=observed_index
         )
         from .model_development import compute_weights_from_target_profile
 
@@ -615,4 +632,14 @@ def validate_strategy_contract(strategy: BaseStrategy) -> tuple[bool, bool]:
     preference = strategy.intent_preference
     if preference is not None and preference not in {"propose", "profile"}:
         raise ValueError("intent_preference must be 'propose', 'profile', or None.")
+    feature_sets = tuple(strategy.required_feature_sets())
+    if len(feature_sets) == 0:
+        raise ValueError("Strategy must declare at least one required_feature_set.")
+    for provider_id in feature_sets:
+        DEFAULT_FEATURE_REGISTRY.get(provider_id)
+    lint_errors, _ = summarize_lint_findings(lint_strategy_class(strategy.__class__))
+    if lint_errors:
+        raise TypeError(
+            "Strategy failed causal lint checks: " + " | ".join(lint_errors)
+        )
     return has_propose_hook, has_profile_hook

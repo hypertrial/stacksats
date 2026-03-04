@@ -83,10 +83,19 @@ def _build_parser() -> argparse.ArgumentParser:
     validate_cmd.add_argument("--start-date", default=None)
     validate_cmd.add_argument("--end-date", default=None)
     validate_cmd.add_argument("--min-win-rate", type=float, default=50.0)
-    validate_cmd.add_argument(
+    validate_strict_group = validate_cmd.add_mutually_exclusive_group()
+    validate_strict_group.add_argument(
         "--strict",
+        dest="strict",
         action="store_true",
-        help="Run additional robustness gates (determinism, mutation, leakage, OOS, placebo).",
+        default=True,
+        help="Run additional robustness gates (enabled by default).",
+    )
+    validate_strict_group.add_argument(
+        "--no-strict",
+        dest="strict",
+        action="store_false",
+        help="Disable strict robustness gates.",
     )
 
     backtest_cmd = strategy_sub.add_parser(
@@ -162,6 +171,21 @@ def _build_parser() -> argparse.ArgumentParser:
     run_daily_cmd.add_argument("--output-dir", default="output")
     run_daily_cmd.add_argument("--btc-price-col", default="PriceUSD_coinmetrics")
     run_daily_cmd.add_argument("--force", action="store_true")
+
+    reconcile_cmd = strategy_sub.add_parser(
+        "reconcile-daily",
+        help="Reconcile a stored daily run against current data",
+        formatter_class=_HelpFormatter,
+    )
+    reconcile_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
+    reconcile_cmd.add_argument(
+        "--strategy-config",
+        default=None,
+        help="JSON config path for strategy parameters",
+    )
+    reconcile_cmd.add_argument("--run-date", required=True)
+    reconcile_cmd.add_argument("--mode", choices=("paper", "live"), default="paper")
+    reconcile_cmd.add_argument("--state-db-path", default=".stacksats/run_state.sqlite3")
     return parser
 
 
@@ -262,6 +286,16 @@ def main() -> None:
                 return
             print("Status: FAILED")
             raise SystemExit(1)
+
+        if args.strategy_command == "reconcile-daily":
+            result = runner.reconcile_daily_run(
+                strategy,
+                run_date=args.run_date,
+                mode=args.mode,
+                state_db_path=args.state_db_path,
+            )
+            print(json.dumps(result, indent=2))
+            return
 
         parser.error("Unsupported command.")
     except JSONDecodeError as exc:

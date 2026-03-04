@@ -201,6 +201,39 @@ def test_process_start_date_batch_reindexes_partial_strategy_output() -> None:
     assert result["weight"].tolist() == [0.7, 0.0]
 
 
+def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
+    idx = pd.date_range("2024-01-01", periods=4, freq="D")
+    features_df = pd.DataFrame(
+        {
+            "PriceUSD_coinmetrics": [100.0, 101.0, 102.0, 103.0],
+            "mvrv_zscore": [0.0, 0.1, 0.2, 0.3],
+        },
+        index=idx,
+    )
+    btc_df = pd.DataFrame({"PriceUSD_coinmetrics": [100.0, 101.0]}, index=idx[:2])
+    strategy = _StrategyWithHook()
+    captured_max: list[pd.Timestamp] = []
+
+    def _compute_weights(ctx):
+        captured_max.append(ctx.features_df.index.max())
+        return pd.Series([0.5, 0.5], index=pd.date_range(idx[0], idx[1], freq="D"))
+
+    strategy.compute_weights = MagicMock(side_effect=_compute_weights)
+
+    process_start_date_batch(
+        idx[0],
+        [idx[1]],
+        features_df,
+        btc_df,
+        current_date=idx[-1],
+        btc_price_col="PriceUSD_coinmetrics",
+        strategy=strategy,
+        enforce_span_contract=False,
+    )
+
+    assert captured_max == [idx[1]]
+
+
 def test_update_today_weights_returns_zero_when_today_absent() -> None:
     conn = MagicMock()
     cursor = conn.cursor.return_value.__enter__.return_value

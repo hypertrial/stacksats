@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stacksats.api import BacktestResult, DailyRunResult
+from stacksats.api import BacktestResult, DailyRunResult, ValidationResult
 from stacksats.backtest import create_performance_metrics_summary
 from stacksats.execution_adapters import load_execution_adapter
 from stacksats.export_weights_runtime import insert_all_data
@@ -38,6 +38,22 @@ def _btc_df(days: int = 900) -> pd.DataFrame:
             "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
         },
         index=idx,
+    )
+
+
+def _allow_validation(runner: StrategyRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runner,
+        "validate",
+        lambda *args, **kwargs: ValidationResult(
+            passed=True,
+            forward_leakage_ok=True,
+            weight_constraints_ok=True,
+            win_rate=100.0,
+            win_rate_ok=True,
+            messages=["ok"],
+            diagnostics={},
+        ),
     )
 
 
@@ -216,6 +232,7 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
     btc = _btc_df()
+    _allow_validation(runner, monkeypatch)
 
     with pytest.raises(ValueError, match="greater than 0"):
         runner.run_daily(

@@ -7,8 +7,6 @@ lightweight, lagged gating to reduce over-allocation in adverse regimes.
 from __future__ import annotations
 
 import argparse
-import os
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,6 +28,20 @@ class MVRVPlusStrategy(BaseStrategy):
     strategy_id = "mvrv-plus"
     version = "0.1.0"
     description = "MVRV baseline with CoinMetrics-aware regime and risk overlays."
+    overlay_features: tuple[str, ...] = (
+        "cm_netflow",
+        "cm_exchange_share",
+        "cm_exchange_share_delta",
+        "cm_activity_div",
+        "cm_roi_context",
+        "cm_liquidity_impulse",
+        "cm_miner_pressure",
+        "cm_hash_momentum",
+    )
+    derived_features: tuple[str, ...] = (
+        "plus_vol21",
+        "plus_drawdown90",
+    )
 
     def __init__(
         self,
@@ -62,15 +74,12 @@ class MVRVPlusStrategy(BaseStrategy):
         self.risk_budget_max = risk_budget_max
         self.miner_pressure_weight = miner_pressure_weight
         self.hash_momentum_weight = hash_momentum_weight
-        self.coinmetrics_csv = Path(
-            os.environ.get(
-                "STACKSATS_COINMETRICS_CSV", "~/.stacksats/cache/coinmetrics_btc.csv"
-            )
-        ).expanduser()
-        self._coinmetrics_overlays: pd.DataFrame | None = None
 
     def required_feature_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics", *FEATS)
+        return ("PriceUSD_coinmetrics", *FEATS, *self.overlay_features, *self.derived_features)
+
+    def required_feature_sets(self) -> tuple[str, ...]:
+        return ("core_model_features_v1", "coinmetrics_overlay_v1")
 
     @staticmethod
     def _safe_array(values: pd.Series, fill: float = 0.0) -> np.ndarray:
@@ -98,120 +107,8 @@ class MVRVPlusStrategy(BaseStrategy):
             out[i] = (a * float(values[i])) + ((1.0 - a) * out[i - 1])
         return out
 
-    @staticmethod
-    def _to_numeric(df: pd.DataFrame, columns: list[str]) -> None:
-        for col in columns:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    def _load_coinmetrics_overlays(self) -> pd.DataFrame:
-        if self._coinmetrics_overlays is not None:
-            return self._coinmetrics_overlays
-        if not self.coinmetrics_csv.exists():
-            self._coinmetrics_overlays = pd.DataFrame()
-            return self._coinmetrics_overlays
-
-        raw = pd.read_csv(self.coinmetrics_csv)
-        if "time" not in raw.columns:
-            self._coinmetrics_overlays = pd.DataFrame()
-            return self._coinmetrics_overlays
-
-        raw["time"] = pd.to_datetime(raw["time"], errors="coerce")
-        raw = raw.dropna(subset=["time"]).set_index("time")
-        raw.index = raw.index.normalize().tz_localize(None)
-        raw = raw.loc[~raw.index.duplicated(keep="last")].sort_index()
-        self._to_numeric(
-            raw,
-            [
-                "PriceUSD",
-                "CapMrktCurUSD",
-                "FlowInExUSD",
-                "FlowOutExUSD",
-                "SplyExNtv",
-                "SplyCur",
-                "AdrActCnt",
-                "TxCnt",
-                "TxTfrCnt",
-                "ROI30d",
-                "ROI1yr",
-                "volume_reported_spot_usd_1d",
-                "IssTotUSD",
-                "HashRate",
-            ],
-        )
-
-        features = pd.DataFrame(index=raw.index)
-
-        if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
-            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            netflow = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
-            features["cm_netflow"] = self._rolling_zscore(
-                netflow.rolling(7, min_periods=3).mean(), 180
-            )
-        else:
-            features["cm_netflow"] = 0.0
-
-        if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
-            exchange_share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
-            features["cm_exchange_share"] = self._rolling_zscore(exchange_share, 365)
-            features["cm_exchange_share_delta"] = self._rolling_zscore(
-                exchange_share.diff(30), 365
-            )
-        else:
-            features["cm_exchange_share"] = 0.0
-            features["cm_exchange_share_delta"] = 0.0
-
-        activity_parts: list[pd.Series] = []
-        for col in ("AdrActCnt", "TxCnt", "TxTfrCnt"):
-            if col in raw.columns:
-                activity_parts.append(self._rolling_zscore(np.log1p(raw[col]), 365))
-        if activity_parts:
-            activity = sum(activity_parts) / float(len(activity_parts))
-            if "PriceUSD" in raw.columns:
-                price_log = np.log(raw["PriceUSD"].replace(0.0, np.nan))
-                momentum = self._rolling_zscore(price_log.diff(30), 365)
-            else:
-                momentum = pd.Series(0.0, index=raw.index)
-            features["cm_activity_div"] = activity - momentum
-        else:
-            features["cm_activity_div"] = 0.0
-
-        if "ROI30d" in raw.columns and "ROI1yr" in raw.columns:
-            roi30 = self._rolling_zscore(raw["ROI30d"], 365)
-            roi1y = self._rolling_zscore(raw["ROI1yr"], 365)
-            features["cm_roi_context"] = (-0.65 * roi30) + (-0.35 * roi1y)
-        else:
-            features["cm_roi_context"] = 0.0
-
-        if "volume_reported_spot_usd_1d" in raw.columns:
-            vol = np.log1p(raw["volume_reported_spot_usd_1d"])
-            features["cm_liquidity_impulse"] = self._rolling_zscore(vol.diff(7), 180)
-        else:
-            features["cm_liquidity_impulse"] = 0.0
-
-        if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
-            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            issuance = raw["IssTotUSD"] / cap
-            features["cm_miner_pressure"] = self._rolling_zscore(issuance, 365)
-        else:
-            features["cm_miner_pressure"] = 0.0
-
-        if "HashRate" in raw.columns:
-            hash_log = np.log(raw["HashRate"].replace(0.0, np.nan))
-            hash_mom = self._rolling_zscore(hash_log.diff(30), 365)
-            features["cm_hash_momentum"] = hash_mom
-        else:
-            features["cm_hash_momentum"] = 0.0
-
-        features = features.shift(1)
-        features = (
-            features.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(-6.0, 6.0)
-        )
-        self._coinmetrics_overlays = features
-        return self._coinmetrics_overlays
-
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+        window = ctx.features_df.copy()
         if window.empty:
             return window
 
@@ -224,9 +121,6 @@ class MVRVPlusStrategy(BaseStrategy):
         # Shift by one day to avoid using same-day information.
         window["plus_vol21"] = rolling_vol.shift(1).fillna(0.0)
         window["plus_drawdown90"] = drawdown.shift(1).fillna(0.0)
-        overlays = self._load_coinmetrics_overlays()
-        if not overlays.empty:
-            window = window.join(overlays.reindex(window.index).fillna(0.0), how="left")
         window = window.fillna(0.0)
         return window
 

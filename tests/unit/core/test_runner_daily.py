@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.api import ValidationResult
 from stacksats.execution_state import IdempotencyConflictError
 from stacksats.runner import StrategyRunner
 from stacksats.strategies.model_example import ExampleMVRVStrategy
@@ -53,8 +54,25 @@ def _config(tmp_path, **overrides) -> RunDailyConfig:
     return RunDailyConfig(**params)
 
 
-def test_run_daily_executes_paper_order(tmp_path) -> None:
+def _allow_validation(runner: StrategyRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runner,
+        "validate",
+        lambda *args, **kwargs: ValidationResult(
+            passed=True,
+            forward_leakage_ok=True,
+            weight_constraints_ok=True,
+            win_rate=100.0,
+            win_rate_ok=True,
+            messages=["ok"],
+            diagnostics={},
+        ),
+    )
+
+
+def test_run_daily_executes_paper_order(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     result = runner.run_daily(
         _UniformDailyStrategy(),
         _config(tmp_path),
@@ -67,8 +85,12 @@ def test_run_daily_executes_paper_order(tmp_path) -> None:
     assert result.artifact_path is not None
 
 
-def test_run_daily_second_invocation_is_noop_for_same_inputs(tmp_path) -> None:
+def test_run_daily_second_invocation_is_noop_for_same_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     strategy = _UniformDailyStrategy()
     first = runner.run_daily(strategy, _config(tmp_path), btc_df=_btc_df())
     second = runner.run_daily(strategy, _config(tmp_path), btc_df=_btc_df())
@@ -78,8 +100,12 @@ def test_run_daily_second_invocation_is_noop_for_same_inputs(tmp_path) -> None:
     assert second.run_key == first.run_key
 
 
-def test_run_daily_conflict_without_force_on_changed_inputs(tmp_path) -> None:
+def test_run_daily_conflict_without_force_on_changed_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     strategy = _UniformDailyStrategy()
     runner.run_daily(strategy, _config(tmp_path), btc_df=_btc_df())
     with pytest.raises(IdempotencyConflictError):
@@ -90,8 +116,12 @@ def test_run_daily_conflict_without_force_on_changed_inputs(tmp_path) -> None:
         )
 
 
-def test_run_daily_force_rerun_allows_changed_inputs(tmp_path) -> None:
+def test_run_daily_force_rerun_allows_changed_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     strategy = _UniformDailyStrategy()
     runner.run_daily(strategy, _config(tmp_path), btc_df=_btc_df())
     forced = runner.run_daily(
@@ -103,10 +133,14 @@ def test_run_daily_force_rerun_allows_changed_inputs(tmp_path) -> None:
     assert forced.forced_rerun is True
 
 
-def test_run_daily_missing_price_data_returns_failed_result(tmp_path) -> None:
+def test_run_daily_missing_price_data_returns_failed_result(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     df = _btc_df()
     df.loc[pd.Timestamp("2024-12-31"), "PriceUSD_coinmetrics"] = np.nan
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     result = runner.run_daily(
         _UniformDailyStrategy(),
         _config(tmp_path),
@@ -126,8 +160,12 @@ def test_run_daily_live_mode_requires_adapter(tmp_path) -> None:
         )
 
 
-def test_run_daily_reuses_prior_snapshot_for_locked_prefix(tmp_path) -> None:
+def test_run_daily_reuses_prior_snapshot_for_locked_prefix(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
     strategy = _ObservingUniformDailyStrategy()
     runner.run_daily(
         strategy,
@@ -144,31 +182,28 @@ def test_run_daily_reuses_prior_snapshot_for_locked_prefix(tmp_path) -> None:
     assert strategy.locked_prefix_len == 364
 
 
-def test_daily_run_fingerprint_ignores_example_strategy_runtime_cache(tmp_path) -> None:
+def test_daily_run_fingerprint_uses_provider_contract_for_example_strategy(tmp_path) -> None:
     runner = StrategyRunner()
     strategy = ExampleMVRVStrategy()
-    strategy.coinmetrics_cache_path = tmp_path / "missing_coinmetrics.csv"
 
     before = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
-    strategy._load_coinmetrics_features()
+    strategy.overlay_scale = 0.95
     after = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
 
-    assert before == after
+    assert before != after
 
 
-def test_daily_run_fingerprint_ignores_mvrv_plus_runtime_cache_but_tracks_params(tmp_path) -> None:
+def test_daily_run_fingerprint_tracks_mvrv_plus_params(tmp_path) -> None:
     runner = StrategyRunner()
     strategy = MVRVPlusStrategy(overlay_scale=0.20)
-    strategy.coinmetrics_csv = tmp_path / "missing_coinmetrics.csv"
 
     before = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
-    strategy._load_coinmetrics_overlays()
-    after_cache = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
+    after_same = runner._daily_run_fingerprint(strategy, _config(tmp_path), "2024-12-31")
     changed = runner._daily_run_fingerprint(
         MVRVPlusStrategy(overlay_scale=0.35),
         _config(tmp_path),
         "2024-12-31",
     )
 
-    assert before == after_cache
+    assert before == after_same
     assert before != changed

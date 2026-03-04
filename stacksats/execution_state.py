@@ -36,6 +36,21 @@ class RunClaim:
     forced_overwrite: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class ValidationReceipt:
+    receipt_id: int
+    strategy_id: str
+    strategy_version: str
+    run_date: str
+    fingerprint: str
+    data_hash: str
+    provider_hash: str
+    feature_snapshot_hash: str
+    config_hash: str
+    passed: bool
+    diagnostics: dict
+
+
 class SQLiteExecutionStateStore:
     """Durable idempotency and snapshot state for daily strategy runs."""
 
@@ -65,6 +80,9 @@ class SQLiteExecutionStateStore:
                     status TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
                     order_json TEXT,
+                    validation_receipt_id INTEGER,
+                    data_hash TEXT NOT NULL DEFAULT '',
+                    feature_snapshot_hash TEXT NOT NULL DEFAULT '',
                     force_flag INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -85,6 +103,52 @@ class SQLiteExecutionStateStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS validation_receipts (
+                    receipt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strategy_id TEXT NOT NULL,
+                    strategy_version TEXT NOT NULL,
+                    run_date TEXT NOT NULL,
+                    fingerprint TEXT NOT NULL,
+                    data_hash TEXT NOT NULL,
+                    provider_hash TEXT NOT NULL,
+                    feature_snapshot_hash TEXT NOT NULL,
+                    config_hash TEXT NOT NULL,
+                    passed INTEGER NOT NULL,
+                    diagnostics_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """
+            )
+            self._ensure_column(
+                conn,
+                table="daily_runs",
+                column="validation_receipt_id",
+                ddl="INTEGER",
+            )
+            self._ensure_column(
+                conn,
+                table="daily_runs",
+                column="data_hash",
+                ddl="TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                conn,
+                table="daily_runs",
+                column="feature_snapshot_hash",
+                ddl="TEXT NOT NULL DEFAULT ''",
+            )
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, *, table: str, column: str, ddl: str) -> None:
+        columns = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column in columns:
+            return
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def claim_run(
         self,
@@ -121,8 +185,11 @@ class SQLiteExecutionStateStore:
                         status,
                         payload_json,
                         order_json,
+                        validation_receipt_id,
+                        data_hash,
+                        feature_snapshot_hash,
                         force_flag
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'running', '{}', NULL, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'running', '{}', NULL, NULL, '', '', ?)
                     """,
                     (
                         strategy_id,
@@ -153,6 +220,9 @@ class SQLiteExecutionStateStore:
                     status = 'running',
                     payload_json = '{}',
                     order_json = NULL,
+                    validation_receipt_id = NULL,
+                    data_hash = '',
+                    feature_snapshot_hash = '',
                     force_flag = ?,
                     updated_at = datetime('now')
                 WHERE strategy_id = ? AND strategy_version = ? AND run_date = ? AND mode = ?
@@ -179,6 +249,9 @@ class SQLiteExecutionStateStore:
         payload: dict,
         order_summary: dict | None,
         force_flag: bool,
+        validation_receipt_id: int | None = None,
+        data_hash: str = "",
+        feature_snapshot_hash: str = "",
     ) -> None:
         self._update_run(
             strategy_id=strategy_id,
@@ -189,6 +262,9 @@ class SQLiteExecutionStateStore:
             payload=payload,
             order_summary=order_summary,
             force_flag=force_flag,
+            validation_receipt_id=validation_receipt_id,
+            data_hash=data_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
         )
 
     def mark_run_success_with_snapshot(
@@ -203,6 +279,9 @@ class SQLiteExecutionStateStore:
         force_flag: bool,
         snapshot_date: str,
         weights: pd.Series,
+        validation_receipt_id: int | None = None,
+        data_hash: str = "",
+        feature_snapshot_hash: str = "",
     ) -> None:
         normalized_run_date = _normalize_date_str(run_date)
         normalized_snapshot_date = _normalize_date_str(snapshot_date)
@@ -226,6 +305,9 @@ class SQLiteExecutionStateStore:
                 SET status = 'executed',
                     payload_json = ?,
                     order_json = ?,
+                    validation_receipt_id = ?,
+                    data_hash = ?,
+                    feature_snapshot_hash = ?,
                     force_flag = ?,
                     updated_at = datetime('now')
                 WHERE strategy_id = ? AND strategy_version = ? AND run_date = ? AND mode = ?
@@ -237,6 +319,9 @@ class SQLiteExecutionStateStore:
                         if order_summary is not None
                         else None
                     ),
+                    validation_receipt_id,
+                    data_hash,
+                    feature_snapshot_hash,
                     int(bool(force_flag)),
                     strategy_id,
                     strategy_version,
@@ -277,6 +362,9 @@ class SQLiteExecutionStateStore:
         mode: str,
         payload: dict,
         force_flag: bool,
+        validation_receipt_id: int | None = None,
+        data_hash: str = "",
+        feature_snapshot_hash: str = "",
     ) -> None:
         self._update_run(
             strategy_id=strategy_id,
@@ -287,6 +375,9 @@ class SQLiteExecutionStateStore:
             payload=payload,
             order_summary=None,
             force_flag=force_flag,
+            validation_receipt_id=validation_receipt_id,
+            data_hash=data_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
         )
 
     def _update_run(
@@ -300,6 +391,9 @@ class SQLiteExecutionStateStore:
         payload: dict,
         order_summary: dict | None,
         force_flag: bool,
+        validation_receipt_id: int | None,
+        data_hash: str,
+        feature_snapshot_hash: str,
     ) -> None:
         normalized_run_date = _normalize_date_str(run_date)
         with self._connect() as conn:
@@ -309,6 +403,9 @@ class SQLiteExecutionStateStore:
                 SET status = ?,
                     payload_json = ?,
                     order_json = ?,
+                    validation_receipt_id = ?,
+                    data_hash = ?,
+                    feature_snapshot_hash = ?,
                     force_flag = ?,
                     updated_at = datetime('now')
                 WHERE strategy_id = ? AND strategy_version = ? AND run_date = ? AND mode = ?
@@ -321,6 +418,9 @@ class SQLiteExecutionStateStore:
                         if order_summary is not None
                         else None
                     ),
+                    validation_receipt_id,
+                    data_hash,
+                    feature_snapshot_hash,
                     int(bool(force_flag)),
                     strategy_id,
                     strategy_version,
@@ -376,6 +476,113 @@ class SQLiteExecutionStateStore:
                     """,
                     rows,
                 )
+
+    def create_validation_receipt(
+        self,
+        *,
+        strategy_id: str,
+        strategy_version: str,
+        run_date: str,
+        fingerprint: str,
+        data_hash: str,
+        provider_hash: str,
+        feature_snapshot_hash: str,
+        config_hash: str,
+        passed: bool,
+        diagnostics: dict,
+    ) -> ValidationReceipt:
+        normalized_run_date = _normalize_date_str(run_date)
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO validation_receipts (
+                    strategy_id,
+                    strategy_version,
+                    run_date,
+                    fingerprint,
+                    data_hash,
+                    provider_hash,
+                    feature_snapshot_hash,
+                    config_hash,
+                    passed,
+                    diagnostics_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    strategy_id,
+                    strategy_version,
+                    normalized_run_date,
+                    fingerprint,
+                    data_hash,
+                    provider_hash,
+                    feature_snapshot_hash,
+                    config_hash,
+                    int(bool(passed)),
+                    json.dumps(diagnostics, sort_keys=True, default=str),
+                ),
+            )
+            receipt_id = int(cursor.lastrowid)
+        return ValidationReceipt(
+            receipt_id=receipt_id,
+            strategy_id=strategy_id,
+            strategy_version=strategy_version,
+            run_date=normalized_run_date,
+            fingerprint=fingerprint,
+            data_hash=data_hash,
+            provider_hash=provider_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
+            config_hash=config_hash,
+            passed=bool(passed),
+            diagnostics=diagnostics,
+        )
+
+    def get_validation_receipt(self, receipt_id: int) -> ValidationReceipt | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM validation_receipts
+                WHERE receipt_id = ?
+                """,
+                (int(receipt_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        return ValidationReceipt(
+            receipt_id=int(row["receipt_id"]),
+            strategy_id=row["strategy_id"],
+            strategy_version=row["strategy_version"],
+            run_date=row["run_date"],
+            fingerprint=row["fingerprint"],
+            data_hash=row["data_hash"],
+            provider_hash=row["provider_hash"],
+            feature_snapshot_hash=row["feature_snapshot_hash"],
+            config_hash=row["config_hash"],
+            passed=bool(row["passed"]),
+            diagnostics=json.loads(row["diagnostics_json"] or "{}"),
+        )
+
+    def get_run(
+        self,
+        *,
+        strategy_id: str,
+        strategy_version: str,
+        run_date: str,
+        mode: str,
+    ) -> StoredRun | None:
+        normalized_run_date = _normalize_date_str(run_date)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM daily_runs
+                WHERE strategy_id = ? AND strategy_version = ? AND run_date = ? AND mode = ?
+                """,
+                (strategy_id, strategy_version, normalized_run_date, mode),
+            ).fetchone()
+        if row is None:
+            return None
+        return _row_to_stored_run(row)
 
     def load_locked_prefix(
         self,
@@ -456,4 +663,5 @@ __all__ = [
     "RunClaim",
     "SQLiteExecutionStateStore",
     "StoredRun",
+    "ValidationReceipt",
 ]

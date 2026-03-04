@@ -50,9 +50,10 @@ def process_start_date_batch(
                 locked_weights=locked_weights,
             )
         else:
+            observed_end = min(pd.Timestamp(current_date), pd.Timestamp(end_date))
             weights = strategy.compute_weights(
                 strategy_context_cls(
-                    features_df=features_df,
+                    features_df=features_df.loc[start_date:observed_end].copy(),
                     start_date=start_date,
                     end_date=end_date,
                     current_date=current_date,

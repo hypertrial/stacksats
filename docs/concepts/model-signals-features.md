@@ -5,7 +5,16 @@ description: Feature engineering and signal composition used by StackSats model 
 
 # Signals and Features
 
-This page covers model-side feature engineering and signal composition before framework allocation.
+This page covers model-side feature engineering and signal composition before framework allocation. In the hardened runtime, strategies consume provider-backed, as-of-materialized, observed-only feature frames.
+
+## Provider-backed feature flow
+
+The framework now owns raw feature sourcing.
+
+- Strategies declare `required_feature_sets()`.
+- Registered feature providers materialize data as-of `current_date`.
+- Strategy hooks receive `ctx.features_df` only for `start_date..current_date`.
+- Strategy methods must not load external files or make network/database calls directly.
 
 ## Primary signals
 
@@ -65,6 +74,8 @@ signal_cols = [
 ]
 features[signal_cols] = features[signal_cols].shift(1)
 ```
+
+Strict validation also rematerializes features from truncated and perturbed source data, runs purged walk-forward checks, block-shuffled null tests, block bootstrap confidence intervals, and feature-drift diagnostics.
 
 ## Dynamic multiplier structure
 

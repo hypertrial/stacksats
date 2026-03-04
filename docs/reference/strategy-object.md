@@ -18,12 +18,13 @@ A strategy subclasses `BaseStrategy` (`stacksats/strategy_types.py`) and defines
 - `metadata`: normalized identity (`strategy_id`, `version`, `description`)
 - `intent_mode`: the active execution path (`"propose"` or `"profile"`)
 - `params`: stable, deterministic strategy configuration used for provenance/idempotency
+- `required_feature_sets`: framework-owned feature providers needed to materialize `ctx.features_df`
 - `required_feature_columns`: hard-required transformed columns
 
 ## Ownership model
 
 !!! info "Framework vs user"
-    User code owns features/signals/intent. Framework code owns iteration, clipping, and invariants.
+    User code owns transforms/signals/intent over observed inputs. Framework code owns feature sourcing, as-of materialization, iteration, clipping, and invariants.
 
 Framework-owned behavior remains sealed:
 
@@ -62,9 +63,14 @@ class MyStrategy(BaseStrategy):
 Optional contract helpers:
 
 ```python
+    def required_feature_sets(self) -> tuple[str, ...]:
+        return ("core_model_features_v1",)
+
     def required_feature_columns(self) -> tuple[str, ...]:
         return ("price_vs_ma", "mvrv_zscore", "mvrv_gradient")
 ```
+
+`ctx.features_df` is always observed-only. Strategy hooks do not receive rows after `current_date`, and strict contract validation rejects direct file, DB, or network access inside strategy methods.
 
 ## Intent Selection
 
@@ -90,6 +96,7 @@ If a strategy implements both intent hooks:
 - `params()`: returns stable strategy config
 - `spec()`: returns `StrategySpec`
 - `intent_mode()`: returns the active intent execution mode
+- `required_feature_sets()`: returns framework-owned provider IDs
 - `required_feature_columns()`: returns hard-required transformed columns
 - `hook_status()`: returns which intent hook path is implemented
 - `validate_contract()`: checks framework contract compliance for the strategy instance
