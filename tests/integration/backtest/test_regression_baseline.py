@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from stacksats.api import BacktestResult
 from stacksats.export_weights import process_start_date_batch
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS

@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from stacksats.backtest import compute_weights_with_features
 from stacksats.export_weights import process_start_date_batch
 from stacksats.model_development import compute_window_weights, precompute_features

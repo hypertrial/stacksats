@@ -16,6 +16,8 @@ from stacksats.strategy_types import (
     ValidationConfig,
 )
 
+pytestmark = pytest.mark.slow
+
 
 class _UniformProposeStrategy(BaseStrategy):
     strategy_id = "runner-uniform"

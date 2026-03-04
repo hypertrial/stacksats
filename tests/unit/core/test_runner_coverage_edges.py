@@ -8,6 +8,8 @@ import pytest
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, StrategyContext, ValidationConfig
 
+pytestmark = pytest.mark.slow
+
 
 class _UniformStrategy(BaseStrategy):
     strategy_id = "runner-coverage-uniform"

@@ -32,10 +32,10 @@ from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import precompute_features
 from tests.test_helpers import PRICE_COL
 
-# Skip all tests in this module if hypothesis is not available
-pytestmark = pytest.mark.skipif(
-    not HYPOTHESIS_AVAILABLE, reason="hypothesis not installed"
-)
+pytestmark = [
+    pytest.mark.skipif(not HYPOTHESIS_AVAILABLE, reason="hypothesis not installed"),
+    pytest.mark.slow,
+]
 
 
 def _create_sample_data():
