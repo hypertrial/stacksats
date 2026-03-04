@@ -12,8 +12,7 @@ source venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
 pip install pre-commit
-pre-commit install
-pre-commit install --hook-type pre-push
+venv/bin/python -m pre_commit install -t pre-commit -t pre-push
 ```
 
 Optional deploy extras:
@@ -24,29 +23,36 @@ pip install -e ".[deploy]"
 
 ## Local quality checks
 
-Run these before opening a pull request:
+Fast local checks:
 
 ```bash
-ruff check .
+venv/bin/python -m ruff check .
+venv/bin/python -m pytest -q
 bash scripts/check_docs_refs.sh
-python scripts/check_docs_ux.py
-python scripts/sync_objects_schema_docs.py --check
-mkdocs build --strict
-pytest tests/ -v
+venv/bin/python scripts/check_docs_ux.py
+venv/bin/python scripts/check_release_docs_sync.py
+venv/bin/python scripts/sync_objects_schema_docs.py --check
+venv/bin/python -m mkdocs build --strict
 bash scripts/check_coverage.sh
-python -m build
-python -m twine check dist/*
+```
+
+Heavy test tiers when you need them explicitly:
+
+```bash
+venv/bin/python -m pytest -m "slow or integration or performance" -q
+```
+
+Release-grade verification:
+
+```bash
+bash scripts/release_check.sh
 ```
 
 Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
 - `pre-push` (every push): fast pytest suite plus `mkdocs build --strict`.
 
-You can also run the project helper:
-
-```bash
-bash scripts/release_check.sh
-```
+Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full slow and integration suite in addition to build/docs checks.
 
 ## Contribution workflow
 
@@ -63,6 +69,7 @@ bash scripts/release_check.sh
 - Package coverage for `stacksats/*` is enforced at 100% in CI (`bash scripts/check_coverage.sh`).
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
+- If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.
 
 ## Release notes policy
 

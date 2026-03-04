@@ -38,8 +38,8 @@ This plan defines UX standards for docs changes and release readiness.
 ## Release acceptance checklist
 
 - [ ] `bash scripts/check_docs_refs.sh` passes.
-- [ ] `python scripts/check_docs_ux.py` passes.
-- [ ] `mkdocs build --strict` passes.
+- [ ] `venv/bin/python scripts/check_docs_ux.py` passes.
+- [ ] `venv/bin/python -m mkdocs build --strict` passes.
 - [ ] Top-task walkthroughs are verified by maintainer review.
 
 ## Governance

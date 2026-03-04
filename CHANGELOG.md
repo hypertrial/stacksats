@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-04
+
+### Added
+- Added `scripts/check_markdown_scope.sh` to define the tracked markdown scope used by docs tooling and CI.
+- Added `scripts/check_release_docs_sync.py` to verify `docs/whats-new.md` stays aligned with the latest released section in `CHANGELOG.md`.
+
+### Changed
+- Corrected the documented `setuptools-scm` release order so publishable artifacts are built after creating the annotated release tag.
+- Strengthened `scripts/release_check.sh` to run docs checks plus the full non-performance test suite instead of inheriting the fast local pytest defaults.
+- Expanded docs CI markdown coverage to all tracked `.md` files, including `.github` templates and root policy docs.
+- Normalized docs around strict validation defaults, fast-vs-release test tiers, and repo-venv maintainer commands.
+- Simplified `docs/whats-new.md` into a current-release summary page instead of a manually maintained release-history mirror.
+
 ## [0.5.2] - 2026-02-28
 
 ### Added

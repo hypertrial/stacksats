@@ -4,10 +4,11 @@ Describe what changed and why.
 
 ## Validation
 
-- [ ] `ruff check .`
-- [ ] `pytest tests/ -v`
-- [ ] `python -m build`
-- [ ] `python -m twine check dist/*`
+- [ ] `venv/bin/python -m ruff check .`
+- [ ] `venv/bin/python -m pytest -q`
+- [ ] `venv/bin/python -m build`
+- [ ] `venv/bin/python -m twine check dist/*`
+- [ ] `bash scripts/release_check.sh` (required for release/tooling changes)
 
 ## Documentation
 

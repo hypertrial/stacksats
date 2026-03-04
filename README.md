@@ -46,8 +46,11 @@ pip install stacksats
 For local development:
 
 ```bash
-pip install -e .
-pip install -r requirements-dev.txt
+python -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+pip install pre-commit
 ```
 
 Optional deploy extras:
@@ -78,6 +81,7 @@ For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/comma
 For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
 For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
+`stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
 
 Run idempotent daily execution (paper mode):
 
@@ -125,9 +129,11 @@ Top-level exports:
 venv/bin/python -m pytest -q
 venv/bin/python -m pytest -m "slow or integration or performance" -q
 venv/bin/python -m pre_commit install -t pre-commit -t pre-push
-ruff check .
+venv/bin/python -m mkdocs build --strict
+venv/bin/python -m ruff check .
 bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh
+bash scripts/release_check.sh
 ```
 
 If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.

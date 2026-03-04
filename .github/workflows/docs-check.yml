@@ -28,14 +28,17 @@ jobs:
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install mkdocs mkdocs-material mkdocstrings[python] codespell pymarkdownlnt
+          pip install -e ".[dev]"
+
+      - name: Collect tracked markdown files
+        run: |
+          echo "MARKDOWN_FILES=$(bash scripts/check_markdown_scope.sh | tr '\n' ' ')" >> "$GITHUB_ENV"
 
       - name: Lint markdown
-        run: pymarkdown -d MD003,MD007,MD013,MD022,MD024,MD026,MD029,MD030,MD032,MD033,MD041 scan docs README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
+        run: pymarkdown -d MD003,MD007,MD013,MD022,MD024,MD026,MD029,MD030,MD032,MD033,MD041 scan $MARKDOWN_FILES
 
       - name: Check spelling
-        run: codespell docs README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md --config .codespellrc
+        run: codespell $MARKDOWN_FILES --config .codespellrc
 
       - name: Check links
         uses: lycheeverse/lychee-action@v2
@@ -43,15 +46,18 @@ jobs:
           args: >-
             --glob --verbose --no-progress --max-retries 2 --retry-wait-time 2
             --accept 200,429 --exclude-mail
-            docs/**/*.md README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md
+            .github/**/*.md docs/**/*.md *.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check docs references
         run: bash scripts/check_docs_refs.sh
 
+      - name: Check release docs sync
+        run: python scripts/check_release_docs_sync.py
+
       - name: Check docs UX structure
         run: python scripts/check_docs_ux.py
 
       - name: Build docs (strict)
-        run: mkdocs build --strict
+        run: python -m mkdocs build --strict

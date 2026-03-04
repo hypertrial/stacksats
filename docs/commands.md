@@ -22,8 +22,7 @@ Strategy implementations can use either:
 stacksats strategy validate \
   --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --strict
+  --end-date 2024-12-31
 
 # Backtest
 stacksats strategy backtest \
@@ -67,15 +66,12 @@ flowchart LR
 From the repo root:
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 Optional dependencies:
 
 ```bash
-# For local development tools
-pip install -r requirements-dev.txt
-
 # For export and database tooling
 pip install -e ".[deploy]"
 ```
@@ -141,7 +137,7 @@ stacksats strategy validate \
   --strategy-config strategy_config.json \
   --start-date 2024-01-01 \
   --end-date 2024-12-31 \
-  --strict \
+  --no-strict \
   --min-win-rate 25.0
 ```
 
@@ -150,7 +146,8 @@ Expected output:
 - Terminal summary like `Validation PASSED | ...`.
 - Win-rate threshold status and leakage/constraint checks.
 
-`--strict` enables additional robustness gates (determinism, mutation, leakage, OOS fold checks, and shuffled baseline checks).
+`stacksats strategy validate` runs in strict mode by default. Use `--no-strict` only when you intentionally want the lighter validation path.
+Strict mode includes additional robustness gates (determinism, mutation, leakage, OOS fold checks, and shuffled baseline checks).
 Default `--min-win-rate` is `50.0`; use it when you explicitly want the stricter default gate.
 
 ## 3) Run Full Backtest via Strategy Lifecycle CLI
@@ -253,8 +250,8 @@ Expected status lines:
 Verify this document's example commands end-to-end:
 
 ```bash
-# Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e .)
-python scripts/test_example_commands.py
+# Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e ".[dev]")
+venv/bin/python scripts/test_example_commands.py
 ```
 
 Run tests:

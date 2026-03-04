@@ -26,6 +26,8 @@ stacksats strategy validate \
   --min-win-rate 50.0
 ```
 
+`--strict` is shown explicitly here for emphasis. `strategy validate` already enables strict validation by default.
+
 ## Expected output
 
 A summary line similar to:

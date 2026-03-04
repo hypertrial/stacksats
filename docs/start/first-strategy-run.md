@@ -50,12 +50,13 @@ class MyStrategy(BaseStrategy):
 ## 2) Validate your strategy
 
 ```bash
-stacksats strategy validate --strategy my_strategy.py:MyStrategy --strict
+stacksats strategy validate --strategy my_strategy.py:MyStrategy
 ```
 
 Expected output:
 
 - A validation summary line including pass/fail and gate results.
+- Strict validation is enabled by default. Use `--no-strict` only if you intentionally want the lighter path.
 
 ## 3) Run backtest and export
 

@@ -16,7 +16,8 @@ This page defines who updates what and when documentation updates are required.
 - `docs/faq.md` captures recurring docs questions sourced from docs feedback issues.
 - `docs/start/*.md` are onboarding guides and should link to canonical command/reference pages instead of duplicating option matrices.
 - `README.md` stays concise and should link into docs for deep usage details.
-- `docs/whats-new.md` is a release pointer page and must stay aligned with release metadata.
+- `CHANGELOG.md` is the canonical release history source.
+- `docs/whats-new.md` is the current-release summary page and must stay aligned with the latest changelog release.
 
 ## Section owners
 
@@ -38,6 +39,8 @@ Update docs in the same PR when any of these change:
 - CLI flag or command behavior changes: update `docs/commands.md` and relevant recipes.
 - Breaking or removed compatibility surfaces: update `docs/migration.md`, `docs/whats-new.md`, and `CHANGELOG.md`.
 - Repeated docs feedback questions: fold updates into `docs/faq.md` and link affected task/start pages.
+- Release tooling or release workflow changes: update `docs/release.md`, `CONTRIBUTING.md`, and release-facing sections in `README.md`.
+- `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
 
 ## Generated artifact policy
 
@@ -52,6 +55,7 @@ Docs quality gate runs in `docs-check`:
 - markdown lint
 - spelling checks
 - link checks
+- release docs sync check (`scripts/check_release_docs_sync.py`)
 - UX structure checks (`scripts/check_docs_ux.py`)
 - strict docs build
 
@@ -59,7 +63,8 @@ Docs quality gate runs in `docs-check`:
 
 ```bash
 bash scripts/check_docs_refs.sh
-python scripts/check_docs_ux.py
-python scripts/sync_objects_schema_docs.py --check
-mkdocs build --strict
+venv/bin/python scripts/check_docs_ux.py
+venv/bin/python scripts/check_release_docs_sync.py
+venv/bin/python scripts/sync_objects_schema_docs.py --check
+venv/bin/python -m mkdocs build --strict
 ```

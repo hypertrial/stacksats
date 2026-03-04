@@ -50,8 +50,7 @@ Run:
 stacksats strategy validate \
   --strategy my_strategy.py:MinimalProposeWeightStrategy \
   --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --strict
+  --end-date 2024-12-31
 ```
 
 ## Example B: `build_target_profile(...)` style
@@ -106,9 +105,10 @@ Run:
 stacksats strategy validate \
   --strategy my_strategy.py:MinimalTargetProfileStrategy \
   --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --strict
+  --end-date 2024-12-31
 ```
+
+Strict validation runs by default in both examples. Use `--no-strict` only when you intentionally want the lighter validation path.
 
 ## Success Criteria
 

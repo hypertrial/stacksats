@@ -11,20 +11,7 @@ blob_links_tmp="$(mktemp)"
 dup_cli_tmp="$(mktemp)"
 trap 'rm -f "${doc_files_tmp}" "${tokens_tmp}" "${missing_tmp}" "${blob_links_tmp}" "${dup_cli_tmp}"' EXIT
 
-{
-  printf '%s\n' README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md
-  if [[ -d docs ]]; then
-    if command -v rg >/dev/null 2>&1; then
-      rg --files docs -g '*.md' | sort
-    else
-      python - <<'PY'
-from pathlib import Path
-for path in sorted(Path("docs").rglob("*.md")):
-    print(path.as_posix())
-PY
-    fi
-  fi
-} > "${doc_files_tmp}"
+bash scripts/check_markdown_scope.sh > "${doc_files_tmp}"
 
 if command -v rg >/dev/null 2>&1; then
   rg --no-filename -o '`[^`]+`' $(<"${doc_files_tmp}") \
@@ -92,7 +79,7 @@ fi
 
 if command -v rg >/dev/null 2>&1; then
   rg -n 'https://github.com/hypertrial/stacksats/blob/main/' \
-    README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md docs \
+    $(<"${doc_files_tmp}") \
     > "${blob_links_tmp}" || true
 fi
 

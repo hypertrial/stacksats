@@ -38,7 +38,7 @@ Repository = "https://github.com/hypertrial/stacksats"
 Source = "https://github.com/hypertrial/stacksats"
 Documentation = "https://hypertrial.github.io/stacksats/"
 Issues = "https://github.com/hypertrial/stacksats/issues"
-Changelog = "https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md"
 Security = "https://github.com/hypertrial/stacksats/security/policy"
 
 [project.optional-dependencies]

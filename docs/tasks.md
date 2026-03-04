@@ -12,7 +12,7 @@ Use this page to jump directly to the workflow you need.
 ### Prerequisites
 
 - Strategy file exists and can be loaded (`module_or_path:ClassName`).
-- Local install is complete (`pip install -e .`).
+- Local install is complete (`pip install -e ".[dev]"`).
 
 ### Command
 
@@ -20,14 +20,14 @@ Use this page to jump directly to the workflow you need.
 stacksats strategy validate \
   --strategy my_strategy.py:MyStrategy \
   --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --strict
+  --end-date 2024-12-31
 ```
 
 ### Expected output
 
 - Terminal summary includes `Validation PASSED` or `Validation FAILED`.
 - Win-rate and leakage/constraint checks are reported.
+- Strict validation runs by default; use `--no-strict` only when you intentionally want the lighter path.
 
 ### Troubleshooting
 
@@ -154,7 +154,7 @@ stacksats strategy run-daily \
 
 ### Next step
 
-- Re-run fast tests and docs checks (`venv/bin/python -m pytest -q`, `mkdocs build --strict`).
+- Re-run fast tests and docs checks (`venv/bin/python -m pytest -q`, `venv/bin/python -m mkdocs build --strict`).
 
 ## I want minimal strategy code templates
 

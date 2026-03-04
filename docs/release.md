@@ -14,6 +14,7 @@ This guide is manual-first. It covers token-based PyPI releases.
 - Use annotated git tags in the form `vX.Y.Z`.
 - Tag and package version must match exactly (for example, tag `v0.1.1` produces package version `0.1.1`).
 - Never reuse a version number after it has been uploaded to PyPI.
+- Do not publish artifacts built before the release tag exists. Build the upload artifacts from the tagged `vX.Y.Z` commit context.
 
 ## One-Time Setup
 
@@ -28,7 +29,10 @@ This guide is manual-first. It covers token-based PyPI releases.
 Use Python 3.11+ and install packaging tools:
 
 ```bash
+python -m venv venv
+source venv/bin/activate
 python -m pip install --upgrade pip
+pip install -e ".[dev]"
 python -m pip install --upgrade build twine
 ```
 
@@ -67,10 +71,10 @@ From repository root:
 
 ```bash
 bash scripts/release_check.sh
-python scripts/check_docs_ux.py
 ```
 
-This should run lint, tests, build, and `twine check`.
+This is a release-preflight command. It runs lint, docs checks, the full non-performance test suite, a preflight package build, and `twine check`.
+The preflight build only verifies buildability; rebuild release artifacts after the release tag is created.
 
 If your environment has constrained SSL trust roots, `scripts/release_check.sh` will:
 - Fall back to already-installed local `build`/`twine` when tool refresh via pip fails.
@@ -79,19 +83,7 @@ If your environment has constrained SSL trust roots, `scripts/release_check.sh` 
 
 ### 3) Build artifacts
 
-```bash
-rm -rf dist/ build/ .eggs/ *.egg-info
-python -m build
-python -m twine check dist/*
-```
-
-### 4) Publish to PyPI (default)
-
-```bash
-bash scripts/publish_pypi_manual.sh
-```
-
-### 5) Tag release
+Create and push the release tag before building the publishable artifacts:
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
@@ -100,7 +92,21 @@ git push origin vX.Y.Z
 
 The tag is the source of truth for the version. No manual version bump is required.
 
-### 6) Post-release verification
+Then build from the tagged commit context:
+
+```bash
+rm -rf dist/ build/ .eggs/ *.egg-info
+venv/bin/python -m build
+venv/bin/python -m twine check dist/*
+```
+
+### 4) Publish to PyPI (default)
+
+```bash
+bash scripts/publish_pypi_manual.sh
+```
+
+### 5) Post-release verification
 
 - Verify package page on PyPI.
 - Install from PyPI in a fresh virtual environment.
@@ -115,9 +121,10 @@ The tag is the source of truth for the version. No manual version bump is requir
 - Pushes to `main` run packaging checks (`package-check.yml`).
 - PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
 - Pull requests also run docs quality checks (`docs-check.yml`):
-  - markdown lint
-  - spelling checks
-  - link checks
+  - markdown lint across all tracked `.md` files
+  - spelling checks across all tracked `.md` files
+  - link checks across all tracked `.md` files
+  - release docs sync check
   - docs reference checks
   - docs UX structure checks
   - strict docs build
@@ -132,21 +139,24 @@ Configure Pages source to `GitHub Actions`.
 Use this sequence after workflows are merged:
 
 1. Open a PR with release notes/changelog updates and verify `package-check-pr.yml` passes.
-2. Create and push annotated tag `vX.Y.Z`.
-3. Run `bash scripts/publish_pypi_manual.sh`.
-4. Verify package page on PyPI.
-5. Install from PyPI in a fresh virtual environment and run command smoke tests.
+2. Run `bash scripts/release_check.sh` on the release candidate commit.
+3. Create and push annotated tag `vX.Y.Z`.
+4. Rebuild from the tagged commit context and run `twine check dist/*`.
+5. Run `bash scripts/publish_pypi_manual.sh`.
+6. Verify package page on PyPI.
+7. Install from PyPI in a fresh virtual environment and run command smoke tests.
 
 Expected results:
 
 - Manual publish succeeds with local `PYPI_API_KEY`.
-- Local build and `twine check` pass before upload.
+- Tagged build and `twine check` pass before upload.
 
 ## Operational Notes
 
 - Do not commit PyPI tokens or store them in repository files.
 - Keep `scripts/publish_pypi_manual.sh` as the default release path.
 - If a release fails after version/tag creation, bump to the next version and retry; do not overwrite versions.
+- If `scripts/release_check.sh` changes, update this page and `CONTRIBUTING.md` in the same PR.
 - Keep contributor and policy docs current:
   - `CONTRIBUTING.md`
   - `SECURITY.md`

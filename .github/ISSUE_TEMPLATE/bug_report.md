@@ -26,7 +26,7 @@ What did you expect instead?
 
 ## Verification checklist
 
-- [ ] I ran `ruff check .`
-- [ ] I ran `pytest tests/ -v`
+- [ ] I ran `venv/bin/python -m ruff check .`
+- [ ] I ran `venv/bin/python -m pytest -q`
 - [ ] I checked docs for expected usage (`README.md`, `docs/commands.md`)
 - [ ] I am not sharing secrets or private credentials

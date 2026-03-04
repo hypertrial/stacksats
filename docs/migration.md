@@ -145,7 +145,7 @@ venv/bin/python -m pytest -q
 9. Rebuild docs:
 
 ```bash
-mkdocs build --strict
+venv/bin/python -m mkdocs build --strict
 ```
 
 ## Related docs

@@ -15,8 +15,7 @@ Use this page for a 5-minute first run.
 === "Editable (recommended)"
 
     ```bash
-    pip install -e .
-    pip install -r requirements-dev.txt
+    pip install -e ".[dev]"
     ```
 
 === "Package only"

@@ -30,11 +30,10 @@ jobs:
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install mkdocs mkdocs-material mkdocstrings[python]
+          pip install -e ".[dev]"
 
       - name: Build docs
-        run: mkdocs build --strict
+        run: python -m mkdocs build --strict
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
