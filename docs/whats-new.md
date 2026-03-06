@@ -7,16 +7,17 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.6.0 highlights
+## 0.6.1 highlights
 
-- Corrected the release workflow for `setuptools-scm` so maintainers tag `v0.6.0` before building publishable artifacts.
-- Strengthened `scripts/release_check.sh` so release preflight now runs docs checks plus the full non-performance test matrix instead of the fast local-default suite.
-- Normalized docs around current behavior: strict validation is the default validate path, `run_daily` is strict-gated, and fast vs release-grade test commands are documented consistently.
-- Expanded markdown quality coverage to all tracked `.md` files, including `.github` templates and repo policy documents.
+- Added a reusable GitHub composite action for Python setup/dependency install to reduce CI workflow duplication.
+- Added scheduled/manual docs command smoke checks so example lifecycle commands are continuously verified.
+- Reset coverage policy to an actionable `97%` fail-under floor in `scripts/check_coverage.sh`, with ratchet-up guidance.
+- Added a local cleanup utility script (`scripts/clean_local.sh`) for generated artifacts and caches.
+- Improved runner/validation maintainability with targeted helper extraction and split, faster test modules.
 
 ## Upgrade notes
 
-- No runtime API changes are introduced in this release-prep PR.
+- No public runtime API changes are introduced in this release.
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.
 - For behavior and compatibility notes, use [Migration Guide](migration.md) and [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 

@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-03-06
+
+### Added
+- Added a reusable GitHub composite action (`.github/actions/setup-python-project`) so Python setup and editable dependency installation are defined once across workflows.
+- Added a scheduled/manual command-smoke workflow (`.github/workflows/example-commands-smoke.yml`) to continuously verify docs lifecycle command examples.
+- Added `scripts/clean_local.sh` to remove local generated artifacts and caches (`.coverage*`, `coverage.xml`, `dist/`, `build/`, `site/`, `output/`, cache directories).
+- Added focused runner-validation unit test modules and shared test kit utilities to improve test maintenance and xdist balancing.
+
+### Changed
+- Adjusted coverage policy to an actionable global fail-under floor of `97%` in `scripts/check_coverage.sh` (with explicit ratchet-up guidance).
+- Consolidated CI workflow setup logic across package, docs, and coverage jobs to reduce duplicated installation/setup steps.
+- Stabilized `scripts/test_example_commands.py` by using deterministic smoke variants and synthetic cache-backed data so scheduled/manual smoke runs are reliable.
+- Expanded targeted runner/validation helper extraction and branch-path test coverage without changing public runtime APIs.
+- Updated docs to reflect current CI/test-tier behavior, strict validation defaults, and data-coverage expectations for export command examples.
+
 ## [0.6.0] - 2026-03-04
 
 ### Added
