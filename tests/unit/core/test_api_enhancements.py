@@ -233,9 +233,7 @@ def test_validate_strategy_observed_only_input_blocks_peeking_strategy():
             lookahead_date = pd.Timestamp(ctx.end_date) + pd.Timedelta(days=1)
             future_signal = 0.0
             if lookahead_date in ctx.features_df.index:
-                future_signal = float(ctx.features_df.loc[lookahead_date, "price_vs_ma"])
-                if np.isnan(future_signal):
-                    future_signal = 0.0
+                future_signal = 1.0
             preference.iloc[-1] = future_signal
             return preference
 
