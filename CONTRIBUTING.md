@@ -50,7 +50,7 @@ bash scripts/release_check.sh
 
 Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
-- `pre-push` (every push): fast pytest suite plus `mkdocs build --strict`.
+- `pre-push` (every push): no mandatory local checks; CI is the required gate.
 
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
 

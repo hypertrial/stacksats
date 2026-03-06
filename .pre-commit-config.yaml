@@ -29,21 +29,3 @@ repos:
         entry: env PYTHONPATH=. venv/bin/python scripts/sync_objects_schema_docs.py --check
         language: system
         pass_filenames: false
-
-      - id: pytest-fast
-        name: pytest fast suite
-        entry: venv/bin/python -m pytest tests/unit tests/bdd/scenarios -m "not performance and not slow and not integration" -q --maxfail=1 --dist=loadscope
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: mkdocs-strict
-        name: mkdocs strict build
-        entry: mkdocs build --strict
-        language: python
-        additional_dependencies:
-          - mkdocs>=1.6.0
-          - mkdocs-material>=9.5.0
-          - mkdocstrings[python]>=0.28.0
-        pass_filenames: false
-        stages: [pre-push]
