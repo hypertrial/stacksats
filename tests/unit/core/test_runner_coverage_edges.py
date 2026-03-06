@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, StrategyContext, ValidationConfig
 
@@ -52,6 +53,16 @@ def test_perturb_future_features_returns_copy_when_no_future_rows() -> None:
     assert perturbed is not features
 
 
+def test_perturb_future_source_data_returns_copy_when_no_future_rows() -> None:
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    source = pd.DataFrame({"PriceUSD_coinmetrics": [100.0, 101.0, 102.0]}, index=idx)
+
+    perturbed = StrategyRunner._perturb_future_source_data(source, probe=idx.max())
+
+    assert perturbed.equals(source)
+    assert perturbed is not source
+
+
 def test_perturb_future_features_reverses_non_numeric_columns() -> None:
     idx = pd.date_range("2024-01-01", periods=4, freq="D")
     features = pd.DataFrame(
@@ -89,6 +100,16 @@ def test_build_fold_ranges_skips_non_increasing_boundaries(
     )
 
     assert folds == []
+
+
+def test_build_fold_ranges_appends_valid_folds() -> None:
+    folds = StrategyRunner._build_fold_ranges(
+        start_ts=pd.Timestamp("2020-01-01"),
+        end_ts=pd.Timestamp("2025-12-31"),
+    )
+
+    assert len(folds) >= 1
+    assert all((end - start).days + 1 >= ALLOCATION_SPAN_DAYS for start, end in folds)
 
 
 def test_strict_fold_checks_skips_when_less_than_two_fold_results(

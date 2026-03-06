@@ -78,7 +78,7 @@ Typical files:
 A successful quickstart run should produce all of the following:
 
 - CLI command exits without traceback.
-- Validation summary is printed.
+- Backtest summary is printed.
 - Backtest artifacts are written under one run directory.
 
 ## Troubleshooting

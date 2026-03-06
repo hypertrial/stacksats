@@ -20,33 +20,30 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python project
+        uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.11"
-
-      - name: Install docs dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          extras: ".[dev]"
 
       - name: Collect tracked markdown files
         run: |
-          echo "MARKDOWN_FILES=$(bash scripts/check_markdown_scope.sh | tr '\n' ' ')" >> "$GITHUB_ENV"
+          bash scripts/check_markdown_scope.sh > .markdown_files.txt
+          echo "MARKDOWN_FILES=$(tr '\n' ' ' < .markdown_files.txt)" >> "$GITHUB_ENV"
 
       - name: Lint markdown
-        run: pymarkdown -d MD003,MD007,MD013,MD022,MD024,MD026,MD029,MD030,MD032,MD033,MD041 scan $MARKDOWN_FILES
+        run: xargs pymarkdown -d MD003,MD007,MD013,MD022,MD024,MD026,MD029,MD030,MD032,MD033,MD041 scan < .markdown_files.txt
 
       - name: Check spelling
-        run: codespell $MARKDOWN_FILES --config .codespellrc
+        run: xargs codespell --config .codespellrc < .markdown_files.txt
 
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
-            --glob --verbose --no-progress --max-retries 2 --retry-wait-time 2
+            --verbose --no-progress --max-retries 2 --retry-wait-time 2
             --accept 200,429 --exclude-mail
-            .github/**/*.md docs/**/*.md *.md
+            ${{ env.MARKDOWN_FILES }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

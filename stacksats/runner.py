@@ -109,6 +109,16 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             json.dumps(asdict(config), sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
 
+    @staticmethod
+    def _merge_strict_check_result(
+        state: _ValidationState,
+        *,
+        ok: bool,
+        messages: list[str],
+    ) -> None:
+        state.strict_checks_ok = state.strict_checks_ok and bool(ok)
+        state.messages.extend(messages)
+
     def _parse_run_daily_config(
         self,
         strategy: BaseStrategy,
@@ -202,6 +212,77 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             data_hash=str(payload.get("data_hash", "")),
             feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
         )
+
+    @staticmethod
+    def _strict_validation_failure_message(messages: list[str]) -> str:
+        details = "; ".join(message for message in messages if message)
+        if details:
+            return f"Strict validation failed before daily execution: {details}"
+        return "Strict validation failed before daily execution."
+
+    def _build_failed_daily_result(
+        self,
+        *,
+        metadata: StrategyMetadata,
+        config: RunDailyConfig,
+        run_date: str,
+        run_key: str,
+        state_store,
+        forced_rerun: bool,
+        bootstrap: bool,
+        validation_receipt_id: int | None,
+        data_hash: str,
+        feature_snapshot_hash: str,
+        error_message: str,
+        daily_run_result_cls,
+    ):
+        return daily_run_result_cls(
+            status="failed",
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            run_key=run_key,
+            mode=config.mode,
+            idempotency_hit=False,
+            forced_rerun=forced_rerun,
+            weight_today=None,
+            order_notional_usd=None,
+            btc_quantity=None,
+            price_usd=None,
+            adapter_name=(
+                "PaperExecutionAdapter" if config.mode == "paper" else "custom-adapter"
+            ),
+            state_db_path=str(state_store.db_path),
+            artifact_path=None,
+            message=f"Daily execution failed: {error_message}",
+            order_receipt=None,
+            bootstrap=bootstrap,
+            validation_receipt_id=validation_receipt_id,
+            validation_passed=False if validation_receipt_id is not None else None,
+            data_hash=data_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
+        )
+
+    @staticmethod
+    def _classify_reconciliation_status(
+        *,
+        previous_weight_today: float | None,
+        recomputed_weight_today: float | None,
+        previous_feature_snapshot_hash: str,
+        recomputed_feature_snapshot_hash: str,
+        atol: float = 1e-12,
+    ) -> str:
+        # Reconciliation status invariant:
+        # - stable: identical decision (and optionally identical snapshot hash)
+        # - data_revised_no_decision_change: snapshot changed but decision did not
+        # - decision_changed_due_to_revision: recomputed decision changed
+        if previous_weight_today is None or recomputed_weight_today is None:
+            return "stable"
+        if abs(float(previous_weight_today) - float(recomputed_weight_today)) <= float(atol):
+            if previous_feature_snapshot_hash == recomputed_feature_snapshot_hash:
+                return "stable"
+            return "data_revised_no_decision_change"
+        return "decision_changed_due_to_revision"
 
     def _run_daily_strict_preflight(
         self,
@@ -485,8 +566,11 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 end_ts=end_ts,
                 config=config,
             )
-            state.strict_checks_ok = state.strict_checks_ok and fold_ok
-            state.messages.extend(fold_messages)
+            self._merge_strict_check_result(
+                state,
+                ok=fold_ok,
+                messages=fold_messages,
+            )
 
             shuffled_days = max(ALLOCATION_SPAN_DAYS * 2, 730)
             shuffled_start = max(start_ts, end_ts - pd.Timedelta(days=shuffled_days - 1))
@@ -497,8 +581,11 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 end_ts=end_ts,
                 config=config,
             )
-            state.strict_checks_ok = state.strict_checks_ok and shuffled_ok
-            state.messages.extend(shuffled_messages)
+            self._merge_strict_check_result(
+                state,
+                ok=shuffled_ok,
+                messages=shuffled_messages,
+            )
             self._strict_statistical_checks(
                 strategy=strategy,
                 btc_df=btc_df,
@@ -596,10 +683,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 btc_df=btc_df,
             )
             if not validation_passed:
-                raise ValueError(
-                    "Strict validation failed before daily execution: "
-                    + "; ".join(validation_messages)
-                )
+                raise ValueError(self._strict_validation_failure_message(validation_messages))
             required_window = btc_df_loaded.reindex(pd.date_range(window_start, window_end, freq="D"))
 
             # Prefix-lock invariant: once prior daily allocations exist, the strategy
@@ -733,31 +817,19 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 data_hash=data_hash,
                 feature_snapshot_hash=feature_snapshot_hash,
             )
-            return DailyRunResult(
-                status="failed",
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
+            return self._build_failed_daily_result(
+                metadata=metadata,
+                config=config,
                 run_date=run_date,
                 run_key=run_key,
-                mode=config.mode,
-                idempotency_hit=False,
+                state_store=state_store,
                 forced_rerun=bool(config.force or claim.forced_overwrite),
-                weight_today=None,
-                order_notional_usd=None,
-                btc_quantity=None,
-                price_usd=None,
-                adapter_name=(
-                    "PaperExecutionAdapter" if config.mode == "paper" else "custom-adapter"
-                ),
-                state_db_path=str(state_store.db_path),
-                artifact_path=None,
-                message=f"Daily execution failed: {error_message}",
-                order_receipt=None,
                 bootstrap=bootstrap,
                 validation_receipt_id=validation_receipt_id,
-                validation_passed=False if validation_receipt_id is not None else None,
                 data_hash=data_hash,
                 feature_snapshot_hash=feature_snapshot_hash,
+                error_message=error_message,
+                daily_run_result_cls=DailyRunResult,
             )
 
     def reconcile_daily_run(
@@ -811,24 +883,20 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         )
         weight_today = float(weights.loc[run_ts]) if run_ts in weights.index else None
         prior_weight = stored.payload.get("weight_today")
-        # Reconciliation status invariant:
-        # - stable: identical decision (and optionally identical snapshot hash)
-        # - data_revised_no_decision_change: snapshot changed but decision did not
-        # - decision_changed_due_to_revision: recomputed decision changed
-        if prior_weight is None or weight_today is None:
-            status = "stable"
-        elif abs(float(prior_weight) - float(weight_today)) <= 1e-12:
-            if stored.payload.get("feature_snapshot_hash", "") == feature_snapshot_hash:
-                status = "stable"
-            else:
-                status = "data_revised_no_decision_change"
-        else:
-            status = "decision_changed_due_to_revision"
+        previous_feature_snapshot_hash = stored.payload.get("feature_snapshot_hash", "")
+        status = self._classify_reconciliation_status(
+            previous_weight_today=(
+                float(prior_weight) if prior_weight is not None else None
+            ),
+            recomputed_weight_today=weight_today,
+            previous_feature_snapshot_hash=previous_feature_snapshot_hash,
+            recomputed_feature_snapshot_hash=feature_snapshot_hash,
+        )
         return {
             "status": status,
             "previous_weight_today": prior_weight,
             "recomputed_weight_today": weight_today,
-            "previous_feature_snapshot_hash": stored.payload.get("feature_snapshot_hash", ""),
+            "previous_feature_snapshot_hash": previous_feature_snapshot_hash,
             "recomputed_feature_snapshot_hash": feature_snapshot_hash,
         }
 

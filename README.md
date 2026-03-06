@@ -99,10 +99,12 @@ Export requires explicit date bounds:
 ```bash
 stacksats strategy export \
   --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
-  --start-date 2025-12-01 \
-  --end-date 2027-12-31 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 ```
+
+Use date bounds that are covered by available BTC source data.
 
 Exported `StrategyTimeSeries` objects are read-only validated artifacts.
 If you need to reload an export later, use `StrategyTimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
@@ -133,6 +135,7 @@ venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
 bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
+bash scripts/clean_local.sh
 bash scripts/release_check.sh
 ```
 

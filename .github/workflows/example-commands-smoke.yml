@@ -1,0 +1,29 @@
+name: example-commands-smoke
+
+on:
+  schedule:
+    - cron: "10 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: example-commands-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python project
+        uses: ./.github/actions/setup-python-project
+        with:
+          python-version: "3.11"
+          extras: ".[dev,deploy]"
+
+      - name: Run docs example command smoke checks
+        run: python scripts/test_example_commands.py

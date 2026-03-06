@@ -34,8 +34,8 @@ stacksats strategy backtest \
 # Export (explicit date bounds required)
 stacksats strategy export \
   --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
-  --start-date 2025-12-01 \
-  --end-date 2027-12-31 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 
 # Run daily execution (paper mode by default)
@@ -187,8 +187,8 @@ All under `output/<strategy_id>/<version>/<run_id>/`.
 stacksats strategy export \
   --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --strategy-config strategy_config.json \
-  --start-date 2025-12-01 \
-  --end-date 2027-12-31 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 ```
 
@@ -250,6 +250,7 @@ Expected status lines:
 Verify this document's example commands end-to-end:
 
 ```bash
+# Runs deterministic smoke variants of the commands on this page.
 # Requires ./venv (for example: python -m venv venv && source venv/bin/activate && pip install -e ".[dev]")
 venv/bin/python scripts/test_example_commands.py
 ```
@@ -264,7 +265,7 @@ venv/bin/python -m pytest -m "slow or integration or performance" -q
 Run lint:
 
 ```bash
-ruff check .
+venv/bin/python -m ruff check .
 ```
 
 ## Troubleshooting
@@ -280,6 +281,9 @@ ruff check .
 
 - **Export failed due to missing date bounds**
   Provide both `--start-date` and `--end-date`.
+
+- **Export failed due to data coverage**
+  Use an `--end-date` that is covered by available source data.
 
 - **Live mode failed with adapter error**
   Ensure `--adapter module_or_path:ClassName` is provided and returns `DailyOrderReceipt`.

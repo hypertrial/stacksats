@@ -295,6 +295,19 @@ class StrategyRunnerValidationMixin:
         state.strict_checks_ok = False
         state.messages.append(message)
 
+    @staticmethod
+    def _stop_on_mutation(
+        *,
+        strict_mode: bool,
+        mutated: bool,
+        state: _ValidationState,
+        message: str = STRICT_MUTATION_MESSAGE,
+    ) -> bool:
+        if strict_mode and mutated:
+            StrategyRunnerValidationMixin._mark_mutation_failure(state, message=message)
+            return True
+        return False
+
     def _compute_with_mutation_guard(
         self,
         strategy: BaseStrategy,
@@ -426,8 +439,11 @@ class StrategyRunnerValidationMixin:
                 full_ctx,
                 strict_mode=strict_mode,
             )
-            if strict_mode and full_mutated:
-                self._mark_mutation_failure(state)
+            if self._stop_on_mutation(
+                strict_mode=strict_mode,
+                mutated=full_mutated,
+                state=state,
+            ):
                 break
 
             if strict_mode and not self._strict_determinism_check(
@@ -452,8 +468,11 @@ class StrategyRunnerValidationMixin:
                 masked_ctx,
                 strict_mode=strict_mode,
             )
-            if strict_mode and masked_mutated:
-                self._mark_mutation_failure(state)
+            if self._stop_on_mutation(
+                strict_mode=strict_mode,
+                mutated=masked_mutated,
+                state=state,
+            ):
                 break
 
             perturbed_source = self._perturb_future_source_data(btc_df, probe)
@@ -468,8 +487,11 @@ class StrategyRunnerValidationMixin:
                 perturbed_ctx,
                 strict_mode=strict_mode,
             )
-            if strict_mode and perturbed_mutated:
-                self._mark_mutation_failure(state)
+            if self._stop_on_mutation(
+                strict_mode=strict_mode,
+                mutated=perturbed_mutated,
+                state=state,
+            ):
                 break
 
             prefix_idx = full_weights.index[full_weights.index <= probe]
@@ -536,13 +558,14 @@ class StrategyRunnerValidationMixin:
                     profile_perturbed_ctx,
                     strict_mode=strict_mode,
                 )
-                if strict_mode and (
-                    full_profile_mutated or masked_profile_mutated or perturbed_profile_mutated
+                if self._stop_on_mutation(
+                    strict_mode=strict_mode,
+                    mutated=(
+                        full_profile_mutated or masked_profile_mutated or perturbed_profile_mutated
+                    ),
+                    state=state,
+                    message=STRICT_PROFILE_MUTATION_MESSAGE,
                 ):
-                    self._mark_mutation_failure(
-                        state,
-                        message=STRICT_PROFILE_MUTATION_MESSAGE,
-                    )
                     break
 
                 full_profile_prefix = full_profile_series.reindex(prefix_idx)
@@ -607,8 +630,11 @@ class StrategyRunnerValidationMixin:
                     ctx,
                     strict_mode=strict_mode,
                 )
-                if strict_mode and mutated:
-                    self._mark_mutation_failure(state)
+                if self._stop_on_mutation(
+                    strict_mode=strict_mode,
+                    mutated=mutated,
+                    state=state,
+                ):
                     break
                 if weights.empty:
                     continue
@@ -679,8 +705,11 @@ class StrategyRunnerValidationMixin:
             base_lock_ctx,
             strict_mode=True,
         )
-        if base_mutated:
-            self._mark_mutation_failure(state)
+        if self._stop_on_mutation(
+            strict_mode=True,
+            mutated=base_mutated,
+            state=state,
+        ):
             return
         if base_lock_weights.empty:
             return
@@ -710,8 +739,11 @@ class StrategyRunnerValidationMixin:
             locked_ctx,
             strict_mode=True,
         )
-        if locked_mutated:
-            self._mark_mutation_failure(state)
+        if self._stop_on_mutation(
+            strict_mode=True,
+            mutated=locked_mutated,
+            state=state,
+        ):
             return
         if n_past > 0:
             observed_prefix = locked_run_weights.iloc[:n_past].to_numpy(dtype=float)

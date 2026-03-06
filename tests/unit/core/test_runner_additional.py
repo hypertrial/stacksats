@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,138 +9,14 @@ import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from stacksats.runner import StrategyRunner, WeightValidationError
-from stacksats.strategy_types import (
-    BacktestConfig,
-    BaseStrategy,
-    ExportConfig,
-    StrategyContext,
-    ValidationConfig,
+from stacksats.strategy_types import BacktestConfig, ExportConfig, StrategyMetadata, ValidationConfig
+from tests.unit.core.runner_validation_testkit import (
+    UniformProposeStrategy,
+    btc_df,
+    patch_skip_weight_and_lock_checks,
 )
 
 pytestmark = pytest.mark.slow
-
-
-class _UniformProposeStrategy(BaseStrategy):
-    strategy_id = "runner-uniform"
-    version = "1.0.0"
-
-    def propose_weight(self, state):
-        return state.uniform_weight
-
-
-class _MutatingProposeStrategy(BaseStrategy):
-    strategy_id = "runner-mutating"
-    version = "1.0.0"
-
-    def transform_features(self, ctx):
-        # Intentional contract violation for strict-mode guard coverage.
-        ctx.features_df["__mutated__"] = 1.0
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-
-    def propose_weight(self, state):
-        return state.uniform_weight
-
-
-class _RandomProposeStrategy(BaseStrategy):
-    strategy_id = "runner-random"
-    version = "1.0.0"
-
-    def propose_weight(self, state):
-        rng = np.random.default_rng()
-        return float(rng.uniform(0.0, state.uniform_weight * 2.0))
-
-
-class _ProfileOffsetLeakStrategy(BaseStrategy):
-    strategy_id = "runner-leak-profile-offset"
-    version = "1.0.0"
-
-    def build_target_profile(
-        self,
-        ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
-        del signals
-        future_rows = ctx.features_df.index[ctx.features_df.index > ctx.end_date]
-        offset = float(len(future_rows))
-        # Additive offsets leave softmax weights unchanged, but profile checks should still catch leakage.
-        base = np.linspace(-1.0, 1.0, len(features_df), dtype=float)
-        return pd.Series(base + offset, index=features_df.index, dtype=float)
-
-
-class _ProfileMutationStrategy(BaseStrategy):
-    strategy_id = "runner-profile-mutation"
-    version = "1.0.0"
-
-    def build_target_profile(
-        self,
-        ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
-        del signals
-        ctx.features_df["__profile_mutation__"] = 1.0
-        if features_df.empty:
-            return pd.Series(dtype=float)
-        return pd.Series(np.ones(len(features_df), dtype=float), index=features_df.index)
-
-
-class _DualHookProfilePreferredLeakStrategy(BaseStrategy):
-    strategy_id = "runner-dual-profile-leak"
-    version = "1.0.0"
-    intent_preference = "profile"
-
-    def propose_weight(self, state):
-        return state.uniform_weight
-
-    def build_target_profile(
-        self,
-        ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
-        del signals
-        future_rows = ctx.features_df.index[ctx.features_df.index > ctx.end_date]
-        offset = float(len(future_rows))
-        base = np.linspace(-1.0, 1.0, len(features_df), dtype=float)
-        return pd.Series(base + offset, index=features_df.index, dtype=float)
-
-
-def _btc_df(days: int = 900) -> pd.DataFrame:
-    idx = pd.date_range("2021-01-01", periods=days, freq="D")
-    return pd.DataFrame(
-        {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 50000.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
-    )
-
-
-def _fast_strict_validation_config(**overrides) -> ValidationConfig:
-    params = {
-        "start_date": "2022-01-01",
-        "end_date": "2024-03-31",
-        "min_win_rate": 0.0,
-        "strict": True,
-        "bootstrap_trials": 25,
-        "permutation_trials": 25,
-        "block_size": 14,
-    }
-    params.update(overrides)
-    return ValidationConfig(**params)
-
-
-def _patch_skip_weight_and_lock_checks(
-    monkeypatch: pytest.MonkeyPatch,
-    runner: StrategyRunner,
-) -> None:
-    monkeypatch.setattr(
-        runner,
-        "_run_weight_constraint_checks",
-        lambda **kwargs: kwargs["end_ts"],
-    )
-    monkeypatch.setattr(runner, "_run_locked_prefix_check", lambda **kwargs: None)
 
 
 def test_validate_weights_rejects_sum_mismatch() -> None:
@@ -198,7 +75,7 @@ def test_validate_weights_rejects_above_max_for_full_contract_span() -> None:
 
 def test_backtest_raises_when_no_windows_generated(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
+    strategy = UniformProposeStrategy()
     monkeypatch.setattr(
         "stacksats.runner.backtest_dynamic_dca",
         lambda *args, **kwargs: (pd.DataFrame(), 50.0, 40.0),
@@ -208,7 +85,7 @@ def test_backtest_raises_when_no_windows_generated(monkeypatch: pytest.MonkeyPat
         runner.backtest(
             strategy,
             BacktestConfig(start_date="2024-01-01", end_date="2024-02-01"),
-            btc_df=_btc_df(days=60),
+            btc_df=btc_df(days=60),
         )
 
 
@@ -216,7 +93,7 @@ def test_backtest_win_rate_ignores_tiny_float_noise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
+    strategy = UniformProposeStrategy()
     spd_table = pd.DataFrame(
         {
             "dynamic_percentile": [40.0 + 1e-12, 50.0 - 1e-12, 60.0 + 5e-11],
@@ -231,10 +108,9 @@ def test_backtest_win_rate_ignores_tiny_float_noise(
     result = runner.backtest(
         strategy,
         BacktestConfig(start_date="2022-01-01", end_date="2022-12-31"),
-        btc_df=_btc_df(days=500),
+        btc_df=btc_df(days=500),
     )
 
-    # Deltas are below win-rate tolerance, so no wins should be counted.
     assert float(result.win_rate) == 0.0
 
 
@@ -242,7 +118,7 @@ def test_backtest_win_rate_counts_only_deltas_above_tolerance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
+    strategy = UniformProposeStrategy()
     spd_table = pd.DataFrame(
         {
             "dynamic_percentile": [40.0 + 1e-8, 50.0 - 1e-8, 60.0 + 2e-10],
@@ -257,10 +133,9 @@ def test_backtest_win_rate_counts_only_deltas_above_tolerance(
     result = runner.backtest(
         strategy,
         BacktestConfig(start_date="2022-01-01", end_date="2022-12-31"),
-        btc_df=_btc_df(days=500),
+        btc_df=btc_df(days=500),
     )
 
-    # Two of three windows exceed tolerance.
     assert result.win_rate == pytest.approx(66.6666666667, rel=0.0, abs=1e-9)
 
 
@@ -268,14 +143,14 @@ def test_validate_reports_win_rate_threshold_failure_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
+    strategy = UniformProposeStrategy()
     monkeypatch.setattr(
         runner,
         "backtest",
         lambda *args, **kwargs: SimpleNamespace(win_rate=12.5),
     )
     monkeypatch.setattr(runner, "_run_forward_leakage_checks", lambda **kwargs: None)
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
+    patch_skip_weight_and_lock_checks(monkeypatch, runner)
 
     result = runner.validate(
         strategy,
@@ -284,7 +159,7 @@ def test_validate_reports_win_rate_threshold_failure_message(
             end_date="2023-12-31",
             min_win_rate=1000.0,
         ),
-        btc_df=_btc_df(days=1200),
+        btc_df=btc_df(days=1200),
     )
 
     assert bool(result.passed) is False
@@ -294,63 +169,23 @@ def test_validate_reports_win_rate_threshold_failure_message(
 
 def test_export_raises_when_no_ranges_generated(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
+    strategy = UniformProposeStrategy()
     monkeypatch.setattr("stacksats.prelude.generate_date_ranges", lambda *args, **kwargs: [])
 
     with pytest.raises(ValueError, match="No export ranges generated"):
         runner.export(
             strategy,
             ExportConfig(range_start="2025-01-01", range_end="2025-01-02"),
-            btc_df=_btc_df(days=1200),
+            btc_df=btc_df(days=1200),
             current_date=pd.Timestamp("2025-01-02"),
         )
-
-
-def test_validate_strict_rejects_strategy_that_mutates_context_features(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    result = runner.validate(
-        _MutatingProposeStrategy(),
-        _fast_strict_validation_config(),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
-
-
-def test_validate_strict_rejects_non_deterministic_strategy(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    result = runner.validate(
-        _RandomProposeStrategy(),
-        _fast_strict_validation_config(),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.passed) is False
-    assert any("non-deterministic" in message for message in result.messages)
 
 
 def test_strict_fold_checks_skip_on_short_range() -> None:
     runner = StrategyRunner()
     ok, messages = runner._strict_fold_checks(
-        strategy=_UniformProposeStrategy(),
-        btc_df=_btc_df(days=120),
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=120),
         start_ts=pd.Timestamp("2024-01-01"),
         end_ts=pd.Timestamp("2024-03-31"),
         config=ValidationConfig(strict=True),
@@ -370,8 +205,8 @@ def test_strict_fold_checks_reports_min_fold_failure(monkeypatch: pytest.MonkeyP
     )
 
     ok, messages = runner._strict_fold_checks(
-        strategy=_UniformProposeStrategy(),
-        btc_df=_btc_df(days=2000),
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=2000),
         start_ts=pd.Timestamp("2021-01-01"),
         end_ts=pd.Timestamp("2025-12-31"),
         config=ValidationConfig(strict=True, min_fold_win_rate=60.0, max_fold_win_rate_std=1000.0),
@@ -392,8 +227,8 @@ def test_strict_fold_checks_reports_std_failure(monkeypatch: pytest.MonkeyPatch)
     )
 
     ok, messages = runner._strict_fold_checks(
-        strategy=_UniformProposeStrategy(),
-        btc_df=_btc_df(days=2000),
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=2000),
         start_ts=pd.Timestamp("2021-01-01"),
         end_ts=pd.Timestamp("2025-12-31"),
         config=ValidationConfig(strict=True, min_fold_win_rate=0.0, max_fold_win_rate_std=5.0),
@@ -414,8 +249,8 @@ def test_strict_shuffled_check_reports_threshold_failure(monkeypatch: pytest.Mon
     )
 
     ok, messages = runner._strict_shuffled_check(
-        strategy=_UniformProposeStrategy(),
-        btc_df=_btc_df(days=2000),
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=2000),
         start_ts=pd.Timestamp("2022-01-01"),
         end_ts=pd.Timestamp("2023-12-31"),
         config=ValidationConfig(strict=True, shuffled_trials=3, max_shuffled_win_rate=80.0),
@@ -428,11 +263,11 @@ def test_strict_shuffled_check_reports_threshold_failure(monkeypatch: pytest.Mon
 
 def test_strict_shuffled_check_skips_without_price_column() -> None:
     runner = StrategyRunner()
-    btc_df = pd.DataFrame({"Other": [1.0, 2.0]}, index=pd.date_range("2024-01-01", periods=2))
+    df = pd.DataFrame({"Other": [1.0, 2.0]}, index=pd.date_range("2024-01-01", periods=2))
 
     ok, messages = runner._strict_shuffled_check(
-        strategy=_UniformProposeStrategy(),
-        btc_df=btc_df,
+        strategy=UniformProposeStrategy(),
+        btc_df=df,
         start_ts=pd.Timestamp("2024-01-01"),
         end_ts=pd.Timestamp("2024-01-02"),
         config=ValidationConfig(strict=True, shuffled_trials=3),
@@ -446,8 +281,8 @@ def test_strict_shuffled_check_skips_when_trials_non_positive() -> None:
     runner = StrategyRunner()
 
     ok, messages = runner._strict_shuffled_check(
-        strategy=_UniformProposeStrategy(),
-        btc_df=_btc_df(days=500),
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=500),
         start_ts=pd.Timestamp("2023-01-01"),
         end_ts=pd.Timestamp("2023-12-31"),
         config=ValidationConfig(strict=True, shuffled_trials=0),
@@ -455,256 +290,6 @@ def test_strict_shuffled_check_skips_when_trials_non_positive() -> None:
 
     assert ok is True
     assert any("shuffled_trials <= 0" in msg for msg in messages)
-
-
-def test_validate_reports_masked_future_weight_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner = StrategyRunner()
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    matches = iter([False])
-    monkeypatch.setattr(
-        runner,
-        "_weights_match",
-        lambda *args, **kwargs: bool(next(matches)),
-    )
-
-    result = runner.validate(
-        _UniformProposeStrategy(),
-        ValidationConfig(
-            start_date="2022-01-01",
-            end_date="2023-12-31",
-            min_win_rate=0.0,
-        ),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.forward_leakage_ok) is False
-    assert any("masked-future weights diverge" in msg for msg in result.messages)
-
-
-def test_validate_reports_perturbed_future_weight_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner = StrategyRunner()
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    matches = iter([True, False])
-    monkeypatch.setattr(
-        runner,
-        "_weights_match",
-        lambda *args, **kwargs: bool(next(matches)),
-    )
-
-    result = runner.validate(
-        _UniformProposeStrategy(),
-        ValidationConfig(
-            start_date="2022-01-01",
-            end_date="2023-12-31",
-            min_win_rate=0.0,
-        ),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.forward_leakage_ok) is False
-    assert any("perturbed-future weights diverge" in msg for msg in result.messages)
-
-
-def test_validate_observed_only_profile_input_blocks_future_offset_leak(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-
-    result = runner.validate(
-        _ProfileOffsetLeakStrategy(),
-        ValidationConfig(
-            start_date="2022-01-01",
-            end_date="2023-12-31",
-            min_win_rate=0.0,
-        ),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.forward_leakage_ok) is True
-    assert any("All validation checks passed." in msg for msg in result.messages)
-
-
-def test_validate_uses_profile_checks_for_dual_hook_profile_preference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-
-    result = runner.validate(
-        _DualHookProfilePreferredLeakStrategy(),
-        ValidationConfig(
-            start_date="2022-01-01",
-            end_date="2023-12-31",
-            min_win_rate=0.0,
-        ),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.forward_leakage_ok) is True
-    assert any("All validation checks passed." in msg for msg in result.messages)
-
-
-def test_validate_strict_passes_and_emits_fold_and_shuffled_diagnostics(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    monkeypatch.setattr(runner, "_run_forward_leakage_checks", lambda **kwargs: None)
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=55.0),
-    )
-
-    result = runner.validate(
-        _UniformProposeStrategy(),
-        ValidationConfig(
-            start_date="2019-01-01",
-            end_date="2025-12-31",
-            min_win_rate=0.0,
-            strict=True,
-            bootstrap_trials=25,
-            permutation_trials=25,
-            block_size=14,
-            min_fold_win_rate=20.0,
-            max_fold_win_rate_std=35.0,
-            max_shuffled_win_rate=80.0,
-            shuffled_trials=3,
-        ),
-        btc_df=_btc_df(days=3200),
-    )
-
-    assert bool(result.passed) is True
-    assert any("Strict fold diagnostics" in msg for msg in result.messages)
-    assert any("Strict shuffled diagnostics" in msg for msg in result.messages)
-
-
-def test_validate_strict_fails_when_boundary_hit_rate_exceeds_threshold(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
-    monkeypatch.setattr(runner, "_run_forward_leakage_checks", lambda **kwargs: None)
-    monkeypatch.setattr(runner, "_run_locked_prefix_check", lambda **kwargs: None)
-    monkeypatch.setattr(runner, "_strict_fold_checks", lambda **kwargs: (True, []))
-    monkeypatch.setattr(runner, "_strict_shuffled_check", lambda **kwargs: (True, []))
-    monkeypatch.setattr(runner, "_strict_statistical_checks", lambda **kwargs: None)
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-
-    def _boundary_saturating_compute_weights(ctx: StrategyContext) -> pd.Series:
-        idx = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        n = len(idx)
-        if n != ALLOCATION_SPAN_DAYS:
-            return pd.Series(np.full(n, 1.0 / n, dtype=float), index=idx)
-        # 355 days at min, 9 days at max, 1 day as remainder => valid sum and >99% at bounds.
-        values = np.full(ALLOCATION_SPAN_DAYS, MIN_DAILY_WEIGHT, dtype=float)
-        values[:9] = MAX_DAILY_WEIGHT
-        values[-1] = 1.0 - float(values[:-1].sum())
-        return pd.Series(values, index=idx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _boundary_saturating_compute_weights)
-
-    result = runner.validate(
-        strategy,
-        _fast_strict_validation_config(max_boundary_hit_rate=0.85),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.passed) is False
-    assert any("boundary hit rate" in msg for msg in result.messages)
-    assert any("exceeds" in msg for msg in result.messages)
-
-
-def test_validate_strict_fails_when_locked_prefix_is_not_preserved(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformProposeStrategy()
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-    monkeypatch.setattr(runner, "_run_forward_leakage_checks", lambda **kwargs: None)
-    monkeypatch.setattr(runner, "_strict_fold_checks", lambda **kwargs: (True, []))
-    monkeypatch.setattr(runner, "_strict_shuffled_check", lambda **kwargs: (True, []))
-    monkeypatch.setattr(runner, "_strict_statistical_checks", lambda **kwargs: None)
-    monkeypatch.setattr(
-        runner,
-        "_run_weight_constraint_checks",
-        lambda **kwargs: kwargs["start_ts"],
-    )
-
-    def _ignoring_locked_prefix_compute_weights(ctx: StrategyContext) -> pd.Series:
-        idx = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        n = len(idx)
-        values = np.full(n, 1.0 / n, dtype=float)
-        if ctx.locked_weights is not None and n >= 2:
-            values[0] += 1e-3
-            values[1] -= 1e-3
-        return pd.Series(values, index=idx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _ignoring_locked_prefix_compute_weights)
-
-    result = runner.validate(
-        strategy,
-        _fast_strict_validation_config(),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.passed) is False
-    assert any("locked prefix was not preserved exactly" in msg for msg in result.messages)
-
-
-def test_validate_strict_detects_profile_build_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner = StrategyRunner()
-    strategy = _ProfileMutationStrategy()
-    _patch_skip_weight_and_lock_checks(monkeypatch, runner)
-    monkeypatch.setattr(
-        runner,
-        "backtest",
-        lambda *args, **kwargs: SimpleNamespace(win_rate=100.0),
-    )
-
-    def _safe_compute_weights(ctx: StrategyContext) -> pd.Series:
-        idx = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        return pd.Series(np.full(len(idx), 1.0 / len(idx), dtype=float), index=idx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _safe_compute_weights)
-
-    result = runner.validate(
-        strategy,
-        _fast_strict_validation_config(),
-        btc_df=_btc_df(days=1200),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df during profile build" in msg for msg in result.messages)
 
 
 def test_frame_signature_falls_back_for_unhashable_cells(
@@ -719,3 +304,133 @@ def test_frame_signature_falls_back_for_unhashable_cells(
     sig = StrategyRunner._frame_signature(df)
     assert isinstance(sig[0], int)
     assert sig[3] == tuple(df.shape)
+
+
+def test_strict_validation_failure_message_includes_details() -> None:
+    msg = StrategyRunner._strict_validation_failure_message(["a", "b"])
+    assert msg.endswith("a; b")
+
+    fallback = StrategyRunner._strict_validation_failure_message([])
+    assert fallback == "Strict validation failed before daily execution."
+
+
+def test_classify_reconciliation_status_paths() -> None:
+    assert (
+        StrategyRunner._classify_reconciliation_status(
+            previous_weight_today=None,
+            recomputed_weight_today=0.1,
+            previous_feature_snapshot_hash="x",
+            recomputed_feature_snapshot_hash="y",
+        )
+        == "stable"
+    )
+    assert (
+        StrategyRunner._classify_reconciliation_status(
+            previous_weight_today=0.2,
+            recomputed_weight_today=0.2,
+            previous_feature_snapshot_hash="x",
+            recomputed_feature_snapshot_hash="x",
+        )
+        == "stable"
+    )
+    assert (
+        StrategyRunner._classify_reconciliation_status(
+            previous_weight_today=0.2,
+            recomputed_weight_today=0.2,
+            previous_feature_snapshot_hash="x",
+            recomputed_feature_snapshot_hash="z",
+        )
+        == "data_revised_no_decision_change"
+    )
+    assert (
+        StrategyRunner._classify_reconciliation_status(
+            previous_weight_today=0.2,
+            recomputed_weight_today=0.25,
+            previous_feature_snapshot_hash="x",
+            recomputed_feature_snapshot_hash="z",
+        )
+        == "decision_changed_due_to_revision"
+    )
+
+
+def test_merge_strict_check_result_updates_state() -> None:
+    state = SimpleNamespace(strict_checks_ok=True, messages=["initial"])
+    StrategyRunner._merge_strict_check_result(
+        state,
+        ok=False,
+        messages=["m1", "m2"],
+    )
+    assert state.strict_checks_ok is False
+    assert state.messages == ["initial", "m1", "m2"]
+
+
+def test_build_failed_daily_result_maps_expected_payload_fields() -> None:
+    class _Result:
+        def __init__(self, **kwargs):
+            self.payload = kwargs
+
+    runner = StrategyRunner()
+    result = runner._build_failed_daily_result(
+        metadata=StrategyMetadata(strategy_id="s", version="1.0.0"),
+        config=SimpleNamespace(mode="paper"),
+        run_date="2026-01-01",
+        run_key="rk",
+        state_store=SimpleNamespace(db_path=Path("/tmp/state.sqlite3")),
+        forced_rerun=True,
+        bootstrap=False,
+        validation_receipt_id=10,
+        data_hash="dhash",
+        feature_snapshot_hash="fhash",
+        error_message="boom",
+        daily_run_result_cls=_Result,
+    )
+
+    assert result.payload["status"] == "failed"
+    assert result.payload["forced_rerun"] is True
+    assert result.payload["validation_receipt_id"] == 10
+    assert result.payload["validation_passed"] is False
+    assert result.payload["message"] == "Daily execution failed: boom"
+
+
+def test_validate_returns_failed_result_when_contract_validation_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    monkeypatch.setattr(
+        runner,
+        "_validate_strategy_contract",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid strategy")),
+    )
+
+    result = runner.validate(
+        UniformProposeStrategy(),
+        ValidationConfig(strict=True),
+        btc_df=btc_df(days=120),
+    )
+
+    assert bool(result.passed) is False
+    assert result.messages == ["invalid strategy"]
+
+
+def test_reconcile_daily_run_raises_when_no_stored_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Store:
+        def __init__(self, _path: str):
+            pass
+
+        def get_run(self, **kwargs):
+            del kwargs
+            return None
+
+    monkeypatch.setattr("stacksats.execution_state.SQLiteExecutionStateStore", _Store)
+
+    runner = StrategyRunner()
+    with pytest.raises(ValueError, match="No stored daily run exists"):
+        runner.reconcile_daily_run(
+            UniformProposeStrategy(),
+            run_date="2025-01-01",
+            mode="paper",
+            state_db_path=":memory:",
+            btc_df=btc_df(days=120),
+        )

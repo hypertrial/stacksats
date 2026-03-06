@@ -82,8 +82,8 @@ stacksats strategy backtest \
 ```bash
 stacksats strategy export \
   --strategy my_strategy.py:MyStrategy \
-  --start-date 2025-12-01 \
-  --end-date 2027-12-31 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
   --output-dir output
 ```
 
@@ -95,6 +95,7 @@ stacksats strategy export \
 ### Troubleshooting
 
 - Export requires both `--start-date` and `--end-date`.
+- Keep `--end-date` within available source data coverage.
 - Validate `weights.csv` has canonical columns (`start_date`, `end_date`, `day_index`, `date`, `price_usd`, `weight`).
 
 ### Next step
