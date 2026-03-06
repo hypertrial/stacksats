@@ -10,6 +10,8 @@ on:
       - ".github/workflows/docs-*.yml"
       - ".github/workflows/docs-*.yaml"
   workflow_dispatch:
+  schedule:
+    - cron: "20 2 * * *"
 
 permissions:
   contents: read
@@ -58,13 +60,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: py311-full
+          - name: py311-nonperf
             python_version: "3.11"
             test_target: tests/
+            marker: "not performance"
             extras: ".[dev,deploy]"
           - name: py312-smoke
             python_version: "3.12"
             test_target: tests/unit tests/bdd/scenarios
+            marker: "not slow and not integration and not performance"
             extras: ".[dev,deploy]"
 
     steps:
@@ -88,8 +92,32 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest ${{ matrix.test_target }} -v -m "not performance and not slow" \
+          pytest ${{ matrix.test_target }} -v -m "${{ matrix.marker }}" \
             --durations=25 --durations-min=1.0 --dist=loadscope
+
+  docs_strict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build docs (strict)
+        run: python -m mkdocs build --strict
 
   coverage:
     runs-on: ubuntu-latest
@@ -121,6 +149,7 @@ jobs:
     needs:
       - quality
       - tests
+      - docs_strict
       - coverage
     steps:
       - name: Check out code

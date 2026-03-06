@@ -33,13 +33,13 @@ venv/bin/python scripts/check_docs_ux.py
 venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
 venv/bin/python -m mkdocs build --strict
-bash scripts/check_coverage.sh
 ```
 
 Heavy test tiers when you need them explicitly:
 
 ```bash
 venv/bin/python -m pytest -m "slow or integration or performance" -q
+bash scripts/check_coverage.sh
 ```
 
 Release-grade verification:
@@ -52,7 +52,7 @@ Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
 - `pre-push` (every push): fast pytest suite plus `mkdocs build --strict`.
 
-Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full slow and integration suite in addition to build/docs checks.
+Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
 
 ## Contribution workflow
 
@@ -66,7 +66,7 @@ Use `bash scripts/release_check.sh` for release prep only. It intentionally runs
 - Keep behavior changes explicit and documented.
 - Prefer small, reviewable PRs over large mixed changes.
 - Include test coverage for fixes/features when practical.
-- Package coverage for `stacksats/*` is enforced at 100% in CI (`bash scripts/check_coverage.sh`).
+- Package coverage for `stacksats/*` is enforced at 100% in Tier-2 CI (`bash scripts/check_coverage.sh`).
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 - If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.

@@ -117,8 +117,9 @@ bash scripts/publish_pypi_manual.sh
 
 ## CI Workflow Notes
 
-- Pull requests run packaging checks (`package-check-pr.yml`).
-- Pushes to `main` run packaging checks (`package-check.yml`).
+- Pull requests run fast packaging checks (`package-check-pr.yml`) and docs checks.
+- Pushes to `main` run full non-performance packaging checks (`package-check.yml`), including coverage and strict docs build.
+- A nightly scheduled run also executes `package-check.yml` for ongoing full-gate validation.
 - PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
 - Pull requests also run docs quality checks (`docs-check.yml`):
   - markdown lint across all tracked `.md` files
