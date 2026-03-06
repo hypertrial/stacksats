@@ -65,7 +65,8 @@ Use `bash scripts/release_check.sh` for release prep only. It intentionally runs
 - Keep behavior changes explicit and documented.
 - Prefer small, reviewable PRs over large mixed changes.
 - Include test coverage for fixes/features when practical.
-- Package coverage for `stacksats/*` is enforced at 100% in Tier-2 CI (`bash scripts/check_coverage.sh`).
+- Full non-performance coverage (`bash scripts/check_coverage.sh`) runs in the scheduled/manual
+  `coverage-report.yml` workflow and remains recommended before release cuts.
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 - If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.

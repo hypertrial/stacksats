@@ -132,7 +132,7 @@ venv/bin/python -m pre_commit install -t pre-commit
 venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
 bash scripts/check_docs_refs.sh
-bash scripts/check_coverage.sh  # full non-performance coverage gate (slower)
+bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
 bash scripts/release_check.sh
 ```
 
