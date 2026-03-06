@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from stacksats.strategies.model_example import ExampleMVRVStrategy, main
-from stacksats.strategy_types import BaseStrategy
+from stacksats.strategy_types import BaseStrategy, validate_strategy_contract
 
 
 def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -26,139 +26,85 @@ def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
             "signal_confidence": np.linspace(0.1, 0.9, n),
             "mvrv_percentile": np.linspace(0.1, 0.9, n),
             "mvrv_acceleration": np.linspace(-0.5, 0.5, n),
+            "cm_netflow_fast": np.linspace(-1.0, 1.0, n),
+            "cm_netflow_slow": np.linspace(-0.8, 0.8, n),
+            "cm_netflow_slope": np.linspace(-0.6, 0.6, n),
+            "cm_activity_level": np.linspace(-0.4, 0.4, n),
+            "cm_activity_div_fast": np.linspace(-0.4, 0.4, n),
+            "cm_activity_div_slow": np.linspace(-0.3, 0.3, n),
+            "cm_liquidity_level": np.linspace(-0.2, 0.2, n),
+            "cm_liquidity_impulse": np.linspace(-0.2, 0.2, n),
+            "cm_exchange_share_level": np.linspace(-0.3, 0.3, n),
+            "cm_exchange_share_delta": np.linspace(-0.3, 0.3, n),
+            "cm_miner_pressure": np.linspace(-0.2, 0.2, n),
+            "cm_hash_momentum": np.linspace(-0.2, 0.2, n),
+            "cm_roi30": np.linspace(-0.6, 0.6, n),
+            "cm_roi1y": np.linspace(-0.5, 0.5, n),
         },
         index=index,
     )
 
 
-def _coinmetrics_csv(path: Path, *, include_optional: bool) -> None:
-    base = pd.DataFrame(
-        {
-            "time": pd.date_range("2024-01-01", periods=30, freq="D"),
-            "PriceUSD": np.linspace(40000.0, 45000.0, 30),
-        }
-    )
-    if include_optional:
-        base["CapMrktCurUSD"] = np.linspace(1e12, 1.2e12, 30)
-        base["FlowInExUSD"] = np.linspace(1e9, 1.3e9, 30)
-        base["FlowOutExUSD"] = np.linspace(0.8e9, 1.1e9, 30)
-        base["AdrActCnt"] = np.linspace(500000, 700000, 30)
-        base["TxCnt"] = np.linspace(200000, 240000, 30)
-        base["FeeTotNtv"] = np.linspace(100, 120, 30)
-        base["volume_reported_spot_usd_1d"] = np.linspace(1e10, 1.2e10, 30)
-        base["SplyExNtv"] = np.linspace(2e6, 2.1e6, 30)
-        base["SplyCur"] = np.linspace(19e6, 19.2e6, 30)
-        base["IssTotUSD"] = np.linspace(1e8, 1.1e8, 30)
-        base["HashRate"] = np.linspace(350e6, 360e6, 30)
-        base["ROI30d"] = np.linspace(-0.1, 0.2, 30)
-        base["ROI1yr"] = np.linspace(-0.4, 0.8, 30)
-    base.to_csv(path, index=False)
-
-
-def test_clean_array_and_rolling_zscore_helpers() -> None:
+def test_clean_array_helper() -> None:
     arr = ExampleMVRVStrategy._clean_array(pd.Series([1.0, np.inf, np.nan, -2.0]))
     assert np.array_equal(arr, np.array([1.0, 0.0, 0.0, -2.0]))
 
-    z = ExampleMVRVStrategy._rolling_zscore(pd.Series(np.linspace(1.0, 60.0, 60)), 30)
-    assert len(z) == 60
-    assert np.isfinite(z.to_numpy(dtype=float)).all()
 
-
-def test_to_numeric_only_converts_known_columns() -> None:
-    df = pd.DataFrame({"a": ["1", "2"], "b": ["x", "y"]})
-    ExampleMVRVStrategy._to_numeric(df, ["a", "missing"])
-    assert list(df["a"]) == [1, 2]
-    assert list(df["b"]) == ["x", "y"]
-
-
-def test_load_coinmetrics_features_handles_missing_and_invalid_time(tmp_path: Path) -> None:
+def test_strategy_contract_and_required_feature_metadata() -> None:
     strategy = ExampleMVRVStrategy()
-    strategy.coinmetrics_cache_path = tmp_path / "missing.csv"
-    assert strategy._load_coinmetrics_features().empty
-
-    invalid = tmp_path / "invalid.csv"
-    pd.DataFrame({"not_time": [1, 2]}).to_csv(invalid, index=False)
-    strategy = ExampleMVRVStrategy()
-    strategy.coinmetrics_cache_path = invalid
-    assert strategy._load_coinmetrics_features().empty
+    has_propose, has_profile = validate_strategy_contract(strategy)
+    assert has_propose is False
+    assert has_profile is True
+    assert strategy.required_feature_sets() == ("core_model_features_v1", "coinmetrics_overlay_v1")
+    assert "cm_netflow_fast" in strategy.required_feature_columns()
 
 
-def test_load_coinmetrics_features_full_and_minimal_paths(tmp_path: Path) -> None:
-    full_csv = tmp_path / "full.csv"
-    _coinmetrics_csv(full_csv, include_optional=True)
-    strategy_full = ExampleMVRVStrategy()
-    strategy_full.coinmetrics_cache_path = full_csv
-    full = strategy_full._load_coinmetrics_features()
-    assert not full.empty
-    assert "cm_netflow_fast" in full.columns
-    assert "cm_hash_momentum" in full.columns
-
-    # cache-hit branch
-    cached = strategy_full._load_coinmetrics_features()
-    assert cached is full
-
-    minimal_csv = tmp_path / "minimal.csv"
-    _coinmetrics_csv(minimal_csv, include_optional=False)
-    strategy_minimal = ExampleMVRVStrategy()
-    strategy_minimal.coinmetrics_cache_path = minimal_csv
-    minimal = strategy_minimal._load_coinmetrics_features()
-    assert not minimal.empty
-    assert np.isfinite(minimal.to_numpy(dtype=float)).all()
-
-
-def test_load_coinmetrics_features_activity_without_price_and_build_signals(tmp_path: Path) -> None:
-    csv_path = tmp_path / "activity_only.csv"
-    pd.DataFrame(
-        {
-            "time": pd.date_range("2024-01-01", periods=20, freq="D"),
-            "AdrActCnt": np.linspace(500000, 600000, 20),
-            "TxCnt": np.linspace(200000, 210000, 20),
-            "FeeTotNtv": np.linspace(100, 110, 20),
-        }
-    ).to_csv(csv_path, index=False)
-    strategy = ExampleMVRVStrategy()
-    strategy.coinmetrics_cache_path = csv_path
-    features = strategy._load_coinmetrics_features()
-    assert not features.empty
-    assert np.isfinite(features[["cm_activity_div_fast", "cm_activity_div_slow"]].to_numpy(dtype=float)).all()
-    assert strategy.build_signals(ctx=object(), features_df=features) == {}
-
-
-def test_transform_features_without_and_with_coinmetrics(tmp_path: Path) -> None:
+def test_transform_features_uses_observed_window_and_handles_nan_inf() -> None:
     idx = pd.date_range("2024-01-01", periods=10, freq="D")
     base = _base_features(idx)
+    base.loc[idx[2], "cm_netflow_fast"] = np.inf
+    base.loc[idx[3], "cm_netflow_slow"] = np.nan
 
-    strategy_no_cm = ExampleMVRVStrategy()
-    strategy_no_cm.coinmetrics_cache_path = tmp_path / "does-not-exist.csv"
+    strategy = ExampleMVRVStrategy()
     ctx = type(
         "Ctx",
         (),
-        {"features_df": base, "start_date": idx[0], "end_date": idx[-1]},
+        {"features_df": base, "start_date": idx[1], "end_date": idx[8]},
     )()
-    transformed_no_cm = strategy_no_cm.transform_features(ctx)
-    assert list(transformed_no_cm.columns) == list(base.columns)
-
-    cm_csv = tmp_path / "cm.csv"
-    _coinmetrics_csv(cm_csv, include_optional=True)
-    strategy_cm = ExampleMVRVStrategy()
-    strategy_cm.coinmetrics_cache_path = cm_csv
-    transformed_cm = strategy_cm.transform_features(ctx)
-    assert "cm_netflow_fast" in transformed_cm.columns
-    assert transformed_cm.shape[0] == base.shape[0]
+    transformed = strategy.transform_features(ctx)
+    assert transformed.index.min() == idx[1]
+    assert transformed.index.max() == idx[8]
+    assert np.isfinite(transformed.to_numpy(dtype=float)).all()
+    assert list(transformed.columns) == list(base.columns)
 
 
-def test_build_target_profile_empty_and_populated() -> None:
+def test_transform_features_returns_empty_when_window_invalid() -> None:
+    idx = pd.date_range("2024-01-01", periods=5, freq="D")
     strategy = ExampleMVRVStrategy()
+    ctx = type(
+        "Ctx",
+        (),
+        {"features_df": _base_features(idx), "start_date": idx[-1], "end_date": idx[0]},
+    )()
+    transformed = strategy.transform_features(ctx)
+    assert transformed.empty
+
+
+def test_build_signals_and_target_profile_paths() -> None:
+    strategy = ExampleMVRVStrategy()
+    idx = pd.date_range("2024-01-01", periods=30, freq="D")
+    features = _base_features(idx)
+
+    assert strategy.build_signals(ctx=object(), features_df=features) == {}
+
     empty = strategy.build_target_profile(ctx=object(), features_df=pd.DataFrame(), signals={})
     assert empty.values.empty
 
-    idx = pd.date_range("2024-01-01", periods=30, freq="D")
-    features = _base_features(idx)
     profile = strategy.build_target_profile(ctx=object(), features_df=features, signals={})
     assert len(profile.values) == len(idx)
     assert np.isfinite(profile.values.to_numpy(dtype=float)).all()
 
-    # missing optional columns branch
+    # missing optional columns path
     slim = features.drop(
         columns=["mvrv_percentile", "mvrv_acceleration", "mvrv_volatility", "signal_confidence"]
     )

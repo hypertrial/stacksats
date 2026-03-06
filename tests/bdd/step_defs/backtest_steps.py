@@ -1,14 +1,8 @@
 """Step definitions for backtest-related features."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from pytest_bdd import given, parsers, then, when
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS

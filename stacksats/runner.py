@@ -31,6 +31,7 @@ from .strategy_types import (
     RunDailyConfig,
     StrategyArtifactSet,
     StrategyContext,
+    StrategyMetadata,
     ValidationConfig,
     validate_strategy_contract,
 )
@@ -107,6 +108,185 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         return hashlib.sha256(
             json.dumps(asdict(config), sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
+
+    def _parse_run_daily_config(
+        self,
+        strategy: BaseStrategy,
+        config: RunDailyConfig,
+    ) -> tuple[StrategyMetadata, float, pd.Timestamp, str]:
+        metadata = strategy.metadata()
+        budget = float(config.total_window_budget_usd)
+        if not pd.notna(budget) or budget <= 0.0:
+            raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
+        if config.mode not in {"paper", "live"}:
+            raise ValueError("mode must be either 'paper' or 'live'.")
+        if config.mode == "live" and not config.adapter_spec:
+            raise ValueError("Live mode requires --adapter.")
+        run_ts = (
+            pd.Timestamp(config.run_date).normalize()
+            if config.run_date is not None
+            else pd.Timestamp.now().normalize()
+        )
+        run_date = run_ts.strftime("%Y-%m-%d")
+        return metadata, budget, run_ts, run_date
+
+    def _build_noop_daily_result(
+        self,
+        *,
+        metadata,
+        config: RunDailyConfig,
+        run_date: str,
+        state_store,
+        existing_run,
+        daily_order_receipt_cls,
+        daily_run_result_cls,
+    ):
+        payload = existing_run.payload
+        order_receipt = None
+        if existing_run.order_summary is not None:
+            order_receipt = daily_order_receipt_cls(
+                status=str(existing_run.order_summary.get("status", "unknown")),
+                external_order_id=existing_run.order_summary.get("external_order_id"),
+                filled_notional_usd=float(
+                    existing_run.order_summary.get("filled_notional_usd", 0.0)
+                ),
+                filled_quantity_btc=float(
+                    existing_run.order_summary.get("filled_quantity_btc", 0.0)
+                ),
+                fill_price_usd=float(existing_run.order_summary.get("fill_price_usd", 0.0)),
+                metadata=dict(existing_run.order_summary.get("metadata") or {}),
+            )
+        return daily_run_result_cls(
+            status="noop",
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            run_key=existing_run.run_key,
+            mode=config.mode,
+            idempotency_hit=True,
+            forced_rerun=False,
+            weight_today=(
+                float(payload["weight_today"])
+                if payload.get("weight_today") is not None
+                else None
+            ),
+            order_notional_usd=(
+                float(payload["order_notional_usd"])
+                if payload.get("order_notional_usd") is not None
+                else None
+            ),
+            btc_quantity=(
+                float(payload["btc_quantity"])
+                if payload.get("btc_quantity") is not None
+                else None
+            ),
+            price_usd=(
+                float(payload["price_usd"]) if payload.get("price_usd") is not None else None
+            ),
+            adapter_name=str(payload.get("adapter_name", "unknown")),
+            state_db_path=str(state_store.db_path),
+            artifact_path=(
+                str(payload["artifact_path"])
+                if payload.get("artifact_path") is not None
+                else None
+            ),
+            message="Existing completed run reused via idempotency ledger.",
+            order_receipt=order_receipt,
+            bootstrap=bool(payload.get("bootstrap", False)),
+            validation_receipt_id=(
+                int(payload["validation_receipt_id"])
+                if payload.get("validation_receipt_id") is not None
+                else None
+            ),
+            validation_passed=payload.get("validation_passed"),
+            data_hash=str(payload.get("data_hash", "")),
+            feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
+        )
+
+    def _run_daily_strict_preflight(
+        self,
+        *,
+        strategy: BaseStrategy,
+        metadata: StrategyMetadata,
+        config: RunDailyConfig,
+        run_date: str,
+        run_ts: pd.Timestamp,
+        fingerprint: str,
+        state_store,
+        btc_df: pd.DataFrame | None = None,
+    ) -> tuple[
+        pd.DataFrame,
+        pd.Timestamp,
+        pd.Timestamp,
+        pd.DataFrame,
+        bool,
+        list[str],
+        int,
+        str,
+        str,
+    ]:
+        btc_df_loaded = self._load_btc_df(btc_df, end_date=run_date)
+        if config.btc_price_col not in btc_df_loaded.columns:
+            raise ValueError(
+                f"Missing required BTC price column '{config.btc_price_col}'."
+            )
+        window_end = run_ts
+        window_start = window_end - ALLOCATION_WINDOW_OFFSET
+        required_index = pd.date_range(window_start, window_end, freq="D")
+        required_window = btc_df_loaded.reindex(required_index)
+        if required_window[config.btc_price_col].isna().any():
+            raise ValueError(
+                "Missing BTC price data for required allocation window ending on run_date."
+            )
+
+        # Strict gate invariant: run_daily must validate against the same snapshot
+        # used for execution.
+        validation_config = ValidationConfig(
+            start_date=window_start.strftime("%Y-%m-%d"),
+            end_date=window_end.strftime("%Y-%m-%d"),
+            strict=True,
+        )
+        validation_result = self.validate(
+            strategy,
+            validation_config,
+            btc_df=btc_df_loaded,
+        )
+        provider_hash = self._feature_registry.provider_fingerprint(strategy)
+        observed_features, feature_snapshot_hash = self._feature_registry.materialization_fingerprint(
+            strategy,
+            btc_df_loaded,
+            start_date=window_start,
+            end_date=window_end,
+            current_date=window_end,
+        )
+        data_hash = hash_dataframe(btc_df_loaded.loc[:window_end].copy())
+        validation_receipt = state_store.create_validation_receipt(
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            fingerprint=fingerprint,
+            data_hash=data_hash,
+            provider_hash=provider_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
+            config_hash=self._config_hash(validation_config),
+            passed=bool(validation_result.passed),
+            diagnostics={
+                "summary": validation_result.summary(),
+                "messages": validation_result.messages,
+                "diagnostics": validation_result.diagnostics,
+            },
+        )
+        return (
+            btc_df_loaded,
+            window_start,
+            window_end,
+            observed_features,
+            bool(validation_result.passed),
+            list(validation_result.messages),
+            validation_receipt.receipt_id,
+            data_hash,
+            feature_snapshot_hash,
+        )
 
     def backtest(
         self,
@@ -364,21 +544,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
-        metadata = strategy.metadata()
-        budget = float(config.total_window_budget_usd)
-        if not pd.notna(budget) or budget <= 0.0:
-            raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
-        if config.mode not in {"paper", "live"}:
-            raise ValueError("mode must be either 'paper' or 'live'.")
-        if config.mode == "live" and not config.adapter_spec:
-            raise ValueError("Live mode requires --adapter.")
-
-        run_ts = (
-            pd.Timestamp(config.run_date).normalize()
-            if config.run_date is not None
-            else pd.Timestamp.now().normalize()
-        )
-        run_date = run_ts.strftime("%Y-%m-%d")
+        metadata, budget, run_ts, run_date = self._parse_run_daily_config(strategy, config)
         run_key = str(uuid4())
         state_store = SQLiteExecutionStateStore(config.state_db_path)
         fingerprint = self._daily_run_fingerprint(strategy, config, run_date)
@@ -394,66 +560,14 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         if claim.status == "noop":
             existing = claim.existing_run
             assert existing is not None
-            payload = existing.payload
-            order_receipt = None
-            if existing.order_summary is not None:
-                order_receipt = DailyOrderReceipt(
-                    status=str(existing.order_summary.get("status", "unknown")),
-                    external_order_id=existing.order_summary.get("external_order_id"),
-                    filled_notional_usd=float(
-                        existing.order_summary.get("filled_notional_usd", 0.0)
-                    ),
-                    filled_quantity_btc=float(
-                        existing.order_summary.get("filled_quantity_btc", 0.0)
-                    ),
-                    fill_price_usd=float(existing.order_summary.get("fill_price_usd", 0.0)),
-                    metadata=dict(existing.order_summary.get("metadata") or {}),
-                )
-            return DailyRunResult(
-                status="noop",
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
+            return self._build_noop_daily_result(
+                metadata=metadata,
+                config=config,
                 run_date=run_date,
-                run_key=existing.run_key,
-                mode=config.mode,
-                idempotency_hit=True,
-                forced_rerun=False,
-                weight_today=(
-                    float(payload["weight_today"])
-                    if payload.get("weight_today") is not None
-                    else None
-                ),
-                order_notional_usd=(
-                    float(payload["order_notional_usd"])
-                    if payload.get("order_notional_usd") is not None
-                    else None
-                ),
-                btc_quantity=(
-                    float(payload["btc_quantity"])
-                    if payload.get("btc_quantity") is not None
-                    else None
-                ),
-                price_usd=(
-                    float(payload["price_usd"]) if payload.get("price_usd") is not None else None
-                ),
-                adapter_name=str(payload.get("adapter_name", "unknown")),
-                state_db_path=str(state_store.db_path),
-                artifact_path=(
-                    str(payload["artifact_path"])
-                    if payload.get("artifact_path") is not None
-                    else None
-                ),
-                message="Existing completed run reused via idempotency ledger.",
-                order_receipt=order_receipt,
-                bootstrap=bool(payload.get("bootstrap", False)),
-                validation_receipt_id=(
-                    int(payload["validation_receipt_id"])
-                    if payload.get("validation_receipt_id") is not None
-                    else None
-                ),
-                validation_passed=payload.get("validation_passed"),
-                data_hash=str(payload.get("data_hash", "")),
-                feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
+                state_store=state_store,
+                existing_run=existing,
+                daily_order_receipt_cls=DailyOrderReceipt,
+                daily_run_result_cls=DailyRunResult,
             )
 
         bootstrap = False
@@ -461,62 +575,35 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         data_hash = ""
         feature_snapshot_hash = ""
         try:
-            btc_df_loaded = self._load_btc_df(btc_df, end_date=run_date)
-            if config.btc_price_col not in btc_df_loaded.columns:
-                raise ValueError(
-                    f"Missing required BTC price column '{config.btc_price_col}'."
-                )
-            window_end = run_ts
-            window_start = window_end - ALLOCATION_WINDOW_OFFSET
-            required_index = pd.date_range(window_start, window_end, freq="D")
-            required_window = btc_df_loaded.reindex(required_index)
-            if required_window[config.btc_price_col].isna().any():
-                raise ValueError(
-                    "Missing BTC price data for required allocation window ending on run_date."
-                )
-
-            validation_config = ValidationConfig(
-                start_date=window_start.strftime("%Y-%m-%d"),
-                end_date=window_end.strftime("%Y-%m-%d"),
-                strict=True,
-            )
-            validation_result = self.validate(
-                strategy,
-                validation_config,
-                btc_df=btc_df_loaded,
-            )
-            provider_hash = self._feature_registry.provider_fingerprint(strategy)
-            observed_features, feature_snapshot_hash = self._feature_registry.materialization_fingerprint(
-                strategy,
+            (
                 btc_df_loaded,
-                start_date=window_start,
-                end_date=window_end,
-                current_date=window_end,
-            )
-            data_hash = hash_dataframe(btc_df_loaded.loc[:window_end].copy())
-            validation_receipt = state_store.create_validation_receipt(
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
+                window_start,
+                window_end,
+                observed_features,
+                validation_passed,
+                validation_messages,
+                validation_receipt_id,
+                data_hash,
+                feature_snapshot_hash,
+            ) = self._run_daily_strict_preflight(
+                strategy=strategy,
+                metadata=metadata,
+                config=config,
                 run_date=run_date,
+                run_ts=run_ts,
                 fingerprint=fingerprint,
-                data_hash=data_hash,
-                provider_hash=provider_hash,
-                feature_snapshot_hash=feature_snapshot_hash,
-                config_hash=self._config_hash(validation_config),
-                passed=bool(validation_result.passed),
-                diagnostics={
-                    "summary": validation_result.summary(),
-                    "messages": validation_result.messages,
-                    "diagnostics": validation_result.diagnostics,
-                },
+                state_store=state_store,
+                btc_df=btc_df,
             )
-            validation_receipt_id = validation_receipt.receipt_id
-            if not validation_result.passed:
+            if not validation_passed:
                 raise ValueError(
                     "Strict validation failed before daily execution: "
-                    + "; ".join(validation_result.messages)
+                    + "; ".join(validation_messages)
                 )
+            required_window = btc_df_loaded.reindex(pd.date_range(window_start, window_end, freq="D"))
 
+            # Prefix-lock invariant: once prior daily allocations exist, the strategy
+            # cannot rewrite historical weights for this allocation window.
             locked_prefix = state_store.load_locked_prefix(
                 strategy_id=metadata.strategy_id,
                 strategy_version=metadata.version,
@@ -724,6 +811,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         )
         weight_today = float(weights.loc[run_ts]) if run_ts in weights.index else None
         prior_weight = stored.payload.get("weight_today")
+        # Reconciliation status invariant:
+        # - stable: identical decision (and optionally identical snapshot hash)
+        # - data_revised_no_decision_change: snapshot changed but decision did not
+        # - decision_changed_due_to_revision: recomputed decision changed
         if prior_weight is None or weight_today is None:
             status = "stable"
         elif abs(float(prior_weight) - float(weight_today)) <= 1e-12:

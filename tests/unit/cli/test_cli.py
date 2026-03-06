@@ -27,6 +27,12 @@ def test_cli_help() -> None:
     assert "strategy" in proc.stdout
 
 
+def test_cli_help_examples_use_stable_packaged_strategy_spec() -> None:
+    help_text = cli._build_parser().format_help()
+    assert "stacksats.strategies.examples:SimpleZScoreStrategy" in help_text
+    assert "stacksats.strategies.model_example:ExampleMVRVStrategy" not in help_text
+
+
 def test_cli_strategy_validate_uses_runner(monkeypatch, capsys) -> None:
     class FakeResult:
         passed = True

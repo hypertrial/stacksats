@@ -211,6 +211,16 @@ def update_today_weights(
             + f". Missing: {', '.join(missing_cols)}"
         )
 
+    logging.info(f"Filtering data for date = {today_str}")
+    day_mask = (
+        pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
+    )
+    today_df = df[day_mask].copy()
+
+    if today_df.empty:
+        logging.warning(f"No data found for today ({today_str})")
+        return 0
+
     previous_price = None
     try:
         today_date = pd.to_datetime(today_str)
@@ -238,37 +248,14 @@ def update_today_weights(
         logging.warning(
             "Failed to fetch BTC price from all API sources. Will use price from dataframe if available."
         )
-        day_mask = (
-            pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-            == today_str
-        )
-        today_df_temp = df[day_mask]
-        if not today_df_temp.empty:
-            current_btc_price = today_df_temp["price_usd"].iloc[0]
-            if pd.notna(current_btc_price):
-                logging.info(
-                    f"Using BTC price from dataframe: ${current_btc_price:,.2f}"
-                )
-            else:
-                logging.error(
-                    "No BTC price available from API sources or dataframe. Skipping BTC price update."
-                )
-                current_btc_price = None
+        current_btc_price = today_df["price_usd"].iloc[0]
+        if pd.notna(current_btc_price):
+            logging.info(f"Using BTC price from dataframe: ${current_btc_price:,.2f}")
         else:
             logging.error(
                 "No BTC price available from API sources or dataframe. Skipping BTC price update."
             )
             current_btc_price = None
-
-    logging.info(f"Filtering data for date = {today_str}")
-    day_mask = (
-        pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
-    )
-    today_df = df[day_mask].copy()
-
-    if today_df.empty:
-        logging.warning(f"No data found for today ({today_str})")
-        return 0
 
     if current_btc_price is None:
         if today_df["price_usd"].notna().any():

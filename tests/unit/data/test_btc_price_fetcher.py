@@ -14,6 +14,7 @@ import warnings
 import pytest
 import responses
 import requests
+from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_none
 
 from stacksats.btc_price_fetcher import (
     fetch_price_coingecko,
@@ -26,6 +27,15 @@ from stacksats.btc_price_fetcher import (
     MIN_BTC_PRICE,
     MAX_BTC_PRICE,
 )
+
+
+def _fast_retry_policy() -> Retrying:
+    return Retrying(
+        stop=stop_after_attempt(1),
+        wait=wait_none(),
+        retry=retry_if_exception_type(requests.RequestException),
+        reraise=True,
+    )
 
 
 # =============================================================================
@@ -389,7 +399,7 @@ class TestRobustFetcher:
             json={"bitcoin": {"usd": 97500}},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 97500
 
     @responses.activate
@@ -408,7 +418,7 @@ class TestRobustFetcher:
             json={"data": {"amount": "98000"}},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 98000
 
     @responses.activate
@@ -433,7 +443,7 @@ class TestRobustFetcher:
             json={"last": "97800"},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 97800
 
     @responses.activate
@@ -462,7 +472,7 @@ class TestRobustFetcher:
             json={"error": [], "result": {"XXBTZUSD": {"c": ["97600", "0.001"]}}},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 97600
 
     @responses.activate
@@ -496,7 +506,7 @@ class TestRobustFetcher:
             json={"symbol": "BTCUSDT", "price": "97700"},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 97700
 
     @responses.activate
@@ -528,7 +538,7 @@ class TestRobustFetcher:
             "https://api.binance.com/api/v3/ticker/price",
             status=400,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price is None
 
     @responses.activate
@@ -548,7 +558,7 @@ class TestRobustFetcher:
             json={"data": {"amount": "97000"}},
             status=200,
         )
-        price = fetch_btc_price_robust()
+        price = fetch_btc_price_robust(retry_policy=_fast_retry_policy())
         assert price == 97000
 
     @responses.activate
@@ -559,7 +569,10 @@ class TestRobustFetcher:
             return 99999.0
 
         sources = [(mock_source, "MockSource")]
-        price = fetch_btc_price_robust(sources=sources)
+        price = fetch_btc_price_robust(
+            sources=sources,
+            retry_policy=_fast_retry_policy(),
+        )
         assert price == 99999.0
 
     @responses.activate
@@ -572,7 +585,10 @@ class TestRobustFetcher:
             status=200,
         )
         # Previous price shouldn't affect validation (large change just warns)
-        price = fetch_btc_price_robust(previous_price=50000.0)
+        price = fetch_btc_price_robust(
+            previous_price=50000.0,
+            retry_policy=_fast_retry_policy(),
+        )
         assert price == 97500
 
 
@@ -731,6 +747,11 @@ def test_module_dunder_main_prints_failure_when_all_sources_raise(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.setattr(
+        "tenacity.wait_exponential",
+        lambda *args, **kwargs: wait_none(),
+    )
+
     def _always_fail_get(*_args, **_kwargs):
         raise requests.exceptions.RequestException("network down")
 

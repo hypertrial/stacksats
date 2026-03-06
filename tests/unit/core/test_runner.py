@@ -60,6 +60,7 @@ def _btc_df() -> pd.DataFrame:
     )
 
 
+@pytest.mark.slow
 def test_runner_backtest_with_uniform_strategy() -> None:
     runner = StrategyRunner()
     result = runner.backtest(
@@ -116,6 +117,7 @@ def test_runner_export_writes_artifacts(tmp_path) -> None:
     assert "run_id" in payload
 
 
+@pytest.mark.slow
 def test_runner_uses_injected_data_provider_when_no_btc_df() -> None:
     class FakeProvider:
         def __init__(self):
@@ -138,6 +140,7 @@ def test_runner_uses_injected_data_provider_when_no_btc_df() -> None:
     assert result.score >= 0.0
 
 
+@pytest.mark.slow
 def test_runner_backtest_does_not_require_params_serialization_for_runtime_execution() -> None:
     class RuntimeOnlyParamStrategy(BaseStrategy):
         strategy_id = "runtime-only-param"

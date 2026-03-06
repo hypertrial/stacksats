@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from stacksats.api import BacktestResult, ValidationResult
 from stacksats.strategy_types import BaseStrategy, StrategyContext, TargetProfile, ValidationConfig
@@ -159,6 +160,7 @@ def test_validation_result_summary_uses_configured_threshold():
     assert "False" in summary
 
 
+@pytest.mark.slow
 def test_validate_strategy_passes_with_uniform_strategy():
     """Uniform example strategy should satisfy validation when win-rate floor is relaxed."""
     btc_df = _sample_btc_df()
@@ -210,6 +212,7 @@ def test_validate_strategy_fails_weight_constraints_for_bad_strategy():
         )
 
 
+@pytest.mark.slow
 def test_validate_strategy_observed_only_input_blocks_peeking_strategy():
     """Observed-only context should remove access to rows beyond the decision date."""
     btc_df = _sample_btc_df()

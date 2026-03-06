@@ -14,7 +14,7 @@ from functools import lru_cache
 import pandas as pd
 import requests
 from tenacity import (
-    retry,
+    Retrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -29,6 +29,12 @@ COINMETRICS_BTC_CSV_URL = "https://raw.githubusercontent.com/coinmetrics/data/ma
 MIN_BTC_PRICE = 1000.0  # Minimum reasonable BTC price (USD)
 MAX_BTC_PRICE = 1000000.0  # Maximum reasonable BTC price (USD)
 MAX_PRICE_CHANGE_PCT = 20.0  # Maximum reasonable day-over-day change (%)
+DEFAULT_RETRY_POLICY = Retrying(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(requests.RequestException),
+    reraise=True,
+)
 
 
 def fetch_price_coingecko() -> float:
@@ -361,13 +367,12 @@ def validate_price(price: float, previous_price: Optional[float] = None) -> bool
     return True
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(requests.RequestException),
-    reraise=True,
-)
-def _fetch_with_retry(fetch_func, source_name: str) -> float:
+def _fetch_with_retry(
+    fetch_func,
+    source_name: str,
+    *,
+    retry_policy: Retrying | None = None,
+) -> float:
     """Fetch price from a single source with retry logic.
 
     Args:
@@ -380,21 +385,26 @@ def _fetch_with_retry(fetch_func, source_name: str) -> float:
     Raises:
         requests.RequestException: If all retries fail
     """
-    try:
-        price = fetch_func()
-        logger.debug(f"Successfully fetched from {source_name}: ${price:,.2f}")
-        return price
-    except requests.RequestException as e:
-        logger.debug(f"Request failed for {source_name}: {e}")
-        raise
-    except (ValueError, KeyError) as e:
-        logger.warning(f"Invalid response format from {source_name}: {e}")
-        raise ValueError(f"{source_name} returned invalid data: {e}") from e
+    policy = retry_policy or DEFAULT_RETRY_POLICY
+    for attempt in policy:
+        with attempt:
+            try:
+                price = fetch_func()
+                logger.debug(f"Successfully fetched from {source_name}: ${price:,.2f}")
+                return price
+            except requests.RequestException as e:
+                logger.debug(f"Request failed for {source_name}: {e}")
+                raise
+            except (ValueError, KeyError) as e:
+                logger.warning(f"Invalid response format from {source_name}: {e}")
+                raise ValueError(f"{source_name} returned invalid data: {e}") from e
+    raise RuntimeError("Retry policy exhausted unexpectedly without returning.")
 
 
 def fetch_btc_price_robust(
     previous_price: Optional[float] = None,
     sources: Optional[list] = None,
+    retry_policy: Retrying | None = None,
 ) -> Optional[float]:
     """Fetch BTC price with retry logic and multiple fallback sources.
 
@@ -422,7 +432,11 @@ def fetch_btc_price_robust(
 
     for fetch_func, source_name in sources:
         try:
-            price = _fetch_with_retry(fetch_func, source_name)
+            price = _fetch_with_retry(
+                fetch_func,
+                source_name,
+                retry_policy=retry_policy,
+            )
 
             # Validate the price
             if validate_price(price, previous_price):

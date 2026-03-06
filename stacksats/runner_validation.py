@@ -323,6 +323,78 @@ class StrategyRunnerValidationMixin:
         after = self._frame_signature(ctx.features_df) if strict_mode else before
         return self._profile_values(profile), before != after
 
+    def _strict_determinism_check(
+        self,
+        *,
+        strategy: BaseStrategy,
+        full_features_df: pd.DataFrame,
+        window_start: pd.Timestamp,
+        probe: pd.Timestamp,
+        full_weights: pd.Series,
+        state: _ValidationState,
+    ) -> bool:
+        repeat_ctx = StrategyContext(
+            features_df=full_features_df.loc[window_start:probe].copy(deep=True),
+            start_date=window_start,
+            end_date=probe,
+            current_date=probe,
+        )
+        repeat_weights, repeat_mutated = self._compute_with_mutation_guard(
+            strategy,
+            repeat_ctx,
+            strict_mode=True,
+        )
+        if repeat_mutated:
+            self._mark_mutation_failure(state)
+            return False
+        if not self._weights_match(full_weights, repeat_weights):
+            state.deterministic_ok = False
+            state.strict_checks_ok = False
+            state.messages.append(
+                "Strict check failed: strategy is non-deterministic for identical inputs."
+            )
+            return False
+        return True
+
+    def _strategy_ctx_from_source(
+        self,
+        *,
+        strategy: BaseStrategy,
+        source_df: pd.DataFrame,
+        window_start: pd.Timestamp,
+        probe: pd.Timestamp,
+    ) -> StrategyContext:
+        return StrategyContext(
+            features_df=self._materialize_strategy_features(
+                strategy,
+                source_df,
+                start_date=window_start,
+                end_date=probe,
+                current_date=probe,
+            ),
+            start_date=window_start,
+            end_date=probe,
+            current_date=probe,
+        )
+
+    def _check_prefix_invariance(
+        self,
+        *,
+        state: _ValidationState,
+        probe: pd.Timestamp,
+        full_prefix: pd.Series,
+        candidate_prefix: pd.Series,
+        check_label: str,
+    ) -> bool:
+        if self._weights_match(full_prefix, candidate_prefix):
+            return True
+        state.forward_leakage_ok = False
+        state.messages.append(
+            "Forward leakage detected near "
+            f"{probe.strftime('%Y-%m-%d')}: {check_label}."
+        )
+        return False
+
     def _run_forward_leakage_checks(
         self,
         *,
@@ -358,42 +430,22 @@ class StrategyRunnerValidationMixin:
                 self._mark_mutation_failure(state)
                 break
 
-            if strict_mode:
-                repeat_ctx = StrategyContext(
-                    features_df=full_features_df.loc[window_start:probe].copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                )
-                repeat_weights, repeat_mutated = self._compute_with_mutation_guard(
-                    strategy,
-                    repeat_ctx,
-                    strict_mode=True,
-                )
-                if repeat_mutated:
-                    self._mark_mutation_failure(state)
-                    break
-                if not self._weights_match(full_weights, repeat_weights):
-                    state.deterministic_ok = False
-                    state.strict_checks_ok = False
-                    state.messages.append(
-                        "Strict check failed: strategy is non-deterministic for identical inputs."
-                    )
-                    break
+            if strict_mode and not self._strict_determinism_check(
+                strategy=strategy,
+                full_features_df=full_features_df,
+                window_start=window_start,
+                probe=probe,
+                full_weights=full_weights,
+                state=state,
+            ):
+                break
 
             masked_source = btc_df.loc[:probe].copy(deep=True)
-            masked_features = self._materialize_strategy_features(
-                strategy,
-                masked_source,
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
-            )
-            masked_ctx = StrategyContext(
-                features_df=masked_features,
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
+            masked_ctx = self._strategy_ctx_from_source(
+                strategy=strategy,
+                source_df=masked_source,
+                window_start=window_start,
+                probe=probe,
             )
             masked_weights, masked_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -405,17 +457,11 @@ class StrategyRunnerValidationMixin:
                 break
 
             perturbed_source = self._perturb_future_source_data(btc_df, probe)
-            perturbed_ctx = StrategyContext(
-                features_df=self._materialize_strategy_features(
-                    strategy,
-                    perturbed_source,
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
-                ),
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
+            perturbed_ctx = self._strategy_ctx_from_source(
+                strategy=strategy,
+                source_df=perturbed_source,
+                window_start=window_start,
+                probe=probe,
             )
             perturbed_weights, perturbed_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -433,19 +479,21 @@ class StrategyRunnerValidationMixin:
             masked_prefix = masked_weights.reindex(prefix_idx)
             perturbed_prefix = perturbed_weights.reindex(prefix_idx)
 
-            if not self._weights_match(full_prefix, masked_prefix):
-                state.forward_leakage_ok = False
-                state.messages.append(
-                    "Forward leakage detected near "
-                    f"{probe.strftime('%Y-%m-%d')}: masked-future weights diverge."
-                )
+            if not self._check_prefix_invariance(
+                state=state,
+                probe=probe,
+                full_prefix=full_prefix,
+                candidate_prefix=masked_prefix,
+                check_label="masked-future weights diverge",
+            ):
                 break
-            if not self._weights_match(full_prefix, perturbed_prefix):
-                state.forward_leakage_ok = False
-                state.messages.append(
-                    "Forward leakage detected near "
-                    f"{probe.strftime('%Y-%m-%d')}: perturbed-future weights diverge."
-                )
+            if not self._check_prefix_invariance(
+                state=state,
+                probe=probe,
+                full_prefix=full_prefix,
+                candidate_prefix=perturbed_prefix,
+                check_label="perturbed-future weights diverge",
+            ):
                 break
 
             if has_profile_hook and not has_propose_hook:
@@ -456,7 +504,7 @@ class StrategyRunnerValidationMixin:
                     current_date=probe,
                 )
                 profile_masked_ctx = StrategyContext(
-                    features_df=masked_features.copy(deep=True),
+                    features_df=masked_ctx.features_df.copy(deep=True),
                     start_date=window_start,
                     end_date=probe,
                     current_date=probe,
@@ -500,19 +548,21 @@ class StrategyRunnerValidationMixin:
                 full_profile_prefix = full_profile_series.reindex(prefix_idx)
                 masked_profile_prefix = masked_profile_series.reindex(prefix_idx)
                 perturbed_profile_prefix = perturbed_profile_series.reindex(prefix_idx)
-                if not self._weights_match(full_profile_prefix, masked_profile_prefix):
-                    state.forward_leakage_ok = False
-                    state.messages.append(
-                        "Forward leakage detected near "
-                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (masked-future)."
-                    )
+                if not self._check_prefix_invariance(
+                    state=state,
+                    probe=probe,
+                    full_prefix=full_profile_prefix,
+                    candidate_prefix=masked_profile_prefix,
+                    check_label="profile values diverge (masked-future)",
+                ):
                     break
-                if not self._weights_match(full_profile_prefix, perturbed_profile_prefix):
-                    state.forward_leakage_ok = False
-                    state.messages.append(
-                        "Forward leakage detected near "
-                        f"{probe.strftime('%Y-%m-%d')}: profile values diverge (perturbed-future)."
-                    )
+                if not self._check_prefix_invariance(
+                    state=state,
+                    probe=probe,
+                    full_prefix=full_profile_prefix,
+                    candidate_prefix=perturbed_profile_prefix,
+                    check_label="profile values diverge (perturbed-future)",
+                ):
                     break
 
     def _run_weight_constraint_checks(

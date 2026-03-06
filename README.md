@@ -128,7 +128,7 @@ Top-level exports:
 ```bash
 venv/bin/python -m pytest -q
 venv/bin/python -m pytest -m "slow or integration or performance" -q
-venv/bin/python -m pre_commit install -t pre-commit -t pre-push
+venv/bin/python -m pre_commit install -t pre-commit
 venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
 bash scripts/check_docs_refs.sh

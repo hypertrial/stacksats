@@ -234,10 +234,20 @@ def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
     assert captured_max == [idx[1]]
 
 
-def test_update_today_weights_returns_zero_when_today_absent() -> None:
+def test_update_today_weights_returns_zero_when_today_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     conn = MagicMock()
     cursor = conn.cursor.return_value.__enter__.return_value
     cursor.fetchone.return_value = (None,)
+    calls = {"count": 0}
+
+    def _fake_get_current_btc_price(previous_price=None):
+        del previous_price
+        calls["count"] += 1
+        return 50000.0
+
+    monkeypatch.setattr("stacksats.export_weights.get_current_btc_price", _fake_get_current_btc_price)
 
     df = pd.DataFrame(
         {
@@ -253,6 +263,7 @@ def test_update_today_weights_returns_zero_when_today_absent() -> None:
     updated = update_today_weights(conn, df, today_str="2024-01-01")
 
     assert updated == 0
+    assert calls["count"] == 0
     update_calls = [c for c in cursor.execute.call_args_list if "UPDATE" in str(c)]
     assert not update_calls
 

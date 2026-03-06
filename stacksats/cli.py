@@ -38,14 +38,14 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Examples:\n"
             "  stacksats strategy validate --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy\n"
+            "stacksats.strategies.examples:SimpleZScoreStrategy\n"
             "  stacksats strategy backtest --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy --output-dir output\n"
+            "stacksats.strategies.examples:SimpleZScoreStrategy --output-dir output\n"
             "  stacksats strategy export --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "stacksats.strategies.examples:SimpleZScoreStrategy "
             "--start-date 2025-12-01 --end-date 2027-12-31\n"
             "  stacksats strategy run-daily --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "stacksats.strategies.examples:SimpleZScoreStrategy "
             "--total-window-budget-usd 1000"
         ),
     )
@@ -59,7 +59,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Strategy spec format:\n"
             "  module_or_path:ClassName\n\n"
             "Example:\n"
-            "  stacksats.strategies.model_example:ExampleMVRVStrategy"
+            "  stacksats.strategies.examples:SimpleZScoreStrategy"
         ),
     )
     strategy_sub = strategy_parser.add_subparsers(dest="strategy_command", required=True)
@@ -71,7 +71,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy validate --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy --strict"
+            "stacksats.strategies.examples:SimpleZScoreStrategy --strict"
         ),
     )
     validate_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
@@ -105,7 +105,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy backtest --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "stacksats.strategies.examples:SimpleZScoreStrategy "
             "--start-date 2020-01-01 --end-date 2025-01-01"
         ),
     )
@@ -127,7 +127,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy export --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "stacksats.strategies.examples:SimpleZScoreStrategy "
             "--start-date 2025-12-01 --end-date 2027-12-31"
         ),
     )
@@ -148,7 +148,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Example:\n"
             "  stacksats strategy run-daily --strategy "
-            "stacksats.strategies.model_example:ExampleMVRVStrategy "
+            "stacksats.strategies.examples:SimpleZScoreStrategy "
             "--total-window-budget-usd 1000 --mode paper"
         ),
     )

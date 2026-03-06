@@ -375,3 +375,15 @@ class SpeclessStrategy(BaseStrategy):
 
     with pytest.raises(ImportError, match="Could not load module spec"):
         load_strategy(f"{strategy_path}:SpeclessStrategy")
+
+
+def test_load_strategy_supports_packaged_example_mvrv_strategy() -> None:
+    strategy = load_strategy("stacksats.strategies.model_example:ExampleMVRVStrategy")
+    assert isinstance(strategy, BaseStrategy)
+    assert strategy.strategy_id == "example-mvrv"
+
+
+def test_load_strategy_supports_packaged_mvrv_plus_strategy() -> None:
+    strategy = load_strategy("stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy")
+    assert isinstance(strategy, BaseStrategy)
+    assert strategy.strategy_id == "mvrv-plus"
