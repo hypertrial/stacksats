@@ -180,6 +180,39 @@ stacksats strategy run-daily \
 
 - Validate your copied strategy using the [CLI validate command](commands.md#2-validate-strategy-via-strategy-lifecycle-cli).
 
+## I want to train and promote the DuckDB alpha strategy
+
+### Prerequisites
+
+- `bitcoin_analytics.duckdb` is present locally, or `STACKSATS_ANALYTICS_DUCKDB` points to it.
+- Local editable install is ready (`pip install -e ".[dev]"`).
+
+### Commands
+
+```bash
+export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
+venv/bin/python scripts/train_duckdb_factor_strategy.py \
+  --start-date 2018-01-01 \
+  --end-date 2025-05-31 \
+  --output stacksats/strategies/duckdb_alpha_v1.json
+
+venv/bin/python scripts/compare_duckdb_alpha.py \
+  --start-date 2018-01-01 \
+  --end-date 2025-05-31
+```
+
+### Expected output
+
+- A refreshed frozen artifact JSON at `stacksats/strategies/duckdb_alpha_v1.json`.
+- Baseline-vs-candidate comparison JSON with score, win-rate, and BTC-per-$1M uplift.
+- Strict diagnostics included when `--skip-strict` is not set.
+
+### Promotion checklist
+
+- Candidate score delta and win-rate delta are positive on the shared horizon.
+- Strict diagnostics are reviewed for permutation p-value, fold stability, and feature drift.
+- Comparison output + artifact hash are captured in PR notes.
+
 ## I want to troubleshoot command failures quickly
 
 ### Prerequisites

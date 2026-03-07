@@ -11,6 +11,7 @@ from .feature_materialization import build_observed_frame, hash_dataframe, norma
 from .feature_providers import (
     CoinMetricsOverlayFeatureProvider,
     CoreModelFeatureProvider,
+    DuckDBAnalyticsFeatureProvider,
     FeatureProvider,
 )
 
@@ -106,4 +107,4 @@ class FeatureRegistry:
 DEFAULT_FEATURE_REGISTRY = FeatureRegistry()
 DEFAULT_FEATURE_REGISTRY.register(CoreModelFeatureProvider())
 DEFAULT_FEATURE_REGISTRY.register(CoinMetricsOverlayFeatureProvider())
-
+DEFAULT_FEATURE_REGISTRY.register(DuckDBAnalyticsFeatureProvider())

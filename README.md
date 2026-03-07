@@ -83,6 +83,17 @@ For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 `stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
 
+DuckDB factor strategy workflow (shared-horizon research):
+
+```bash
+export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
+venv/bin/python scripts/train_duckdb_factor_strategy.py --start-date 2018-01-01 --end-date 2025-05-31
+venv/bin/python scripts/compare_duckdb_alpha.py --start-date 2018-01-01 --end-date 2025-05-31
+```
+
+If `STACKSATS_ANALYTICS_DUCKDB` is unset, runtime falls back to `./bitcoin_analytics.duckdb`.
+For quick candidate-only loops, `scripts/compare_duckdb_alpha.py` supports `--skip-strict` plus baseline metric overrides.
+
 Run idempotent daily execution (paper mode):
 
 ```bash
@@ -137,6 +148,8 @@ bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
 bash scripts/clean_local.sh
 bash scripts/release_check.sh
+venv/bin/python scripts/train_duckdb_factor_strategy.py --help
+venv/bin/python scripts/compare_duckdb_alpha.py --help
 ```
 
 If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.

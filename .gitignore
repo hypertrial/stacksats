@@ -208,5 +208,6 @@ __marimo__/
 
 .DS_Store
 :memory:
+*.duckdb
 
 /output

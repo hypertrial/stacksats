@@ -268,6 +268,51 @@ Run lint:
 venv/bin/python -m ruff check .
 ```
 
+## 7) DuckDB Factor Research Commands
+
+DuckDB provider runtime path resolution:
+
+- first choice: `STACKSATS_ANALYTICS_DUCKDB`
+- fallback: `./bitcoin_analytics.duckdb` (repo root)
+
+Train and freeze the DuckDB artifact:
+
+```bash
+export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
+venv/bin/python scripts/train_duckdb_factor_strategy.py \
+  --start-date 2018-01-01 \
+  --end-date 2025-05-31 \
+  --output stacksats/strategies/duckdb_alpha_v1.json
+```
+
+Run baseline vs candidate comparison:
+
+```bash
+venv/bin/python scripts/compare_duckdb_alpha.py \
+  --start-date 2018-01-01 \
+  --end-date 2025-05-31
+```
+
+Fast research loop (candidate-only backtest, strict skipped, baseline overridden):
+
+```bash
+venv/bin/python scripts/compare_duckdb_alpha.py \
+  --start-date 2018-01-01 \
+  --end-date 2025-05-31 \
+  --baseline-score 66.1640 \
+  --baseline-win-rate 52.5597 \
+  --baseline-exp-decay-percentile 79.7683 \
+  --baseline-mean-dynamic-sats-per-dollar 7277.21 \
+  --skip-strict
+```
+
+Promotion checklist for DuckDB alpha:
+
+- Candidate score and win-rate improve over baseline on the same horizon.
+- Strict validation is run at least once on the exact candidate/artifact snapshot.
+- Artifact hash and comparison output are captured in PR notes.
+- Any gate failure (permutation p-value, fold instability, or drift) is recorded with mitigation notes.
+
 ## Troubleshooting
 
 - **`Invalid strategy spec`**
