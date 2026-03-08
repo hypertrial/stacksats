@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import duckdb
 import pandas as pd
 import pytest
 
@@ -41,6 +42,70 @@ def _btc_df() -> pd.DataFrame:
         },
         index=idx,
     )
+
+
+def _create_brk_overlay_duckdb_fixture(path: str) -> None:
+    con = duckdb.connect(path)
+    try:
+        con.execute(
+            "CREATE TABLE metrics_distribution (date_day DATE, metric VARCHAR, value DOUBLE)"
+        )
+        con.execute(
+            "CREATE TABLE metrics_supply (date_day DATE, metric VARCHAR, value DOUBLE)"
+        )
+        con.execute(
+            "CREATE TABLE metrics_transactions (date_day DATE, metric VARCHAR, value DOUBLE)"
+        )
+        con.execute(
+            "CREATE TABLE metrics_blocks (date_day DATE, metric VARCHAR, value DOUBLE)"
+        )
+
+        dates = pd.date_range("2023-01-01", periods=500, freq="D")
+        distribution_metrics = (
+            "adjusted_sopr",
+            "adjusted_sopr_7d_ema",
+            "net_sentiment",
+            "greed_index",
+            "pain_index",
+        )
+        supply_metrics = ("realized_cap_growth_rate", "market_cap_growth_rate")
+        tx_metrics = ("tx_count_pct10", "annualized_volume_usd")
+        block_metrics = ("hash_rate_1y_sma", "subsidy_usd_average")
+
+        rows_distribution: list[tuple[object, str, float]] = []
+        rows_supply: list[tuple[object, str, float]] = []
+        rows_tx: list[tuple[object, str, float]] = []
+        rows_blocks: list[tuple[object, str, float]] = []
+        for day_idx, day in enumerate(dates):
+            day_factor = float(day_idx + 1)
+            for metric_idx, metric in enumerate(distribution_metrics):
+                rows_distribution.append(
+                    (day.date(), metric, day_factor * float(metric_idx + 1))
+                )
+            for metric_idx, metric in enumerate(supply_metrics):
+                rows_supply.append(
+                    (day.date(), metric, day_factor * float(metric_idx + 2))
+                )
+            for metric_idx, metric in enumerate(tx_metrics):
+                rows_tx.append((day.date(), metric, day_factor * float(metric_idx + 3)))
+            for metric_idx, metric in enumerate(block_metrics):
+                rows_blocks.append(
+                    (day.date(), metric, day_factor * float(metric_idx + 4))
+                )
+
+        con.executemany("INSERT INTO metrics_distribution VALUES (?, ?, ?)", rows_distribution)
+        con.executemany("INSERT INTO metrics_supply VALUES (?, ?, ?)", rows_supply)
+        con.executemany("INSERT INTO metrics_transactions VALUES (?, ?, ?)", rows_tx)
+        con.executemany("INSERT INTO metrics_blocks VALUES (?, ?, ?)", rows_blocks)
+    finally:
+        con.close()
+
+
+@pytest.fixture(autouse=True)
+def _overlay_duckdb_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "overlay.duckdb"
+    _create_brk_overlay_duckdb_fixture(str(db_path))
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
 
 
 def test_feature_registry_rejects_duplicate_registration() -> None:
