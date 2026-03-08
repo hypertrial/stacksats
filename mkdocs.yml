@@ -87,6 +87,7 @@ nav:
   - Getting Started:
       - Welcome: index.md
       - Task Hub: tasks.md
+      - BRK Data Source: data-source.md
       - Quickstart: start/quickstart.md
       - First Strategy Run: start/first-strategy-run.md
       - Minimal Strategy Examples: start/minimal-strategy-examples.md
@@ -106,6 +107,7 @@ nav:
       - Interpret Backtest Metrics: recipes/interpret-backtest.md
   - Reference:
       - Glossary: glossary.md
+      - DuckDB Schema: reference/bitcoin-analytics-duckdb-schema.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - Strategy TimeSeries: reference/strategy-timeseries.md

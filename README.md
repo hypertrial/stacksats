@@ -84,6 +84,22 @@ For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 `stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
 
+## Data Source (BRK DuckDB)
+
+Canonical BRK data distribution:
+
+- Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
+- Manifest: `data/brk_data_manifest.json`
+
+Fetch and verify DuckDB + schema:
+
+```bash
+venv/bin/python scripts/fetch_brk_data.py --target-dir .
+export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+```
+
+Runtime stays local-file based by design. It does not auto-download source data.
+
 DuckDB factor strategy workflow (shared-horizon research):
 
 ```bash

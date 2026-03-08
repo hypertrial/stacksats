@@ -79,6 +79,13 @@ pip install -e ".[deploy]"
 Data source contract:
 - Strategy runtime is BRK-only (`STACKSATS_ANALYTICS_DUCKDB` -> `./bitcoin_analytics.duckdb` fallback).
 - Legacy source compatibility paths are not supported in `0.7.x`.
+- To pull canonical DuckDB + schema artifacts from Drive, run:
+
+```bash
+venv/bin/python scripts/fetch_brk_data.py --target-dir .
+```
+
+See [BRK Data Source](data-source.md) for manifest/checksum details.
 
 ## Strategy Spec Format
 

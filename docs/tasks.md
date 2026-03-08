@@ -10,6 +10,7 @@ Use this page to jump directly to the workflow you need.
 Global source contract:
 - Strategy runtime and validation are BRK-only in `0.7.x`.
 - Set `STACKSATS_ANALYTICS_DUCKDB` or place `bitcoin_analytics.duckdb` at repo root.
+- For canonical Drive-distributed artifacts + checksum workflow, see [BRK Data Source](data-source.md).
 
 ## I want to validate a strategy
 
@@ -194,6 +195,7 @@ stacksats strategy run-daily \
 ### Commands
 
 ```bash
+venv/bin/python scripts/fetch_brk_data.py --target-dir .
 export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
 venv/bin/python scripts/train_duckdb_factor_strategy.py \
   --start-date 2018-01-01 \
