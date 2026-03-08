@@ -78,7 +78,7 @@ pip install -e ".[deploy]"
 
 Data source contract:
 - Strategy runtime is BRK-only (`STACKSATS_ANALYTICS_DUCKDB` -> `./bitcoin_analytics.duckdb` fallback).
-- Legacy source compatibility paths are not supported in `0.7.0`.
+- Legacy source compatibility paths are not supported in `0.7.x`.
 
 ## Strategy Spec Format
 

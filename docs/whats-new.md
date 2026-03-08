@@ -7,13 +7,11 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.7.0 highlights
+## 0.7.1 highlights
 
-- Hard-break source contract is now fully BRK-only for runtime/docs/release guidance.
-- Added required CI and release preflight guardrails to block deprecated CoinMetrics token reintroduction.
-- Completed StrategyTimeSeries schema/lineage cleanup for BRK source-oriented naming and clearer export schema semantics.
-- Migrated stale loader/history/prelude tests to BRK DuckDB-native behavior and removed obsolete legacy-loader tests.
-- Updated release prep documentation so 0.7.0 release execution is fully aligned with current scripts and workflows.
+- Stabilized BRK overlay and registry unit tests so they no longer require a pre-existing repository-root `bitcoin_analytics.duckdb` file.
+- Added deterministic synthetic DuckDB fixtures in affected unit tests, removing environment-sensitive failures in clean CI runners.
+- Preserved the hard-break BRK-only runtime/source contract introduced in `0.7.0`; no runtime API changes were introduced in this patch release.
 
 ## Upgrade notes
 

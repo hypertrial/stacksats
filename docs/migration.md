@@ -7,9 +7,9 @@ description: Breaking-change migration mappings for StackSats runtime and export
 
 Use this guide when upgrading code that depended on removed compatibility helpers or older signatures.
 
-## 0.7.0 hard-break note
+## 0.7.x hard-break note
 
-`0.7.0` is BRK-only for strategy metrics/runtime data sourcing.
+`0.7.0+` is BRK-only for strategy metrics/runtime data sourcing.
 Legacy CoinMetrics source paths are removed from active runtime and docs workflows.
 
 ## Scope

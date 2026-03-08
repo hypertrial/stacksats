@@ -10,7 +10,7 @@
 StackSats, developed by [Hypertrial](https://www.hypertrial.ai), is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
-Current release line: `0.7.0`.
+Current release line: `0.7.1`.
 
 ## Start Here
 

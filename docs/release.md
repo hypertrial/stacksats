@@ -12,7 +12,7 @@ This guide is manual-first. It covers token-based PyPI releases.
 - Use SemVer: `MAJOR.MINOR.PATCH`.
 - Package version is generated automatically from git tags via `setuptools-scm`.
 - Use annotated git tags in the form `vX.Y.Z`.
-- Tag and package version must match exactly (for example, tag `v0.7.0` produces package version `0.7.0`).
+- Tag and package version must match exactly (for example, tag `v0.7.1` produces package version `0.7.1`).
 - Never reuse a version number after it has been uploaded to PyPI.
 - Do not publish artifacts built before the release tag exists. Build the upload artifacts from the tagged `vX.Y.Z` commit context.
 

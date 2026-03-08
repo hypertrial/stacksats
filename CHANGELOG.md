@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-03-08
+
+### Fixed
+- Stabilized BRK overlay and feature registry unit tests by provisioning deterministic synthetic DuckDB fixtures in-test instead of relying on a repository-root `bitcoin_analytics.duckdb`.
+- Removed environment-dependent unit test failures where `brk_overlay_v1` materialization could fail on missing local DuckDB files in clean CI runners.
+
 ## [0.7.0] - 2026-03-08
 
 ### Added
