@@ -55,10 +55,12 @@ build_with_ssl_fallback() {
   local build_err
   build_err="$(mktemp)"
 
-  if python -m build 2> >(tee "$build_err" >&2); then
+  if python -m build 2>"$build_err"; then
     rm -f "$build_err"
     return 0
   fi
+
+  cat "$build_err" >&2
 
   if is_ssl_constraint_failure "$build_err"; then
     log "Isolated build failed due SSL trust constraints; retrying without isolation."
