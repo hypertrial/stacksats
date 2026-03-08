@@ -14,16 +14,17 @@ from .strategy_time_series_batch import StrategyTimeSeriesBatch
 from .strategy_time_series_diagnostics import StrategyTimeSeriesDiagnosticsMixin
 from .strategy_time_series_metadata import StrategySeriesMetadata
 from .strategy_time_series_schema import (
-    COINMETRICS_BTC_CSV_COLUMNS as _DEFAULT_COINMETRICS_BTC_CSV_COLUMNS,
-    COINMETRICS_LINEAGE as _DEFAULT_COINMETRICS_LINEAGE,
-    CoinMetricsLineageSpec,
+    BRK_BTC_CSV_COLUMNS as _DEFAULT_BRK_BTC_CSV_COLUMNS,
+    BRK_SOURCE_COLUMNS as _DEFAULT_BRK_SOURCE_COLUMNS,
+    BRK_LINEAGE as _DEFAULT_BRK_LINEAGE,
+    BRKLineageSpec,
     ColumnSpec,
-    coinmetrics_lineage_markdown as render_coinmetrics_lineage_markdown,
+    brk_lineage_markdown as render_brk_lineage_markdown,
     merge_schema_specs,
     render_schema_markdown,
     schema_dict as build_schema_dict,
     schema_specs as build_core_schema_specs,
-    validate_coinmetrics_lineage_coverage as validate_lineage_coverage,
+    validate_brk_lineage_coverage as validate_lineage_coverage,
     validate_schema_specs,
 )
 
@@ -37,8 +38,10 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
     _data: pd.DataFrame = field(repr=False)
 
     REQUIRED_COLUMNS: ClassVar[tuple[str, ...]] = ("date", "weight", "price_usd")
-    COINMETRICS_BTC_CSV_COLUMNS: ClassVar[tuple[str, ...]] = _DEFAULT_COINMETRICS_BTC_CSV_COLUMNS
-    COINMETRICS_LINEAGE: ClassVar[tuple[CoinMetricsLineageSpec, ...]] = _DEFAULT_COINMETRICS_LINEAGE
+    BRK_SOURCE_COLUMNS: ClassVar[tuple[str, ...]] = _DEFAULT_BRK_SOURCE_COLUMNS
+    # Backward-compatible alias kept for existing callers.
+    BRK_BTC_CSV_COLUMNS: ClassVar[tuple[str, ...]] = _DEFAULT_BRK_BTC_CSV_COLUMNS
+    BRK_LINEAGE: ClassVar[tuple[BRKLineageSpec, ...]] = _DEFAULT_BRK_LINEAGE
 
     def __init__(
         self,
@@ -153,24 +156,24 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
         return build_schema_dict(cls._merged_schema_specs(extra_schema))
 
     @classmethod
-    def validate_coinmetrics_lineage_coverage(cls) -> None:
+    def validate_brk_lineage_coverage(cls) -> None:
         """Ensure lineage mappings target documented core StrategyTimeSeries columns."""
         validate_lineage_coverage(
-            lineage=cls.COINMETRICS_LINEAGE,
+            lineage=cls.BRK_LINEAGE,
             schema_specs_iter=cls._core_schema_specs(),
-            source_columns=cls.COINMETRICS_BTC_CSV_COLUMNS,
+            source_columns=cls.BRK_SOURCE_COLUMNS,
         )
 
     @classmethod
-    def coinmetrics_lineage_markdown(cls) -> str:
-        """Render CoinMetrics source-to-schema lineage as a markdown table."""
-        cls.validate_coinmetrics_lineage_coverage()
-        return render_coinmetrics_lineage_markdown(cls.COINMETRICS_LINEAGE)
+    def brk_lineage_markdown(cls) -> str:
+        """Render BRK source-to-schema lineage as a markdown table."""
+        cls.validate_brk_lineage_coverage()
+        return render_brk_lineage_markdown(cls.BRK_LINEAGE)
 
     @classmethod
     def schema_markdown_table(cls, extra_schema: Iterable[ColumnSpec] = ()) -> str:
         """Render StrategyTimeSeries schema specs as a markdown table."""
-        cls.validate_coinmetrics_lineage_coverage()
+        cls.validate_brk_lineage_coverage()
         return cls._render_schema_markdown(cls._merged_schema_specs(extra_schema))
 
     @staticmethod
@@ -369,7 +372,7 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
 
 __all__ = [
     "ColumnSpec",
-    "CoinMetricsLineageSpec",
+    "BRKLineageSpec",
     "StrategySeriesMetadata",
     "StrategyTimeSeries",
     "StrategyTimeSeriesBatch",

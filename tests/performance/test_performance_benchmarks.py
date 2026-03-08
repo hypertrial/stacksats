@@ -62,8 +62,8 @@ def benchmark_btc_df():
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -215,7 +215,7 @@ class TestBatchProcessingBenchmark:
             benchmark_features_df,
             benchmark_btc_df,
             current_date,
-            "PriceUSD_coinmetrics",
+            "price_usd",
         )
 
         assert len(result) > 0
@@ -240,7 +240,7 @@ class TestBatchProcessingBenchmark:
             benchmark_features_df,
             benchmark_btc_df,
             current_date,
-            "PriceUSD_coinmetrics",
+            "price_usd",
         )
 
         assert len(result) > 0
@@ -276,8 +276,8 @@ class TestPerformanceThresholds:
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
 
-        df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-        df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+        df = pd.DataFrame({"price_usd": prices}, index=dates)
+        df["PriceUSD"] = df["price_usd"]
         df.index.name = "time"
         return df
 
@@ -341,7 +341,7 @@ class TestPerformanceThresholds:
             perf_features_df,
             perf_btc_df,
             current_date,
-            "PriceUSD_coinmetrics",
+            "price_usd",
         )
         elapsed = time.perf_counter() - start
 
@@ -368,8 +368,8 @@ class TestMemoryUsage:
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
 
-        df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-        df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+        df = pd.DataFrame({"price_usd": prices}, index=dates)
+        df["PriceUSD"] = df["price_usd"]
         df.index.name = "time"
         return df
 
@@ -420,8 +420,8 @@ class TestScaling:
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
 
-        df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-        df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+        df = pd.DataFrame({"price_usd": prices}, index=dates)
+        df["PriceUSD"] = df["price_usd"]
         df.index.name = "time"
         return df
 

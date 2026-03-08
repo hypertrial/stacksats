@@ -13,20 +13,32 @@ from pathlib import Path
 EXAMPLE_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 
 
-def _write_synthetic_coinmetrics_cache(
-    cache_csv: Path,
+def _write_synthetic_brk_duckdb(
+    db_path: Path,
     *,
     end_date: date,
     lookback_days: int = 2200,
 ) -> None:
+    import duckdb
+
     start = end_date - timedelta(days=lookback_days)
-    cache_csv.parent.mkdir(parents=True, exist_ok=True)
-    with cache_csv.open("w", encoding="utf-8") as handle:
-        handle.write("time,PriceUSD\n")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect(str(db_path))
+    try:
+        con.execute("CREATE TABLE metrics_price (date_day DATE, metric VARCHAR, value DOUBLE)")
+        con.execute("CREATE TABLE metrics_distribution (date_day DATE, metric VARCHAR, value DOUBLE)")
+        price_rows: list[tuple[str, str, float]] = []
+        mvrv_rows: list[tuple[str, str, float]] = []
         for offset in range(lookback_days + 1):
             day = start + timedelta(days=offset)
             price = 10000.0 + (offset * 6.5)
-            handle.write(f"{day.isoformat()},{price:.2f}\n")
+            mvrv = 0.8 + (0.00035 * offset)
+            price_rows.append((day.isoformat(), "price_close", float(price)))
+            mvrv_rows.append((day.isoformat(), "mvrv", float(mvrv)))
+        con.executemany("INSERT INTO metrics_price VALUES (?, ?, ?)", price_rows)
+        con.executemany("INSERT INTO metrics_distribution VALUES (?, ?, ?)", mvrv_rows)
+    finally:
+        con.close()
 
 
 def run_step(label: str, cmd: list[str], *, cwd: Path, env: dict[str, str]) -> bool:
@@ -70,12 +82,13 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="stacksats-example-smoke-") as tmp_home:
         synthetic_home = Path(tmp_home)
-        cache_csv = synthetic_home / ".stacksats" / "cache" / "coinmetrics_btc.csv"
-        _write_synthetic_coinmetrics_cache(cache_csv, end_date=today)
+        db_path = synthetic_home / "bitcoin_analytics.duckdb"
+        _write_synthetic_brk_duckdb(db_path, end_date=today)
         mpl_config_dir = synthetic_home / ".mplconfig"
         mpl_config_dir.mkdir(parents=True, exist_ok=True)
         env["HOME"] = str(synthetic_home)
         env["MPLCONFIGDIR"] = str(mpl_config_dir)
+        env["STACKSATS_ANALYTICS_DUCKDB"] = str(db_path)
 
         steps: list[tuple[str, list[str]]] = [
             (

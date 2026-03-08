@@ -9,7 +9,7 @@ import pandas as pd
 
 from .feature_materialization import build_observed_frame, hash_dataframe, normalize_timestamp
 from .feature_providers import (
-    CoinMetricsOverlayFeatureProvider,
+    BRKOverlayFeatureProvider,
     CoreModelFeatureProvider,
     DuckDBAnalyticsFeatureProvider,
     FeatureProvider,
@@ -106,5 +106,5 @@ class FeatureRegistry:
 
 DEFAULT_FEATURE_REGISTRY = FeatureRegistry()
 DEFAULT_FEATURE_REGISTRY.register(CoreModelFeatureProvider())
-DEFAULT_FEATURE_REGISTRY.register(CoinMetricsOverlayFeatureProvider())
+DEFAULT_FEATURE_REGISTRY.register(BRKOverlayFeatureProvider())
 DEFAULT_FEATURE_REGISTRY.register(DuckDBAnalyticsFeatureProvider())

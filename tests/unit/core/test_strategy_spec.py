@@ -19,8 +19,8 @@ def _context(*, start: str = "2024-01-01", periods: int = 4) -> StrategyContext:
     idx = pd.date_range(start, periods=periods, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(100.0, 103.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 1.3, len(idx)),
+            "price_usd": np.linspace(100.0, 103.0, len(idx)),
+            "mvrv": np.linspace(1.0, 1.3, len(idx)),
             "price_vs_ma": np.linspace(-0.2, 0.1, len(idx)),
             "mvrv_zscore": np.linspace(-1.0, 1.0, len(idx)),
             "mvrv_gradient": np.linspace(-0.5, 0.5, len(idx)),

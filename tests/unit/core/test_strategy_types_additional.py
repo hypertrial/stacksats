@@ -12,8 +12,8 @@ def _context(*, start: str = "2024-01-01", periods: int = 3) -> StrategyContext:
     idx = pd.date_range(start, periods=periods, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(100.0, 102.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 1.2, len(idx)),
+            "price_usd": np.linspace(100.0, 102.0, len(idx)),
+            "mvrv": np.linspace(1.0, 1.2, len(idx)),
         },
         index=idx,
     )
@@ -301,7 +301,7 @@ def test_run_executes_lifecycle_with_optional_export_and_save() -> None:
 def test_compute_weights_returns_empty_when_context_range_is_empty() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="D")
     ctx = StrategyContext(
-        features_df=pd.DataFrame({"PriceUSD_coinmetrics": [100, 101, 102]}, index=idx),
+        features_df=pd.DataFrame({"price_usd": [100, 101, 102]}, index=idx),
         start_date=pd.Timestamp("2024-01-03"),
         end_date=pd.Timestamp("2024-01-01"),
         current_date=pd.Timestamp("2024-01-01"),

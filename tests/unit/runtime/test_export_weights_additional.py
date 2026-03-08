@@ -29,12 +29,12 @@ def _sample_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.Timestamp, pd.Times
     idx = pd.date_range("2024-01-01", periods=2, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": [100.0, 101.0],
+            "price_usd": [100.0, 101.0],
             "mvrv_zscore": [0.0, 0.1],
         },
         index=idx,
     )
-    btc_df = pd.DataFrame({"PriceUSD_coinmetrics": [100.0, 101.0]}, index=idx)
+    btc_df = pd.DataFrame({"price_usd": [100.0, 101.0]}, index=idx)
     return features_df, btc_df, idx.min(), idx.max()
 
 
@@ -171,7 +171,7 @@ def test_process_start_date_batch_falls_back_when_strategy_returns_empty(mocker)
         features_df,
         btc_df,
         current_date=end_date,
-        btc_price_col="PriceUSD_coinmetrics",
+        btc_price_col="price_usd",
         strategy=strategy,
         enforce_span_contract=False,
     )
@@ -193,7 +193,7 @@ def test_process_start_date_batch_reindexes_partial_strategy_output() -> None:
         features_df,
         btc_df,
         current_date=end_date,
-        btc_price_col="PriceUSD_coinmetrics",
+        btc_price_col="price_usd",
         strategy=strategy,
         enforce_span_contract=False,
     )
@@ -205,12 +205,12 @@ def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
     idx = pd.date_range("2024-01-01", periods=4, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": [100.0, 101.0, 102.0, 103.0],
+            "price_usd": [100.0, 101.0, 102.0, 103.0],
             "mvrv_zscore": [0.0, 0.1, 0.2, 0.3],
         },
         index=idx,
     )
-    btc_df = pd.DataFrame({"PriceUSD_coinmetrics": [100.0, 101.0]}, index=idx[:2])
+    btc_df = pd.DataFrame({"price_usd": [100.0, 101.0]}, index=idx[:2])
     strategy = _StrategyWithHook()
     captured_max: list[pd.Timestamp] = []
 
@@ -226,7 +226,7 @@ def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
         features_df,
         btc_df,
         current_date=idx[-1],
-        btc_price_col="PriceUSD_coinmetrics",
+        btc_price_col="price_usd",
         strategy=strategy,
         enforce_span_contract=False,
     )

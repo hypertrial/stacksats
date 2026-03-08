@@ -29,14 +29,14 @@ class TestWeightComputationPipeline:
 
     def test_mvrv_data_available(self, btc_data):
         """Verify MVRV data is available for weight computation."""
-        assert "CapMVRVCur" in btc_data.columns, "CapMVRVCur column missing"
-        mvrv_col = btc_data["CapMVRVCur"]
+        assert "mvrv" in btc_data.columns, "mvrv column missing"
+        mvrv_col = btc_data["mvrv"]
         assert mvrv_col.notna().sum() > 0, "No MVRV data available"
 
         # Check recent data in fixture range
         recent = btc_data.loc["2025-01-01":]
         assert len(recent) > 0, "No recent data"
-        assert recent["CapMVRVCur"].notna().sum() > 0, "No MVRV data for recent dates"
+        assert recent["mvrv"].notna().sum() > 0, "No MVRV data for recent dates"
 
     def test_features_vary(self, features_data):
         """Verify computed features have variation."""

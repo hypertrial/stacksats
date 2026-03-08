@@ -17,7 +17,7 @@ def _series(prices: list[float] | None = None) -> StrategyTimeSeries:
             "date": dates,
             "weight": [1.0 / len(price_vals)] * len(price_vals),
             "price_usd": price_vals,
-            "CapMVRVCur": np.arange(len(price_vals), dtype=float),
+            "mvrv": np.arange(len(price_vals), dtype=float),
         }
     )
     meta = StrategySeriesMetadata(
@@ -61,7 +61,7 @@ def test_resolve_series_like_and_cross_correlation_paths() -> None:
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         corr = ts.cross_correlation(short_other, max_lag=2, series="returns")
         assert not corr.empty
-        corr_col = ts.cross_correlation("CapMVRVCur", max_lag=1, series="returns")
+        corr_col = ts.cross_correlation("mvrv", max_lag=1, series="returns")
         assert not corr_col.empty
 
 
@@ -78,7 +78,7 @@ def test_resample_and_decompose_error_paths() -> None:
     non_numeric = ts.to_dataframe()
     non_numeric["weight"] = non_numeric["weight"].astype(str)
     non_numeric["price_usd"] = non_numeric["price_usd"].astype(str)
-    non_numeric["CapMVRVCur"] = non_numeric["CapMVRVCur"].astype(str)
+    non_numeric["mvrv"] = non_numeric["mvrv"].astype(str)
     object.__setattr__(ts, "_data", non_numeric)
     out = ts.resample("D")
     assert list(out.columns) == ["date"]
@@ -103,11 +103,11 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
 
     ts_single = _series()
     sparse_metric = ts_single.to_dataframe()
-    sparse_metric["CapMVRVCur"] = [np.nan, np.nan, np.nan, np.nan, np.nan, 1.0]
+    sparse_metric["mvrv"] = [np.nan, np.nan, np.nan, np.nan, np.nan, 1.0]
     detrended = StrategyTimeSeries(metadata=ts_single.metadata, data=sparse_metric).detrend(
-        method="linear", columns=["CapMVRVCur"]
+        method="linear", columns=["mvrv"]
     )
-    assert detrended["CapMVRVCur_detrended"].isna().all()
+    assert detrended["mvrv_detrended"].isna().all()
 
     with pytest.raises(ValueError, match="Unknown columns for difference"):
         ts.difference(columns=["unknown_col"])

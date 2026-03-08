@@ -13,7 +13,7 @@
     "2024-06-10"
   ],
   "columns": [
-    "PriceUSD_coinmetrics",
+    "price_usd",
     "z30",
     "z90",
     "z180",
@@ -21,7 +21,7 @@
     "z1461"
   ],
   "data": {
-    "PriceUSD_coinmetrics": [
+    "price_usd": [
       329886.0069791245,
       328432.9685492133,
       361812.45266641775,

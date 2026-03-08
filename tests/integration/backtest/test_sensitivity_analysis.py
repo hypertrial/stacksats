@@ -48,8 +48,8 @@ def sensitivity_btc_df():
     mvrv_noise = np.random.normal(0, 0.2, len(dates))
     mvrv = np.clip(mvrv_base + mvrv_noise, 0.5, 4.0)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices, "CapMVRVCur": mvrv}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices, "mvrv": mvrv}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 

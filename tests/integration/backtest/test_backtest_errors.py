@@ -66,7 +66,7 @@ class TestPrecomputeFeaturesErrors:
 
     def test_empty_dataframe_handling(self):
         """Test behavior with empty DataFrame."""
-        empty_df = pd.DataFrame(columns=["PriceUSD_coinmetrics"])
+        empty_df = pd.DataFrame(columns=["price_usd"])
         empty_df.index = pd.DatetimeIndex([])
 
         # Should handle empty data gracefully (may return empty or raise)
@@ -87,7 +87,7 @@ class TestDataQualityErrors:
         """Test that NaN prices are handled during feature computation."""
         # Create DataFrame with NaN prices
         df_with_nan = sample_btc_df.copy()
-        df_with_nan.loc["2024-06-15", "PriceUSD_coinmetrics"] = float("nan")
+        df_with_nan.loc["2024-06-15", "price_usd"] = float("nan")
 
         # Should not raise, but produce features
         result = precompute_features(df_with_nan)
@@ -99,7 +99,7 @@ class TestDataQualityErrors:
         """Test behavior with zero prices (edge case)."""
         df_with_zero = sample_btc_df.copy()
         # Setting a zero price - this is invalid but should be handled
-        df_with_zero.loc["2024-06-15", "PriceUSD_coinmetrics"] = 0.0
+        df_with_zero.loc["2024-06-15", "price_usd"] = 0.0
 
         # Should complete (may produce warnings or clipped values)
         result = precompute_features(df_with_zero)
@@ -109,7 +109,7 @@ class TestDataQualityErrors:
         """Test behavior with negative prices (invalid data)."""
         df_with_neg = sample_btc_df.copy()
         # Negative price is invalid
-        df_with_neg.loc["2024-06-15", "PriceUSD_coinmetrics"] = -1000.0
+        df_with_neg.loc["2024-06-15", "price_usd"] = -1000.0
 
         # Should complete (log of negative will produce NaN/Inf, which gets handled)
         result = precompute_features(df_with_neg)
@@ -160,7 +160,7 @@ class TestBoundaryConditions:
         # Create weekly data
         dates = pd.date_range("2020-01-01", periods=100, freq="W")
         df = pd.DataFrame(
-            {"PriceUSD_coinmetrics": [10000 + i * 100 for i in range(100)]},
+            {"price_usd": [10000 + i * 100 for i in range(100)]},
             index=dates,
         )
 

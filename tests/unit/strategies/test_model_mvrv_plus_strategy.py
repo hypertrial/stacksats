@@ -18,21 +18,21 @@ def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "date": index,
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 20000.0, n),
-            "CapMVRVCur": np.linspace(1.0, 2.0, n),
+            "price_usd": np.linspace(10000.0, 20000.0, n),
+            "mvrv": np.linspace(1.0, 2.0, n),
             "price_vs_ma": np.linspace(-0.5, 0.5, n),
             "mvrv_zscore": np.linspace(-2.0, 2.0, n),
             "mvrv_zone": np.tile(np.array([-1.5, 0.0, 1.5]), n // 3 + 1)[:n],
             "mvrv_volatility": np.linspace(0.2, 0.95, n),
             "signal_confidence": np.linspace(0.1, 0.9, n),
-            "cm_netflow": np.linspace(-0.7, 0.7, n),
-            "cm_exchange_share": np.linspace(-0.6, 0.6, n),
-            "cm_exchange_share_delta": np.linspace(-0.5, 0.5, n),
-            "cm_activity_div": np.linspace(-0.4, 0.4, n),
-            "cm_roi_context": np.linspace(-0.6, 0.6, n),
-            "cm_liquidity_impulse": np.linspace(-0.3, 0.3, n),
-            "cm_miner_pressure": np.linspace(-0.4, 0.4, n),
-            "cm_hash_momentum": np.linspace(-0.4, 0.4, n),
+            "brk_netflow": np.linspace(-0.7, 0.7, n),
+            "brk_exchange_share": np.linspace(-0.6, 0.6, n),
+            "brk_exchange_share_delta": np.linspace(-0.5, 0.5, n),
+            "brk_activity_div": np.linspace(-0.4, 0.4, n),
+            "brk_roi_context": np.linspace(-0.6, 0.6, n),
+            "brk_liquidity_impulse": np.linspace(-0.3, 0.3, n),
+            "brk_miner_pressure": np.linspace(-0.4, 0.4, n),
+            "brk_hash_momentum": np.linspace(-0.4, 0.4, n),
         },
         index=index,
     )
@@ -56,7 +56,7 @@ def test_strategy_contract_and_required_feature_metadata() -> None:
     has_propose, has_profile = validate_strategy_contract(strategy)
     assert has_propose is False
     assert has_profile is True
-    assert strategy.required_feature_sets() == ("core_model_features_v1", "coinmetrics_overlay_v1")
+    assert strategy.required_feature_sets() == ("core_model_features_v1", "brk_overlay_v1")
     assert "plus_vol21" in strategy.required_feature_columns()
 
 
@@ -79,7 +79,7 @@ def test_transform_features_and_build_target_profile(monkeypatch) -> None:
     transformed = strategy.transform_features(ctx)
     assert "plus_vol21" in transformed.columns
     assert "plus_drawdown90" in transformed.columns
-    assert "cm_netflow" in transformed.columns
+    assert "brk_netflow" in transformed.columns
     assert np.isfinite(transformed.to_numpy(dtype=float)).all()
 
     monkeypatch.setattr(
@@ -110,7 +110,7 @@ def test_transform_features_is_collision_safe_with_provider_columns() -> None:
     ctx = type("Ctx", (), {"features_df": features, "start_date": idx[0], "end_date": idx[-1]})()
     transformed = strategy.transform_features(ctx)
     assert transformed.index.equals(idx)
-    assert "cm_exchange_share" in transformed.columns
+    assert "brk_exchange_share" in transformed.columns
     assert "plus_vol21" in transformed.columns
     assert transformed.loc[idx[0], "plus_vol21"] == 1.23
     assert transformed.loc[idx[1], "plus_drawdown90"] == -0.45

@@ -274,7 +274,7 @@ def test_strict_shuffled_check_skips_without_price_column() -> None:
     )
 
     assert ok is True
-    assert any("missing PriceUSD_coinmetrics column" in msg for msg in messages)
+    assert any("missing price_usd column" in msg for msg in messages)
 
 
 def test_strict_shuffled_check_skips_when_trials_non_positive() -> None:

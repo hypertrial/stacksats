@@ -36,8 +36,8 @@ def _btc_df() -> pd.DataFrame:
     idx = pd.date_range("2021-01-01", periods=1500, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000, 60000, len(idx)),
-            "CapMVRVCur": np.linspace(0.9, 2.1, len(idx)),
+            "price_usd": np.linspace(10000, 60000, len(idx)),
+            "mvrv": np.linspace(0.9, 2.1, len(idx)),
         },
         index=idx,
     )

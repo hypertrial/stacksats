@@ -169,7 +169,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_daily_cmd.add_argument("--adapter", default=None)
     run_daily_cmd.add_argument("--state-db-path", default=".stacksats/run_state.sqlite3")
     run_daily_cmd.add_argument("--output-dir", default="output")
-    run_daily_cmd.add_argument("--btc-price-col", default="PriceUSD_coinmetrics")
+    run_daily_cmd.add_argument("--btc-price-col", default="price_usd")
     run_daily_cmd.add_argument("--force", action="store_true")
 
     reconcile_cmd = strategy_sub.add_parser(

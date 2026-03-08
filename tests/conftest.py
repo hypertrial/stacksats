@@ -33,16 +33,16 @@ def sample_btc_prices():
 
 @pytest.fixture
 def sample_btc_df(sample_btc_prices):
-    """Create a sample BTC DataFrame similar to CoinMetrics data."""
+    """Create a sample BTC DataFrame similar to BRK data."""
     df = pd.DataFrame({"PriceUSD": sample_btc_prices})
-    df["PriceUSD_coinmetrics"] = df["PriceUSD"]
+    df["price_usd"] = df["PriceUSD"]
 
-    # Add MVRV data (CapMVRVCur) - cycles between 0.5 and 4.0 over ~4 years
+    # Add MVRV data (mvrv) - cycles between 0.5 and 4.0 over ~4 years
     n = len(df)
     np.random.seed(123)
     mvrv_base = 1.5 + 1.2 * np.sin(np.arange(n) * 2 * np.pi / 1461)  # 4-year cycle
     mvrv_noise = np.random.normal(0, 0.15, n)
-    df["CapMVRVCur"] = np.clip(mvrv_base + mvrv_noise, 0.5, 5.0)
+    df["mvrv"] = np.clip(mvrv_base + mvrv_noise, 0.5, 5.0)
 
     df.index.name = "time"
     return df
@@ -81,13 +81,13 @@ def sample_spd_df():
 
 
 # -----------------------------------------------------------------------------
-# Mock CoinMetrics CSV Data
+# Mock BRK CSV Data
 # -----------------------------------------------------------------------------
 
 
 @pytest.fixture
-def sample_coinmetrics_csv():
-    """Generate sample CoinMetrics CSV data."""
+def sample_brk_csv():
+    """Generate sample BRK CSV data."""
     dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
     np.random.seed(42)
     base_price = 10000
@@ -292,7 +292,7 @@ def simulation_btc_df(simulation_price_generator):
     prices = simulation_price_generator(start_date, end_date, initial_price=50000.0)
 
     df = pd.DataFrame({"PriceUSD": prices})
-    df["PriceUSD_coinmetrics"] = df["PriceUSD"]
+    df["price_usd"] = df["PriceUSD"]
     df.index.name = "time"
     return df
 

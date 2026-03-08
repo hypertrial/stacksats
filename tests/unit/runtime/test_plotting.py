@@ -11,23 +11,23 @@ from stacksats.plot_weights import main as main_weights
 class TestPlottingScripts:
     """Tests for plotting scripts."""
 
-    @patch("stacksats.plot_mvrv.fetch_coinmetrics_btc_csv")
+    @patch("stacksats.plot_mvrv.BTCDataProvider.load")
     @patch("stacksats.plot_mvrv.plt.savefig")
-    def test_plot_mvrv_main(self, mock_savefig, mock_fetch):
+    def test_plot_mvrv_main(self, mock_savefig, mock_load):
         """Test plot_mvrv.py main function."""
         # Mock data
         df = pd.DataFrame({
-            "CapMVRVCur": [1.0, 2.0, 3.0],
+            "mvrv": [1.0, 2.0, 3.0],
             "CapMVRVZ": [0.5, 1.5, 2.5]
         }, index=pd.date_range("2024-01-01", periods=3))
-        mock_fetch.return_value = df
+        mock_load.return_value = df
 
         # Call main with no arguments (uses defaults)
         with patch("sys.argv", ["stacksats.plot_mvrv.py"]):
             main_mvrv()
 
         assert mock_savefig.called
-        assert mock_fetch.called
+        assert mock_load.called
 
     @patch("stacksats.plot_weights.get_db_connection")
     @patch("stacksats.plot_weights.plt.savefig")

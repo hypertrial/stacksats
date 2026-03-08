@@ -15,8 +15,8 @@ def _sample_btc_df() -> pd.DataFrame:
     mvrv = np.linspace(0.8, 2.2, len(dates))
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": price,
-            "CapMVRVCur": mvrv,
+            "price_usd": price,
+            "mvrv": mvrv,
         },
         index=dates,
     )

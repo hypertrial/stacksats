@@ -32,8 +32,8 @@ class StrategyContext:
     end_date: pd.Timestamp
     current_date: pd.Timestamp
     locked_weights: np.ndarray | None = None
-    btc_price_col: str = "PriceUSD_coinmetrics"
-    mvrv_col: str = "CapMVRVCur"
+    btc_price_col: str = "price_usd"
+    mvrv_col: str = "mvrv"
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,7 @@ class ExportConfig:
     range_start: str = field(default_factory=_default_export_range_start)
     range_end: str = field(default_factory=_default_export_range_end)
     output_dir: str = "output"
-    btc_price_col: str = "PriceUSD_coinmetrics"
+    btc_price_col: str = "price_usd"
 
 
 def _default_state_db_path() -> str:
@@ -94,7 +94,7 @@ class RunDailyConfig:
     output_dir: str = "output"
     adapter_spec: str | None = None
     force: bool = False
-    btc_price_col: str = "PriceUSD_coinmetrics"
+    btc_price_col: str = "price_usd"
 
 
 @dataclass(frozen=True)

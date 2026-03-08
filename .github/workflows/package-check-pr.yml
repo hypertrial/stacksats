@@ -39,6 +39,9 @@ jobs:
       - name: Run lint
         run: ruff check .
 
+      - name: Guard against legacy metric-source refs
+        run: python scripts/check_no_coinmetrics_refs.py
+
       - name: Check docs references
         run: bash scripts/check_docs_refs.sh
 

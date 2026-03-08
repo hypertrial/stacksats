@@ -34,8 +34,8 @@ def _btc_df(days: int = 900) -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", periods=days, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(20000.0, 80000.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "price_usd": np.linspace(20000.0, 80000.0, len(idx)),
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
         },
         index=idx,
     )
@@ -289,7 +289,7 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
     assert "missing run_date allocation" in missing_weight.message
 
     btc_zero = btc.copy()
-    btc_zero.loc[pd.Timestamp("2024-12-31"), "PriceUSD_coinmetrics"] = 0.0
+    btc_zero.loc[pd.Timestamp("2024-12-31"), "price_usd"] = 0.0
     zero_price = runner.run_daily(
         _UniformStrategy(),
         RunDailyConfig(
@@ -389,13 +389,13 @@ def test_compute_cycle_spd_source_mask_branches() -> None:
     source_exists.iloc[100] = False
     df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": prices,
-            "PriceUSD_source_exists": source_exists,
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "price_usd": prices,
+            "price_usd_source_exists": source_exists,
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
         },
         index=idx,
     )
-    feats = df[["PriceUSD_coinmetrics", "CapMVRVCur"]].copy()
+    feats = df[["price_usd", "mvrv"]].copy()
     out = compute_cycle_spd(
         df,
         lambda window: pd.Series(np.full(len(window.index), 1.0 / len(window.index)), index=window.index),
@@ -451,8 +451,8 @@ def test_strategy_types_helpers_and_runner_validation_edge(monkeypatch) -> None:
         strategy=_UniformStrategy(),
         features_df=pd.DataFrame(
             {
-                "PriceUSD_coinmetrics": [100.0, 101.0],
-                "CapMVRVCur": [1.0, 1.1],
+                "price_usd": [100.0, 101.0],
+                "mvrv": [1.0, 1.1],
             },
             index=pd.date_range("2024-01-01", periods=2, freq="D"),
         ),
@@ -475,8 +475,8 @@ def test_runner_locked_prefix_check_empty_weights_early_return(monkeypatch) -> N
         strategy=_UniformStrategy(),
         features_df=pd.DataFrame(
             {
-                "PriceUSD_coinmetrics": [100.0, 101.0],
-                "CapMVRVCur": [1.0, 1.1],
+                "price_usd": [100.0, 101.0],
+                "mvrv": [1.0, 1.1],
             },
             index=pd.date_range("2024-01-01", periods=2, freq="D"),
         ),

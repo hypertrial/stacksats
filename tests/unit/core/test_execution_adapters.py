@@ -31,7 +31,7 @@ def _request() -> DailyOrderRequest:
         notional_usd=10.0,
         price_usd=50000.0,
         quantity_btc=0.0002,
-        btc_price_col="PriceUSD_coinmetrics",
+        btc_price_col="price_usd",
     )
 
 

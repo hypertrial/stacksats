@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from stacksats.feature_providers import (
-    CoinMetricsOverlayFeatureProvider,
+    BRKOverlayFeatureProvider,
     CoreModelFeatureProvider,
 )
 
@@ -15,8 +15,8 @@ def _btc_frame(index: pd.DatetimeIndex) -> pd.DataFrame:
     n = len(index)
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 20000.0, n),
-            "CapMVRVCur": np.linspace(1.0, 2.0, n),
+            "price_usd": np.linspace(10000.0, 20000.0, n),
+            "mvrv": np.linspace(1.0, 2.0, n),
             "PriceUSD": np.linspace(10000.0, 20000.0, n),
             "FlowInExUSD": np.linspace(1_000_000.0, 2_000_000.0, n),
             "FlowOutExUSD": np.linspace(900_000.0, 1_900_000.0, n),
@@ -38,11 +38,11 @@ def _btc_frame(index: pd.DatetimeIndex) -> pd.DataFrame:
 
 
 def test_overlay_provider_handles_non_positive_values_without_runtime_warnings() -> None:
-    provider = CoinMetricsOverlayFeatureProvider()
+    provider = BRKOverlayFeatureProvider()
     idx = pd.date_range("2024-01-01", periods=420, freq="D")
     btc_df = _btc_frame(idx)
     btc_df.loc[idx[0], "PriceUSD"] = -10.0
-    btc_df.loc[idx[1], "PriceUSD_coinmetrics"] = -5.0
+    btc_df.loc[idx[1], "price_usd"] = -5.0
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", RuntimeWarning)
@@ -69,7 +69,7 @@ def test_core_provider_cache_invalidates_after_price_change() -> None:
         as_of_date=idx[-1],
     )
 
-    btc_df.loc[idx[-1], "PriceUSD_coinmetrics"] = 2_000_000.0
+    btc_df.loc[idx[-1], "price_usd"] = 2_000_000.0
     second = provider.materialize(
         btc_df,
         start_date=idx[20],

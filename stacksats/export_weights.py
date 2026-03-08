@@ -10,6 +10,7 @@ import sys
 from types import ModuleType
 
 import numpy as np
+import pandas as pd
 
 try:
     import psycopg2
@@ -20,6 +21,7 @@ except ImportError:  # pragma: no cover - exercised only without deploy extras
     execute_values = None
 
 from .btc_price_fetcher import fetch_btc_price_robust
+from .data_btc import BTCDataProvider
 from .export_weights_core import (
     load_locked_weights_for_window as _load_locked_weights_for_window,
 )
@@ -141,7 +143,20 @@ def today_data_exists(conn, today_str):
 
 
 def get_current_btc_price(previous_price=None):
-    """Fetch current BTC price using robust fetcher with retry logic and multiple sources."""
+    """Fetch current BTC price from BRK-local-node data first, then API fallback."""
+    today = pd.Timestamp.now().normalize()
+    try:
+        provider = BTCDataProvider(max_staleness_days=14)
+        history_start = (today - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+        btc_df = provider.load(backtest_start=history_start, end_date=today.strftime("%Y-%m-%d"))
+        series = pd.to_numeric(btc_df.get("price_usd"), errors="coerce")
+        if today in series.index and pd.notna(series.loc[today]):
+            return float(series.loc[today])
+        series = series.dropna()
+        if not series.empty:
+            return float(series.iloc[-1])
+    except Exception:
+        pass
     return _get_current_btc_price(
         previous_price=previous_price,
         fetch_btc_price_fn=fetch_btc_price_robust,

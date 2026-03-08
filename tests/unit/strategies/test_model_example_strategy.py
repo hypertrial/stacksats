@@ -16,8 +16,8 @@ def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
     n = len(index)
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 20000.0, n),
-            "CapMVRVCur": np.linspace(1.0, 2.0, n),
+            "price_usd": np.linspace(10000.0, 20000.0, n),
+            "mvrv": np.linspace(1.0, 2.0, n),
             "price_vs_ma": np.linspace(-0.3, 0.3, n),
             "mvrv_zscore": np.linspace(-2.0, 2.0, n),
             "mvrv_gradient": np.linspace(-1.0, 1.0, n),
@@ -26,20 +26,20 @@ def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
             "signal_confidence": np.linspace(0.1, 0.9, n),
             "mvrv_percentile": np.linspace(0.1, 0.9, n),
             "mvrv_acceleration": np.linspace(-0.5, 0.5, n),
-            "cm_netflow_fast": np.linspace(-1.0, 1.0, n),
-            "cm_netflow_slow": np.linspace(-0.8, 0.8, n),
-            "cm_netflow_slope": np.linspace(-0.6, 0.6, n),
-            "cm_activity_level": np.linspace(-0.4, 0.4, n),
-            "cm_activity_div_fast": np.linspace(-0.4, 0.4, n),
-            "cm_activity_div_slow": np.linspace(-0.3, 0.3, n),
-            "cm_liquidity_level": np.linspace(-0.2, 0.2, n),
-            "cm_liquidity_impulse": np.linspace(-0.2, 0.2, n),
-            "cm_exchange_share_level": np.linspace(-0.3, 0.3, n),
-            "cm_exchange_share_delta": np.linspace(-0.3, 0.3, n),
-            "cm_miner_pressure": np.linspace(-0.2, 0.2, n),
-            "cm_hash_momentum": np.linspace(-0.2, 0.2, n),
-            "cm_roi30": np.linspace(-0.6, 0.6, n),
-            "cm_roi1y": np.linspace(-0.5, 0.5, n),
+            "brk_netflow_fast": np.linspace(-1.0, 1.0, n),
+            "brk_netflow_slow": np.linspace(-0.8, 0.8, n),
+            "brk_netflow_slope": np.linspace(-0.6, 0.6, n),
+            "brk_activity_level": np.linspace(-0.4, 0.4, n),
+            "brk_activity_div_fast": np.linspace(-0.4, 0.4, n),
+            "brk_activity_div_slow": np.linspace(-0.3, 0.3, n),
+            "brk_liquidity_level": np.linspace(-0.2, 0.2, n),
+            "brk_liquidity_impulse": np.linspace(-0.2, 0.2, n),
+            "brk_exchange_share_level": np.linspace(-0.3, 0.3, n),
+            "brk_exchange_share_delta": np.linspace(-0.3, 0.3, n),
+            "brk_miner_pressure": np.linspace(-0.2, 0.2, n),
+            "brk_hash_momentum": np.linspace(-0.2, 0.2, n),
+            "brk_roi30": np.linspace(-0.6, 0.6, n),
+            "brk_roi1y": np.linspace(-0.5, 0.5, n),
         },
         index=index,
     )
@@ -55,15 +55,15 @@ def test_strategy_contract_and_required_feature_metadata() -> None:
     has_propose, has_profile = validate_strategy_contract(strategy)
     assert has_propose is False
     assert has_profile is True
-    assert strategy.required_feature_sets() == ("core_model_features_v1", "coinmetrics_overlay_v1")
-    assert "cm_netflow_fast" in strategy.required_feature_columns()
+    assert strategy.required_feature_sets() == ("core_model_features_v1", "brk_overlay_v1")
+    assert "brk_netflow_fast" in strategy.required_feature_columns()
 
 
 def test_transform_features_uses_observed_window_and_handles_nan_inf() -> None:
     idx = pd.date_range("2024-01-01", periods=10, freq="D")
     base = _base_features(idx)
-    base.loc[idx[2], "cm_netflow_fast"] = np.inf
-    base.loc[idx[3], "cm_netflow_slow"] = np.nan
+    base.loc[idx[2], "brk_netflow_fast"] = np.inf
+    base.loc[idx[3], "brk_netflow_slow"] = np.nan
 
     strategy = ExampleMVRVStrategy()
     ctx = type(

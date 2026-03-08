@@ -79,7 +79,7 @@ Core guarantees:
 - if both `window_start` and `window_end` exist, `date` must exactly equal the full daily range between them
 - `weight` is finite, non-negative, and sums to `1.0` (tolerance)
 - `price_usd` is finite when present
-- schema and CoinMetrics lineage coverage stay synchronized
+- schema and BRK lineage coverage stay synchronized
 
 Important detail:
 
@@ -199,7 +199,7 @@ Example `artifacts.json` (shape):
 
 ## Schema details
 
-See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and CoinMetrics lineage tables.
+See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and BRK lineage tables.
 
 ## Feedback
 

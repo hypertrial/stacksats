@@ -173,7 +173,7 @@ def evaluate_fold(
                 continue
 
             # Get price data
-            price_slice = btc_df["PriceUSD_coinmetrics"].loc[start:end]
+            price_slice = btc_df["price_usd"].loc[start:end]
             if price_slice.empty or len(price_slice) < 7:
                 continue
 
@@ -240,8 +240,8 @@ def cv_btc_df():
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 

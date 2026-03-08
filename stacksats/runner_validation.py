@@ -229,8 +229,8 @@ class StrategyRunnerValidationMixin:
         config: ValidationConfig,
     ) -> tuple[bool, list[str]]:
         messages: list[str] = []
-        if "PriceUSD_coinmetrics" not in btc_df.columns:
-            messages.append("Strict shuffled check skipped: missing PriceUSD_coinmetrics column.")
+        if "price_usd" not in btc_df.columns:
+            messages.append("Strict shuffled check skipped: missing price_usd column.")
             return True, messages
         if config.shuffled_trials <= 0:
             messages.append("Strict shuffled check skipped: shuffled_trials <= 0.")
@@ -240,7 +240,7 @@ class StrategyRunnerValidationMixin:
         for seed in self.ITER_RANGE(int(config.shuffled_trials)):
             shuffled_df = btc_df.copy(deep=True)
             window_values = np.array(
-                shuffled_df.loc[start_ts:end_ts, "PriceUSD_coinmetrics"].to_numpy(dtype=float),
+                shuffled_df.loc[start_ts:end_ts, "price_usd"].to_numpy(dtype=float),
                 dtype=float,
                 copy=True,
             )
@@ -254,7 +254,7 @@ class StrategyRunnerValidationMixin:
                 for idx in range(0, window_values.size, block_size)
             ]
             rng.shuffle(blocks)
-            shuffled_df.loc[start_ts:end_ts, "PriceUSD_coinmetrics"] = np.concatenate(blocks)[
+            shuffled_df.loc[start_ts:end_ts, "price_usd"] = np.concatenate(blocks)[
                 : window_values.size
             ]
             shuffled_result = self.backtest(

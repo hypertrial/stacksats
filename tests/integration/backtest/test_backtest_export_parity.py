@@ -23,7 +23,7 @@ WEIGHT_SUM_TOLERANCE = 1e-9
 # The MVRV-based features use long rolling windows that cause some drift as data evolves
 WEIGHT_STABILITY_TOLERANCE = 5e-3
 
-PRICE_COL = "PriceUSD_coinmetrics"
+PRICE_COL = "price_usd"
 
 
 # -----------------------------------------------------------------------------

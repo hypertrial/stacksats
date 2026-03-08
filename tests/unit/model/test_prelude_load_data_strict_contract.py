@@ -13,7 +13,7 @@ def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
     expected_df = pd.DataFrame(
         {
             "PriceUSD": [40000.0, 41000.0],
-            "PriceUSD_coinmetrics": [40000.0, 41000.0],
+            "price_usd": [40000.0, 41000.0],
         },
         index=pd.date_range("2024-01-01", periods=2, freq="D"),
     )
@@ -24,19 +24,19 @@ def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
 
     df = load_data()
 
-    provider_cls.assert_called_once_with(cache_dir="~/.stacksats/cache", max_age_hours=24)
+    provider_cls.assert_called_once_with(duckdb_path=None, max_staleness_days=3)
     load_mock.assert_called_once_with(backtest_start="2018-01-01", end_date=None)
     assert df is expected_df
 
 
 def test_load_data_propagates_missing_price_failure(mocker) -> None:
     provider_instance = mocker.Mock(
-        load=mocker.Mock(side_effect=DataLoadError("missing PriceUSD values"))
+        load=mocker.Mock(side_effect=DataLoadError("missing price_usd values"))
     )
     mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
 
-    with pytest.raises(DataLoadError, match="missing PriceUSD values"):
-        load_data(cache_dir=None)
+    with pytest.raises(DataLoadError, match="missing price_usd values"):
+        load_data(duckdb_path=None)
 
 
 def test_load_data_propagates_missing_dates_failure(mocker) -> None:
@@ -46,24 +46,27 @@ def test_load_data_propagates_missing_dates_failure(mocker) -> None:
     mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
 
     with pytest.raises(DataLoadError, match="missing dates"):
-        load_data(cache_dir=None)
+        load_data(duckdb_path=None)
 
 
 def test_load_data_propagates_past_only_cache_failure(mocker) -> None:
     provider_instance = mocker.Mock(
         load=mocker.Mock(
             side_effect=DataLoadError(
-                "Past-only backtest requested but no local CoinMetrics cache file was found."
+                "BRK data does not cover requested end_date."
             )
         )
     )
     provider_cls = mocker.Mock(return_value=provider_instance)
     mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
 
-    with pytest.raises(DataLoadError, match="Past-only backtest requested"):
-        load_data(cache_dir="~/.stacksats/cache", end_date="2020-12-31")
+    with pytest.raises(DataLoadError, match="does not cover requested end_date"):
+        load_data(duckdb_path="~/analytics.duckdb", end_date="2020-12-31")
 
-    provider_cls.assert_called_once_with(cache_dir="~/.stacksats/cache", max_age_hours=24)
+    provider_cls.assert_called_once_with(
+        duckdb_path="~/analytics.duckdb",
+        max_staleness_days=3,
+    )
     provider_instance.load.assert_called_once_with(
         backtest_start="2018-01-01",
         end_date="2020-12-31",

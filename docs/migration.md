@@ -29,7 +29,7 @@ This page covers migration for:
 | `RANGE_START` / `RANGE_END` / `MIN_RANGE_LENGTH_DAYS` module defaults | set explicit app-level defaults in your own code/config |
 | `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
 | `BaseStrategy.export_weights(config=None, **kwargs)` | `BaseStrategy.export(config=None, **kwargs)` |
-| `stacksats.load_data(cache_dir=..., max_age_hours=...)` with gap-fill assumptions | `stacksats.load_data(cache_dir=..., max_age_hours=..., end_date=...)` with strict CoinMetrics source-only validation |
+| `stacksats.load_data(duckdb_path=..., max_staleness_days=...)` with gap-fill assumptions | `stacksats.load_data(duckdb_path=..., max_staleness_days=..., end_date=...)` with strict BRK source-only validation |
 | raw `strategy_id` / `version` / public attrs as the informal contract | `strategy.spec()` as the canonical public contract |
 | implicit dual-hook precedence | explicit `intent_preference = "propose"` or `"profile"` when both hooks exist |
 
@@ -93,10 +93,14 @@ batch = strategy.export(config=my_export_config)
 
 ```python
 # old (assumed synthetic fill/fallback behavior)
-df = load_data(cache_dir="~/.stacksats/cache")
+df = load_data(duckdb_path="./bitcoin_analytics.duckdb")
 
 # new (strict source-only and optional explicit end bound)
-df = load_data(cache_dir="~/.stacksats/cache", end_date="2025-12-31")
+df = load_data(
+    duckdb_path="./bitcoin_analytics.duckdb",
+    max_staleness_days=3,
+    end_date="2025-12-31",
+)
 ```
 
 `load_data(...)` now mirrors `BTCDataProvider.load(...)` behavior:

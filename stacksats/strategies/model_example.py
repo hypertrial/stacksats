@@ -1,7 +1,7 @@
-"""Score-focused CoinMetrics-enhanced strategy for StackSats.
+"""Score-focused BRK-enhanced strategy for StackSats.
 
 This strategy starts from the package MVRV/MA multiplier and adds lagged,
-regime-conditional CoinMetrics overlays with multi-horizon features and
+regime-conditional BRK overlays with multi-horizon features and
 interaction terms. It only returns daily intent and leaves allocation mechanics
 to the sealed framework kernel.
 """
@@ -29,7 +29,7 @@ class ExampleMVRVStrategy(BaseStrategy):
 
     strategy_id = "example-mvrv"
     version = "4.2.0"
-    description = "Score-focused MVRV + multi-horizon CoinMetrics overlays."
+    description = "Score-focused MVRV + multi-horizon BRK overlays."
 
     # Dynamic temperature controls how aggressively baseline preference is used.
     base_temperature: float = 0.58
@@ -48,27 +48,27 @@ class ExampleMVRVStrategy(BaseStrategy):
     interaction_weight: float = 0.12
     momentum_follow_weight: float = 0.18
     overlay_features: tuple[str, ...] = (
-        "cm_netflow_fast",
-        "cm_netflow_slow",
-        "cm_netflow_slope",
-        "cm_activity_level",
-        "cm_activity_div_fast",
-        "cm_activity_div_slow",
-        "cm_liquidity_level",
-        "cm_liquidity_impulse",
-        "cm_exchange_share_level",
-        "cm_exchange_share_delta",
-        "cm_miner_pressure",
-        "cm_hash_momentum",
-        "cm_roi30",
-        "cm_roi1y",
+        "brk_netflow_fast",
+        "brk_netflow_slow",
+        "brk_netflow_slope",
+        "brk_activity_level",
+        "brk_activity_div_fast",
+        "brk_activity_div_slow",
+        "brk_liquidity_level",
+        "brk_liquidity_impulse",
+        "brk_exchange_share_level",
+        "brk_exchange_share_delta",
+        "brk_miner_pressure",
+        "brk_hash_momentum",
+        "brk_roi30",
+        "brk_roi1y",
     )
 
     def required_feature_columns(self) -> tuple[str, ...]:
         return tuple(model_lib.FEATS) + self.overlay_features
 
     def required_feature_sets(self) -> tuple[str, ...]:
-        return ("core_model_features_v1", "coinmetrics_overlay_v1")
+        return ("core_model_features_v1", "brk_overlay_v1")
 
     @staticmethod
     def _clean_array(values: pd.Series) -> np.ndarray:
@@ -146,25 +146,25 @@ class ExampleMVRVStrategy(BaseStrategy):
         def _col(name: str) -> np.ndarray:
             return self._clean_array(features_df.get(name, pd.Series(0.0, index=features_df.index)))
 
-        netflow_fast = _col("cm_netflow_fast")
-        netflow_slow = _col("cm_netflow_slow")
-        netflow_slope = _col("cm_netflow_slope")
+        netflow_fast = _col("brk_netflow_fast")
+        netflow_slow = _col("brk_netflow_slow")
+        netflow_slope = _col("brk_netflow_slope")
 
-        activity_level = _col("cm_activity_level")
-        activity_div_fast = _col("cm_activity_div_fast")
-        activity_div_slow = _col("cm_activity_div_slow")
+        activity_level = _col("brk_activity_level")
+        activity_div_fast = _col("brk_activity_div_fast")
+        activity_div_slow = _col("brk_activity_div_slow")
 
-        liquidity_level = _col("cm_liquidity_level")
-        liquidity_impulse = _col("cm_liquidity_impulse")
+        liquidity_level = _col("brk_liquidity_level")
+        liquidity_impulse = _col("brk_liquidity_impulse")
 
-        exchange_level = _col("cm_exchange_share_level")
-        exchange_delta = _col("cm_exchange_share_delta")
+        exchange_level = _col("brk_exchange_share_level")
+        exchange_delta = _col("brk_exchange_share_delta")
 
-        miner_pressure = _col("cm_miner_pressure")
-        hash_momentum = _col("cm_hash_momentum")
+        miner_pressure = _col("brk_miner_pressure")
+        hash_momentum = _col("brk_hash_momentum")
 
-        roi30 = _col("cm_roi30")
-        roi1y = _col("cm_roi1y")
+        roi30 = _col("brk_roi30")
+        roi1y = _col("brk_roi1y")
 
         mvrv_zone = _col("mvrv_zone")
         volatility = _col("mvrv_volatility") if "mvrv_volatility" in features_df else np.full(
@@ -250,7 +250,7 @@ def main() -> None:
     parser.add_argument("--start-date", type=str, default=None, help="YYYY-MM-DD")
     parser.add_argument("--end-date", type=str, default=None, help="YYYY-MM-DD")
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
-    parser.add_argument("--strategy-label", type=str, default="example-mvrv-coinmetrics")
+    parser.add_argument("--strategy-label", type=str, default="example-mvrv-brk")
     args = parser.parse_args()
 
     strategy = ExampleMVRVStrategy()

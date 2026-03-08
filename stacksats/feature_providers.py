@@ -69,10 +69,52 @@ def _signed_log1p(series: pd.Series) -> pd.Series:
     return np.sign(numeric) * np.log1p(np.abs(numeric))
 
 
+def _resolve_duckdb_path(default_duckdb_path: str) -> Path:
+    env_path = os.getenv("STACKSATS_ANALYTICS_DUCKDB")
+    path = Path(env_path or default_duckdb_path).expanduser()
+    if not path.exists():
+        raise ValueError(
+            f"DuckDB file not found at '{path}'. "
+            "Set STACKSATS_ANALYTICS_DUCKDB or place a file at "
+            f"'{default_duckdb_path}'."
+        )
+    return path
+
+
+def _load_long_metrics(
+    connection,
+    *,
+    table_name: str,
+    metrics: tuple[str, ...],
+) -> pd.DataFrame:
+    escaped = ", ".join("'" + metric.replace("'", "''") + "'" for metric in metrics)
+    query = (
+        "SELECT date_day, metric, value "
+        f"FROM {table_name} "
+        f"WHERE metric IN ({escaped}) "
+        "ORDER BY date_day"
+    )
+    long_df = connection.execute(query).fetchdf()
+    if long_df.empty:
+        return pd.DataFrame(index=pd.DatetimeIndex([], name="date_day"))
+    long_df["date_day"] = pd.to_datetime(long_df["date_day"]).dt.normalize()
+    wide_df = (
+        long_df.pivot_table(
+            index="date_day",
+            columns="metric",
+            values="value",
+            aggfunc="last",
+        )
+        .sort_index()
+        .copy()
+    )
+    return wide_df
+
+
 def _btc_frame_cache_key(
     btc_df: pd.DataFrame,
     *,
-    price_column: str = "PriceUSD_coinmetrics",
+    price_column: str = "price_usd",
 ) -> tuple[int, int, int, float, float]:
     idx = pd.DatetimeIndex(btc_df.index).normalize()
     if len(idx) == 0:
@@ -98,7 +140,7 @@ class CoreModelFeatureProvider:
     _cache_features: pd.DataFrame | None = field(default=None, init=False, repr=False)
 
     def required_source_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics",)
+        return ("price_usd",)
 
     def materialize(
         self,
@@ -129,8 +171,9 @@ class CoreModelFeatureProvider:
 
 
 @dataclass(slots=True)
-class CoinMetricsOverlayFeatureProvider:
-    provider_id: str = "coinmetrics_overlay_v1"
+class BRKOverlayFeatureProvider:
+    provider_id: str = "brk_overlay_v1"
+    default_duckdb_path: str = "./bitcoin_analytics.duckdb"
     _cache_key: tuple[int, int, int, float, float] | None = field(
         default=None,
         init=False,
@@ -139,7 +182,7 @@ class CoinMetricsOverlayFeatureProvider:
     _cache_features: pd.DataFrame | None = field(default=None, init=False, repr=False)
 
     def required_source_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics",)
+        return ("price_usd", "mvrv")
 
     def materialize(
         self,
@@ -167,119 +210,119 @@ class CoinMetricsOverlayFeatureProvider:
         raw = btc_df.copy(deep=True)
         raw.index = pd.DatetimeIndex(raw.index).normalize()
         raw = raw.loc[~raw.index.duplicated(keep="last")].sort_index()
-        raw = _to_numeric(
-            raw,
-            (
-                "PriceUSD_coinmetrics",
-                "PriceUSD",
-                "CapMrktCurUSD",
-                "FlowInExUSD",
-                "FlowOutExUSD",
-                "AdrActCnt",
-                "TxCnt",
-                "TxTfrCnt",
-                "FeeTotNtv",
-                "volume_reported_spot_usd_1d",
-                "SplyExNtv",
-                "SplyCur",
-                "IssTotUSD",
-                "HashRate",
-                "ROI30d",
-                "ROI1yr",
-            ),
-        )
-        if "PriceUSD" not in raw.columns:
-            raw["PriceUSD"] = raw["PriceUSD_coinmetrics"]
-
+        raw = _to_numeric(raw, ("price_usd", "mvrv"))
         features = pd.DataFrame(index=raw.index)
+        features["brk_flow"] = 0.0
+        features["brk_supply_pressure"] = 0.0
+        features["brk_activity_div"] = 0.0
+        features["brk_roi_context"] = 0.0
+        features["brk_liquidity_impulse"] = 0.0
+        features["brk_miner_pressure"] = 0.0
+        features["brk_hash_momentum"] = 0.0
+        features["brk_sentiment"] = 0.0
 
-        if {"FlowInExUSD", "FlowOutExUSD", "CapMrktCurUSD"}.issubset(raw.columns):
-            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            flow_ratio = (raw["FlowInExUSD"] - raw["FlowOutExUSD"]) / cap
-            flow_fast = flow_ratio.rolling(7, min_periods=3).mean()
-            flow_slow = flow_ratio.rolling(30, min_periods=10).mean()
-            features["cm_netflow_fast"] = _rolling_zscore(flow_fast, 120)
-            features["cm_netflow_slow"] = _rolling_zscore(flow_slow, 240)
-            features["cm_netflow_slope"] = _rolling_zscore(flow_fast - flow_slow, 180)
-            features["cm_netflow"] = _rolling_zscore(flow_fast, 180)
-        else:
-            features["cm_netflow_fast"] = 0.0
-            features["cm_netflow_slow"] = 0.0
-            features["cm_netflow_slope"] = 0.0
-            features["cm_netflow"] = 0.0
+        db_path = _resolve_duckdb_path(self.default_duckdb_path)
+        try:
+            import duckdb
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("duckdb is required for provider 'brk_overlay_v1'.") from exc
 
-        activity_parts: list[pd.Series] = []
-        for column in ("AdrActCnt", "TxCnt", "TxTfrCnt", "FeeTotNtv"):
-            if column in raw.columns:
-                non_negative = pd.to_numeric(raw[column], errors="coerce").clip(lower=0.0)
-                activity_parts.append(_rolling_zscore(np.log1p(non_negative), 365))
-        price_series = pd.to_numeric(raw["PriceUSD"], errors="coerce")
-        price_log = np.log(price_series.where(price_series > 0.0))
+        con = duckdb.connect(str(db_path), read_only=True)
+        try:
+            flow_df = _load_long_metrics(
+                con,
+                table_name="metrics_distribution",
+                metrics=("adjusted_sopr", "adjusted_sopr_7d_ema"),
+            )
+            supply_df = _load_long_metrics(
+                con,
+                table_name="metrics_supply",
+                metrics=("realized_cap_growth_rate", "market_cap_growth_rate"),
+            )
+            tx_df = _load_long_metrics(
+                con,
+                table_name="metrics_transactions",
+                metrics=("tx_count_pct10", "annualized_volume_usd"),
+            )
+            hash_df = _load_long_metrics(
+                con,
+                table_name="metrics_blocks",
+                metrics=("hash_rate_1y_sma", "subsidy_usd_average"),
+            )
+            sentiment_df = _load_long_metrics(
+                con,
+                table_name="metrics_distribution",
+                metrics=("net_sentiment", "greed_index", "pain_index"),
+            )
+        finally:
+            con.close()
+
+        price = pd.to_numeric(raw["price_usd"], errors="coerce")
+        price_log = np.log(price.where(price > 0.0))
         mom_30 = _rolling_zscore(price_log.diff(30), 365)
         mom_90 = _rolling_zscore(price_log.diff(90), 365)
-        if activity_parts:
-            activity = sum(activity_parts) / float(len(activity_parts))
-            features["cm_activity_level"] = activity
-            features["cm_activity_div_fast"] = activity - mom_30
-            features["cm_activity_div_slow"] = activity - mom_90
-            features["cm_activity_div"] = activity - mom_30
-        else:
-            features["cm_activity_level"] = 0.0
-            features["cm_activity_div_fast"] = 0.0
-            features["cm_activity_div_slow"] = 0.0
-            features["cm_activity_div"] = 0.0
 
-        if "volume_reported_spot_usd_1d" in raw.columns:
-            vol_series = pd.to_numeric(
-                raw["volume_reported_spot_usd_1d"],
-                errors="coerce",
-            ).clip(lower=0.0)
-            vol_log = np.log1p(vol_series)
-            features["cm_liquidity_level"] = _rolling_zscore(vol_log, 180)
-            features["cm_liquidity_impulse"] = _rolling_zscore(vol_log.diff(7), 120)
+        if not flow_df.empty and {"adjusted_sopr", "adjusted_sopr_7d_ema"}.issubset(flow_df.columns):
+            flow = flow_df.reindex(features.index).ffill()
+            sopr = pd.to_numeric(flow["adjusted_sopr"], errors="coerce")
+            sopr_ema = pd.to_numeric(flow["adjusted_sopr_7d_ema"], errors="coerce")
+            features["brk_flow"] = _rolling_zscore((sopr - sopr_ema), 240)
+            features["brk_roi_context"] = _rolling_zscore((-0.65 * sopr) + (-0.35 * sopr_ema), 365)
         else:
-            features["cm_liquidity_level"] = 0.0
-            features["cm_liquidity_impulse"] = 0.0
+            features["brk_roi_context"] = (-0.65 * mom_30) + (-0.35 * mom_90)
 
-        if {"SplyExNtv", "SplyCur"}.issubset(raw.columns):
-            exchange_share = raw["SplyExNtv"] / raw["SplyCur"].replace(0.0, np.nan)
-            features["cm_exchange_share_level"] = _rolling_zscore(exchange_share, 240)
-            features["cm_exchange_share_delta"] = _rolling_zscore(
-                exchange_share.diff(30),
-                240,
-            )
-            features["cm_exchange_share"] = _rolling_zscore(exchange_share, 365)
-        else:
-            features["cm_exchange_share_level"] = 0.0
-            features["cm_exchange_share_delta"] = 0.0
-            features["cm_exchange_share"] = 0.0
+        if not supply_df.empty and {"realized_cap_growth_rate", "market_cap_growth_rate"}.issubset(supply_df.columns):
+            supply = supply_df.reindex(features.index).ffill()
+            realized = pd.to_numeric(supply["realized_cap_growth_rate"], errors="coerce")
+            market = pd.to_numeric(supply["market_cap_growth_rate"], errors="coerce")
+            features["brk_supply_pressure"] = _rolling_zscore(market - realized, 365)
 
-        if {"IssTotUSD", "CapMrktCurUSD"}.issubset(raw.columns):
-            cap = raw["CapMrktCurUSD"].replace(0.0, np.nan)
-            features["cm_miner_pressure"] = _rolling_zscore(raw["IssTotUSD"] / cap, 365)
-        else:
-            features["cm_miner_pressure"] = 0.0
+        if not tx_df.empty and {"tx_count_pct10", "annualized_volume_usd"}.issubset(tx_df.columns):
+            tx = tx_df.reindex(features.index).ffill()
+            tx_count = _signed_log1p(pd.to_numeric(tx["tx_count_pct10"], errors="coerce"))
+            tx_vol = _signed_log1p(pd.to_numeric(tx["annualized_volume_usd"], errors="coerce"))
+            activity = (_rolling_zscore(tx_count, 365) + _rolling_zscore(tx_vol, 365)) / 2.0
+            features["brk_activity_div"] = activity - mom_30
+            features["brk_liquidity_impulse"] = _rolling_zscore(tx_vol.diff(7), 180)
 
-        if "HashRate" in raw.columns:
-            hash_rate = pd.to_numeric(raw["HashRate"], errors="coerce")
-            hash_log = np.log(hash_rate.where(hash_rate > 0.0))
-            hash_fast = _rolling_zscore(hash_log.diff(30), 365)
-            hash_slow = _rolling_zscore(hash_log.diff(90), 365)
-            features["cm_hash_momentum"] = (0.6 * hash_fast) + (0.4 * hash_slow)
-        else:
-            features["cm_hash_momentum"] = 0.0
+        if not hash_df.empty and {"hash_rate_1y_sma", "subsidy_usd_average"}.issubset(hash_df.columns):
+            hr = hash_df.reindex(features.index).ffill()
+            hash_rate = _signed_log1p(pd.to_numeric(hr["hash_rate_1y_sma"], errors="coerce"))
+            subsidy = _signed_log1p(pd.to_numeric(hr["subsidy_usd_average"], errors="coerce"))
+            features["brk_hash_momentum"] = _rolling_zscore(hash_rate.diff(30), 365)
+            features["brk_miner_pressure"] = _rolling_zscore(subsidy - hash_rate, 365)
 
-        if "ROI30d" in raw.columns:
-            features["cm_roi30"] = _rolling_zscore(raw["ROI30d"], 365)
-        else:
-            features["cm_roi30"] = mom_30
-        if "ROI1yr" in raw.columns:
-            features["cm_roi1y"] = _rolling_zscore(raw["ROI1yr"], 365)
-        else:
-            features["cm_roi1y"] = mom_90
-        features["cm_roi_context"] = (-0.65 * features["cm_roi30"]) + (
-            -0.35 * features["cm_roi1y"]
-        )
+        if not sentiment_df.empty:
+            sentiment = sentiment_df.reindex(features.index).ffill()
+            components: list[pd.Series] = []
+            for column in ("net_sentiment", "greed_index", "pain_index"):
+                if column in sentiment.columns:
+                    components.append(_rolling_zscore(pd.to_numeric(sentiment[column], errors="coerce"), 365))
+            if components:
+                features["brk_sentiment"] = sum(components) / float(len(components))
+
+        # Compatibility aliases for existing built-in strategy formulas.
+        flow_fast = features["brk_flow"].rolling(7, min_periods=3).mean()
+        flow_slow = features["brk_flow"].rolling(30, min_periods=10).mean()
+        features["brk_netflow_fast"] = _rolling_zscore(flow_fast, 120)
+        features["brk_netflow_slow"] = _rolling_zscore(flow_slow, 240)
+        features["brk_netflow_slope"] = _rolling_zscore(flow_fast - flow_slow, 180)
+        features["brk_netflow"] = _rolling_zscore(flow_fast, 180)
+
+        activity_level = _rolling_zscore(features["brk_activity_div"] + mom_30, 365)
+        features["brk_activity_level"] = activity_level
+        features["brk_activity_div_fast"] = features["brk_activity_div"]
+        features["brk_activity_div_slow"] = activity_level - mom_90
+
+        features["brk_liquidity_level"] = _rolling_zscore(features["brk_liquidity_impulse"], 180)
+
+        exchange_level = _rolling_zscore(features["brk_supply_pressure"], 240)
+        features["brk_exchange_share_level"] = exchange_level
+        features["brk_exchange_share_delta"] = _rolling_zscore(exchange_level.diff(30), 240)
+        features["brk_exchange_share"] = _rolling_zscore(exchange_level, 365)
+
+        features["brk_roi30"] = _rolling_zscore(mom_30, 365)
+        features["brk_roi1y"] = _rolling_zscore(mom_90, 365)
 
         features = features.shift(1)
         features = features.replace([np.inf, -np.inf], np.nan).fillna(0.0)
@@ -400,18 +443,10 @@ class DuckDBAnalyticsFeatureProvider:
     )
 
     def required_source_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics",)
+        return ("price_usd",)
 
     def _resolve_duckdb_path(self) -> Path:
-        env_path = os.getenv("STACKSATS_ANALYTICS_DUCKDB")
-        path = Path(env_path or self.default_duckdb_path).expanduser()
-        if not path.exists():
-            raise ValueError(
-                "Feature provider 'duckdb_analytics_factors_v1' could not find DuckDB "
-                f"file at '{path}'. Set STACKSATS_ANALYTICS_DUCKDB or place "
-                f"'{self.default_duckdb_path}' in the working directory."
-            )
-        return path
+        return _resolve_duckdb_path(self.default_duckdb_path)
 
     @staticmethod
     def _source_key(path: Path) -> tuple[str, int, int]:

@@ -63,7 +63,7 @@ class MomentumStrategy(BaseStrategy):
     description = "Simple momentum strategy with contrarian tilt."
 
     def required_feature_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics",)
+        return ("price_usd",)
 
     def build_target_profile(
         self,
@@ -75,6 +75,6 @@ class MomentumStrategy(BaseStrategy):
         window = features_df
         if window.empty:
             return pd.Series(dtype=float)
-        price = window["PriceUSD_coinmetrics"]
+        price = window["price_usd"]
         momentum = price.pct_change(30).fillna(0.0)
         return pd.Series(-np.clip(momentum.to_numpy(), -1.0, 1.0), index=window.index)

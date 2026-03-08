@@ -26,8 +26,8 @@ def _btc_df() -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", "2024-12-31", freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 60000.0, len(idx)),
-            "CapMVRVCur": np.linspace(0.8, 2.2, len(idx)),
+            "price_usd": np.linspace(10000.0, 60000.0, len(idx)),
+            "mvrv": np.linspace(0.8, 2.2, len(idx)),
         },
         index=idx,
     )
@@ -42,7 +42,7 @@ class _LeakyProfileStrategy(BaseStrategy):
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         window = ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-        leak_value = float(ctx.features_df["PriceUSD_coinmetrics"].mean(skipna=True))
+        leak_value = float(ctx.features_df["price_usd"].mean(skipna=True))
         window["leak"] = leak_value
         return window
 
@@ -96,11 +96,11 @@ def test_runner_validate_observed_only_profile_input_blocks_profile_peeking() ->
 def _single_window_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     idx = pd.date_range("2024-01-01", "2025-01-01", freq="D")
     btc_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": np.linspace(30000.0, 50000.0, len(idx))},
+        {"price_usd": np.linspace(30000.0, 50000.0, len(idx))},
         index=idx,
     )
     features_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": btc_df["PriceUSD_coinmetrics"]},
+        {"price_usd": btc_df["price_usd"]},
         index=idx,
     )
     return btc_df, features_df
@@ -172,7 +172,7 @@ def test_compute_cycle_spd_computes_features_when_none_provided(
 
     def _fake_precompute_features(df: pd.DataFrame) -> pd.DataFrame:
         calls["count"] += 1
-        return pd.DataFrame({"PriceUSD_coinmetrics": df["PriceUSD_coinmetrics"]}, index=df.index)
+        return pd.DataFrame({"price_usd": df["price_usd"]}, index=df.index)
 
     monkeypatch.setattr("stacksats.prelude.precompute_features", _fake_precompute_features)
 
@@ -199,10 +199,10 @@ def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
     end_ts = start_ts + prelude_module.WINDOW_OFFSET + pd.Timedelta(days=2)
     full_idx = pd.date_range(start_ts, end_ts + pd.Timedelta(days=2), freq="D")
     btc_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": np.linspace(30000.0, 50000.0, len(full_idx))},
+        {"price_usd": np.linspace(30000.0, 50000.0, len(full_idx))},
         index=full_idx,
     )
-    features_df = pd.DataFrame({"PriceUSD_coinmetrics": btc_df["PriceUSD_coinmetrics"]}, index=full_idx)
+    features_df = pd.DataFrame({"price_usd": btc_df["price_usd"]}, index=full_idx)
 
     real_date_range = prelude_module.pd.date_range
     max_start_date = end_ts - prelude_module.WINDOW_OFFSET
@@ -339,7 +339,7 @@ class _NanProposalStrategy(BaseStrategy):
 def _strategy_context(periods: int = 3) -> StrategyContext:
     idx = pd.date_range("2024-01-01", periods=periods, freq="D")
     features_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": np.linspace(100.0, 110.0, len(idx))},
+        {"price_usd": np.linspace(100.0, 110.0, len(idx))},
         index=idx,
     )
     return StrategyContext(

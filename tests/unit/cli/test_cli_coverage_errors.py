@@ -50,7 +50,7 @@ def test_cli_run_daily_noop_status_prints_idempotent(monkeypatch, capsys) -> Non
                 output_dir="output",
                 adapter=None,
                 force=False,
-                btc_price_col="PriceUSD_coinmetrics",
+                btc_price_col="price_usd",
             ),
             error=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
         ),

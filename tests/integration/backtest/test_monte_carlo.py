@@ -50,7 +50,7 @@ def generate_random_walk_prices(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     if seed is not None:
         np.random.seed(seed)
@@ -60,8 +60,8 @@ def generate_random_walk_prices(
     log_prices = np.log(initial_price) + np.cumsum(returns)
     prices = np.exp(log_prices)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -89,7 +89,7 @@ def generate_fat_tailed_prices(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     if seed is not None:
         np.random.seed(seed)
@@ -105,8 +105,8 @@ def generate_fat_tailed_prices(
     # Clip extreme values to prevent numerical issues
     prices = np.clip(prices, 100, 10000000)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -130,7 +130,7 @@ def generate_mean_reverting_prices(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     if seed is not None:
         np.random.seed(seed)
@@ -148,8 +148,8 @@ def generate_mean_reverting_prices(
 
     prices = np.exp(log_prices)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -177,7 +177,7 @@ def generate_regime_switching_prices(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     if seed is not None:
         np.random.seed(seed)
@@ -200,8 +200,8 @@ def generate_regime_switching_prices(
     log_prices = np.log(initial_price) + np.cumsum(returns)
     prices = np.exp(log_prices)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -225,7 +225,7 @@ def compute_window_performance(
     try:
         weights = compute_weights_fast(features_df, start_date, end_date)
 
-        price_slice = btc_df["PriceUSD_coinmetrics"].loc[start_date:end_date]
+        price_slice = btc_df["price_usd"].loc[start_date:end_date]
 
         # Align
         common_idx = weights.index.intersection(price_slice.index)

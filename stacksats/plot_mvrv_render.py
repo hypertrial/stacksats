@@ -17,27 +17,27 @@ def plot_mvrv_metrics(
     mdates_mod,
     path_cls,
 ) -> None:
-    """Plot CapMVRVCur and CapMVRVZ metrics over time."""
+    """Plot mvrv and CapMVRVZ metrics over time."""
     init_plot_env_fn()
 
-    if "CapMVRVCur" not in df.columns:
+    if "mvrv" not in df.columns:
         available_cols = [
             c for c in df.columns if "MVRV" in c.upper() or "CAP" in c.upper()
         ]
         raise ValueError(
-            f"Missing required column: CapMVRVCur. "
+            f"Missing required column: mvrv. "
             f"Available MVRV/Cap columns: {available_cols if available_cols else 'None'}"
         )
 
     if "CapMVRVZ" not in df.columns:
         logging_mod.info(
-            "CapMVRVZ not found in data. Calculating MVRV Z-Score from CapMVRVCur..."
+            "CapMVRVZ not found in data. Calculating MVRV Z-Score from mvrv..."
         )
-        mvrv_mean = df["CapMVRVCur"].rolling(window=365, min_periods=30).mean()
-        mvrv_std = df["CapMVRVCur"].rolling(window=365, min_periods=30).std()
-        df["CapMVRVZ"] = (df["CapMVRVCur"] - mvrv_mean) / mvrv_std
+        mvrv_mean = df["mvrv"].rolling(window=365, min_periods=30).mean()
+        mvrv_std = df["mvrv"].rolling(window=365, min_periods=30).std()
+        df["CapMVRVZ"] = (df["mvrv"] - mvrv_mean) / mvrv_std
         logging_mod.info(
-            "✓ Calculated CapMVRVZ from CapMVRVCur using 365-day rolling window"
+            "✓ Calculated CapMVRVZ from mvrv using 365-day rolling window"
         )
 
     if start_date:
@@ -48,7 +48,7 @@ def plot_mvrv_metrics(
     if len(df) == 0:
         raise ValueError("No data available for the specified date range")
 
-    df_clean = df[["CapMVRVCur", "CapMVRVZ"]].dropna()
+    df_clean = df[["mvrv", "CapMVRVZ"]].dropna()
 
     if len(df_clean) == 0:
         raise ValueError("No valid MVRV data available after removing missing values")
@@ -58,14 +58,14 @@ def plot_mvrv_metrics(
         f"{df_clean.index.min().date()} to {df_clean.index.max().date()}"
     )
 
-    mvrv_ma30 = df_clean["CapMVRVCur"].rolling(window=30, min_periods=1).mean()
+    mvrv_ma30 = df_clean["mvrv"].rolling(window=30, min_periods=1).mean()
     zscore_ma30 = df_clean["CapMVRVZ"].rolling(window=30, min_periods=1).mean()
 
     fig, (ax1, ax2) = plt_mod.subplots(2, 1, figsize=(14, 10), sharex=True)
 
     ax1.plot(
         df_clean.index,
-        df_clean["CapMVRVCur"],
+        df_clean["mvrv"],
         linewidth=1.5,
         color="#2563eb",
         alpha=0.5,
@@ -73,7 +73,7 @@ def plot_mvrv_metrics(
     )
     ax1.fill_between(
         df_clean.index,
-        df_clean["CapMVRVCur"],
+        df_clean["mvrv"],
         alpha=0.2,
         color="#2563eb",
     )
@@ -104,11 +104,11 @@ def plot_mvrv_metrics(
     ax1.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
     ax1.legend(loc="upper left", fontsize=10, framealpha=0.95)
 
-    mvrv_mean = df_clean["CapMVRVCur"].mean()
-    mvrv_median = df_clean["CapMVRVCur"].median()
-    mvrv_min = df_clean["CapMVRVCur"].min()
-    mvrv_max = df_clean["CapMVRVCur"].max()
-    mvrv_current = df_clean["CapMVRVCur"].iloc[-1]
+    mvrv_mean = df_clean["mvrv"].mean()
+    mvrv_median = df_clean["mvrv"].median()
+    mvrv_min = df_clean["mvrv"].min()
+    mvrv_max = df_clean["mvrv"].max()
+    mvrv_current = df_clean["mvrv"].iloc[-1]
     mvrv_ma30_current = mvrv_ma30.iloc[-1]
 
     stats_text1 = (

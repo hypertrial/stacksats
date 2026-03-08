@@ -1,4 +1,4 @@
-"""Plot CoinMetrics MVRV metrics over time.
+"""Plot BRK MVRV metrics over time.
 
 Usage:
     stacksats-plot-mvrv                     # Creates plots with default settings
@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from .btc_api.coinmetrics_btc_csv import fetch_coinmetrics_btc_csv
+from .data_btc import BTCDataProvider
 from .matplotlib_setup import configure_matplotlib_env
 from .plot_mvrv_render import plot_mvrv_metrics as _plot_mvrv_metrics
 
@@ -45,7 +45,7 @@ def plot_mvrv_metrics(
     end_date: Optional[str] = None,
     output_path: str = "mvrv_metrics.svg",
 ) -> None:
-    """Plot CapMVRVCur and CapMVRVZ metrics over time."""
+    """Plot mvrv and CapMVRVZ metrics over time."""
     return _plot_mvrv_metrics(
         df,
         start_date,
@@ -63,7 +63,7 @@ def main() -> None:
     """Main function to fetch data and create MVRV plots."""
     _init_plot_env()
     parser = argparse.ArgumentParser(
-        description="Plot CoinMetrics MVRV metrics (CapMVRVCur and CapMVRVZ) over time",
+        description="Plot BRK MVRV metrics (mvrv and CapMVRVZ) over time",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -93,8 +93,8 @@ Examples:
     args = parser.parse_args()
 
     try:
-        logging.info("Fetching CoinMetrics BTC data...")
-        df = fetch_coinmetrics_btc_csv()
+        logging.info("Loading BRK BTC data...")
+        df = BTCDataProvider().load()
 
         plot_mvrv_metrics(
             df,
@@ -108,13 +108,7 @@ Examples:
     except ValueError as e:
         logging.error(f"Error: {e}")
         print(f"\n❌ Error: {e}")
-        print(
-            "\nTip: The CoinMetrics CSV may not include MVRV columns in all versions."
-        )
-        print("     Check available columns by running:")
-        print(
-            '     python -c "from stacksats.btc_api.coinmetrics_btc_csv import fetch_coinmetrics_btc_csv; df = fetch_coinmetrics_btc_csv(); print(list(df.columns))"'
-        )
+        print("\nTip: Verify your BRK DuckDB has metrics_distribution.mvrv.")
         return 1
     except Exception as e:
         logging.error(f"Unexpected error: {e}", exc_info=True)

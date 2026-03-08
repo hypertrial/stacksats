@@ -49,8 +49,8 @@ def _create_sample_data():
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    btc_df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    btc_df["PriceUSD"] = btc_df["PriceUSD_coinmetrics"]
+    btc_df = pd.DataFrame({"price_usd": prices}, index=dates)
+    btc_df["PriceUSD"] = btc_df["price_usd"]
     btc_df.index.name = "time"
 
     features_df = precompute_features(btc_df)

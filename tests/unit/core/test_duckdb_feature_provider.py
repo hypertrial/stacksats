@@ -16,7 +16,7 @@ from stacksats.feature_providers import (
 def _btc_df(index: pd.DatetimeIndex) -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 20000.0, len(index)),
+            "price_usd": np.linspace(10000.0, 20000.0, len(index)),
         },
         index=index,
     )
@@ -55,7 +55,7 @@ def test_duckdb_provider_missing_path_fails(tmp_path: Path) -> None:
     provider = DuckDBAnalyticsFeatureProvider(
         default_duckdb_path=str(tmp_path / "missing.duckdb")
     )
-    with pytest.raises(ValueError, match="could not find DuckDB file"):
+    with pytest.raises(ValueError, match="DuckDB file not found"):
         provider.materialize(
             _btc_df(idx),
             start_date=idx[0],

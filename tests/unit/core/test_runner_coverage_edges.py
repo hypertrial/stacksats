@@ -23,8 +23,8 @@ def _btc_df(days: int = 60) -> pd.DataFrame:
     idx = pd.date_range("2024-01-01", periods=days, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 50000.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "price_usd": np.linspace(10000.0, 50000.0, len(idx)),
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
         },
         index=idx,
     )
@@ -55,7 +55,7 @@ def test_perturb_future_features_returns_copy_when_no_future_rows() -> None:
 
 def test_perturb_future_source_data_returns_copy_when_no_future_rows() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    source = pd.DataFrame({"PriceUSD_coinmetrics": [100.0, 101.0, 102.0]}, index=idx)
+    source = pd.DataFrame({"price_usd": [100.0, 101.0, 102.0]}, index=idx)
 
     perturbed = StrategyRunner._perturb_future_source_data(source, probe=idx.max())
 
@@ -67,7 +67,7 @@ def test_perturb_future_features_reverses_non_numeric_columns() -> None:
     idx = pd.date_range("2024-01-01", periods=4, freq="D")
     features = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": [100.0, 110.0, 120.0, 130.0],
+            "price_usd": [100.0, 110.0, 120.0, 130.0],
             "label": ["a", "b", "c", "d"],
         },
         index=idx,

@@ -45,8 +45,8 @@ class ColumnSpec:
 
 
 @dataclass(frozen=True, slots=True)
-class CoinMetricsLineageSpec:
-    """CoinMetrics source column lineage into StrategyTimeSeries columns."""
+class BRKLineageSpec:
+    """BRK source column lineage into StrategyTimeSeries columns."""
 
     source_column: str
     required: bool
@@ -55,14 +55,14 @@ class CoinMetricsLineageSpec:
     notes: str = ""
 
 
-COINMETRICS_BTC_CSV_COLUMNS: tuple[str, ...] = (
+BRK_SOURCE_COLUMNS: tuple[str, ...] = (
     "time",
     "AdrActCnt",
     "AdrBalCnt",
     "AssetCompletionTime",
     "AssetEODCompletionTime",
     "BlkCnt",
-    "CapMVRVCur",
+    "mvrv",
     "CapMrktCurUSD",
     "CapMrktEstUSD",
     "FeeTotNtv",
@@ -90,206 +90,209 @@ COINMETRICS_BTC_CSV_COLUMNS: tuple[str, ...] = (
     "volume_reported_spot_usd_1d",
 )
 
-COINMETRICS_LINEAGE: tuple[CoinMetricsLineageSpec, ...] = (
-    CoinMetricsLineageSpec(
+# Backward-compatible alias kept for callers/tests that still reference legacy name.
+BRK_BTC_CSV_COLUMNS: tuple[str, ...] = BRK_SOURCE_COLUMNS
+
+BRK_LINEAGE: tuple[BRKLineageSpec, ...] = (
+    BRKLineageSpec(
         source_column="time",
         required=True,
-        description="CoinMetrics daily timestamp column.",
+        description="BRK daily timestamp column.",
         strategy_column="date",
         notes="Loaded as index, then represented by StrategyTimeSeries.date.",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="AdrActCnt",
         required=False,
-        description="CoinMetrics active addresses count.",
+        description="BRK active addresses count.",
         strategy_column="AdrActCnt",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="AdrBalCnt",
         required=False,
-        description="CoinMetrics addresses with non-zero balance.",
+        description="BRK addresses with non-zero balance.",
         strategy_column="AdrBalCnt",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="AssetCompletionTime",
         required=False,
-        description="CoinMetrics ingestion completion timestamp for asset-day data.",
+        description="BRK ingestion completion timestamp for asset-day data.",
         strategy_column="AssetCompletionTime",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="AssetEODCompletionTime",
         required=False,
-        description="CoinMetrics end-of-day completion timestamp for asset metrics.",
+        description="BRK end-of-day completion timestamp for asset metrics.",
         strategy_column="AssetEODCompletionTime",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="BlkCnt",
         required=False,
-        description="CoinMetrics blocks mined during the day.",
+        description="BRK blocks mined during the day.",
         strategy_column="BlkCnt",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="PriceUSD",
         required=True,
-        description="CoinMetrics BTC close price in USD.",
+        description="BRK BTC close price in USD.",
         strategy_column="price_usd",
-        notes="Aliased to PriceUSD_coinmetrics before export normalization.",
+        notes="Aliased to price_usd before export normalization.",
     ),
-    CoinMetricsLineageSpec(
-        source_column="CapMVRVCur",
+    BRKLineageSpec(
+        source_column="mvrv",
         required=False,
-        description="CoinMetrics current market-value-to-realized-value ratio.",
-        strategy_column="CapMVRVCur",
+        description="BRK current market-value-to-realized-value ratio.",
+        strategy_column="mvrv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="CapMrktCurUSD",
         required=False,
-        description="CoinMetrics current market capitalization in USD.",
+        description="BRK current market capitalization in USD.",
         strategy_column="CapMrktCurUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="CapMrktEstUSD",
         required=False,
-        description="CoinMetrics estimated market capitalization in USD.",
+        description="BRK estimated market capitalization in USD.",
         strategy_column="CapMrktEstUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="FeeTotNtv",
         required=False,
-        description="CoinMetrics total transaction fees in native BTC units.",
+        description="BRK total transaction fees in native BTC units.",
         strategy_column="FeeTotNtv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="FlowInExNtv",
         required=False,
-        description="CoinMetrics exchange inflow in native BTC units.",
+        description="BRK exchange inflow in native BTC units.",
         strategy_column="FlowInExNtv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="FlowInExUSD",
         required=False,
-        description="CoinMetrics exchange inflow valued in USD.",
+        description="BRK exchange inflow valued in USD.",
         strategy_column="FlowInExUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="FlowOutExNtv",
         required=False,
-        description="CoinMetrics exchange outflow in native BTC units.",
+        description="BRK exchange outflow in native BTC units.",
         strategy_column="FlowOutExNtv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="FlowOutExUSD",
         required=False,
-        description="CoinMetrics exchange outflow valued in USD.",
+        description="BRK exchange outflow valued in USD.",
         strategy_column="FlowOutExUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="HashRate",
         required=False,
-        description="CoinMetrics network hash rate estimate.",
+        description="BRK network hash rate estimate.",
         strategy_column="HashRate",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="IssTotNtv",
         required=False,
-        description="CoinMetrics total daily issuance in native BTC units.",
+        description="BRK total daily issuance in native BTC units.",
         strategy_column="IssTotNtv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="IssTotUSD",
         required=False,
-        description="CoinMetrics total daily issuance valued in USD.",
+        description="BRK total daily issuance valued in USD.",
         strategy_column="IssTotUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="PriceBTC",
         required=False,
-        description="CoinMetrics BTC reference price quoted in BTC.",
+        description="BRK BTC reference price quoted in BTC.",
         strategy_column="PriceBTC",
     ),
-    CoinMetricsLineageSpec(
-        source_column="PriceUSD_coinmetrics",
+    BRKLineageSpec(
+        source_column="price_usd",
         required=True,
-        description="Runtime alias of CoinMetrics PriceUSD.",
+        description="Runtime alias of BRK PriceUSD.",
         strategy_column="price_usd",
         notes="Canonical runtime price input consumed by model and export.",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ROI1yr",
         required=False,
-        description="CoinMetrics trailing 1-year return metric.",
+        description="BRK trailing 1-year return metric.",
         strategy_column="ROI1yr",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ROI30d",
         required=False,
-        description="CoinMetrics trailing 30-day return metric.",
+        description="BRK trailing 30-day return metric.",
         strategy_column="ROI30d",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ReferenceRate",
         required=False,
-        description="CoinMetrics reference rate for BTC.",
+        description="BRK reference rate for BTC.",
         strategy_column="ReferenceRate",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ReferenceRateETH",
         required=False,
-        description="CoinMetrics reference rate for BTC quoted in ETH.",
+        description="BRK reference rate for BTC quoted in ETH.",
         strategy_column="ReferenceRateETH",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ReferenceRateEUR",
         required=False,
-        description="CoinMetrics reference rate for BTC quoted in EUR.",
+        description="BRK reference rate for BTC quoted in EUR.",
         strategy_column="ReferenceRateEUR",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="ReferenceRateUSD",
         required=False,
-        description="CoinMetrics reference rate for BTC quoted in USD.",
+        description="BRK reference rate for BTC quoted in USD.",
         strategy_column="ReferenceRateUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="SplyCur",
         required=False,
-        description="CoinMetrics current circulating BTC supply.",
+        description="BRK current circulating BTC supply.",
         strategy_column="SplyCur",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="SplyExNtv",
         required=False,
-        description="CoinMetrics supply held on exchanges in native BTC units.",
+        description="BRK supply held on exchanges in native BTC units.",
         strategy_column="SplyExNtv",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="SplyExUSD",
         required=False,
-        description="CoinMetrics supply held on exchanges valued in USD.",
+        description="BRK supply held on exchanges valued in USD.",
         strategy_column="SplyExUSD",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="SplyExpFut10yr",
         required=False,
-        description="CoinMetrics projected BTC supply 10 years ahead.",
+        description="BRK projected BTC supply 10 years ahead.",
         strategy_column="SplyExpFut10yr",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="TxCnt",
         required=False,
-        description="CoinMetrics on-chain transaction count.",
+        description="BRK on-chain transaction count.",
         strategy_column="TxCnt",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="TxTfrCnt",
         required=False,
-        description="CoinMetrics transfer transaction count.",
+        description="BRK transfer transaction count.",
         strategy_column="TxTfrCnt",
     ),
-    CoinMetricsLineageSpec(
+    BRKLineageSpec(
         source_column="volume_reported_spot_usd_1d",
         required=False,
-        description="CoinMetrics reported spot exchange volume in USD for 1 day.",
+        description="BRK reported spot exchange volume in USD for 1 day.",
         strategy_column="volume_reported_spot_usd_1d",
     ),
 )
@@ -340,286 +343,276 @@ def schema_specs() -> tuple[ColumnSpec, ...]:
             name="PriceUSD",
             dtype="float64",
             required=False,
-            description="Raw CoinMetrics BTC price column when preserved in payloads.",
+            description="Raw BRK BTC price column when preserved in payloads.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
             formula="raw PriceUSD",
         ),
         ColumnSpec(
-            name="PriceUSD_coinmetrics",
+            name="mvrv",
             dtype="float64",
             required=False,
-            description="Runtime alias for CoinMetrics BTC price when retained.",
-            unit="USD",
+            description="BRK MVRV ratio when retained in strategy payloads.",
             constraints=("finite when present",),
-            source="coinmetrics",
-            formula="PriceUSD -> PriceUSD_coinmetrics",
-        ),
-        ColumnSpec(
-            name="CapMVRVCur",
-            dtype="float64",
-            required=False,
-            description="CoinMetrics MVRV ratio when retained in strategy payloads.",
-            constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="time",
             dtype="datetime64[ns]",
             required=False,
-            description="CoinMetrics daily timestamp column.",
+            description="BRK daily timestamp column.",
             constraints=("valid datetime when present",),
-            source="coinmetrics",
+            source="brk",
             formula="raw time",
         ),
         ColumnSpec(
             name="AdrActCnt",
             dtype="float64",
             required=False,
-            description="CoinMetrics active addresses count.",
+            description="BRK active addresses count.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="AdrBalCnt",
             dtype="float64",
             required=False,
-            description="CoinMetrics addresses with non-zero balance.",
+            description="BRK addresses with non-zero balance.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="AssetCompletionTime",
             dtype="datetime64[ns]",
             required=False,
-            description="CoinMetrics ingestion completion timestamp for asset-day data.",
+            description="BRK ingestion completion timestamp for asset-day data.",
             constraints=("valid datetime when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="AssetEODCompletionTime",
             dtype="datetime64[ns]",
             required=False,
-            description="CoinMetrics end-of-day completion timestamp for asset metrics.",
+            description="BRK end-of-day completion timestamp for asset metrics.",
             constraints=("valid datetime when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="BlkCnt",
             dtype="float64",
             required=False,
-            description="CoinMetrics blocks mined during the day.",
+            description="BRK blocks mined during the day.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="CapMrktCurUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics current market capitalization in USD.",
+            description="BRK current market capitalization in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="CapMrktEstUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics estimated market capitalization in USD.",
+            description="BRK estimated market capitalization in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="FeeTotNtv",
             dtype="float64",
             required=False,
-            description="CoinMetrics total transaction fees in native BTC units.",
+            description="BRK total transaction fees in native BTC units.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="FlowInExNtv",
             dtype="float64",
             required=False,
-            description="CoinMetrics exchange inflow in native BTC units.",
+            description="BRK exchange inflow in native BTC units.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="FlowInExUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics exchange inflow valued in USD.",
+            description="BRK exchange inflow valued in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="FlowOutExNtv",
             dtype="float64",
             required=False,
-            description="CoinMetrics exchange outflow in native BTC units.",
+            description="BRK exchange outflow in native BTC units.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="FlowOutExUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics exchange outflow valued in USD.",
+            description="BRK exchange outflow valued in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="HashRate",
             dtype="float64",
             required=False,
-            description="CoinMetrics network hash rate estimate.",
+            description="BRK network hash rate estimate.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="IssTotNtv",
             dtype="float64",
             required=False,
-            description="CoinMetrics total daily issuance in native BTC units.",
+            description="BRK total daily issuance in native BTC units.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="IssTotUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics total daily issuance valued in USD.",
+            description="BRK total daily issuance valued in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="PriceBTC",
             dtype="float64",
             required=False,
-            description="CoinMetrics BTC reference price quoted in BTC.",
+            description="BRK BTC reference price quoted in BTC.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ROI1yr",
             dtype="float64",
             required=False,
-            description="CoinMetrics trailing 1-year return metric.",
+            description="BRK trailing 1-year return metric.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ROI30d",
             dtype="float64",
             required=False,
-            description="CoinMetrics trailing 30-day return metric.",
+            description="BRK trailing 30-day return metric.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ReferenceRate",
             dtype="float64",
             required=False,
-            description="CoinMetrics reference rate for BTC.",
+            description="BRK reference rate for BTC.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ReferenceRateETH",
             dtype="float64",
             required=False,
-            description="CoinMetrics reference rate for BTC quoted in ETH.",
+            description="BRK reference rate for BTC quoted in ETH.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ReferenceRateEUR",
             dtype="float64",
             required=False,
-            description="CoinMetrics reference rate for BTC quoted in EUR.",
+            description="BRK reference rate for BTC quoted in EUR.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="ReferenceRateUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics reference rate for BTC quoted in USD.",
+            description="BRK reference rate for BTC quoted in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="SplyCur",
             dtype="float64",
             required=False,
-            description="CoinMetrics current circulating BTC supply.",
+            description="BRK current circulating BTC supply.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="SplyExNtv",
             dtype="float64",
             required=False,
-            description="CoinMetrics supply held on exchanges in native BTC units.",
+            description="BRK supply held on exchanges in native BTC units.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="SplyExUSD",
             dtype="float64",
             required=False,
-            description="CoinMetrics supply held on exchanges valued in USD.",
+            description="BRK supply held on exchanges valued in USD.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="SplyExpFut10yr",
             dtype="float64",
             required=False,
-            description="CoinMetrics projected BTC supply 10 years ahead.",
+            description="BRK projected BTC supply 10 years ahead.",
             unit="BTC",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="TxCnt",
             dtype="float64",
             required=False,
-            description="CoinMetrics on-chain transaction count.",
+            description="BRK on-chain transaction count.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="TxTfrCnt",
             dtype="float64",
             required=False,
-            description="CoinMetrics transfer transaction count.",
+            description="BRK transfer transaction count.",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
         ColumnSpec(
             name="volume_reported_spot_usd_1d",
             dtype="float64",
             required=False,
-            description="CoinMetrics reported spot exchange volume in USD for 1 day.",
+            description="BRK reported spot exchange volume in USD for 1 day.",
             unit="USD",
             constraints=("finite when present",),
-            source="coinmetrics",
+            source="brk",
         ),
     )
 
@@ -665,9 +658,9 @@ def merge_schema_specs(
     return core + extra
 
 
-def validate_coinmetrics_lineage_coverage(
+def validate_brk_lineage_coverage(
     *,
-    lineage: Iterable[CoinMetricsLineageSpec],
+    lineage: Iterable[BRKLineageSpec],
     schema_specs_iter: Iterable[ColumnSpec],
     source_columns: Iterable[str],
 ) -> None:
@@ -680,17 +673,17 @@ def validate_coinmetrics_lineage_coverage(
     ]
     if missing_targets:
         raise ValueError(
-            "CoinMetrics lineage mappings reference undocumented StrategyTimeSeries "
+            "BRK lineage mappings reference undocumented StrategyTimeSeries "
             "columns for source columns: " + ", ".join(missing_targets)
         )
 
     lineage_sources = {item.source_column for item in lineage_list}
     missing_sources = [column for column in source_columns if column not in lineage_sources]
     if missing_sources:
-        raise ValueError("CoinMetrics lineage missing BTC CSV source columns: " + ", ".join(missing_sources))
+        raise ValueError("BRK lineage missing source columns: " + ", ".join(missing_sources))
 
 
-def coinmetrics_lineage_markdown(lineage: Iterable[CoinMetricsLineageSpec]) -> str:
+def brk_lineage_markdown(lineage: Iterable[BRKLineageSpec]) -> str:
     header = (
         "| source_column | required | description | strategy_column | notes |\n"
         "| --- | --- | --- | --- | --- |"

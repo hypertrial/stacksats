@@ -27,16 +27,16 @@ class MVRVPlusStrategy(BaseStrategy):
 
     strategy_id = "mvrv-plus"
     version = "0.1.0"
-    description = "MVRV baseline with CoinMetrics-aware regime and risk overlays."
+    description = "MVRV baseline with BRK-aware regime and risk overlays."
     overlay_features: tuple[str, ...] = (
-        "cm_netflow",
-        "cm_exchange_share",
-        "cm_exchange_share_delta",
-        "cm_activity_div",
-        "cm_roi_context",
-        "cm_liquidity_impulse",
-        "cm_miner_pressure",
-        "cm_hash_momentum",
+        "brk_netflow",
+        "brk_exchange_share",
+        "brk_exchange_share_delta",
+        "brk_activity_div",
+        "brk_roi_context",
+        "brk_liquidity_impulse",
+        "brk_miner_pressure",
+        "brk_hash_momentum",
     )
     derived_features: tuple[str, ...] = (
         "plus_vol21",
@@ -76,10 +76,10 @@ class MVRVPlusStrategy(BaseStrategy):
         self.hash_momentum_weight = hash_momentum_weight
 
     def required_feature_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics", *FEATS, *self.overlay_features, *self.derived_features)
+        return ("price_usd", *FEATS, *self.overlay_features, *self.derived_features)
 
     def required_feature_sets(self) -> tuple[str, ...]:
-        return ("core_model_features_v1", "coinmetrics_overlay_v1")
+        return ("core_model_features_v1", "brk_overlay_v1")
 
     @staticmethod
     def _safe_array(values: pd.Series, fill: float = 0.0) -> np.ndarray:
@@ -110,7 +110,7 @@ class MVRVPlusStrategy(BaseStrategy):
         if window.empty:
             return window
 
-        price = pd.to_numeric(window.get("PriceUSD_coinmetrics"), errors="coerce")
+        price = pd.to_numeric(window.get("price_usd"), errors="coerce")
         returns = price.pct_change()
         rolling_vol = returns.rolling(21, min_periods=10).std()
         rolling_max = price.rolling(90, min_periods=30).max()
@@ -221,36 +221,36 @@ class MVRVPlusStrategy(BaseStrategy):
         realized_vol_scale = 1.0 - (0.10 * vol21_cap)
 
         netflow = self._safe_array(
-            features_df.get("cm_netflow", pd.Series(0.0, index=features_df.index))
+            features_df.get("brk_netflow", pd.Series(0.0, index=features_df.index))
         )
         exchange_share = self._safe_array(
             features_df.get(
-                "cm_exchange_share", pd.Series(0.0, index=features_df.index)
+                "brk_exchange_share", pd.Series(0.0, index=features_df.index)
             )
         )
         exchange_share_delta = self._safe_array(
             features_df.get(
-                "cm_exchange_share_delta", pd.Series(0.0, index=features_df.index)
+                "brk_exchange_share_delta", pd.Series(0.0, index=features_df.index)
             )
         )
         activity_div = self._safe_array(
-            features_df.get("cm_activity_div", pd.Series(0.0, index=features_df.index))
+            features_df.get("brk_activity_div", pd.Series(0.0, index=features_df.index))
         )
         roi_context = self._safe_array(
-            features_df.get("cm_roi_context", pd.Series(0.0, index=features_df.index))
+            features_df.get("brk_roi_context", pd.Series(0.0, index=features_df.index))
         )
         liquidity_impulse = self._safe_array(
             features_df.get(
-                "cm_liquidity_impulse", pd.Series(0.0, index=features_df.index)
+                "brk_liquidity_impulse", pd.Series(0.0, index=features_df.index)
             )
         )
         miner_pressure = self._safe_array(
             features_df.get(
-                "cm_miner_pressure", pd.Series(0.0, index=features_df.index)
+                "brk_miner_pressure", pd.Series(0.0, index=features_df.index)
             )
         )
         hash_momentum = self._safe_array(
-            features_df.get("cm_hash_momentum", pd.Series(0.0, index=features_df.index))
+            features_df.get("brk_hash_momentum", pd.Series(0.0, index=features_df.index))
         )
 
         value_gate = np.where(zone <= -1.0, 1.20, np.where(zone >= 1.0, 0.80, 1.00))

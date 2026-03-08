@@ -53,7 +53,7 @@ def test_strategy_time_series_rejects_unknown_columns() -> None:
         StrategyTimeSeries(metadata=_metadata(), data=data)
 
 
-def test_strategy_time_series_accepts_coinmetrics_passthrough_column() -> None:
+def test_strategy_time_series_accepts_brk_passthrough_column() -> None:
     data = pd.DataFrame(
         {
             "date": pd.date_range("2024-01-01", periods=3, freq="D"),
@@ -66,8 +66,8 @@ def test_strategy_time_series_accepts_coinmetrics_passthrough_column() -> None:
 
     schema = series.schema()
     assert "SplyCur" in schema
-    assert schema["SplyCur"].description == "CoinMetrics current circulating BTC supply."
-    assert schema["SplyCur"].source == "coinmetrics"
+    assert schema["SplyCur"].description == "BRK current circulating BTC supply."
+    assert schema["SplyCur"].source == "brk"
 
 
 def test_strategy_time_series_rejects_weight_sum_mismatch() -> None:
@@ -121,7 +121,7 @@ def test_strategy_time_series_batch_from_flat_dataframe() -> None:
     assert len(first.data) == 2
 
 
-def test_strategy_time_series_batch_preserves_coinmetrics_passthrough_columns() -> None:
+def test_strategy_time_series_batch_preserves_brk_passthrough_columns() -> None:
     flat = pd.DataFrame(
         {
             "start_date": ["2024-01-01", "2024-01-01"],

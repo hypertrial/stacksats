@@ -18,7 +18,7 @@ def _feature_frame(strategy: DuckDBAlphaStrategy, index: pd.DatetimeIndex) -> pd
     frame = pd.DataFrame(index=index)
     for idx, column in enumerate(cols):
         frame[column] = np.linspace(-1.0 + (idx * 0.01), 1.0 + (idx * 0.01), len(index))
-    frame["PriceUSD_coinmetrics"] = np.linspace(10000.0, 20000.0, len(index))
+    frame["price_usd"] = np.linspace(10000.0, 20000.0, len(index))
     frame["mvrv_zone"] = np.tile(np.array([-1.2, 0.0, 1.3]), len(index) // 3 + 1)[: len(index)]
     frame["mvrv_volatility"] = np.linspace(0.25, 0.95, len(index))
     frame["signal_confidence"] = np.linspace(0.1, 0.9, len(index))

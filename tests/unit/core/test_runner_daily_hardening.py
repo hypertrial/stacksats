@@ -35,9 +35,9 @@ def _btc_df(days: int = 500) -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", periods=days, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(10000.0, 50000.0, len(idx)),
+            "price_usd": np.linspace(10000.0, 50000.0, len(idx)),
             "PriceUSD": np.linspace(10000.0, 50000.0, len(idx)),
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
         },
         index=idx,
     )
@@ -120,7 +120,7 @@ def test_reconcile_daily_run_detects_decision_change(tmp_path, monkeypatch) -> N
     )
 
     revised_df = base_df.copy()
-    revised_df.loc["2024-04-15":"2024-05-01", "PriceUSD_coinmetrics"] *= 0.8
+    revised_df.loc["2024-04-15":"2024-05-01", "price_usd"] *= 0.8
     revised_df.loc["2024-04-15":"2024-05-01", "PriceUSD"] *= 0.8
     result = runner.reconcile_daily_run(
         strategy,
@@ -172,7 +172,7 @@ def test_reconcile_daily_run_reuses_locked_prefix(monkeypatch) -> None:
         "materialization_fingerprint",
         lambda *args, **kwargs: (
             pd.DataFrame(
-                {"PriceUSD_coinmetrics": np.linspace(10000.0, 20000.0, 366)},
+                {"price_usd": np.linspace(10000.0, 20000.0, 366)},
                 index=pd.date_range("2023-05-02", periods=366, freq="D"),
             ),
             "new-hash",

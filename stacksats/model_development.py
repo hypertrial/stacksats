@@ -46,8 +46,8 @@ from .model_development_weights import (
     compute_window_weights as _compute_window_weights_impl,
 )
 
-PRICE_COL = "PriceUSD_coinmetrics"
-MVRV_COL = "CapMVRVCur"
+PRICE_COL = "price_usd"
+MVRV_COL = "mvrv"
 
 MIN_W = MIN_DAILY_WEIGHT
 MA_WINDOW = 200

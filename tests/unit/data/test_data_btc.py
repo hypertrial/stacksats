@@ -1,286 +1,109 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock
 
+import duckdb
 import pandas as pd
 import pytest
 
-from stacksats.data_btc import BTCDataProvider, DataLoadError, _is_cache_usable
+from stacksats.data_btc import BTCDataProvider, DataLoadError
 
 
-PRICE_COL = "PriceUSD_coinmetrics"
-
-
-def _csv_bytes(rows: list[dict]) -> bytes:
-    return pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
-
-
-def _mock_response(content: bytes) -> MagicMock:
-    resp = MagicMock()
-    resp.content = content
-    resp.raise_for_status.return_value = None
-    return resp
-
-
-def test_is_cache_usable_true_for_recent_complete_window() -> None:
-    today = pd.Timestamp("2024-01-10")
-    csv_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-08", "PriceUSD": 43000.0},
-            {"time": "2024-01-09", "PriceUSD": 43100.0},
-            {"time": "2024-01-10", "PriceUSD": 43200.0},
-        ]
-    )
-
-    assert _is_cache_usable(csv_bytes, pd.Timestamp("2024-01-01"), today) is True
-
-
-def test_is_cache_usable_false_for_stale_latest_date() -> None:
-    today = pd.Timestamp("2024-01-10")
-    csv_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": 40000.0},
-            {"time": "2024-01-02", "PriceUSD": 40100.0},
-        ]
-    )
-
-    assert _is_cache_usable(csv_bytes, pd.Timestamp("2024-01-01"), today) is False
-
-
-def test_is_cache_usable_false_for_malformed_bytes() -> None:
-    assert _is_cache_usable(b"not-csv", pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-10")) is False
-
-
-def test_is_cache_usable_true_for_past_window_without_recent_requirement() -> None:
-    today = pd.Timestamp("2024-01-10")
-    csv_bytes = _csv_bytes(
-        [
-            {"time": "2023-12-30", "PriceUSD": 42000.0},
-            {"time": "2023-12-31", "PriceUSD": 42100.0},
-        ]
-    )
-
-    assert (
-        _is_cache_usable(
-            csv_bytes,
-            pd.Timestamp("2023-12-01"),
-            today,
-            target_end=pd.Timestamp("2023-12-31"),
-            require_recent=False,
-        )
-        is True
-    )
-
-
-def test_load_uses_fresh_usable_cache_without_network(tmp_path: Path, mocker) -> None:
-    now = pd.Timestamp("2024-01-05")
-    cache_file = tmp_path / "coinmetrics_btc.csv"
-    cache_file.write_bytes(
-        _csv_bytes(
-            [
-                {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-                {"time": "2024-01-02", "PriceUSD": 40100.0, "CapMVRVCur": 2.1},
-                {"time": "2024-01-03", "PriceUSD": 40200.0, "CapMVRVCur": 2.2},
-                {"time": "2024-01-04", "PriceUSD": 40300.0, "CapMVRVCur": 2.3},
-                {"time": "2024-01-05", "PriceUSD": 40400.0, "CapMVRVCur": 2.4},
-            ]
-        )
-    )
-    os.utime(cache_file, (now.timestamp() - 60, now.timestamp() - 60))
-
-    mocked_get = mocker.patch("stacksats.data_btc.requests.get")
-    mocked_get.side_effect = AssertionError("Network should not be used for fresh cache")
-
-    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-01")
-
-    assert mocked_get.call_count == 0
-    assert float(df.loc[pd.Timestamp("2024-01-05"), PRICE_COL]) == 40400.0
-
-
-def test_load_refreshes_when_cache_is_unusable(tmp_path: Path, mocker) -> None:
-    now = pd.Timestamp("2024-01-10")
-    cache_file = tmp_path / "coinmetrics_btc.csv"
-    stale_bytes = _csv_bytes(
-        [{"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0}]
-    )
-    fresh_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-09", "PriceUSD": 43000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-10", "PriceUSD": 43100.0, "CapMVRVCur": 2.1},
-        ]
-    )
-    cache_file.write_bytes(stale_bytes)
-    os.utime(cache_file, (now.timestamp() - 60, now.timestamp() - 60))
-
-    mocked_get = mocker.patch(
-        "stacksats.data_btc.requests.get",
-        return_value=_mock_response(fresh_bytes),
-    )
-
-    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-09")
-
-    assert mocked_get.call_count == 1
-    assert cache_file.read_bytes() == fresh_bytes
-    assert float(df.loc[pd.Timestamp("2024-01-10"), PRICE_COL]) == 43100.0
-
-
-def test_load_refreshes_stale_cache_by_age(tmp_path: Path, mocker) -> None:
-    now = pd.Timestamp("2024-01-10")
-    cache_file = tmp_path / "coinmetrics_btc.csv"
-    cache_file.write_bytes(
-        _csv_bytes(
-            [
-                {"time": "2024-01-09", "PriceUSD": 42000.0, "CapMVRVCur": 2.0},
-                {"time": "2024-01-10", "PriceUSD": 42100.0, "CapMVRVCur": 2.1},
-            ]
-        )
-    )
-    stale_mtime = now.timestamp() - (72 * 3600)
-    os.utime(cache_file, (stale_mtime, stale_mtime))
-
-    fresh_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-09", "PriceUSD": 52000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-10", "PriceUSD": 52100.0, "CapMVRVCur": 2.1},
-        ]
-    )
-    mocked_get = mocker.patch(
-        "stacksats.data_btc.requests.get",
-        return_value=_mock_response(fresh_bytes),
-    )
-
-    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-09")
-
-    assert mocked_get.call_count == 1
-    assert float(df.loc[pd.Timestamp("2024-01-10"), PRICE_COL]) == 52100.0
-
-
-def test_load_past_only_uses_cache_without_network(tmp_path: Path, mocker) -> None:
-    now = pd.Timestamp("2026-02-17")
-    cache_file = tmp_path / "coinmetrics_btc.csv"
-    cache_file.write_bytes(
-        _csv_bytes(
-            [
-                {"time": "2025-12-30", "PriceUSD": 94000.0, "CapMVRVCur": 2.0},
-                {"time": "2025-12-31", "PriceUSD": 95000.0, "CapMVRVCur": 2.1},
-            ]
-        )
-    )
-    stale_mtime = now.timestamp() - (90 * 24 * 3600)
-    os.utime(cache_file, (stale_mtime, stale_mtime))
-
-    mocked_get = mocker.patch("stacksats.data_btc.requests.get")
-    mocked_get.side_effect = AssertionError("Network should not be used for past-only windows")
-
-    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
-    df = provider.load(backtest_start="2025-12-30", end_date="2025-12-31")
-
-    assert mocked_get.call_count == 0
-    assert float(df.loc[pd.Timestamp("2025-12-31"), PRICE_COL]) == 95000.0
-
-
-def test_load_past_only_raises_when_coinmetrics_has_missing_dates(
-    tmp_path: Path, mocker
+def _create_duckdb_fixture(
+    path: Path,
+    *,
+    start: str = "2024-01-01",
+    days: int = 10,
+    include_mvrv: bool = True,
+    skip_day: str | None = None,
+    null_price_day: str | None = None,
 ) -> None:
-    now = pd.Timestamp("2024-01-10")
-    cache_file = tmp_path / "coinmetrics_btc.csv"
-    cache_file.write_bytes(
-        _csv_bytes(
-            [
-                {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-                {"time": "2024-01-03", "PriceUSD": 42000.0, "CapMVRVCur": 2.2},
-            ]
-        )
-    )
-    os.utime(cache_file, (now.timestamp() - 60, now.timestamp() - 60))
-
-    mocked_get = mocker.patch("stacksats.data_btc.requests.get")
-    mocked_get.side_effect = AssertionError("Network should not be used for past-only windows")
-
-    provider = BTCDataProvider(cache_dir=str(tmp_path), max_age_hours=24, clock=lambda: now)
-    with pytest.raises(DataLoadError, match="missing dates"):
-        provider.load(backtest_start="2024-01-01", end_date="2024-01-03")
-
-
-def test_load_without_cache_fetches_network(mocker) -> None:
-    now = pd.Timestamp("2024-01-02")
-    remote_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-02", "PriceUSD": 40100.0, "CapMVRVCur": 2.1},
-        ]
-    )
-    mocked_get = mocker.patch(
-        "stacksats.data_btc.requests.get",
-        return_value=_mock_response(remote_bytes),
-    )
-
-    provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-01")
-
-    assert mocked_get.call_count == 1
-    assert float(df.loc[pd.Timestamp("2024-01-02"), PRICE_COL]) == 40100.0
+    con = duckdb.connect(str(path))
+    try:
+        con.execute("CREATE TABLE metrics_price (date_day DATE, metric VARCHAR, value DOUBLE)")
+        con.execute("CREATE TABLE metrics_distribution (date_day DATE, metric VARCHAR, value DOUBLE)")
+        idx = pd.date_range(start, periods=days, freq="D")
+        price_rows: list[tuple[str, str, float | None]] = []
+        mvrv_rows: list[tuple[str, str, float]] = []
+        for i, ts in enumerate(idx):
+            day = ts.strftime("%Y-%m-%d")
+            if skip_day is not None and day == skip_day:
+                continue
+            price_val: float | None = float(40_000 + (i * 100))
+            if null_price_day is not None and day == null_price_day:
+                price_val = None
+            price_rows.append((day, "price_close", price_val))
+            if include_mvrv:
+                mvrv_rows.append((day, "mvrv", float(1.2 + (0.01 * i))))
+        con.executemany("INSERT INTO metrics_price VALUES (?, ?, ?)", price_rows)
+        if include_mvrv and mvrv_rows:
+            con.executemany("INSERT INTO metrics_distribution VALUES (?, ?, ?)", mvrv_rows)
+    finally:
+        con.close()
 
 
-def test_load_fills_historical_and_today_gaps(mocker) -> None:
-    now = pd.Timestamp("2024-01-04")
-    remote_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-03", "PriceUSD": 42000.0, "CapMVRVCur": 2.2},
-        ]
-    )
-    mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    with pytest.raises(DataLoadError, match="missing dates"):
+def test_load_success_from_duckdb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "bitcoin_analytics.duckdb"
+    _create_duckdb_fixture(db_path, start="2024-01-01", days=5)
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+
+    df = provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
+
+    assert list(df.columns) == ["price_usd", "mvrv"]
+    assert df.index.min() == pd.Timestamp("2024-01-01")
+    assert df.index.max() == pd.Timestamp("2024-01-05")
+    assert float(df.loc[pd.Timestamp("2024-01-05"), "price_usd"]) > 0.0
+
+
+def test_load_missing_duckdb_file_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", "/tmp/does-not-exist.duckdb")
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    with pytest.raises(DataLoadError, match="DuckDB file not found"):
         provider.load(backtest_start="2024-01-01")
 
 
-def test_load_falls_back_to_previous_price_when_fetch_returns_none(mocker) -> None:
-    now = pd.Timestamp("2024-01-03")
-    remote_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-03", "PriceUSD": 42000.0, "CapMVRVCur": 2.2},
-        ]
-    )
-    mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
+def test_load_missing_required_table_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "broken.duckdb"
+    con = duckdb.connect(str(db_path))
+    try:
+        con.execute("CREATE TABLE metrics_price (date_day DATE, metric VARCHAR, value DOUBLE)")
+        con.execute("INSERT INTO metrics_price VALUES ('2024-01-01', 'price_close', 42000.0)")
+    finally:
+        con.close()
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    with pytest.raises(DataLoadError, match="Could not query required BRK tables/metrics"):
+        provider.load(backtest_start="2024-01-01")
+
+
+def test_load_stale_data_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "stale.duckdb"
+    _create_duckdb_fixture(db_path, start="2024-01-01", days=3)
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-02-20"), max_staleness_days=3)
+    with pytest.raises(DataLoadError, match="does not cover requested end_date"):
+        provider.load(backtest_start="2024-01-01", end_date="2024-02-20")
+
+
+def test_load_missing_dates_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "gappy.duckdb"
+    _create_duckdb_fixture(db_path, start="2024-01-01", days=5, skip_day="2024-01-03")
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
     with pytest.raises(DataLoadError, match="missing dates"):
-        provider.load(backtest_start="2024-01-01")
+        provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
 
 
-def test_load_preserves_missing_today_mvrv(mocker) -> None:
-    now = pd.Timestamp("2024-01-03")
-    remote_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": 40000.0, "CapMVRVCur": 2.0},
-            {"time": "2024-01-02", "PriceUSD": 41000.0, "CapMVRVCur": 2.1},
-            {"time": "2024-01-03", "PriceUSD": 42000.0, "CapMVRVCur": None},
-        ]
+def test_load_missing_price_values_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "null-price.duckdb"
+    _create_duckdb_fixture(
+        db_path,
+        start="2024-01-01",
+        days=5,
+        null_price_day="2024-01-04",
     )
-    mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-
-    provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    df = provider.load(backtest_start="2024-01-01")
-
-    assert pd.isna(df.loc[pd.Timestamp("2024-01-03"), "CapMVRVCur"])
-
-
-def test_load_raises_when_required_prices_remain_missing(mocker) -> None:
-    now = pd.Timestamp("2024-01-02")
-    remote_bytes = _csv_bytes(
-        [
-            {"time": "2024-01-01", "PriceUSD": None, "CapMVRVCur": 2.0},
-            {"time": "2024-01-02", "PriceUSD": 41000.0, "CapMVRVCur": 2.1},
-        ]
-    )
-    mocker.patch("stacksats.data_btc.requests.get", return_value=_mock_response(remote_bytes))
-    provider = BTCDataProvider(cache_dir=None, clock=lambda: now)
-    with pytest.raises(DataLoadError, match="missing PriceUSD values"):
-        provider.load(backtest_start="2024-01-01")
+    monkeypatch.setenv("STACKSATS_ANALYTICS_DUCKDB", str(db_path))
+    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    with pytest.raises(DataLoadError, match="missing price_usd values"):
+        provider.load(backtest_start="2024-01-01", end_date="2024-01-05")

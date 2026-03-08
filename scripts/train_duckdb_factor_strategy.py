@@ -32,7 +32,7 @@ class _TrainingStrategy(BaseStrategy):
     def required_feature_sets(self) -> tuple[str, ...]:
         return (
             "core_model_features_v1",
-            "coinmetrics_overlay_v1",
+            "brk_overlay_v1",
             "duckdb_analytics_factors_v1",
         )
 
@@ -186,7 +186,7 @@ def main() -> None:
         current_date=end_ts,
     )
     prices = pd.to_numeric(
-        btc_df["PriceUSD_coinmetrics"].reindex(features.index),
+        btc_df["price_usd"].reindex(features.index),
         errors="coerce",
     )
     label = _future_mean_price_label(prices, args.horizon_days)

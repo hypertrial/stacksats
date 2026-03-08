@@ -28,7 +28,7 @@ from stacksats.model_development import MIN_W, precompute_features
 
 DEFAULT_RANGE_START = "2025-12-01"
 DEFAULT_RANGE_END = "2027-12-31"
-BTC_PRICE_COL = "PriceUSD_coinmetrics"
+BTC_PRICE_COL = "price_usd"
 
 # -----------------------------------------------------------------------------
 # Simulation Test Harness

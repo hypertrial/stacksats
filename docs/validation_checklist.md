@@ -129,7 +129,7 @@ flowchart LR
 
 34. [ ] **Block-shuffled null robustness threshold is met in strict mode (when shuffled checks run)**
    - Mean win rate on block-shuffled price trials must be `<= max_shuffled_win_rate` (default `80.0`) across `shuffled_trials` (default `3`).
-   - Shuffled checks are skipped when `PriceUSD_coinmetrics` is missing, the shuffled window is empty, or `shuffled_trials <= 0`.
+   - Shuffled checks are skipped when `price_usd` is missing, the shuffled window is empty, or `shuffled_trials <= 0`.
 
 35. [ ] **Bootstrap confidence interval threshold is met in strict mode**
    - Lower bootstrap CI for anchored excess must be `>= min_bootstrap_ci_lower_excess`.

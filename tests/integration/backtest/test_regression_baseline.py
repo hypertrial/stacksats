@@ -31,7 +31,7 @@ from stacksats.strategy_types import (
     TargetProfile,
 )
 
-PRICE_COL = "PriceUSD_coinmetrics"
+PRICE_COL = "price_usd"
 
 
 def _sample_btc_df(start: str = "2021-01-01", days: int = 900) -> pd.DataFrame:
@@ -40,7 +40,7 @@ def _sample_btc_df(start: str = "2021-01-01", days: int = 900) -> pd.DataFrame:
     return pd.DataFrame(
         {
             PRICE_COL: trend,
-            "CapMVRVCur": np.linspace(0.8, 2.2, num=days),
+            "mvrv": np.linspace(0.8, 2.2, num=days),
         },
         index=idx,
     )
@@ -155,8 +155,8 @@ class BadStrategy(BaseStrategy):
 idx = pd.date_range("2022-01-01", periods=500, freq="D")
 btc_df = pd.DataFrame(
     {
-        "PriceUSD_coinmetrics": np.linspace(20000, 40000, 500),
-        "CapMVRVCur": np.linspace(1.0, 2.0, 500),
+        "price_usd": np.linspace(20000, 40000, 500),
+        "mvrv": np.linspace(1.0, 2.0, 500),
     },
     index=idx,
 )

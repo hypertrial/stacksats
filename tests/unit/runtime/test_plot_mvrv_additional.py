@@ -16,7 +16,7 @@ def test_plot_mvrv_metrics_autocomputes_missing_zscore_and_uses_long_range_locat
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     idx = pd.date_range("2022-01-01", periods=500, freq="D")
-    df = pd.DataFrame({"CapMVRVCur": np.linspace(0.8, 2.5, len(idx))}, index=idx)
+    df = pd.DataFrame({"mvrv": np.linspace(0.8, 2.5, len(idx))}, index=idx)
     monkeypatch.setattr("stacksats.plot_mvrv.plt.savefig", lambda *_args, **_kwargs: None)
 
     calls = {"year": 0, "month_args": []}
@@ -48,7 +48,7 @@ def test_plot_mvrv_metrics_uses_medium_range_date_locators(
     idx = pd.date_range("2024-01-01", periods=120, freq="D")
     df = pd.DataFrame(
         {
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
             "CapMVRVZ": np.linspace(-1.0, 1.0, len(idx)),
         },
         index=idx,
@@ -80,7 +80,7 @@ def test_plot_mvrv_metrics_raises_when_cleaned_dataset_is_empty(tmp_path) -> Non
     idx = pd.date_range("2024-01-01", periods=10, freq="D")
     df = pd.DataFrame(
         {
-            "CapMVRVCur": np.full(len(idx), np.nan),
+            "mvrv": np.full(len(idx), np.nan),
             "CapMVRVZ": np.full(len(idx), np.nan),
         },
         index=idx,
@@ -96,14 +96,14 @@ def test_plot_mvrv_module_dunder_main_executes(
     idx = pd.date_range("2024-01-01", periods=120, freq="D")
     df = pd.DataFrame(
         {
-            "CapMVRVCur": np.linspace(1.0, 2.0, len(idx)),
+            "mvrv": np.linspace(1.0, 2.0, len(idx)),
             "CapMVRVZ": np.linspace(-1.0, 1.0, len(idx)),
         },
         index=idx,
     )
     monkeypatch.setattr(
-        "stacksats.btc_api.coinmetrics_btc_csv.fetch_coinmetrics_btc_csv",
-        lambda: df,
+        "stacksats.plot_mvrv.BTCDataProvider.load",
+        lambda *_args, **_kwargs: df,
     )
     monkeypatch.setattr("matplotlib.pyplot.savefig", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(

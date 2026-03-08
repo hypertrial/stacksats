@@ -11,7 +11,7 @@ class _NegativeShiftStrategy(BaseStrategy):
 
     def transform_features(self, ctx):
         features = ctx.features_df.copy()
-        features["bad"] = features["PriceUSD_coinmetrics"].shift(-1)
+        features["bad"] = features["price_usd"].shift(-1)
         return features
 
     def propose_weight(self, state):
@@ -23,7 +23,7 @@ class _CenteredRollingStrategy(BaseStrategy):
 
     def transform_features(self, ctx):
         features = ctx.features_df.copy()
-        features["bad"] = features["PriceUSD_coinmetrics"].rolling(3, center=True).mean()
+        features["bad"] = features["price_usd"].rolling(3, center=True).mean()
         return features
 
     def propose_weight(self, state):
@@ -47,7 +47,7 @@ class _WarningStrategy(BaseStrategy):
     def transform_features(self, ctx):
         features = ctx.features_df.copy()
         _ = features.tail(1)
-        _ = features["PriceUSD_coinmetrics"].quantile(0.5)
+        _ = features["price_usd"].quantile(0.5)
         return features
 
     def propose_weight(self, state):
@@ -90,4 +90,3 @@ def test_lint_strategy_class_handles_uninspectable_source() -> None:
     _, warnings = summarize_lint_findings(findings)
 
     assert any("source-unavailable" in warning for warning in warnings)
-

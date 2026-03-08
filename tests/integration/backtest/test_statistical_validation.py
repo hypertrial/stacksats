@@ -61,8 +61,8 @@ class TestRandomizedBaseline:
 
             # Shuffle prices while keeping dates
             shuffled_df = sample_btc_df.copy()
-            shuffled_df["PriceUSD_coinmetrics"] = np.random.permutation(
-                shuffled_df["PriceUSD_coinmetrics"].values
+            shuffled_df["price_usd"] = np.random.permutation(
+                shuffled_df["price_usd"].values
             )
 
             try:
@@ -102,8 +102,8 @@ class TestRandomizedBaseline:
         """
         # Reverse prices (time reversal)
         reversed_df = sample_btc_df.copy()
-        reversed_df["PriceUSD_coinmetrics"] = sample_btc_df[
-            "PriceUSD_coinmetrics"
+        reversed_df["price_usd"] = sample_btc_df[
+            "price_usd"
         ].values[::-1]
 
         try:
@@ -126,7 +126,7 @@ class TestRandomizedBaseline:
         """
         # Set all prices to constant
         constant_df = sample_btc_df.copy()
-        constant_df["PriceUSD_coinmetrics"] = 50000.0  # Constant price
+        constant_df["price_usd"] = 50000.0  # Constant price
 
         try:
             spd_table = compute_cycle_spd(
@@ -365,7 +365,7 @@ class TestNumericalStability:
         """Test with extreme price values to check for numerical issues."""
         # Test with very small prices
         small_df = sample_btc_df.copy()
-        small_df["PriceUSD_coinmetrics"] = sample_btc_df["PriceUSD_coinmetrics"] / 1000
+        small_df["price_usd"] = sample_btc_df["price_usd"] / 1000
 
         features_small = precompute_features(small_df)
 
@@ -380,7 +380,7 @@ class TestNumericalStability:
 
         # Test with very large prices
         large_df = sample_btc_df.copy()
-        large_df["PriceUSD_coinmetrics"] = sample_btc_df["PriceUSD_coinmetrics"] * 1000
+        large_df["price_usd"] = sample_btc_df["price_usd"] * 1000
 
         features_large = precompute_features(large_df)
 
@@ -393,7 +393,7 @@ class TestNumericalStability:
         """Test that zero prices are handled gracefully."""
         # Create data with some zero prices
         zero_df = sample_btc_df.copy()
-        zero_df.iloc[100:110, zero_df.columns.get_loc("PriceUSD_coinmetrics")] = 0
+        zero_df.iloc[100:110, zero_df.columns.get_loc("price_usd")] = 0
 
         # Suppress expected RuntimeWarning for divide by zero in log(0)
         with warnings.catch_warnings():

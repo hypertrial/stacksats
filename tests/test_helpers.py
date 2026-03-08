@@ -5,7 +5,7 @@ import pandas as pd
 # Constants
 FLOAT_TOLERANCE = 1e-12
 WEIGHT_SUM_TOLERANCE = 1e-6  # Tolerance for weight sum validation
-PRICE_COL = "PriceUSD_coinmetrics"
+PRICE_COL = "price_usd"
 DATE_COLS = ["start_date", "end_date", "date"]
 PRIMARY_KEY_COLS = ["day_index", "start_date", "end_date", "date"]
 

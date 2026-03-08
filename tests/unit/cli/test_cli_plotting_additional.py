@@ -52,14 +52,14 @@ def test_cli_validate_exits_nonzero_on_failed_validation(
 def test_plot_mvrv_metrics_raises_when_required_column_missing() -> None:
     df = pd.DataFrame({"Other": [1, 2, 3]}, index=pd.date_range("2024-01-01", periods=3))
 
-    with pytest.raises(ValueError, match="Missing required column: CapMVRVCur"):
+    with pytest.raises(ValueError, match="Missing required column: mvrv"):
         plot_mvrv_metrics(df)
 
 
 def test_plot_mvrv_metrics_raises_when_filtered_data_is_empty(tmp_path: Path) -> None:
     df = pd.DataFrame(
         {
-            "CapMVRVCur": [1.0, 1.1, 1.2],
+            "mvrv": [1.0, 1.1, 1.2],
             "CapMVRVZ": [0.0, 0.1, 0.2],
         },
         index=pd.date_range("2024-01-01", periods=3),

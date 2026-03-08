@@ -25,18 +25,21 @@ def get_backtest_end() -> str:
 
 def load_data(
     *,
-    cache_dir: str | None = "~/.stacksats/cache",
-    max_age_hours: int = 24,
+    duckdb_path: str | None = None,
+    max_staleness_days: int = 3,
     end_date: str | None = None,
 ):
-    """Load strict CoinMetrics BTC data through the canonical provider path.
+    """Load strict BRK BTC data through the canonical provider path.
 
     This path intentionally enforces source-only data integrity:
-    - no synthetic today row
-    - no historical gap filling
-    - no MVRV fallback
+    - local DuckDB only
+    - no synthetic row filling
+    - no fallback source blending
     """
-    provider = BTCDataProvider(cache_dir=cache_dir, max_age_hours=max_age_hours)
+    provider = BTCDataProvider(
+        duckdb_path=duckdb_path,
+        max_staleness_days=max_staleness_days,
+    )
     return provider.load(backtest_start=BACKTEST_START, end_date=end_date)
 
 
@@ -124,7 +127,7 @@ def compute_cycle_spd(
     precomputed features. Uses 1-year windows for consistency across modules.
 
     Args:
-        dataframe: DataFrame containing price data with 'PriceUSD_coinmetrics' column
+        dataframe: DataFrame containing price data with 'price_usd' column
         strategy_function: Function that takes features DataFrame and returns weights
         features_df: Optional precomputed features. If None, computes them internally.
         start_date: Optional start date (default: BACKTEST_START)
@@ -144,10 +147,10 @@ def compute_cycle_spd(
         full_feat = features_df.loc[start:end]
 
     source_mask: pd.Series | None = None
-    if "PriceUSD_source_exists" in dataframe.columns:
-        # Backtests must only use rows that exist in CoinMetrics history.
+    if "price_usd_source_exists" in dataframe.columns:
+        # Backtests must only use rows that exist in BRK history.
         source_mask = (
-            dataframe["PriceUSD_source_exists"]
+            dataframe["price_usd_source_exists"]
             .reindex(dataframe.index)
             .fillna(False)
             .astype(bool)
@@ -185,7 +188,7 @@ def compute_cycle_spd(
         if window_end > pd.to_datetime(end):
             continue
 
-        price_slice = dataframe["PriceUSD_coinmetrics"].loc[window_start:window_end]
+        price_slice = dataframe["price_usd"].loc[window_start:window_end]
         if price_slice.empty:
             continue
         if source_mask is not None:
@@ -295,7 +298,7 @@ def backtest_dynamic_dca(
     precomputed features.
 
     Args:
-        dataframe: DataFrame containing price data with 'PriceUSD_coinmetrics' column
+        dataframe: DataFrame containing price data with 'price_usd' column
         strategy_function: Function that takes features DataFrame and returns weights
         features_df: Optional precomputed features. If None, computes them internally.
         strategy_label: Label for logging (default: "strategy")

@@ -8,8 +8,8 @@ from .strategy_time_series import StrategyTimeSeries
 
 STRATEGY_SCHEMA_BEGIN = "<!-- BEGIN: STRATEGY_TIMESERIES_SCHEMA_TABLE -->"
 STRATEGY_SCHEMA_END = "<!-- END: STRATEGY_TIMESERIES_SCHEMA_TABLE -->"
-COINMETRICS_LINEAGE_BEGIN = "<!-- BEGIN: STRATEGY_TIMESERIES_COINMETRICS_LINEAGE -->"
-COINMETRICS_LINEAGE_END = "<!-- END: STRATEGY_TIMESERIES_COINMETRICS_LINEAGE -->"
+BRK_LINEAGE_BEGIN = "<!-- BEGIN: STRATEGY_TIMESERIES_BRK_LINEAGE -->"
+BRK_LINEAGE_END = "<!-- END: STRATEGY_TIMESERIES_BRK_LINEAGE -->"
 
 
 def objects_docs_path(root_dir: Path | None = None) -> Path:
@@ -39,7 +39,7 @@ def render_objects_docs(content: str) -> str:
     )
     return _replace_section(
         updated,
-        COINMETRICS_LINEAGE_BEGIN,
-        COINMETRICS_LINEAGE_END,
-        StrategyTimeSeries.coinmetrics_lineage_markdown(),
+        BRK_LINEAGE_BEGIN,
+        BRK_LINEAGE_END,
+        StrategyTimeSeries.brk_lineage_markdown(),
     )

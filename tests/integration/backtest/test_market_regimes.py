@@ -58,7 +58,7 @@ def create_bull_market_data(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     np.random.seed(seed)
     dates = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -68,8 +68,8 @@ def create_bull_market_data(
     log_prices = np.log(initial_price) + np.cumsum(returns)
     prices = np.exp(log_prices)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -93,7 +93,7 @@ def create_bear_market_data(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     np.random.seed(seed)
     dates = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -106,8 +106,8 @@ def create_bear_market_data(
     # Ensure prices don't go below a minimum threshold
     prices = np.maximum(prices, 1000.0)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -129,7 +129,7 @@ def create_sideways_market_data(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     np.random.seed(seed)
     dates = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -148,8 +148,8 @@ def create_sideways_market_data(
 
     prices = np.exp(log_prices)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -173,7 +173,7 @@ def create_high_volatility_data(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     np.random.seed(seed)
     dates = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -186,8 +186,8 @@ def create_high_volatility_data(
     # Ensure prices stay within reasonable bounds
     prices = np.clip(prices, 1000.0, 1000000.0)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 
@@ -215,7 +215,7 @@ def create_crash_recovery_data(
         seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with PriceUSD_coinmetrics column
+        DataFrame with price_usd column
     """
     np.random.seed(seed)
     dates = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -240,8 +240,8 @@ def create_crash_recovery_data(
     # Ensure prices stay within reasonable bounds
     prices = np.clip(prices, 1000.0, 1000000.0)
 
-    df = pd.DataFrame({"PriceUSD_coinmetrics": prices}, index=dates)
-    df["PriceUSD"] = df["PriceUSD_coinmetrics"]
+    df = pd.DataFrame({"price_usd": prices}, index=dates)
+    df["PriceUSD"] = df["price_usd"]
     df.index.name = "time"
     return df
 

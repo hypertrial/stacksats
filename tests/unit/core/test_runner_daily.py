@@ -35,8 +35,8 @@ def _btc_df() -> pd.DataFrame:
     idx = pd.date_range("2023-01-01", periods=900, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(20000.0, 90000.0, len(idx)),
-            "CapMVRVCur": np.linspace(0.8, 2.2, len(idx)),
+            "price_usd": np.linspace(20000.0, 90000.0, len(idx)),
+            "mvrv": np.linspace(0.8, 2.2, len(idx)),
         },
         index=idx,
     )
@@ -138,7 +138,7 @@ def test_run_daily_missing_price_data_returns_failed_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     df = _btc_df()
-    df.loc[pd.Timestamp("2024-12-31"), "PriceUSD_coinmetrics"] = np.nan
+    df.loc[pd.Timestamp("2024-12-31"), "price_usd"] = np.nan
     runner = StrategyRunner()
     _allow_validation(runner, monkeypatch)
     result = runner.run_daily(

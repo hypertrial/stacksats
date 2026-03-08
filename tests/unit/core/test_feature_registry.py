@@ -13,7 +13,7 @@ class _ProviderStrategy(BaseStrategy):
     strategy_id = "provider-strategy"
 
     def required_feature_sets(self) -> tuple[str, ...]:
-        return ("core_model_features_v1", "coinmetrics_overlay_v1")
+        return ("core_model_features_v1", "brk_overlay_v1")
 
     def propose_weight(self, state):
         return state.uniform_weight
@@ -24,7 +24,7 @@ class _ConstantProvider:
     provider_id: str = "constant"
 
     def required_source_columns(self) -> tuple[str, ...]:
-        return ("PriceUSD_coinmetrics",)
+        return ("price_usd",)
 
     def materialize(self, btc_df, *, start_date, end_date, as_of_date) -> pd.DataFrame:
         idx = pd.date_range(start_date, as_of_date, freq="D")
@@ -35,9 +35,9 @@ def _btc_df() -> pd.DataFrame:
     idx = pd.date_range("2024-01-01", periods=400, freq="D")
     return pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": pd.Series(range(1, 401), index=idx, dtype=float),
+            "price_usd": pd.Series(range(1, 401), index=idx, dtype=float),
             "PriceUSD": pd.Series(range(1, 401), index=idx, dtype=float),
-            "CapMVRVCur": pd.Series(range(400), index=idx, dtype=float) / 100.0 + 1.0,
+            "mvrv": pd.Series(range(400), index=idx, dtype=float) / 100.0 + 1.0,
         },
         index=idx,
     )
@@ -67,7 +67,7 @@ def test_default_registry_materializes_strategy_features() -> None:
     assert frame.index.min() == pd.Timestamp("2024-06-01")
     assert frame.index.max() == pd.Timestamp("2024-07-01")
     assert "price_vs_ma" in frame.columns
-    assert "cm_netflow_fast" in frame.columns
+    assert "brk_netflow_fast" in frame.columns
 
 
 def test_materialization_fingerprint_is_stable() -> None:

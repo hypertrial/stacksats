@@ -13,10 +13,10 @@ def test_plot_mvrv_main_returns_nonzero_on_value_error(
     monkeypatch,
 ) -> None:
     bad_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": [100.0, 101.0]},
+        {"price_usd": [100.0, 101.0]},
         index=pd.date_range("2024-01-01", periods=2, freq="D"),
     )
-    monkeypatch.setattr("stacksats.plot_mvrv.fetch_coinmetrics_btc_csv", lambda: bad_df)
+    monkeypatch.setattr("stacksats.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: bad_df)
     monkeypatch.setattr(sys, "argv", ["plot_mvrv.py"])
 
     assert plot_mvrv_main() == 1
@@ -28,7 +28,7 @@ def test_plot_mvrv_main_returns_nonzero_on_unexpected_error(
     def _boom():
         raise RuntimeError("unexpected")
 
-    monkeypatch.setattr("stacksats.plot_mvrv.fetch_coinmetrics_btc_csv", _boom)
+    monkeypatch.setattr("stacksats.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: _boom())
     monkeypatch.setattr(sys, "argv", ["plot_mvrv.py"])
 
     assert plot_mvrv_main() == 1

@@ -19,7 +19,7 @@ def _context(days: int = 5, *, current_day_index: int | None = None) -> Strategy
     idx = pd.date_range("2024-01-01", periods=days, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(100.0, 104.0, len(idx)),
+            "price_usd": np.linspace(100.0, 104.0, len(idx)),
             "mvrv_zscore": np.linspace(-1.0, 1.0, len(idx)),
         },
         index=idx,
@@ -199,13 +199,13 @@ def test_export_batch_rejects_compute_weights_override() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="D")
     features_df = pd.DataFrame(
         {
-            "PriceUSD_coinmetrics": np.linspace(100.0, 102.0, len(idx)),
+            "price_usd": np.linspace(100.0, 102.0, len(idx)),
             "mvrv_zscore": np.linspace(-1.0, 1.0, len(idx)),
         },
         index=idx,
     )
     btc_df = pd.DataFrame(
-        {"PriceUSD_coinmetrics": np.linspace(100.0, 102.0, len(idx))},
+        {"price_usd": np.linspace(100.0, 102.0, len(idx))},
         index=idx,
     )
     with pytest.raises(TypeError, match="Custom compute_weights overrides"):
@@ -215,7 +215,7 @@ def test_export_batch_rejects_compute_weights_override() -> None:
             features_df=features_df,
             btc_df=btc_df,
             current_date=idx.max(),
-            btc_price_col="PriceUSD_coinmetrics",
+            btc_price_col="price_usd",
             strategy=_IllegalComputeWeightsStrategy(),
             enforce_span_contract=False,
         )
