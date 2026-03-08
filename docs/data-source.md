@@ -11,6 +11,11 @@ StackSats strategy runtime is BRK-only.
 - local fallback path when env var is unset: `./bitcoin_analytics.duckdb`
 - runtime does not auto-download data
 
+Current DuckDB artifact size is large:
+
+- `bitcoin_analytics.duckdb`: `10,876,104,704` bytes (`~10.13 GiB`)
+- plan for at least `~12 GiB` of free local disk space before download
+
 ## Canonical Source of Truth
 
 - Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
@@ -43,6 +48,8 @@ Default behavior:
 - downloads schema markdown to `./docs/reference/bitcoin-analytics-duckdb-schema.md`
 - verifies `sha256` and exact file size from manifest
 - fails closed on missing metadata, hash mismatch, size mismatch, or partial download
+
+Because the DuckDB file is over `10 GiB`, first download can take time depending on bandwidth.
 
 Then export the runtime path:
 

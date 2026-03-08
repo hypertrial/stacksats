@@ -90,6 +90,7 @@ Canonical BRK data distribution:
 
 - Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
 - Manifest: `data/brk_data_manifest.json`
+- DuckDB artifact size: `10,876,104,704` bytes (`~10.13 GiB`)
 
 Fetch and verify DuckDB + schema:
 
@@ -99,6 +100,7 @@ export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
 ```
 
 Runtime stays local-file based by design. It does not auto-download source data.
+Make sure you have at least `~12 GiB` of free disk space before fetching.
 
 DuckDB factor strategy workflow (shared-horizon research):
 
