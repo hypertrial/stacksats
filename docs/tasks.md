@@ -7,6 +7,10 @@ description: Task-first workflows for common StackSats goals.
 
 Use this page to jump directly to the workflow you need.
 
+Global source contract:
+- Strategy runtime and validation are BRK-only in `0.7.0`.
+- Set `STACKSATS_ANALYTICS_DUCKDB` or place `bitcoin_analytics.duckdb` at repo root.
+
 ## I want to validate a strategy
 
 ### Prerequisites

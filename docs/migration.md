@@ -7,6 +7,11 @@ description: Breaking-change migration mappings for StackSats runtime and export
 
 Use this guide when upgrading code that depended on removed compatibility helpers or older signatures.
 
+## 0.7.0 hard-break note
+
+`0.7.0` is BRK-only for strategy metrics/runtime data sourcing.
+Legacy CoinMetrics source paths are removed from active runtime and docs workflows.
+
 ## Scope
 
 This page covers migration for:
@@ -29,7 +34,10 @@ This page covers migration for:
 | `RANGE_START` / `RANGE_END` / `MIN_RANGE_LENGTH_DAYS` module defaults | set explicit app-level defaults in your own code/config |
 | `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
 | `BaseStrategy.export_weights(config=None, **kwargs)` | `BaseStrategy.export(config=None, **kwargs)` |
-| `stacksats.load_data(duckdb_path=..., max_staleness_days=...)` with gap-fill assumptions | `stacksats.load_data(duckdb_path=..., max_staleness_days=..., end_date=...)` with strict BRK source-only validation |
+| `stacksats.load_data(cache_dir=..., max_age_hours=...)` | `stacksats.load_data(duckdb_path=..., max_staleness_days=..., end_date=...)` |
+| `coinmetrics_overlay_v1` provider ID | `brk_overlay_v1` provider ID |
+| `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
+| `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK DuckDB loader is canonical |
 | raw `strategy_id` / `version` / public attrs as the informal contract | `strategy.spec()` as the canonical public contract |
 | implicit dual-hook precedence | explicit `intent_preference = "propose"` or `"profile"` when both hooks exist |
 
@@ -107,6 +115,7 @@ df = load_data(
 - no synthetic "today" row creation
 - no historical date gap filling
 - no MVRV fallback substitution
+- BRK DuckDB is the only supported source path
 
 ### 7) Strategy contract hardening
 

@@ -32,6 +32,7 @@ bash scripts/check_docs_refs.sh
 venv/bin/python scripts/check_docs_ux.py
 venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
+venv/bin/python scripts/check_no_coinmetrics_refs.py
 venv/bin/python -m mkdocs build --strict
 ```
 
@@ -53,6 +54,7 @@ Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
 
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
+Current source contract is hard-break BRK-only; keep runtime/docs/tests aligned with canonical BRK naming and providers.
 
 ## Contribution workflow
 

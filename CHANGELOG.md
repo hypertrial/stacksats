@@ -6,6 +6,22 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-08
+
+### Added
+- Added a required source-contract guard script (`scripts/check_no_coinmetrics_refs.py`) to prevent reintroduction of deprecated CoinMetrics tokens in active runtime, test, script, and workflow paths.
+- Added CI quality workflow enforcement of the BRK-only source guard in both PR and main package-check pipelines.
+- Added explicit legacy-loader removal coverage with a dedicated regression test asserting the removed source module cannot be imported.
+
+### Changed
+- Finalized hard-break BRK-only docs and release messaging across README, commands, tasks, migration, and release guides.
+- Updated release preflight (`scripts/release_check.sh`) to include the BRK source-reference guard in the required release-gate command chain.
+- Completed StrategyTimeSeries schema/lineage cleanup to use BRK source-oriented naming and remove ambiguous duplicate lineage/schema entries.
+- Migrated stale data-loader/historical-fetch/prelude contract tests to BRK DuckDB-native signatures and behavior.
+
+### Removed
+- Removed remaining legacy CoinMetrics CSV loader code and CoinMetrics-focused unit tests from active code paths.
+
 ## [0.6.1] - 2026-03-06
 
 ### Added

@@ -7,17 +7,18 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.6.1 highlights
+## 0.7.0 highlights
 
-- Added a reusable GitHub composite action for Python setup/dependency install to reduce CI workflow duplication.
-- Added scheduled/manual docs command smoke checks so example lifecycle commands are continuously verified.
-- Reset coverage policy to an actionable `97%` fail-under floor in `scripts/check_coverage.sh`, with ratchet-up guidance.
-- Added a local cleanup utility script (`scripts/clean_local.sh`) for generated artifacts and caches.
-- Improved runner/validation maintainability with targeted helper extraction and split, faster test modules.
+- Hard-break source contract is now fully BRK-only for runtime/docs/release guidance.
+- Added required CI and release preflight guardrails to block deprecated CoinMetrics token reintroduction.
+- Completed StrategyTimeSeries schema/lineage cleanup for BRK source-oriented naming and clearer export schema semantics.
+- Migrated stale loader/history/prelude tests to BRK DuckDB-native behavior and removed obsolete legacy-loader tests.
+- Updated release prep documentation so 0.7.0 release execution is fully aligned with current scripts and workflows.
 
 ## Upgrade notes
 
-- No public runtime API changes are introduced in this release.
+- No new runtime feature APIs are introduced in this release.
+- Source-contract posture is strict: BRK DuckDB is the only supported metrics authority for strategy workflows.
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.
 - For behavior and compatibility notes, use [Migration Guide](migration.md) and [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 

@@ -211,13 +211,6 @@ BRK_LINEAGE: tuple[BRKLineageSpec, ...] = (
         strategy_column="PriceBTC",
     ),
     BRKLineageSpec(
-        source_column="price_usd",
-        required=True,
-        description="Runtime alias of BRK PriceUSD.",
-        strategy_column="price_usd",
-        notes="Canonical runtime price input consumed by model and export.",
-    ),
-    BRKLineageSpec(
         source_column="ROI1yr",
         required=False,
         description="BRK trailing 1-year return metric.",

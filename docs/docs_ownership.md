@@ -41,6 +41,7 @@ Update docs in the same PR when any of these change:
 - Repeated docs feedback questions: fold updates into `docs/faq.md` and link affected task/start pages.
 - Release tooling or release workflow changes: update `docs/release.md`, `CONTRIBUTING.md`, and release-facing sections in `README.md`.
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
+- BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
 
 ## Generated artifact policy
 

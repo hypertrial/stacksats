@@ -12,7 +12,7 @@ If a strategy exports additional columns, those must be declared explicitly via 
 
 Refresh with:
 
-`python scripts/sync_objects_schema_docs.py`
+`venv/bin/python scripts/sync_objects_schema_docs.py`
 
 ## Data columns (generated)
 
@@ -85,7 +85,6 @@ Refresh with:
 | IssTotNtv | False | BRK total daily issuance in native BTC units. | IssTotNtv |  |
 | IssTotUSD | False | BRK total daily issuance valued in USD. | IssTotUSD |  |
 | PriceBTC | False | BRK BTC reference price quoted in BTC. | PriceBTC |  |
-| price_usd | True | Runtime alias of BRK PriceUSD. | price_usd | Canonical runtime price input consumed by model and export. |
 | ROI1yr | False | BRK trailing 1-year return metric. | ROI1yr |  |
 | ROI30d | False | BRK trailing 30-day return metric. | ROI30d |  |
 | ReferenceRate | False | BRK reference rate for BTC. | ReferenceRate |  |

@@ -12,7 +12,7 @@ This guide is manual-first. It covers token-based PyPI releases.
 - Use SemVer: `MAJOR.MINOR.PATCH`.
 - Package version is generated automatically from git tags via `setuptools-scm`.
 - Use annotated git tags in the form `vX.Y.Z`.
-- Tag and package version must match exactly (for example, tag `v0.1.1` produces package version `0.1.1`).
+- Tag and package version must match exactly (for example, tag `v0.7.0` produces package version `0.7.0`).
 - Never reuse a version number after it has been uploaded to PyPI.
 - Do not publish artifacts built before the release tag exists. Build the upload artifacts from the tagged `vX.Y.Z` commit context.
 
@@ -33,7 +33,7 @@ python -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
-python -m pip install --upgrade build twine
+venv/bin/python -m pip install --upgrade build twine
 ```
 
 ### Local token handling (default)
@@ -74,6 +74,7 @@ bash scripts/release_check.sh
 ```
 
 This is a release-preflight command. It runs lint, docs checks, the full non-performance test suite, a preflight package build, and `twine check`.
+It also runs the BRK source-contract guard (`scripts/check_no_coinmetrics_refs.py`).
 The preflight build only verifies buildability; rebuild release artifacts after the release tag is created.
 
 If your environment has constrained SSL trust roots, `scripts/release_check.sh` will:

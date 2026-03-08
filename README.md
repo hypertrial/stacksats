@@ -10,6 +10,7 @@
 StackSats, developed by [Hypertrial](https://www.hypertrial.ai), is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
+Current release line: `0.7.0`.
 
 ## Start Here
 
@@ -92,6 +93,7 @@ venv/bin/python scripts/compare_duckdb_alpha.py --start-date 2018-01-01 --end-da
 ```
 
 If `STACKSATS_ANALYTICS_DUCKDB` is unset, runtime falls back to `./bitcoin_analytics.duckdb`.
+StackSats runtime is BRK-only for strategy metrics sourcing.
 For quick candidate-only loops, `scripts/compare_duckdb_alpha.py` supports `--skip-strict` plus baseline metric overrides.
 
 Run idempotent daily execution (paper mode):
@@ -144,6 +146,7 @@ venv/bin/python -m pytest -m "slow or integration or performance" -q
 venv/bin/python -m pre_commit install -t pre-commit
 venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
+venv/bin/python scripts/check_no_coinmetrics_refs.py
 bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
 bash scripts/clean_local.sh
