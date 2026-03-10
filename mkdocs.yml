@@ -105,6 +105,7 @@ nav:
       - Create a Strategy: recipes/create-strategy.md
       - Strict Validation: recipes/strict-validation.md
       - Interpret Backtest Metrics: recipes/interpret-backtest.md
+      - Animate Backtest Performance: recipes/animate-backtest.md
   - Reference:
       - Glossary: glossary.md
       - DuckDB Schema: reference/bitcoin-analytics-duckdb-schema.md

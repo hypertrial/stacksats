@@ -43,6 +43,12 @@ stacksats strategy run-daily \
   --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
+
+# Animate an existing backtest artifact (HD GIF)
+stacksats strategy animate \
+  --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
+  --output-dir output/<strategy_id>/<version>/<run_id> \
+  --output-name strategy_vs_uniform_hd.gif
 ```
 
 Expected output location for backtest/export artifacts:
@@ -253,7 +259,42 @@ Expected status lines:
 - `Status: NO-OP (idempotent)`
 - `Status: FAILED`
 
-## 6) Useful Development Commands
+## 6) Animate Backtest Output (HD GIF)
+
+Render a high-definition GIF from a previously generated `backtest_result.json`.
+
+Basic:
+
+```bash
+stacksats strategy animate \
+  --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json
+```
+
+With explicit render controls:
+
+```bash
+stacksats strategy animate \
+  --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
+  --output-dir output/<strategy_id>/<version>/<run_id> \
+  --output-name strategy_vs_uniform_hd.gif \
+  --fps 20 \
+  --width 1920 \
+  --height 1080 \
+  --max-frames 240 \
+  --window-mode rolling
+```
+
+Window modes:
+
+- `rolling` (default): uses all eligible rolling windows, downsampled to `--max-frames`.
+- `non-overlapping`: uses a non-overlapping subset for communication-safe reporting.
+
+Expected artifacts:
+
+- `strategy_vs_uniform_hd.gif` (or custom `--output-name`)
+- `animation_manifest.json` (frames/fps/window mode/source JSON metadata)
+
+## 7) Useful Development Commands
 
 Verify this document's example commands end-to-end:
 

@@ -149,6 +149,65 @@ class BacktestResult:
             "metrics_json": str(Path(output_dir) / "metrics.json"),
         }
 
+    def animate(
+        self,
+        output_dir: str = "output",
+        *,
+        fps: int = 20,
+        width: int = 1920,
+        height: int = 1080,
+        max_frames: int = 240,
+        filename: str = "strategy_vs_uniform_hd.gif",
+        window_mode: str = "rolling",
+        source_backtest_json: str | Path | None = None,
+    ) -> dict[str, str]:
+        """Render an animated strategy-vs-uniform GIF and write a manifest JSON."""
+        from .animation_data import prepare_animation_frame_data
+        from .animation_render import render_strategy_vs_uniform_gif
+
+        output_root = Path(output_dir).expanduser().resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+
+        frame_data = prepare_animation_frame_data(
+            self.spd_table,
+            window_mode=window_mode,
+            max_frames=max_frames,
+        )
+        gif_path = output_root / filename
+        render_meta = render_strategy_vs_uniform_gif(
+            frame_data,
+            gif_path,
+            fps=fps,
+            width=width,
+            height=height,
+        )
+
+        source_json_path: str | None = None
+        if source_backtest_json is not None:
+            source_json_path = str(Path(source_backtest_json).expanduser().resolve())
+
+        manifest_payload = {
+            "frames": int(render_meta["frames"]),
+            "fps": int(render_meta["fps"]),
+            "width": int(render_meta["width"]),
+            "height": int(render_meta["height"]),
+            "window_mode": window_mode,
+            "source_backtest_json": source_json_path,
+            "output_gif": str(gif_path),
+            "strategy_id": self.strategy_id,
+            "strategy_version": self.strategy_version,
+            "run_id": self.run_id,
+        }
+        manifest_path = output_root / "animation_manifest.json"
+        manifest_path.write_text(
+            json.dumps(manifest_payload, indent=2),
+            encoding="utf-8",
+        )
+        return {
+            "gif": str(gif_path),
+            "manifest_json": str(manifest_path),
+        }
+
 
 @dataclass(slots=True)
 class ValidationResult:

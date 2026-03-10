@@ -112,6 +112,59 @@ def test_backtest_result_plot_delegates_to_backtest_module(mocker):
     assert paths["performance_comparison"].endswith("my-output/performance_comparison.svg")
 
 
+def test_backtest_result_animate_writes_manifest_and_returns_paths(
+    tmp_path: Path, mocker
+) -> None:
+    result = BacktestResult(
+        spd_table=_sample_spd_df(),
+        exp_decay_percentile=44.2,
+        win_rate=66.6,
+        score=55.4,
+        uniform_exp_decay_percentile=35.0,
+        strategy_id="example",
+        strategy_version="1.2.3",
+        run_id="run-123",
+    )
+    source_json = tmp_path / "backtest_result.json"
+    source_json.write_text("{}", encoding="utf-8")
+
+    def _fake_render(frame_data, output_path, *, fps, width, height, **kwargs):
+        del kwargs
+        Path(output_path).write_bytes(b"GIF89a")
+        return {
+            "gif_path": str(output_path),
+            "frames": len(frame_data),
+            "fps": fps,
+            "width": width,
+            "height": height,
+        }
+
+    mocker.patch("stacksats.animation_render.render_strategy_vs_uniform_gif", _fake_render)
+
+    paths = result.animate(
+        output_dir=str(tmp_path),
+        fps=7,
+        width=800,
+        height=450,
+        max_frames=2,
+        filename="demo.gif",
+        window_mode="non-overlapping",
+        source_backtest_json=source_json,
+    )
+    manifest = json.loads(Path(paths["manifest_json"]).read_text(encoding="utf-8"))
+
+    assert Path(paths["gif"]).exists()
+    assert Path(paths["manifest_json"]).exists()
+    assert manifest["fps"] == 7
+    assert manifest["width"] == 800
+    assert manifest["height"] == 450
+    assert manifest["window_mode"] == "non-overlapping"
+    assert manifest["source_backtest_json"] == str(source_json.resolve())
+    assert manifest["strategy_id"] == "example"
+    assert manifest["strategy_version"] == "1.2.3"
+    assert manifest["run_id"] == "run-123"
+
+
 def test_backtest_result_exp_decay_multiple_none_when_uniform_zero() -> None:
     result = BacktestResult(
         spd_table=_sample_spd_df(),

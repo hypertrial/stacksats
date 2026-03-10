@@ -84,6 +84,15 @@ For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 `stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
 
+Create a high-definition strategy-vs-uniform animation from an existing backtest:
+
+```bash
+stacksats strategy animate \
+  --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
+  --output-dir output/<strategy_id>/<version>/<run_id> \
+  --output-name strategy_vs_uniform_hd.gif
+```
+
 ## Data Source (BRK DuckDB)
 
 Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
