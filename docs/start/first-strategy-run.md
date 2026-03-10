@@ -47,7 +47,18 @@ class MyStrategy(BaseStrategy):
         return TargetProfile(values=preference, mode="preference")
 ```
 
-## 2) Validate your strategy
+## 2) Make BRK data available
+
+Use [BRK Data Source](../data-source.md) before validation/backtest.
+
+```bash
+venv/bin/python scripts/fetch_brk_data.py --target-dir .
+export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+```
+
+If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.duckdb` at repo root manually and export `STACKSATS_ANALYTICS_DUCKDB` to that file.
+
+## 3) Validate your strategy
 
 ```bash
 stacksats strategy validate --strategy my_strategy.py:MyStrategy
@@ -58,7 +69,7 @@ Expected output:
 - A validation summary line including pass/fail and gate results.
 - Strict validation is enabled by default. Use `--no-strict` only if you intentionally want the lighter path.
 
-## 3) Run backtest and export
+## 4) Run backtest and export
 
 Use the canonical command reference for full option sets:
 
@@ -90,14 +101,14 @@ Expected output location:
 output/<strategy_id>/<version>/<run_id>/
 ```
 
-## 4) Keep strategy responsibilities clean
+## 5) Keep strategy responsibilities clean
 
 !!! info "Contract summary"
     You own transforms, signals, and intent over observed data only. The framework owns feature sourcing, as-of materialization, iteration, clipping, and lock semantics.
 
 Read [Framework Boundary](../framework.md) before increasing strategy complexity.
 
-## 5) Troubleshooting
+## 6) Troubleshooting
 
 - If validation fails on constraints, check [Validation Checklist](../validation_checklist.md).
 - If validation fails on lint or feature sourcing, confirm `required_feature_sets()` is provider-backed and remove direct file/network access from the strategy class.

@@ -2,7 +2,7 @@
 
 Source database: `bitcoin_analytics.duckdb`
 Schema scope: all user tables in `main`
-Snapshot date: `2026-03-08`
+Snapshot source: generated from local DuckDB metadata
 
 All metrics in this database were derived via the BRK library from a local Bitcoin node.
 
@@ -10,10 +10,11 @@ Canonical distribution references:
 
 - Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
 - Manifest: `data/brk_data_manifest.json`
+- Regenerate this page: `venv/bin/python scripts/render_duckdb_schema_doc.py`
 
 ## Basic DB Stats
 
-Computed from `bitcoin_analytics.duckdb` on `2026-03-08`.
+Computed from `bitcoin_analytics.duckdb`.
 
 | Stat | Value |
 |---|---|
@@ -51,12 +52,12 @@ Computed from `bitcoin_analytics.duckdb` on `2026-03-08`.
 
 | Column | Type | Nullable |
 |---|---|---|
-| `run_id` | `VARCHAR` | yes |
-| `group_name` | `VARCHAR` | yes |
-| `chunk_start` | `DATE` | yes |
-| `chunk_end` | `DATE` | yes |
-| `metric_batch_start` | `INTEGER` | yes |
-| `metric_batch_end` | `INTEGER` | yes |
+| `run_id` | `VARCHAR` | no |
+| `group_name` | `VARCHAR` | no |
+| `chunk_start` | `DATE` | no |
+| `chunk_end` | `DATE` | no |
+| `metric_batch_start` | `INTEGER` | no |
+| `metric_batch_end` | `INTEGER` | no |
 | `status` | `VARCHAR` | no |
 | `attempt_count` | `INTEGER` | no |
 | `row_count` | `BIGINT` | yes |

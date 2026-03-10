@@ -42,6 +42,7 @@ Update docs in the same PR when any of these change:
 - Release tooling or release workflow changes: update `docs/release.md`, `CONTRIBUTING.md`, and release-facing sections in `README.md`.
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
 - BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
+- BRK data distribution changes (`data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
 
 ## Generated artifact policy
 
@@ -67,5 +68,6 @@ bash scripts/check_docs_refs.sh
 venv/bin/python scripts/check_docs_ux.py
 venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
+venv/bin/python scripts/render_duckdb_schema_doc.py --check
 venv/bin/python -m mkdocs build --strict
 ```

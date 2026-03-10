@@ -66,26 +66,23 @@ flowchart LR
 From the repo root:
 
 ```bash
-pip install -e ".[dev]"
+python -m venv venv
+source venv/bin/activate
+venv/bin/python -m pip install --upgrade pip
+venv/bin/python -m pip install -e ".[dev]"
 ```
 
 Optional dependencies:
 
 ```bash
 # For export and database tooling
-pip install -e ".[deploy]"
+venv/bin/python -m pip install -e ".[deploy]"
 ```
 
 Data source contract:
 - Strategy runtime is BRK-only (`STACKSATS_ANALYTICS_DUCKDB` -> `./bitcoin_analytics.duckdb` fallback).
 - Legacy source compatibility paths are not supported in `0.7.x`.
-- To pull canonical DuckDB + schema artifacts from Drive, run:
-
-```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
-```
-
-See [BRK Data Source](data-source.md) for manifest/checksum details.
+- For DuckDB fetch/manual placement/checksum workflow, use [BRK Data Source](data-source.md).
 
 ## Strategy Spec Format
 

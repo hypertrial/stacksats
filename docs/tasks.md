@@ -17,7 +17,7 @@ Global source contract:
 ### Prerequisites
 
 - Strategy file exists and can be loaded (`module_or_path:ClassName`).
-- Local install is complete (`pip install -e ".[dev]"`).
+- Local install is complete (`venv/bin/python -m pip install -e ".[dev]"`).
 
 ### Command
 
@@ -190,13 +190,13 @@ stacksats strategy run-daily \
 ### Prerequisites
 
 - `bitcoin_analytics.duckdb` is present locally, or `STACKSATS_ANALYTICS_DUCKDB` points to it.
-- Local editable install is ready (`pip install -e ".[dev]"`).
+- Local editable install is ready (`venv/bin/python -m pip install -e ".[dev]"`).
 
 ### Commands
 
 ```bash
 venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
+export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
 venv/bin/python scripts/train_duckdb_factor_strategy.py \
   --start-date 2018-01-01 \
   --end-date 2025-05-31 \
@@ -218,6 +218,7 @@ venv/bin/python scripts/compare_duckdb_alpha.py \
 - Candidate score delta and win-rate delta are positive on the shared horizon.
 - Strict diagnostics are reviewed for permutation p-value, fold stability, and feature drift.
 - Comparison output + artifact hash are captured in PR notes.
+- If manifest file IDs are placeholders, skip fetch and place DuckDB locally before exporting `STACKSATS_ANALYTICS_DUCKDB`.
 
 ## I want to troubleshoot command failures quickly
 

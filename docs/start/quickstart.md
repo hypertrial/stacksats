@@ -15,7 +15,10 @@ Use this page for a 5-minute first run.
 === "Editable (recommended)"
 
     ```bash
-    pip install -e ".[dev]"
+    python -m venv venv
+    source venv/bin/activate
+    venv/bin/python -m pip install --upgrade pip
+    venv/bin/python -m pip install -e ".[dev]"
     ```
 
 === "Package only"
@@ -24,7 +27,20 @@ Use this page for a 5-minute first run.
     pip install stacksats
     ```
 
-## 2) Run an example strategy
+## 2) Make BRK data available
+
+Use the canonical data workflow in [BRK Data Source](../data-source.md).
+
+Most direct path:
+
+```bash
+venv/bin/python scripts/fetch_brk_data.py --target-dir .
+export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+```
+
+If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.duckdb` at repo root manually and set `STACKSATS_ANALYTICS_DUCKDB` to that path.
+
+## 3) Run an example strategy
 
 ```bash
 stacksats strategy backtest \
@@ -40,7 +56,7 @@ This runs a packaged example through the canonical lifecycle and writes artifact
 output/<strategy_id>/<version>/<run_id>/
 ```
 
-## 3) Use the Strategy Lifecycle CLI
+## 4) Use the Strategy Lifecycle CLI
 
 Run lifecycle commands from the canonical reference:
 
@@ -48,7 +64,7 @@ Run lifecycle commands from the canonical reference:
 - [Run Full Backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
 - [Export Strategy Artifacts](../commands.md#4-export-strategy-artifacts)
 
-## 4) Inspect outputs
+## 5) Inspect outputs
 
 Primary run artifacts are written under:
 
@@ -62,7 +78,7 @@ Typical files:
 - `metrics.json`
 - plot `.svg` files
 
-## 5) What to read next
+## 6) What to read next
 
 - [Task Hub](../tasks.md)
 - [Notebook Demo](notebook-demo.md)

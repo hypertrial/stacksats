@@ -86,21 +86,17 @@ For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/st
 
 ## Data Source (BRK DuckDB)
 
-Canonical BRK data distribution:
+Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
 
-- Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
-- Manifest: `data/brk_data_manifest.json`
-- DuckDB artifact size: `10,876,104,704` bytes (`~10.13 GiB`)
-
-Fetch and verify DuckDB + schema:
+Quick command:
 
 ```bash
 venv/bin/python scripts/fetch_brk_data.py --target-dir .
 export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
 ```
 
-Runtime stays local-file based by design. It does not auto-download source data.
-Make sure you have at least `~12 GiB` of free disk space before fetching.
+DuckDB artifact size is `~10.13 GiB`; keep at least `~12 GiB` free disk.
+If manifest file IDs are placeholders, fetch fails by design and you should place DuckDB locally, then export `STACKSATS_ANALYTICS_DUCKDB`.
 
 DuckDB factor strategy workflow (shared-horizon research):
 
