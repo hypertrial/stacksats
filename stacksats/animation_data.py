@@ -175,4 +175,14 @@ def prepare_animation_frame_data(
     selected["win_rate_to_date"] = wins.expanding().mean() * 100.0
     selected["cumulative_excess"] = selected["excess_percentile"].cumsum()
 
+    cumulative_dynamic = selected["dynamic_sats_per_dollar"].cumsum()
+    cumulative_uniform = selected["uniform_sats_per_dollar"].cumsum()
+    selected["cumulative_dynamic_sats_per_dollar"] = cumulative_dynamic
+    selected["cumulative_uniform_sats_per_dollar"] = cumulative_uniform
+    selected["cumulative_btc_vs_uniform_pct"] = np.where(
+        cumulative_uniform.abs() > _WIN_EPS,
+        (cumulative_dynamic / cumulative_uniform - 1.0) * 100.0,
+        0.0,
+    )
+
     return selected.reset_index(drop=True)

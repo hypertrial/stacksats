@@ -20,7 +20,7 @@ def _frame_data(n: int = 6) -> pd.DataFrame:
             "dynamic_percentile": dynamic,
             "uniform_percentile": uniform,
             "excess_percentile": excess,
-            "cumulative_excess": excess.cumsum(),
+            "cumulative_btc_vs_uniform_pct": excess.cumsum(),
             "win_rate_to_date": np.linspace(50.0, 75.0, n),
         }
     )

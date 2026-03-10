@@ -26,8 +26,8 @@ stacksats strategy animate \
 ## What the animation shows
 
 - Top panel: dynamic percentile versus uniform percentile over time.
-- Bottom panel: cumulative excess percentile with positive/negative area fill.
-- Overlay counters: current excess percentile, cumulative excess, and win-rate-to-date.
+- Bottom panel: total BTC bought advantage versus uniform DCA (`%`) to date, with positive/negative area fill.
+- Overlay counters: current excess percentile, total BTC vs uniform (`%`), and win-rate-to-date.
 
 ## Window modes
 

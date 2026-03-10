@@ -15,7 +15,7 @@ REQUIRED_ANIMATION_COLUMNS = (
     "dynamic_percentile",
     "uniform_percentile",
     "excess_percentile",
-    "cumulative_excess",
+    "cumulative_btc_vs_uniform_pct",
     "win_rate_to_date",
 )
 
@@ -34,6 +34,10 @@ class AnimationStyle:
     marker_color: str = "#fbbf24"
     line_width: float = 2.6
     grid_alpha: float = 0.38
+    legend_facecolor: str = "#111e35"
+    legend_edgecolor: str = "#314a72"
+    legend_alpha: float = 0.92
+    legend_text_size: int = 11
 
 
 DEFAULT_ANIMATION_STYLE = AnimationStyle()
@@ -98,8 +102,8 @@ def render_strategy_vs_uniform_gif(
     dynamic = pd.to_numeric(ordered["dynamic_percentile"], errors="coerce").to_numpy()
     uniform = pd.to_numeric(ordered["uniform_percentile"], errors="coerce").to_numpy()
     excess = pd.to_numeric(ordered["excess_percentile"], errors="coerce").to_numpy()
-    cumulative_excess = pd.to_numeric(
-        ordered["cumulative_excess"], errors="coerce"
+    cumulative_btc_advantage = pd.to_numeric(
+        ordered["cumulative_btc_vs_uniform_pct"], errors="coerce"
     ).to_numpy()
     win_rate = pd.to_numeric(ordered["win_rate_to_date"], errors="coerce").to_numpy()
 
@@ -109,7 +113,13 @@ def render_strategy_vs_uniform_gif(
         dpi=dpi,
         facecolor=style.facecolor,
     )
-    grid = fig.add_gridspec(nrows=2, ncols=1, height_ratios=[2.0, 1.0], hspace=0.14)
+    grid = fig.add_gridspec(
+        nrows=2,
+        ncols=1,
+        height_ratios=[2.0, 1.0],
+        hspace=0.14,
+        top=0.86,
+    )
     ax_top = fig.add_subplot(grid[0, 0])
     ax_bottom = fig.add_subplot(grid[1, 0], sharex=ax_top)
 
@@ -123,15 +133,15 @@ def render_strategy_vs_uniform_gif(
         axis.spines["right"].set_color(style.grid_color)
 
     top_min, top_max = _axis_limits(dynamic, uniform)
-    bot_min, bot_max = _axis_limits(cumulative_excess)
+    bot_min, bot_max = _axis_limits(cumulative_btc_advantage)
     ax_top.set_ylim(top_min, top_max)
     ax_bottom.set_ylim(bot_min, bot_max)
     ax_top.set_xlim(x[0], x[-1])
 
     ax_top.set_ylabel("Window Percentile", color=style.text_color, fontsize=12)
-    ax_bottom.set_ylabel("Cumulative Excess", color=style.text_color, fontsize=12)
+    ax_bottom.set_ylabel("Total BTC vs Uniform (%)", color=style.text_color, fontsize=12)
     ax_bottom.set_xlabel("Window Start Date", color=style.text_color, fontsize=12)
-    ax_top.set_title(title, color=style.text_color, fontsize=18, pad=12, weight="bold")
+    ax_top.set_title(title, color=style.text_color, fontsize=21, pad=34, weight="bold")
 
     ax_bottom.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
     ax_bottom.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=10))
@@ -155,7 +165,7 @@ def render_strategy_vs_uniform_gif(
         [],
         color=style.text_color,
         linewidth=2.0,
-        label="Cumulative Excess",
+        label="Total BTC vs Uniform (%)",
     )
     vline_top = ax_top.axvline(x=x[0], color=style.marker_color, alpha=0.9, linewidth=1.3)
     vline_bottom = ax_bottom.axvline(
@@ -163,7 +173,31 @@ def render_strategy_vs_uniform_gif(
     )
     ax_top.axhline(50.0, color=style.grid_color, linestyle="--", linewidth=1.0, alpha=0.6)
     ax_bottom.axhline(0.0, color=style.grid_color, linestyle="--", linewidth=1.0, alpha=0.8)
-    ax_top.legend(loc="upper left", facecolor=style.facecolor, edgecolor=style.grid_color)
+    legend = fig.legend(
+        handles=(dynamic_line, uniform_line, excess_line),
+        labels=(
+            "Dynamic percentile",
+            "Uniform percentile",
+            "Total BTC vs uniform (%)",
+        ),
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.93),
+        ncol=3,
+        frameon=True,
+        fancybox=True,
+        columnspacing=1.4,
+        handlelength=1.8,
+        borderpad=0.55,
+        fontsize=style.legend_text_size,
+    )
+    legend_frame = legend.get_frame()
+    legend_frame.set_facecolor(style.legend_facecolor)
+    legend_frame.set_edgecolor(style.legend_edgecolor)
+    legend_frame.set_alpha(style.legend_alpha)
+    legend_frame.set_linewidth(1.2)
+    for text in legend.get_texts():
+        text.set_color(style.text_color)
+        text.set_fontweight("semibold")
 
     stats_text = ax_top.text(
         0.99,
@@ -200,7 +234,7 @@ def render_strategy_vs_uniform_gif(
         x_slice = x[:end]
         dynamic_slice = dynamic[:end]
         uniform_slice = uniform[:end]
-        cumulative_slice = cumulative_excess[:end]
+        cumulative_slice = cumulative_btc_advantage[:end]
 
         dynamic_line.set_data(x_slice, dynamic_slice)
         uniform_line.set_data(x_slice, uniform_slice)
@@ -232,11 +266,11 @@ def render_strategy_vs_uniform_gif(
         )
 
         current_excess = float(excess[end - 1])
-        current_cumulative = float(cumulative_excess[end - 1])
+        current_cumulative = float(cumulative_btc_advantage[end - 1])
         current_win_rate = float(win_rate[end - 1])
         stats_text.set_text(
             f"Excess: {current_excess:+.2f} pct\n"
-            f"Cumulative: {current_cumulative:+.2f}\n"
+            f"Total BTC vs uniform: {current_cumulative:+.2f}%\n"
             f"Win-rate-to-date: {current_win_rate:.2f}%"
         )
         date_text.set_text(f"Window: {pd.Timestamp(x[end - 1]).date().isoformat()}")

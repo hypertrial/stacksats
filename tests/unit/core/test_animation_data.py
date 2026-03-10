@@ -40,6 +40,13 @@ def test_prepare_animation_frame_data_sorts_cleans_and_adds_running_metrics() ->
     assert np.isfinite(prepared["dynamic_sats_per_dollar"]).all()
     assert np.isclose(float(prepared["cumulative_excess"].iloc[-1]), 2.0)
     assert np.isclose(float(prepared["win_rate_to_date"].iloc[-1]), 33.33333333333333)
+    cum_dynamic = float(prepared["cumulative_dynamic_sats_per_dollar"].iloc[-1])
+    cum_uniform = float(prepared["cumulative_uniform_sats_per_dollar"].iloc[-1])
+    expected_pct = (cum_dynamic / cum_uniform - 1.0) * 100.0
+    assert np.isclose(
+        float(prepared["cumulative_btc_vs_uniform_pct"].iloc[-1]),
+        expected_pct,
+    )
 
 
 def test_prepare_animation_frame_data_supports_non_overlapping_mode() -> None:
