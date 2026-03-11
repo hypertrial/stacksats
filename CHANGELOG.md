@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-03-11
+
+### Added
+- Added dedicated command reference pages under `docs/run/` for validate, backtest, export, run-daily, and animate flows.
+
+### Changed
+- Reorganized docs information architecture and navigation around `Start`, `Run`, `Build`, `Reference`, and `Maintainers`.
+- Refreshed docs visual styling with tokenized light/dark themes, improved typography rhythm, and consistent cards/code/admonition presentation.
+- Refactored docs UX checks to enforce structural intent instead of brittle literal heading matches.
+- Updated docs ownership and cross-page links so task pages remain workflow-intent focused while command pages are the canonical flag/reference source.
+
 ## [0.7.1] - 2026-03-08
 
 ### Fixed

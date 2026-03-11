@@ -7,11 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.7.1 highlights
+## 0.7.2 highlights
 
-- Stabilized BRK overlay and registry unit tests so they no longer require a pre-existing repository-root `bitcoin_analytics.duckdb` file.
-- Added deterministic synthetic DuckDB fixtures in affected unit tests, removing environment-sensitive failures in clean CI runners.
-- Preserved the hard-break BRK-only runtime/source contract introduced in `0.7.0`; no runtime API changes were introduced in this patch release.
+- Reorganized docs navigation around clear user intent paths (`Start`, `Run`, `Build`, `Reference`, `Maintainers`) while keeping compatibility anchors for high-traffic command links.
+- Split lifecycle command documentation into canonical pages under `docs/run/` to reduce duplication and make flags/reference details easier to maintain.
+- Refreshed docs visual styling with clearer light/dark theming, improved readability, and more consistent cards/code/admonition presentation.
+- Refactored docs UX guardrails to check structural outcomes rather than brittle exact heading strings.
 
 ## Upgrade notes
 
