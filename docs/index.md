@@ -46,7 +46,7 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
     ---
 
-    Use copy-paste lifecycle commands and troubleshooting patterns.
+    Use the command index and dedicated command reference pages.
 
     [CLI Commands](commands.md)
 
@@ -54,7 +54,7 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
     ---
 
-    Jump directly to common workflows.
+    Jump directly to workflow outcomes and next steps.
 
     [Task Hub](tasks.md)
 
@@ -84,29 +84,12 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
 </div>
 
-## Most Common Tasks
+## Start in 2 Clicks
 
-1. Validate a strategy: [Task Hub - validate](tasks.md#i-want-to-validate-a-strategy)
-2. Run backtest and inspect artifacts: [Task Hub - backtest](tasks.md#i-want-to-run-a-full-backtest)
-3. Export weights safely: [Task Hub - export](tasks.md#i-want-to-export-strategy-weights)
-4. Migrate old integration code: [Migration Guide](migration.md)
-5. Find answers quickly: [FAQ](faq.md)
-
-## What StackSats Gives You
-
-- Deterministic, invariant-enforced allocation behavior.
-- Clear separation between strategy intent and framework mechanics.
-- Reproducible lifecycle workflows for validate, backtest, and export.
-
-## Recommended Reading Path
-
-1. [Quickstart](start/quickstart.md)
-2. [Task Hub](tasks.md)
-3. [First Strategy Run](start/first-strategy-run.md)
-4. [Framework Boundary](framework.md)
-5. [CLI Commands](commands.md)
-6. [Migration Guide](migration.md)
-7. [FAQ](faq.md)
+1. New user path: [Quickstart](start/quickstart.md) -> [First Strategy Run](start/first-strategy-run.md)
+2. Runner path: [Task Hub](tasks.md) -> [Command Index](commands.md)
+3. Builder path: [Create a Strategy](recipes/create-strategy.md) -> [Framework Boundary](framework.md)
+4. Maintainer path: [Release Guide](release.md) -> [Docs Ownership](docs_ownership.md)
 
 ## Feedback
 

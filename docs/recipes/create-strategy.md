@@ -18,8 +18,8 @@ Create a custom strategy file and run it end-to-end.
 4. Declare any hard-required transformed columns with `required_feature_columns()`.
 5. Keep durable config in public attrs or `params()`, and keep runtime caches private.
 6. Validate and backtest with CLI from the canonical command guide:
-   - [Validate](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
-   - [Backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+   - [Validate](../run/validate.md)
+   - [Backtest](../run/backtest.md)
 
 ## Contract reminders
 
@@ -30,7 +30,7 @@ Create a custom strategy file and run it end-to-end.
 ## Expected output
 
 - Validation summary line with pass/fail status.
-- Backtest artifacts in the standard run output directory (see [CLI Commands](../commands.md#4-export-strategy-artifacts)).
+- Backtest artifacts in the standard run output directory (see [Export Command](../run/export.md)).
 
 ## Common failure patterns
 

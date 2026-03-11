@@ -42,7 +42,7 @@ stacksats strategy validate \
 
 ### Next step
 
-- Run a full backtest: [CLI backtest command](commands.md#3-run-full-backtest-via-strategy-lifecycle-cli).
+- Run a full backtest: [Backtest Command](run/backtest.md).
 
 ## I want to run a full backtest
 
@@ -74,6 +74,7 @@ stacksats strategy backtest \
 ### Next step
 
 - Interpret metrics consistently: [Interpret Backtest Metrics](recipes/interpret-backtest.md).
+- Full flag reference: [Backtest Command](run/backtest.md).
 
 ## I want animated performance visuals
 
@@ -110,6 +111,7 @@ stacksats strategy animate \
 ### Next step
 
 - Share the GIF with fold/validation metrics for context (not as a standalone quality signal).
+- Full flag reference: [Animate Command](run/animate.md).
 
 ## I want to export strategy weights
 
@@ -142,6 +144,7 @@ stacksats strategy export \
 ### Next step
 
 - Review schema guarantees: [Strategy TimeSeries](reference/strategy-timeseries.md).
+- Full flag reference: [Export Command](run/export.md).
 
 ## I want to run daily execution safely
 
@@ -175,6 +178,7 @@ stacksats strategy run-daily \
 ### Next step
 
 - Inspect generated artifact JSON under `output/<strategy_id>/<version>/daily/<run_date>/`.
+- Full flag reference: [Run Daily Command](run/run-daily.md).
 
 ## I want to migrate from removed legacy internals
 
@@ -219,7 +223,7 @@ stacksats strategy run-daily \
 
 ### Next step
 
-- Validate your copied strategy using the [CLI validate command](commands.md#2-validate-strategy-via-strategy-lifecycle-cli).
+- Validate your copied strategy using the [Validate Command](run/validate.md).
 
 ## I want to train and promote the DuckDB alpha strategy
 
@@ -264,7 +268,7 @@ venv/bin/python scripts/compare_duckdb_alpha.py \
 
 ### Command
 
-- Use [CLI Commands](commands.md#troubleshooting) and [Validation Checklist](validation_checklist.md).
+- Use [Command Index](commands.md), [Validation Checklist](validation_checklist.md), and the specific command page under `Run`.
 
 ### Expected output
 

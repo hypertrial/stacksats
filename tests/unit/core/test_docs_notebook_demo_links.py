@@ -24,4 +24,4 @@ def test_notebook_demo_does_not_link_removed_hosted_notebook_asset() -> None:
 def test_notebook_demo_points_to_maintained_workflow_docs() -> None:
     markdown = _notebook_demo_markdown(_repo_root())
     assert "[Quickstart](quickstart.md)" in markdown
-    assert "[CLI Commands](../commands.md)" in markdown
+    assert "(../commands.md)" in markdown

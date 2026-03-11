@@ -128,8 +128,9 @@ A successful run for either style should show:
 
 ## Next Steps
 
-- Run a full backtest: [CLI backtest command](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
-- Export weights: [CLI export command](../commands.md#4-export-strategy-artifacts)
+- Run a full backtest: [Backtest Command](../run/backtest.md)
+- Export weights: [Export Command](../run/export.md)
+- Validate quickly: [Validate Command](../run/validate.md)
 - Compare styles and internals: [Framework Boundary](../framework.md)
 
 ## Feedback

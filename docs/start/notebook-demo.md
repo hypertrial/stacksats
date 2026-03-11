@@ -27,7 +27,7 @@ stacksats strategy backtest \
   --output-dir output
 ```
 
-3. Run the lifecycle commands from [CLI Commands](../commands.md):
+3. Run the lifecycle commands from [Command Index](../commands.md):
    - `stacksats strategy validate ...`
    - `stacksats strategy backtest ...`
    - `stacksats strategy export ...`

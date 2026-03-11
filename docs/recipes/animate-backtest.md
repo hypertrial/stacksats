@@ -53,5 +53,5 @@ stacksats strategy animate \
 
 ## Related docs
 
-- [CLI Commands](../commands.md#6-animate-backtest-output-hd-gif)
+- [Animate Command](../run/animate.md)
 - [Interpret Backtest Metrics](interpret-backtest.md)

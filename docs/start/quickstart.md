@@ -60,9 +60,10 @@ output/<strategy_id>/<version>/<run_id>/
 
 Run lifecycle commands from the canonical reference:
 
-- [Validate Strategy](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
-- [Run Full Backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
-- [Export Strategy Artifacts](../commands.md#4-export-strategy-artifacts)
+- [Validate Strategy](../run/validate.md)
+- [Run Full Backtest](../run/backtest.md)
+- [Export Strategy Artifacts](../run/export.md)
+- [Animate Backtest Output](../run/animate.md)
 
 ## 5) Inspect outputs
 

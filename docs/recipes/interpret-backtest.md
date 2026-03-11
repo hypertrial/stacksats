@@ -13,7 +13,7 @@ Read backtest outputs consistently when comparing strategy changes.
 
 Use the canonical backtest command as reference:
 
-- [CLI Commands: backtest](../commands.md#3-run-full-backtest-via-strategy-lifecycle-cli)
+- [Backtest Command](../run/backtest.md)
 
 Example:
 

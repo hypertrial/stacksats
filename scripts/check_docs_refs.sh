@@ -98,9 +98,9 @@ if command -v rg >/dev/null 2>&1; then
 fi
 
 if [[ -s "${dup_cli_tmp}" ]]; then
-  filtered_dup_cli="$(rg -v '^(README\.md|docs/commands\.md|docs/start/quickstart\.md|docs/start/notebook-demo\.md):' "${dup_cli_tmp}" || true)"
+  filtered_dup_cli="$(rg -v '^(README\.md|docs/commands\.md|docs/run/.*\.md|docs/start/quickstart\.md|docs/start/notebook-demo\.md):' "${dup_cli_tmp}" || true)"
   if [[ -n "${filtered_dup_cli}" ]]; then
-    echo "Canonical example strategy CLI commands should only live in README.md, docs/commands.md, or quickstart entry pages:"
+    echo "Canonical example strategy CLI commands should only live in README.md, docs/commands.md, docs/run/*.md, or quickstart entry pages:"
     while IFS= read -r line; do
       [[ -z "${line}" ]] && continue
       echo " - ${line}"

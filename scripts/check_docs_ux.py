@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Lightweight UX structure checks for key docs pages.
+"""UX structure checks for core docs pages.
 
-This complements link/build checks by enforcing a task-first shape on core pages.
+This validates intent-oriented structure and catches docs drift:
+- key section intent across high-traffic pages
+- task page workflow pattern presence
+- command index size and snippet duplication drift
 """
 
 from __future__ import annotations
@@ -11,80 +14,75 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 
-REQUIRED_HEADINGS: dict[str, list[str]] = {
+FEEDBACK_TOKEN = "template=docs_feedback.md"
+
+REQUIRED_HEADING_PATTERNS: dict[str, list[tuple[str, str]]] = {
     "docs/index.md": [
-        "## Choose Your Path",
-        "## Most Common Tasks",
-        "## Feedback",
+        ("choose path routing", r"^##\s+Choose Your Path$"),
+        ("quick routes", r"^##\s+Start in 2 Clicks$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/tasks.md": [
-        "# I Want To...",
-        "## Feedback",
+        ("task hub heading", r"^#\s+I Want To"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/commands.md": [
-        "## Most Common Commands (copy/paste)",
-        "## 2) Validate Strategy via Strategy Lifecycle CLI",
-        "## 3) Run Full Backtest via Strategy Lifecycle CLI",
-        "## 4) Export Strategy Artifacts",
-        "## Troubleshooting",
-        "## Feedback",
+        ("command index heading", r"^#\s+Command Index$"),
+        ("command pages section", r"^##\s+Command Pages$"),
+        ("troubleshooting section", r"^##\s+Troubleshooting$"),
+        ("feedback section", r"^##\s+Feedback$"),
+        (
+            "compatibility validate anchor",
+            r"^##\s+(?:\d+\)\s+)?Validate Strategy via Strategy Lifecycle CLI$",
+        ),
+        (
+            "compatibility backtest anchor",
+            r"^##\s+(?:\d+\)\s+)?Run Full Backtest via Strategy Lifecycle CLI$",
+        ),
+        (
+            "compatibility export anchor",
+            r"^##\s+(?:\d+\)\s+)?Export Strategy Artifacts$",
+        ),
     ],
     "docs/start/quickstart.md": [
-        "## Success Criteria",
-        "## Troubleshooting",
-        "## Feedback",
+        ("success criteria section", r"^##\s+Success Criteria$"),
+        ("troubleshooting section", r"^##\s+Troubleshooting$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/start/first-strategy-run.md": [
-        "## Success Criteria",
-        "## 5) Troubleshooting",
-        "## Next Steps",
-        "## Feedback",
+        ("success criteria section", r"^##\s+Success Criteria$"),
+        ("next steps section", r"^##\s+Next Steps$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/start/minimal-strategy-examples.md": [
-        "# Minimal Strategy Examples",
-        "## Example A: `propose_weight(state)` style",
-        "## Example B: `build_target_profile(...)` style",
-        "## Success Criteria",
-        "## Feedback",
+        ("page heading", r"^#\s+Minimal Strategy Examples$"),
+        ("example A section", r"^##\s+Example A:\s+.*propose_weight"),
+        ("example B section", r"^##\s+Example B:\s+.*build_target_profile"),
+        ("success criteria section", r"^##\s+Success Criteria$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/migration.md": [
-        "## Old -> New Mapping",
-        "## Upgrade Checklist",
-        "## Feedback",
+        ("mapping section", r"^##\s+Old -> New Mapping$"),
+        ("upgrade checklist", r"^##\s+Upgrade Checklist$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/faq.md": [
-        "# FAQ",
-        "## Strategy authoring",
-        "## CLI and outputs",
-        "## Migration and compatibility",
-        "## Docs feedback workflow",
-        "## Feedback",
+        ("page heading", r"^#\s+FAQ$"),
+        ("strategy authoring section", r"^##\s+Strategy authoring$"),
+        ("cli outputs section", r"^##\s+CLI and outputs$"),
+        ("migration section", r"^##\s+Migration and compatibility$"),
+        ("feedback workflow section", r"^##\s+Docs feedback workflow$"),
+        ("feedback section", r"^##\s+Feedback$"),
     ],
 }
 
-REQUIRED_SUBSTRINGS: dict[str, list[str]] = {
-    "docs/migration.md": [
-        "compute_weights_shared",
-        "compute_weights_with_features",
-        "BACKTEST_END",
-        "get_backtest_end()",
-        "generate_date_ranges(start, end, min_length_days)",
-        "generate_date_ranges(start, end)",
-    ],
-    "docs/commands.md": [
-        "--start-date",
-        "--end-date",
-        "output/<strategy_id>/<version>/<run_id>/",
-    ],
-    "docs/start/minimal-strategy-examples.md": [
-        "propose_weight",
-        "build_target_profile",
-    ],
-    "docs/faq.md": [
-        "template=docs_feedback.md",
-        "label%3Adocumentation",
-    ],
-}
+COMMAND_PAGE_PATHS = [
+    "docs/run/validate.md",
+    "docs/run/backtest.md",
+    "docs/run/export.md",
+    "docs/run/run-daily.md",
+    "docs/run/animate.md",
+]
 
 FEEDBACK_LINK_PAGES = [
     "docs/index.md",
@@ -97,9 +95,8 @@ FEEDBACK_LINK_PAGES = [
     "docs/faq.md",
     "docs/model_backtest.md",
     "docs/reference/strategy-timeseries.md",
+    *COMMAND_PAGE_PATHS,
 ]
-
-FEEDBACK_TOKEN = "template=docs_feedback.md"
 
 
 def load(rel: str) -> str:
@@ -109,43 +106,104 @@ def load(rel: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def line_count(rel: str) -> int:
+    return len(load(rel).splitlines())
+
+
+def _extract_bash_blocks(text: str) -> list[str]:
+    blocks = re.findall(r"```bash\s*(.*?)```", text, flags=re.DOTALL)
+    normalized: list[str] = []
+    for block in blocks:
+        lines = [line.rstrip() for line in block.strip().splitlines()]
+        lines = [line for line in lines if line and not line.strip().startswith("#")]
+        if len(lines) < 2:
+            continue
+        normalized.append("\n".join(lines))
+    return normalized
+
+
 def main() -> int:
     errors: list[str] = []
 
-    for rel, headings in REQUIRED_HEADINGS.items():
+    for rel, required_patterns in REQUIRED_HEADING_PATTERNS.items():
         try:
             text = load(rel)
         except FileNotFoundError as exc:
             errors.append(str(exc))
             continue
-        for heading in headings:
-            if heading not in text:
-                errors.append(f"{rel}: missing heading '{heading}'")
+        for label, pattern in required_patterns:
+            if not re.search(pattern, text, flags=re.MULTILINE):
+                errors.append(f"{rel}: missing required section intent '{label}'")
 
-    for rel, required in REQUIRED_SUBSTRINGS.items():
-        text = load(rel)
-        for token in required:
-            if token not in text:
-                errors.append(f"{rel}: missing required content '{token}'")
+    first_strategy_text = load("docs/start/first-strategy-run.md")
+    if not re.search(
+        r"^##\s+(?:\d+\)\s+)?Troubleshooting$",
+        first_strategy_text,
+        re.MULTILINE,
+    ):
+        errors.append("docs/start/first-strategy-run.md: missing troubleshooting section")
 
     tasks_text = load("docs/tasks.md")
-    task_heading_count = len(re.findall(r"^## I want to ", tasks_text, flags=re.MULTILINE))
-    if task_heading_count < 5:
-        errors.append(
-            "docs/tasks.md: expected at least 5 'I want to ...' task sections"
-        )
+    task_heading_count = len(
+        re.findall(r"^##\s+I want to ", tasks_text, flags=re.MULTILINE | re.IGNORECASE)
+    )
+    if task_heading_count < 7:
+        errors.append("docs/tasks.md: expected at least 7 'I want to ...' sections")
 
-    for subsection in [
-        "### Prerequisites",
-        "### Command",
-        "### Expected output",
-        "### Troubleshooting",
-        "### Next step",
-    ]:
-        if tasks_text.count(subsection) < 4:
-            errors.append(
-                f"docs/tasks.md: expected repeated subsection '{subsection}' in task blocks"
+    command_subsections = len(
+        re.findall(r"^###\s+Command[s]?$", tasks_text, flags=re.MULTILINE | re.IGNORECASE)
+    )
+    if command_subsections < 7:
+        errors.append(
+            "docs/tasks.md: expected repeated command sections across task blocks"
+        )
+    if (
+        len(
+            re.findall(
+                r"^###\s+Troubleshooting$", tasks_text, flags=re.MULTILINE | re.IGNORECASE
             )
+        )
+        < 7
+    ):
+        errors.append(
+            "docs/tasks.md: expected repeated troubleshooting sections across task blocks"
+        )
+    if (
+        len(
+            re.findall(
+                r"^###\s+Next step[s]?$", tasks_text, flags=re.MULTILINE | re.IGNORECASE
+            )
+        )
+        < 7
+    ):
+        errors.append("docs/tasks.md: expected repeated next-step sections across task blocks")
+
+    commands_text = load("docs/commands.md")
+    for token in [
+        "run/validate.md",
+        "run/backtest.md",
+        "run/export.md",
+        "run/run-daily.md",
+        "run/animate.md",
+    ]:
+        if token not in commands_text:
+            errors.append(f"docs/commands.md: missing command-page link '{token}'")
+
+    if line_count("docs/commands.md") > 220:
+        errors.append("docs/commands.md: command index should stay concise (<= 220 lines)")
+
+    for rel in COMMAND_PAGE_PATHS:
+        if line_count(rel) > 220:
+            errors.append(f"{rel}: command page should stay concise (<= 220 lines)")
+
+    command_blocks = set(_extract_bash_blocks(commands_text))
+    tasks_blocks = set(_extract_bash_blocks(tasks_text))
+    duplicates = sorted(command_blocks.intersection(tasks_blocks))
+    if duplicates:
+        errors.append(
+            "docs/commands.md and docs/tasks.md contain duplicated long bash snippets; "
+            "keep commands canonical in docs/run/*.md and task snippets minimal."
+        )
 
     for rel in FEEDBACK_LINK_PAGES:
         text = load(rel)

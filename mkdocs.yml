@@ -84,28 +84,33 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Getting Started:
+  - Start:
       - Welcome: index.md
-      - Task Hub: tasks.md
-      - BRK Data Source: data-source.md
       - Quickstart: start/quickstart.md
       - First Strategy Run: start/first-strategy-run.md
       - Minimal Strategy Examples: start/minimal-strategy-examples.md
       - Notebook Demo: start/notebook-demo.md
-      - CLI Commands: commands.md
-      - Migration Guide: migration.md
+      - BRK Data Source: data-source.md
       - FAQ: faq.md
-  - Concepts:
+  - Run:
+      - Task Hub: tasks.md
+      - Command Index: commands.md
+      - Validate Command: run/validate.md
+      - Backtest Command: run/backtest.md
+      - Export Command: run/export.md
+      - Run Daily Command: run/run-daily.md
+      - Animate Command: run/animate.md
+  - Build:
       - Framework Boundary: framework.md
       - Model Overview: model.md
       - Signals and Features: concepts/model-signals-features.md
       - Allocation Kernel: concepts/allocation-kernel.md
       - Backtest Runtime: model_backtest.md
-  - How-To Recipes:
       - Create a Strategy: recipes/create-strategy.md
       - Strict Validation: recipes/strict-validation.md
       - Interpret Backtest Metrics: recipes/interpret-backtest.md
       - Animate Backtest Performance: recipes/animate-backtest.md
+      - Migration Guide: migration.md
   - Reference:
       - Glossary: glossary.md
       - DuckDB Schema: reference/bitcoin-analytics-duckdb-schema.md

@@ -13,7 +13,7 @@ Run strict validation and diagnose failures quickly.
 
 Use the canonical validate command options as your source of truth:
 
-- [CLI Commands: validate](../commands.md#2-validate-strategy-via-strategy-lifecycle-cli)
+- [Validate Command](../run/validate.md)
 
 Typical strict run:
 
