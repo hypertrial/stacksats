@@ -195,7 +195,15 @@ def test_runner_backtest_materializes_features_per_window_end(
     btc_df = _btc_df()
     original_materialize = runner._materialize_strategy_features
 
-    def _wrapped_materialize(strategy, btc_df_arg, *, start_date, end_date, current_date):
+    def _wrapped_materialize(
+        strategy,
+        btc_df_arg,
+        *,
+        start_date,
+        end_date,
+        current_date,
+        cache_namespace=None,
+    ):
         seen_current_dates.append(current_date)
         return original_materialize(
             strategy,
@@ -203,6 +211,7 @@ def test_runner_backtest_materializes_features_per_window_end(
             start_date=start_date,
             end_date=end_date,
             current_date=current_date,
+            cache_namespace=cache_namespace,
         )
 
     monkeypatch.setattr(runner, "_materialize_strategy_features", _wrapped_materialize)
