@@ -50,9 +50,9 @@ Single-window object:
 - `schema_markdown()`
 - `validate_schema_coverage()`
 - `validate()`
-- `to_dataframe()`
+- `to_dataframe()` — returns a Polars DataFrame
 - `to_csv(path)`
-- `from_dataframe(...)`
+- `from_dataframe(...)` — accepts Polars or pandas DataFrame
 - `from_csv(...)`
 - `columns`
 - `row_count`
@@ -61,9 +61,9 @@ Single-window object:
 
 Batch object:
 
-- `to_dataframe()`
+- `to_dataframe()` — returns a Polars DataFrame
 - `to_csv(path)`
-- `from_flat_dataframe(...)`
+- `from_flat_dataframe(...)` — accepts Polars or pandas DataFrame
 - `from_csv(...)`
 - `from_artifact_dir(...)`
 - `schema_markdown()`

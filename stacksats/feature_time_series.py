@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 
 import pandas as pd
@@ -24,12 +25,19 @@ def _validate_date_column(df: pl.DataFrame) -> None:
         raise ValueError(f"Column '{DATE_COL}' must be sorted ascending.")
 
 
-def _validate_no_future_data(df: pl.DataFrame, as_of_date: pd.Timestamp) -> None:
+def _validate_no_future_data(df: pl.DataFrame, as_of_date: dt.datetime) -> None:
     """Ensure no row has date after as_of_date."""
     max_date = df[DATE_COL].max()
     if max_date is None:
         return
-    if pd.Timestamp(max_date) > pd.Timestamp(as_of_date).normalize():
+    if isinstance(max_date, dt.datetime):
+        max_d = max_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        max_d = dt.datetime.fromisoformat(str(max_date)[:10])
+    ref = as_of_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    if as_of_date.tzinfo is not None:
+        ref = as_of_date.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    if max_d > ref:
         raise ValueError(
             "FeatureTimeSeries must not contain data after as_of_date "
             f"(as_of_date={as_of_date!s}, max date in data={max_date!s})."
@@ -66,12 +74,59 @@ class FeatureTimeSeries:
         _validate_date_column(self._frame)
 
     @classmethod
+    def from_dataframe(
+        cls,
+        df: pl.DataFrame,
+        *,
+        required_columns: tuple[str, ...] = (),
+        as_of_date: dt.datetime | None = None,
+        require_finite: tuple[str, ...] | None = None,
+    ) -> FeatureTimeSeries:
+        """
+        Build a FeatureTimeSeries from a Polars DataFrame.
+
+        The DataFrame must have a 'date' column (sorted, unique, no nulls).
+        Other columns are feature columns.
+
+        Parameters
+        ----------
+        df : polars DataFrame
+            Feature matrix with 'date' column and feature columns.
+        required_columns : tuple of str
+            Column names that must be present (excluding 'date').
+        as_of_date : datetime or None
+            If set, validates that no row has date after this date (no forward-looking).
+        require_finite : tuple of str or None
+            If set, these numeric columns must contain only finite values.
+        """
+        if not isinstance(df, pl.DataFrame):
+            raise TypeError("FeatureTimeSeries.from_dataframe requires a polars DataFrame.")
+        if df.is_empty():
+            pl_df = pl.DataFrame(schema={DATE_COL: pl.Datetime("us")})
+        else:
+            pl_df = df.clone()
+            if DATE_COL not in pl_df.columns and pl_df.width > 0:
+                pl_df = pl_df.rename({pl_df.columns[0]: DATE_COL})
+        for col in required_columns:
+            if col not in pl_df.columns:
+                raise ValueError(
+                    f"FeatureTimeSeries missing required column: {col!r}. "
+                    f"Available: {tuple(pl_df.columns)!r}."
+                )
+        _validate_date_column(pl_df)
+        if as_of_date is not None and not pl_df.is_empty():
+            _validate_no_future_data(pl_df, as_of_date)
+        if require_finite:
+            _validate_finite_numeric(pl_df, tuple(require_finite))
+        return cls(_frame=pl_df)
+
+    @classmethod
     def from_pandas(
         cls,
         df: pd.DataFrame,
         *,
         required_columns: tuple[str, ...] = (),
-        as_of_date: pd.Timestamp | None = None,
+        as_of_date: dt.datetime | None = None,
         require_finite: tuple[str, ...] | None = None,
     ) -> FeatureTimeSeries:
         """

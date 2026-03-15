@@ -6,10 +6,10 @@ framework-side allocation mechanics.
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 
 import numpy as np
-import pandas as pd
 
 MIN_SPAN_DAYS = 90
 MAX_SPAN_DAYS = 1460
@@ -20,12 +20,18 @@ MAX_DAILY_WEIGHT = 0.1
 SUM_TOLERANCE = 1e-8
 
 
-def _as_timestamp(value: pd.Timestamp | str) -> pd.Timestamp:
+def _as_timestamp(value: dt.datetime | str) -> dt.datetime:
     """Normalize date-like values into timezone-naive timestamps."""
-    ts = pd.Timestamp(value)
+    if isinstance(value, str):
+        try:
+            ts = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            ts = dt.datetime.strptime(value[:10], "%Y-%m-%d")
+    else:
+        ts = value
     if ts.tzinfo is not None:
-        ts = ts.tz_localize(None)
-    return ts.normalize()
+        ts = ts.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return ts.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _load_allocation_span_days() -> int:
@@ -49,7 +55,7 @@ def _load_allocation_span_days() -> int:
 
 
 ALLOCATION_SPAN_DAYS = _load_allocation_span_days()
-ALLOCATION_WINDOW_OFFSET = pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+ALLOCATION_WINDOW_OFFSET = dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
 
 def _is_contract_length(n_days: int) -> bool:
@@ -75,9 +81,16 @@ def _assert_weight_budget_feasible(n_days: int) -> None:
         )
 
 
+def _day_count(start: dt.datetime, end: dt.datetime) -> int:
+    """Number of calendar days from start to end inclusive."""
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
+
 def validate_span_length(
-    start_date: pd.Timestamp | str,
-    end_date: pd.Timestamp | str,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
 ) -> int:
     """Validate allocation span cardinality.
 
@@ -87,7 +100,7 @@ def validate_span_length(
     end_ts = _as_timestamp(end_date)
     if end_ts < start_ts:
         raise ValueError("end_date must be on or after start_date.")
-    n_days = len(pd.date_range(start=start_ts, end=end_ts, freq="D"))
+    n_days = _day_count(start_ts, end_ts)
     if n_days != ALLOCATION_SPAN_DAYS:
         raise ValueError(
             "Allocation span must match configured fixed span "
@@ -96,15 +109,45 @@ def validate_span_length(
     return n_days
 
 
-def compute_n_past(date_index: pd.DatetimeIndex, current_date: pd.Timestamp | str) -> int:
-    """Compute deterministic count of days at-or-before current_date."""
-    if len(date_index) == 0:
+def _to_naive_utc(value: dt.datetime | str | object) -> dt.datetime:
+    """Normalize date-like value to timezone-naive midnight UTC."""
+    if isinstance(value, dt.datetime):
+        ts = value
+    elif isinstance(value, str):
+        ts = _as_timestamp(value)
+        return ts  # already normalized
+    elif hasattr(value, "to_pydatetime"):
+        ts = value.to_pydatetime()
+    else:
+        return _as_timestamp(str(value))
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return ts.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def compute_n_past(
+    date_index: list[dt.datetime] | list,
+    current_date: dt.datetime | str,
+) -> int:
+    """Compute deterministic count of days at-or-before current_date.
+
+    date_index must be sorted ascending (monotonic). Elements can be
+    datetime, str, or pandas Timestamp; current_date is normalized to naive UTC.
+    """
+    dates = list(date_index)
+    if len(dates) == 0:
         return 0
-    current_ts = _as_timestamp(current_date)
-    normalized_index = pd.DatetimeIndex(date_index).normalize()
-    if not normalized_index.is_monotonic_increasing:
-        raise ValueError("Allocation index must be monotonic increasing.")
-    return int((normalized_index <= current_ts).sum())
+    current_ts = _to_naive_utc(current_date)
+    prev = None
+    count = 0
+    for d in dates:
+        norm = _to_naive_utc(d)
+        if prev is not None and norm < prev:
+            raise ValueError("Allocation index must be monotonic increasing.")
+        prev = norm
+        if norm <= current_ts:
+            count += 1
+    return count
 
 
 def validate_locked_prefix(

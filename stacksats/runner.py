@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
+import polars as pl
 
 from .column_map_provider import ColumnMapDataProvider
 from .data_btc import BTCDataProvider
@@ -1011,7 +1012,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         output_root.mkdir(parents=True, exist_ok=True)
         result_path = output_root / "weights.csv"
         export_df = series_batch.to_dataframe()
-        export_df.to_csv(result_path, index=False)
+        if isinstance(export_df, pl.DataFrame):
+            export_df.write_csv(result_path, include_header=True)
+        else:
+            export_df.to_csv(result_path, index=False)
         schema_path = output_root / "timeseries_schema.md"
         schema_path.write_text(series_batch.schema_markdown(), encoding="utf-8")
         artifact_metadata = StrategyArtifactSet(

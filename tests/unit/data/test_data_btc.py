@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 
 import pandas as pd
@@ -40,20 +41,23 @@ def test_load_success_from_parquet(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     pq_path = tmp_path / "bitcoin_analytics.parquet"
     _create_parquet_fixture(pq_path, start="2024-01-01", days=5)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
 
     df = provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
 
     assert "price_usd" in df.columns
     assert "mvrv" in df.columns
-    assert df.index.min() == pd.Timestamp("2024-01-01")
-    assert df.index.max() == pd.Timestamp("2024-01-05")
-    assert float(df.loc[pd.Timestamp("2024-01-05"), "price_usd"]) > 0.0
+    assert "date" in df.columns
+    assert df["date"].min() is not None
+    assert str(df["date"].min())[:10] == "2024-01-01"
+    assert str(df["date"].max())[:10] == "2024-01-05"
+    last_row = df.sort("date").tail(1)
+    assert last_row.height == 1 and float(last_row["price_usd"][0]) > 0.0
 
 
 def test_load_missing_parquet_file_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", "/tmp/does-not-exist.parquet")
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="Parquet file not found"):
         provider.load(backtest_start="2024-01-01")
 
@@ -62,7 +66,7 @@ def test_load_empty_parquet_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     pq_path = tmp_path / "empty.parquet"
     pd.DataFrame(columns=["date", "price_usd"]).to_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="Parquet file is empty"):
         provider.load(backtest_start="2024-01-01")
 
@@ -73,7 +77,7 @@ def test_load_parquet_missing_price_column_fails(tmp_path: Path, monkeypatch: py
     df = df.set_index("date")
     df.to_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-03"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 3))
     with pytest.raises(DataLoadError, match="must contain a 'price_usd' column"):
         provider.load(backtest_start="2024-01-01", end_date="2024-01-03")
 
@@ -82,7 +86,7 @@ def test_load_stale_data_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     pq_path = tmp_path / "stale.parquet"
     _create_parquet_fixture(pq_path, start="2024-01-01", days=3)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-02-20"), max_staleness_days=3)
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 2, 20), max_staleness_days=3)
     with pytest.raises(DataLoadError, match="does not cover requested end_date"):
         provider.load(backtest_start="2024-01-01", end_date="2024-02-20")
 
@@ -101,7 +105,7 @@ def test_load_missing_dates_fails_closed(tmp_path: Path, monkeypatch: pytest.Mon
     df = df.set_index("date")
     df.to_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="missing dates"):
         provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
 
@@ -120,6 +124,6 @@ def test_load_missing_price_values_fail(tmp_path: Path, monkeypatch: pytest.Monk
     df = df.set_index("date")
     df.to_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
-    provider = BTCDataProvider(clock=lambda: pd.Timestamp("2024-01-05"))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="missing price_usd values"):
         provider.load(backtest_start="2024-01-01", end_date="2024-01-05")

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+import polars as pl
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .feature_time_series import FeatureTimeSeries
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
@@ -24,19 +25,39 @@ if TYPE_CHECKING:
     from .strategy_time_series import WeightTimeSeriesBatch
 
 
+def _to_datetime(value: dt.datetime | str) -> dt.datetime:
+    """Normalize date-like to naive datetime."""
+    if isinstance(value, dt.datetime):
+        out = value
+    elif isinstance(value, str):
+        try:
+            out = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            out = dt.datetime.strptime(value[:10], "%Y-%m-%d")
+    else:
+        # pandas Timestamp during migration
+        if hasattr(value, "to_pydatetime"):
+            out = value.to_pydatetime()
+        else:
+            out = dt.datetime.strptime(str(value)[:10], "%Y-%m-%d")
+    if out.tzinfo is not None:
+        out = out.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return out.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def strategy_context_from_features_df(
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-    current_date: pd.Timestamp,
+    features_df: pl.DataFrame | pd.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+    current_date: dt.datetime | str,
     *,
     required_columns: tuple[str, ...] = (),
-    as_of_date: pd.Timestamp | None = None,
+    as_of_date: dt.datetime | str | None = None,
     locked_weights: np.ndarray | None = None,
     btc_price_col: str = "price_usd",
     mvrv_col: str = "mvrv",
 ) -> StrategyContext:
-    """Build a StrategyContext from a pandas feature DataFrame. Prefer StrategyContext.from_features_df()."""
+    """Build a StrategyContext from a feature DataFrame (Polars or pandas). Prefer StrategyContext.from_features_df()."""
     return StrategyContext.from_features_df(
         features_df,
         start_date,
@@ -55,9 +76,9 @@ class StrategyContext:
     """Normalized context passed into strategy computation."""
 
     features: FeatureTimeSeries
-    start_date: pd.Timestamp
-    end_date: pd.Timestamp
-    current_date: pd.Timestamp
+    start_date: dt.datetime
+    end_date: dt.datetime
+    current_date: dt.datetime
     locked_weights: np.ndarray | None = None
     btc_price_col: str = "price_usd"
     mvrv_col: str = "mvrv"
@@ -65,32 +86,40 @@ class StrategyContext:
     @classmethod
     def from_features_df(
         cls,
-        features_df: pd.DataFrame,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        current_date: pd.Timestamp,
+        features_df: pl.DataFrame | pd.DataFrame,
+        start_date: dt.datetime | str,
+        end_date: dt.datetime | str,
+        current_date: dt.datetime | str,
         *,
         required_columns: tuple[str, ...] = (),
-        as_of_date: pd.Timestamp | None = None,
+        as_of_date: dt.datetime | str | None = None,
         locked_weights: np.ndarray | None = None,
         btc_price_col: str = "price_usd",
         mvrv_col: str = "mvrv",
     ) -> StrategyContext:
-        """Build a StrategyContext from a pandas feature DataFrame (wraps in FeatureTimeSeries).
+        """Build a StrategyContext from a feature DataFrame (Polars or pandas, wraps in FeatureTimeSeries).
 
         When as_of_date is provided, validates no forward-looking data
         (max date in features <= as_of_date).
         """
-        features = FeatureTimeSeries.from_pandas(
-            features_df,
-            required_columns=required_columns,
-            as_of_date=as_of_date,
-        )
+        as_of = _to_datetime(as_of_date) if as_of_date is not None else None
+        if isinstance(features_df, pl.DataFrame):
+            features = FeatureTimeSeries.from_dataframe(
+                features_df,
+                required_columns=required_columns,
+                as_of_date=as_of,
+            )
+        else:
+            features = FeatureTimeSeries.from_pandas(
+                features_df,
+                required_columns=required_columns,
+                as_of_date=as_of,
+            )
         return cls(
             features=features,
-            start_date=start_date,
-            end_date=end_date,
-            current_date=current_date,
+            start_date=_to_datetime(start_date),
+            end_date=_to_datetime(end_date),
+            current_date=_to_datetime(current_date),
             locked_weights=locked_weights,
             btc_price_col=btc_price_col,
             mvrv_col=mvrv_col,
@@ -136,12 +165,18 @@ class ValidationConfig:
 
 
 def _default_export_range_start() -> str:
-    today = pd.Timestamp.now().normalize()
-    return (today - pd.Timedelta(days=364)).strftime("%Y-%m-%d")
+    today = dt.datetime.now(dt.timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return (today - dt.timedelta(days=364)).strftime("%Y-%m-%d")
 
 
 def _default_export_range_end() -> str:
-    return pd.Timestamp.now().normalize().strftime("%Y-%m-%d")
+    return (
+        dt.datetime.now(dt.timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .strftime("%Y-%m-%d")
+    )
 
 
 @dataclass(frozen=True)
@@ -222,7 +257,7 @@ class StrategyRunResult:
 class DayState:
     """Per-day user hook input for proposing today's weight."""
 
-    current_date: pd.Timestamp
+    current_date: dt.datetime
     features: pd.Series
     remaining_budget: float
     day_index: int
@@ -251,9 +286,9 @@ def _normalize_param_value(value: object, *, key_path: str) -> object:
         return value
     if isinstance(value, Path):
         return str(value)
-    if isinstance(value, pd.Timestamp):
-        return value.isoformat()
     if isinstance(value, (dt.datetime, dt.date)):
+        return value.isoformat()
+    if hasattr(value, "isoformat") and callable(getattr(value, "isoformat")):
         return value.isoformat()
     if isinstance(value, list | tuple):
         return [
@@ -463,7 +498,7 @@ class BaseStrategy(ABC):
         proposed: list[float] = []
         for day_index, current_date in enumerate(features_df.index):
             state = DayState(
-                current_date=current_date,
+                current_date=_to_datetime(current_date),
                 features=features_df.loc[current_date],
                 remaining_budget=remaining_budget,
                 day_index=day_index,
@@ -482,7 +517,7 @@ class BaseStrategy(ABC):
         from .framework_contract import compute_n_past
 
         expected_index = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        observed_end = min(pd.Timestamp(ctx.current_date), pd.Timestamp(ctx.end_date))
+        observed_end = min(ctx.current_date, ctx.end_date)
         observed_index = pd.date_range(ctx.start_date, observed_end, freq="D")
         features_df = self.transform_features(ctx)
         if not isinstance(features_df, pd.DataFrame):

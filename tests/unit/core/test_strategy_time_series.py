@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import (
@@ -254,10 +255,15 @@ def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
 
     assert list(report.columns) == ["date", "column", "value", "score", "method", "threshold"]
     assert len(report) == 1
-    assert report.iloc[0]["column"] == "price_usd"
-    assert report.iloc[0]["date"] == pd.Timestamp("2024-01-05")
-    assert np.isclose(report.iloc[0]["value"], 1000.0)
-    assert report.iloc[0]["method"] == "mad"
+    row = report.row(0)
+    col_idx = report.columns.index("column")
+    date_idx = report.columns.index("date")
+    value_idx = report.columns.index("value")
+    method_idx = report.columns.index("method")
+    assert row[col_idx] == "price_usd"
+    assert str(row[date_idx])[:10] == "2024-01-05"
+    assert np.isclose(float(row[value_idx]), 1000.0)
+    assert row[method_idx] == "mad"
 
 
 def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_values() -> None:
@@ -284,8 +290,8 @@ def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_va
 
     assert "price_usd_mean_2" in stats.columns
     assert "return_std_2" in stats.columns
-    assert np.isclose(stats.loc[1, "price_usd_mean_2"], 105.0)
-    assert np.isclose(stats.loc[3, "price_usd_mean_2"], 125.0)
+    assert np.isclose(float(stats["price_usd_mean_2"][1]), 105.0)
+    assert np.isclose(float(stats["price_usd_mean_2"][3]), 125.0)
 
 
 def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
@@ -340,10 +346,11 @@ def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None
     drawdowns = series.drawdown_table(top_n=3)
 
     assert len(drawdowns) == 1
-    assert np.isclose(float(drawdowns.loc[0, "max_drawdown"]), -0.1)
-    assert bool(drawdowns.loc[0, "recovered"]) is True
-    assert drawdowns.loc[0, "peak_date"] == pd.Timestamp("2024-01-01")
-    assert drawdowns.loc[0, "recovery_date"] == pd.Timestamp("2024-01-04")
+    row0 = drawdowns.row(0, named=True)
+    assert np.isclose(float(row0["max_drawdown"]), -0.1)
+    assert bool(row0["recovered"]) is True
+    assert str(row0["peak_date"])[:10] == "2024-01-01"
+    assert str(row0["recovery_date"])[:10] == "2024-01-04"
 
 
 def test_strategy_time_series_seasonality_profile_weekday_returns_expected_counts() -> None:
@@ -369,9 +376,9 @@ def test_strategy_time_series_seasonality_profile_weekday_returns_expected_count
     profile = series.seasonality_profile(freq="weekday", series="returns")
 
     assert len(profile) == 7
-    monday = profile.loc[profile["period_label"] == "Mon"].iloc[0]
+    monday = profile.filter(pl.col("period_label") == "Mon").row(0, named=True)
     assert int(monday["count"]) == 0
-    tuesday = profile.loc[profile["period_label"] == "Tue"].iloc[0]
+    tuesday = profile.filter(pl.col("period_label") == "Tue").row(0, named=True)
     assert int(tuesday["count"]) == 1
 
 
@@ -427,7 +434,7 @@ def test_strategy_time_series_decompose_additive_returns_expected_columns() -> N
     assert set(["observed", "trend", "seasonal", "residual", "model", "period", "series"]).issubset(
         decomposition.columns
     )
-    assert decomposition["model"].iloc[0] == "additive"
+    assert decomposition["model"][0] == "additive"
 
 
 def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None:
@@ -454,7 +461,7 @@ def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None
 
     assert "price_usd_detrended" in detrended.columns
     assert "weight_detrended" in detrended.columns
-    assert detrended["price_usd_detrended"].notna().any()
+    assert (detrended["price_usd_detrended"].is_not_null() & ~detrended["price_usd_detrended"].is_nan()).any()
 
 
 def test_strategy_time_series_difference_returns_expected_shape() -> None:
@@ -480,8 +487,9 @@ def test_strategy_time_series_difference_returns_expected_shape() -> None:
     diffed = series.difference(order=1)
 
     assert "price_usd_diff" in diffed.columns
-    assert pd.isna(diffed.loc[0, "price_usd_diff"])
-    assert np.isclose(diffed.loc[2, "price_usd_diff"], 3.0)
+    first_val = diffed["price_usd_diff"][0]
+    assert first_val is None or (isinstance(first_val, float) and np.isnan(first_val))
+    assert np.isclose(float(diffed["price_usd_diff"][2]), 3.0)
 
 
 def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
@@ -560,7 +568,7 @@ def test_strategy_time_series_spectral_density_periodogram_returns_expected_colu
     spectrum = series.spectral_density(series="price")
 
     assert set(["frequency", "power", "series", "method", "observations"]).issubset(spectrum.columns)
-    assert spectrum["method"].iloc[0] == "periodogram"
+    assert spectrum["method"][0] == "periodogram"
 
 
 def test_strategy_time_series_integration_order_returns_per_column_output() -> None:

@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import StrategySeriesMetadata, StrategyTimeSeries
@@ -37,20 +38,19 @@ def test_eda_series_variants_and_errors() -> None:
     log_returns = ts._eda_value_series("log_returns")
     assert len(log_returns) == len(ts.data)
     weight = ts._eda_value_series("weight")
-    assert np.isfinite(weight.to_numpy(dtype=float)).all()
+    assert np.isfinite(weight.to_numpy().astype(float)).all()
     with pytest.raises(ValueError, match="series must be one of"):
         ts._eda_value_series("bad-series")
 
 
 def test_drawdown_branches_no_valid_and_unrecovered() -> None:
     ts = _series()
-    empty_df = ts.to_dataframe()
-    empty_df["price_usd"] = np.nan
+    empty_df = ts.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
     empty = StrategyTimeSeries(metadata=ts.metadata, data=empty_df).drawdown_table()
-    assert empty.empty
+    assert empty.is_empty()
 
     unrecovered = _series([100.0, 90.0, 80.0, 70.0, 60.0, 50.0]).drawdown_table(top_n=3)
-    assert not unrecovered.empty
+    assert not unrecovered.is_empty()
     assert bool((unrecovered["recovered"] == False).any())  # noqa: E712
 
 
@@ -60,9 +60,9 @@ def test_resolve_series_like_and_cross_correlation_paths() -> None:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         corr = ts.cross_correlation(short_other, max_lag=2, series="returns")
-        assert not corr.empty
+        assert not corr.is_empty()
         corr_col = ts.cross_correlation("mvrv", max_lag=1, series="returns")
-        assert not corr_col.empty
+        assert not corr_col.is_empty()
 
 
 def test_pacf_edge_paths() -> None:
@@ -75,10 +75,11 @@ def test_pacf_edge_paths() -> None:
 
 def test_resample_and_decompose_error_paths() -> None:
     ts = _series()
-    non_numeric = ts.to_dataframe()
-    non_numeric["weight"] = non_numeric["weight"].astype(str)
-    non_numeric["price_usd"] = non_numeric["price_usd"].astype(str)
-    non_numeric["mvrv"] = non_numeric["mvrv"].astype(str)
+    non_numeric = ts.to_dataframe().with_columns(
+        pl.col("weight").cast(pl.Utf8).alias("weight"),
+        pl.col("price_usd").cast(pl.Utf8).alias("price_usd"),
+        pl.col("mvrv").cast(pl.Utf8).alias("mvrv"),
+    )
     object.__setattr__(ts, "_data", non_numeric)
     out = ts.resample("D")
     assert list(out.columns) == ["date"]
@@ -102,12 +103,14 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
     assert "price_usd_detrended" in diffed.columns
 
     ts_single = _series()
-    sparse_metric = ts_single.to_dataframe()
-    sparse_metric["mvrv"] = [np.nan, np.nan, np.nan, np.nan, np.nan, 1.0]
+    sparse_metric = ts_single.to_dataframe().with_columns(
+        pl.Series("mvrv", [None, None, None, None, None, 1.0])
+    )
     detrended = StrategyTimeSeries(metadata=ts_single.metadata, data=sparse_metric).detrend(
         method="linear", columns=["mvrv"]
     )
-    assert detrended["mvrv_detrended"].isna().all()
+    # Polars: NaN != null; detrend returns NaN for insufficient data
+    assert (detrended["mvrv_detrended"].is_nan() | detrended["mvrv_detrended"].is_null()).all()
 
     with pytest.raises(ValueError, match="Unknown columns for difference"):
         ts.difference(columns=["unknown_col"])
@@ -119,17 +122,16 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
 def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
     ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
     acf = ts.acf_pacf(lags=[1, 100], series="returns")
-    row_high = acf.loc[acf["lag"] == 100].iloc[0]
-    assert pd.isna(row_high["acf"])
-    assert pd.isna(row_high["pacf"])
+    row_high = acf.filter(pl.col("lag") == 100).row(0, named=True)
+    assert row_high["acf"] is None or (isinstance(row_high["acf"], float) and np.isnan(row_high["acf"]))
+    assert row_high["pacf"] is None or (isinstance(row_high["pacf"], float) and np.isnan(row_high["pacf"]))
 
     ts_nan = _series([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
-    nan_prices = ts_nan.to_dataframe()
-    nan_prices["price_usd"] = np.nan
+    nan_prices = ts_nan.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
     empty_spec = StrategyTimeSeries(metadata=ts_nan.metadata, data=nan_prices).spectral_density(
         series="returns"
     )
-    assert empty_spec.empty
+    assert empty_spec.is_empty()
 
     assert StrategyTimeSeries._stationarity_proxy(pd.Series([1.0, 2.0]), acf_threshold=0.8)
     assert StrategyTimeSeries._stationarity_proxy(pd.Series([1.0, 1.0, 1.0]), acf_threshold=0.8)
@@ -138,8 +140,7 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
 
 def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_lag(monkeypatch) -> None:
     ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
-    nan_prices = ts.to_dataframe()
-    nan_prices["price_usd"] = np.nan
+    nan_prices = ts.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
     ts_all_nan = StrategyTimeSeries(metadata=ts.metadata, data=nan_prices)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Mean of empty slice", category=RuntimeWarning)
@@ -147,5 +148,8 @@ def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_la
     assert "seasonal" in dec.columns
     assert len(dec) == len(ts.data)
 
-    monkeypatch.setattr(pd.Series, "autocorr", lambda self, lag=1: np.nan)
+    monkeypatch.setattr(
+        "stacksats.strategy_time_series_analysis._autocorr_pl",
+        lambda s, lag: None,
+    )
     assert StrategyTimeSeries._stationarity_proxy(pd.Series([1.0, 2.0, 3.0]), acf_threshold=0.8)

@@ -1,5 +1,6 @@
 """Tests for backtest.py - Visualization and metrics export."""
 
+import datetime as dt
 import json
 import os
 
@@ -28,15 +29,15 @@ class TestParseWindowDates:
         label = "2024-01-01 → 2024-12-31"
         result = parse_window_dates(label)
 
-        assert isinstance(result, pd.Timestamp)
-        assert result == pd.Timestamp("2024-01-01")
+        assert isinstance(result, dt.datetime)
+        assert result == dt.datetime(2024, 1, 1)
 
     def test_parse_extracts_start_date(self):
         """Test that only start date is extracted."""
         label = "2023-06-15 → 2024-06-15"
         result = parse_window_dates(label)
 
-        assert result == pd.Timestamp("2023-06-15")
+        assert result == dt.datetime(2023, 6, 15)
 
     def test_parse_different_years(self):
         """Test parsing label spanning different years."""

@@ -44,6 +44,19 @@ This page covers migration for:
 | `TimeSeries` | `WeightTimeSeries` (deprecated alias available until 0.9.0) |
 | `TimeSeriesBatch` | `WeightTimeSeriesBatch` (deprecated alias available until 0.9.0) |
 
+## Polars migration (core objects)
+
+`WeightTimeSeries`, `WeightTimeSeriesBatch`, `FeatureTimeSeries`, and the data layer use Polars internally.
+
+| If you use | Update to |
+| --- | --- |
+| `series.to_dataframe()` expecting pandas | Returns `pl.DataFrame`; use `pl` APIs (e.g. `.filter()`, `.row()`, `.is_empty()`) or convert with `.to_pandas()` if needed |
+| `batch.to_dataframe()` expecting pandas | Same as above |
+| `WeightTimeSeries.from_dataframe(pd_df)` | Still supported; pandas is converted to Polars internally |
+| `FeatureTimeSeries.from_pandas(df)` | Still supported; use `from_dataframe(pl_df)` for Polars |
+| `StrategyContext.from_features_df(df)` | Accepts Polars or pandas |
+| Strategy hooks (`transform_features`, `build_signals`, `build_target_profile`) | Continue to use pandas; framework passes `ctx.features.to_pandas()` |
+
 ## Code Replacements
 
 ### 1) Backtest weight helper

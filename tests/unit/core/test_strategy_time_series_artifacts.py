@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal
 
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_time_series import (
@@ -259,4 +258,6 @@ def test_strategy_time_series_batch_from_artifact_dir_roundtrip(tmp_path) -> Non
     assert loaded.strategy_version == "1.0.0"
     assert loaded.run_id == batch.run_id
     assert loaded.row_count == batch.row_count
-    assert_frame_equal(loaded.to_dataframe(), batch.to_dataframe(), check_dtype=False)
+    loaded_df = loaded.to_dataframe()
+    batch_df = batch.to_dataframe()
+    assert loaded_df.equals(batch_df), f"DataFrames differ: {loaded_df} vs {batch_df}"

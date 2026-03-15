@@ -17,21 +17,34 @@ Do not confuse with **WeightTimeSeries**, which is the **output** of a strategy 
 
 ## Construction
 
-Build from a pandas DataFrame (e.g. from the feature registry or precomputed features):
+Build from a Polars or pandas DataFrame (e.g. from the feature registry or precomputed features):
 
 ```python
 from stacksats import FeatureTimeSeries
+import polars as pl
 import pandas as pd
 
-# DataFrame with DatetimeIndex or 'date' column
-df = pd.DataFrame(
+# Polars DataFrame with 'date' column (Datetime type)
+pl_df = pl.DataFrame({
+    "date": pl.Series(["2024-01-01", "2024-01-02"]).str.to_datetime(),
+    "price_usd": [100, 101],
+    "mvrv": [1.0, 1.1],
+})
+fts = FeatureTimeSeries.from_dataframe(
+    pl_df,
+    required_columns=("price_usd", "mvrv"),
+    as_of_date="2024-01-02",  # optional: no data after this date
+)
+
+# Or from pandas (DatetimeIndex or 'date' column)
+pd_df = pd.DataFrame(
     {"price_usd": [100, 101], "mvrv": [1.0, 1.1]},
     index=pd.date_range("2024-01-01", periods=2, freq="D"),
 )
 fts = FeatureTimeSeries.from_pandas(
-    df,
+    pd_df,
     required_columns=("price_usd", "mvrv"),
-    as_of_date=pd.Timestamp("2024-01-02"),  # optional: no data after this date
+    as_of_date=pd.Timestamp("2024-01-02"),
 )
 ```
 
@@ -47,7 +60,7 @@ Parameters:
 
 ## StrategyContext
 
-`StrategyContext.features` is a `FeatureTimeSeries`. The preferred way to build a context from a pandas feature DataFrame is **`StrategyContext.from_features_df(...)`**, which wraps the DataFrame in a `FeatureTimeSeries` and returns a full context. The runner uses this (or the helper `strategy_context_from_features_df`, which delegates to it) so that strategies never see future data when the framework enforces it.
+`StrategyContext.features` is a `FeatureTimeSeries`. The preferred way to build a context from a feature DataFrame is **`StrategyContext.from_features_df(...)`**, which accepts a Polars or pandas DataFrame, wraps it in a `FeatureTimeSeries`, and returns a full context. The runner uses this (or the helper `strategy_context_from_features_df`, which delegates to it) so that strategies never see future data when the framework enforces it.
 
 ## Schema and validation
 

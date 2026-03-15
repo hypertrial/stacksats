@@ -1,7 +1,9 @@
+import datetime as dt
 import logging
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from .data_btc import BTCDataProvider
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
@@ -20,7 +22,11 @@ WEIGHT_SUM_TOLERANCE = 1e-5
 
 def get_backtest_end() -> str:
     """Return dynamic default end date as yesterday (UTC-localized date)."""
-    return (pd.Timestamp.now().normalize() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    today = dt.datetime.now(dt.timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    yesterday = today - dt.timedelta(days=1)
+    return yesterday.strftime("%Y-%m-%d")
 
 
 def load_data(
@@ -49,27 +55,27 @@ def load_data(
     return provider.load(backtest_start=BACKTEST_START, end_date=end_date)
 
 
-def _make_window_label(start: pd.Timestamp, end: pd.Timestamp) -> str:
+def _make_window_label(start: dt.datetime, end: dt.datetime) -> str:
     """Format rolling window label as 'YYYY-MM-DD → YYYY-MM-DD'."""
     return f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')}"
 
 
-def parse_window_dates(window_label: str) -> pd.Timestamp:
+def parse_window_dates(window_label: str) -> dt.datetime:
     """Extract start date from window label like '2016-01-01 → 2017-01-01'.
 
     Args:
         window_label: Window label in format 'YYYY-MM-DD → YYYY-MM-DD'
 
     Returns:
-        Start date as pandas Timestamp
+        Start date as datetime (naive).
     """
-    return pd.to_datetime(window_label.split(" → ")[0])
+    return dt.datetime.strptime(window_label.split(" → ")[0], "%Y-%m-%d")
 
 
 def generate_date_ranges(
     range_start: str,
     range_end: str,
-) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+) -> list[tuple[dt.datetime, dt.datetime]]:
     """Generate date ranges where each start_date has fixed-span end_date.
 
     Uses DATE_FREQ (daily) for start date generation.
@@ -83,26 +89,55 @@ def generate_date_ranges(
     Returns:
         List of (start_date, end_date) tuples
     """
-    start, end = pd.to_datetime(range_start), pd.to_datetime(range_end)
+    start = dt.datetime.strptime(range_start, "%Y-%m-%d")
+    end = dt.datetime.strptime(range_end, "%Y-%m-%d")
     max_start_date = end - WINDOW_OFFSET
-    start_dates = pd.date_range(start=start, end=max_start_date, freq=DATE_FREQ)
 
-    def _window_end(start_date: pd.Timestamp) -> pd.Timestamp:
+    def _window_end(start_date: dt.datetime) -> dt.datetime:
         return start_date + WINDOW_OFFSET
 
-    date_ranges = []
-    for start_date in start_dates:
-        end_date = _window_end(start_date)
-        # Only include if end_date is within range_end
+    date_ranges: list[tuple[dt.datetime, dt.datetime]] = []
+    current = start
+    while current <= max_start_date:
+        end_date = _window_end(current)
         if end_date <= end:
-            date_ranges.append((start_date, end_date))
+            date_ranges.append((current, end_date))
+        current += dt.timedelta(days=1)
 
     return date_ranges
 
 
+def date_range_list(
+    start: dt.datetime | str,
+    end: dt.datetime | str,
+) -> list[dt.datetime]:
+    """Return list of dates from start to end inclusive (1d interval).
+
+    Replaces pd.date_range(..., freq='D') for Polars migration.
+    """
+    if isinstance(start, str):
+        start = dt.datetime.strptime(start[:10], "%Y-%m-%d")
+    if isinstance(end, str):
+        end = dt.datetime.strptime(end[:10], "%Y-%m-%d")
+    s = pl.datetime_range(start, end, interval="1d", eager=True)
+    return s.to_list()
+
+
+def date_range_series(
+    start: dt.datetime | str,
+    end: dt.datetime | str,
+) -> pl.Series:
+    """Return Polars Series of dates from start to end inclusive (1d interval)."""
+    if isinstance(start, str):
+        start = dt.datetime.strptime(start[:10], "%Y-%m-%d")
+    if isinstance(end, str):
+        end = dt.datetime.strptime(end[:10], "%Y-%m-%d")
+    return pl.datetime_range(start, end, interval="1d", eager=True)
+
+
 def group_ranges_by_start_date(
-    date_ranges: list[tuple[pd.Timestamp, pd.Timestamp]],
-) -> dict[pd.Timestamp, list[pd.Timestamp]]:
+    date_ranges: list[tuple[dt.datetime, dt.datetime]],
+) -> dict[dt.datetime, list[dt.datetime]]:
     """Group list of (start, end) tuples by start_date.
 
     Args:
@@ -111,7 +146,7 @@ def group_ranges_by_start_date(
     Returns:
         Dictionary mapping start_date -> list of end_dates
     """
-    grouped: dict[pd.Timestamp, list[pd.Timestamp]] = {}
+    grouped: dict[dt.datetime, list[dt.datetime]] = {}
     for start, end in date_ranges:
         if start not in grouped:
             grouped[start] = []

@@ -2,23 +2,40 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any, Iterable
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from scipy.signal import periodogram
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+
+def _autocorr_pl(series: pl.Series, lag: int) -> float | None:
+    """Compute autocorrelation at lag for a Polars Series."""
+    arr = series.drop_nulls().to_numpy()
+    if len(arr) <= lag:
+        return None
+    y = arr[lag:]
+    x = arr[:-lag]
+    corr = np.corrcoef(y, x)[0, 1]
+    return float(corr) if np.isfinite(corr) else None
 
 
 class StrategyTimeSeriesAnalysisMixin:
     """EDA and statistical analysis helpers for normalized strategy windows."""
 
-    def _eda_price_series(self, price_col: str = "price_usd") -> pd.Series:
-        """Return clean numeric price series indexed by dataframe row."""
+    def _eda_price_series(self, price_col: str = "price_usd") -> pl.Series:
+        """Return clean numeric price series aligned to dataframe rows."""
         if price_col not in self._data.columns:
             raise ValueError(f"Unknown price column: {price_col}")
-        return pd.to_numeric(self._data[price_col], errors="coerce")
+        return self._data[price_col].cast(pl.Float64, strict=False)
 
-    def _eda_value_series(self, series: str, price_col: str = "price_usd") -> pd.Series:
+    def _eda_value_series(self, series: str, price_col: str = "price_usd") -> pl.Series:
         """Return named EDA series for analysis helpers."""
         key = series.lower()
         if key == "price":
@@ -26,19 +43,23 @@ class StrategyTimeSeriesAnalysisMixin:
         if key in {"returns", "simple_returns"}:
             prices = self._eda_price_series(price_col=price_col)
             prev = prices.shift(1)
-            valid_step = prices.notna() & prev.notna() & (prev != 0)
-            out = pd.Series(np.nan, index=prices.index, dtype=float)
-            out.loc[valid_step] = (prices.loc[valid_step] / prev.loc[valid_step]) - 1.0
-            return out
+            p_arr = prices.to_numpy()
+            pr_arr = prev.to_numpy()
+            out = np.full(len(prices), float("nan"))
+            valid = np.isfinite(p_arr) & np.isfinite(pr_arr) & (pr_arr != 0)
+            out[valid] = (p_arr[valid] / pr_arr[valid]) - 1.0
+            return pl.Series("returns", out)
         if key == "log_returns":
             prices = self._eda_price_series(price_col=price_col)
             prev = prices.shift(1)
-            positive_step = prices.notna() & prev.notna() & (prices > 0) & (prev > 0)
-            out = pd.Series(np.nan, index=prices.index, dtype=float)
-            out.loc[positive_step] = np.log(prices.loc[positive_step] / prev.loc[positive_step])
-            return out
+            p_arr = prices.to_numpy()
+            pr_arr = prev.to_numpy()
+            out = np.full(len(prices), float("nan"))
+            positive = np.isfinite(p_arr) & np.isfinite(pr_arr) & (p_arr > 0) & (pr_arr > 0)
+            out[positive] = np.log(p_arr[positive] / pr_arr[positive])
+            return pl.Series("log_returns", out)
         if key == "weight":
-            return pd.to_numeric(self._data["weight"], errors="coerce")
+            return self._data["weight"].cast(pl.Float64, strict=False)
         raise ValueError("series must be one of: price, returns, simple_returns, log_returns, weight")
 
     @staticmethod
@@ -56,18 +77,24 @@ class StrategyTimeSeriesAnalysisMixin:
         windows: tuple[int, ...] = (7, 30, 90),
         *,
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Return rolling time-series statistics for price and returns."""
         normalized_windows = self._normalize_positive_ints(windows, "windows")
         prices = self._eda_price_series(price_col=price_col)
-        returns = self._eda_value_series("returns", price_col=price_col)
-        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
+        returns_series = self._eda_value_series("returns", price_col=price_col)
+
+        out = self._data.select(["date"])
         for window in normalized_windows:
-            out[f"{price_col}_mean_{window}"] = prices.rolling(window, min_periods=1).mean()
-            out[f"{price_col}_std_{window}"] = prices.rolling(window, min_periods=1).std(ddof=0)
-            out[f"return_mean_{window}"] = returns.rolling(window, min_periods=1).mean()
-            out[f"return_std_{window}"] = returns.rolling(window, min_periods=1).std(ddof=0)
-            out[f"vol_annualized_{window}"] = out[f"return_std_{window}"] * np.sqrt(365.0)
+            out = out.with_columns(
+                prices.rolling_mean(window_size=window).alias(f"{price_col}_mean_{window}"),
+                prices.rolling_std(window_size=window).alias(f"{price_col}_std_{window}"),
+                returns_series.rolling_mean(window_size=window).alias(f"return_mean_{window}"),
+                returns_series.rolling_std(window_size=window).alias(f"return_std_{window}"),
+            )
+        for w in normalized_windows:
+            out = out.with_columns(
+                (pl.col(f"return_std_{w}") * np.sqrt(365.0)).alias(f"vol_annualized_{w}")
+            )
         return out
 
     def autocorrelation(
@@ -79,45 +106,47 @@ class StrategyTimeSeriesAnalysisMixin:
     ) -> dict[str, Any]:
         """Return autocorrelation values at selected lags."""
         normalized_lags = self._normalize_positive_ints(lags, "lags")
-        values = self._eda_value_series(series=series, price_col=price_col).dropna()
+        raw = self._eda_value_series(series=series, price_col=price_col)
+        values = raw.filter(raw.is_finite())
         acf: dict[str, float | None] = {}
+        n = values.len()
         for lag in normalized_lags:
-            if lag >= int(values.shape[0]):
+            if lag >= n:
                 acf[str(lag)] = None
             else:
-                acf[str(lag)] = self._native_float(values.autocorr(lag=lag))
+                acf[str(lag)] = self._native_float(_autocorr_pl(values, lag))
         return {
             "series": series.lower(),
             "lags": normalized_lags,
-            "observations": int(values.shape[0]),
+            "observations": int(n),
             "autocorrelation": acf,
         }
 
-    def drawdown_table(self, top_n: int = 5, *, price_col: str = "price_usd") -> pd.DataFrame:
+    def drawdown_table(self, top_n: int = 5, *, price_col: str = "price_usd") -> pl.DataFrame:
         """Return top drawdown episodes ranked by severity."""
         if int(top_n) <= 0:
             raise ValueError("top_n must be > 0")
 
         prices = self._eda_price_series(price_col=price_col)
-        dates = pd.to_datetime(self._data["date"], errors="coerce")
-        valid = prices.notna() & dates.notna()
-        if not bool(valid.any()):
-            return pd.DataFrame(
-                columns=[
-                    "peak_date",
-                    "trough_date",
-                    "recovery_date",
-                    "max_drawdown",
-                    "days_to_trough",
-                    "days_to_recovery",
-                    "duration_days",
-                    "recovered",
-                ]
+        dates = self._data["date"]
+        valid = prices.is_not_null() & dates.is_not_null()
+        if not valid.any():
+            return pl.DataFrame(
+                schema={
+                    "peak_date": pl.Datetime,
+                    "trough_date": pl.Datetime,
+                    "recovery_date": pl.Datetime,
+                    "max_drawdown": pl.Float64,
+                    "days_to_trough": pl.Int64,
+                    "days_to_recovery": pl.Int64,
+                    "duration_days": pl.Int64,
+                    "recovered": pl.Boolean,
+                }
             )
 
-        prices_valid = prices.loc[valid].reset_index(drop=True)
-        dates_valid = dates.loc[valid].reset_index(drop=True)
-        running_max = prices_valid.cummax()
+        prices_valid = prices.filter(valid).to_numpy()
+        dates_valid = dates.filter(valid).to_list()
+        running_max = np.maximum.accumulate(prices_valid)
         drawdown = (prices_valid / running_max) - 1.0
 
         peak_idx = 0
@@ -127,68 +156,64 @@ class StrategyTimeSeriesAnalysisMixin:
         trough_idx = 0
 
         for idx in range(len(prices_valid)):
-            if prices_valid.iloc[idx] >= running_max.iloc[idx]:
+            if prices_valid[idx] >= running_max[idx]:
                 peak_idx = idx
 
-            dd = float(drawdown.iloc[idx])
+            dd = float(drawdown[idx])
             if dd < 0 and not in_drawdown:
                 in_drawdown = True
                 start_idx = peak_idx
                 trough_idx = idx
-            if in_drawdown and dd < float(drawdown.iloc[trough_idx]):
+            if in_drawdown and dd < float(drawdown[trough_idx]):
                 trough_idx = idx
             if in_drawdown and dd >= 0:
-                peak_date = pd.Timestamp(dates_valid.iloc[start_idx])
-                trough_date = pd.Timestamp(dates_valid.iloc[trough_idx])
-                recovery_date = pd.Timestamp(dates_valid.iloc[idx])
+                peak_date = dates_valid[start_idx]
+                trough_date = dates_valid[trough_idx]
+                recovery_date = dates_valid[idx]
+                peak_dt = peak_date if isinstance(peak_date, dt.datetime) else dt.datetime.fromisoformat(str(peak_date)[:10])
+                trough_dt = trough_date if isinstance(trough_date, dt.datetime) else dt.datetime.fromisoformat(str(trough_date)[:10])
+                rec_dt = recovery_date if isinstance(recovery_date, dt.datetime) else dt.datetime.fromisoformat(str(recovery_date)[:10])
                 episodes.append(
                     {
                         "peak_date": peak_date,
                         "trough_date": trough_date,
                         "recovery_date": recovery_date,
-                        "max_drawdown": self._native_float(drawdown.iloc[trough_idx]),
-                        "days_to_trough": int((trough_date - peak_date).days),
-                        "days_to_recovery": int((recovery_date - trough_date).days),
-                        "duration_days": int((recovery_date - peak_date).days),
+                        "max_drawdown": self._native_float(drawdown[trough_idx]),
+                        "days_to_trough": int((trough_dt - peak_dt).days),
+                        "days_to_recovery": int((rec_dt - trough_dt).days),
+                        "duration_days": int((rec_dt - peak_dt).days),
                         "recovered": True,
                     }
                 )
                 in_drawdown = False
 
         if in_drawdown:
-            peak_date = pd.Timestamp(dates_valid.iloc[start_idx])
-            trough_date = pd.Timestamp(dates_valid.iloc[trough_idx])
-            end_date = pd.Timestamp(dates_valid.iloc[len(dates_valid) - 1])
+            peak_date = dates_valid[start_idx]
+            trough_date = dates_valid[trough_idx]
+            end_date = dates_valid[-1]
+
+            def _dt(v):
+                return v if isinstance(v, dt.datetime) else dt.datetime.fromisoformat(str(v)[:10])
+
             episodes.append(
                 {
                     "peak_date": peak_date,
                     "trough_date": trough_date,
-                    "recovery_date": pd.NaT,
-                    "max_drawdown": self._native_float(drawdown.iloc[trough_idx]),
-                    "days_to_trough": int((trough_date - peak_date).days),
+                    "recovery_date": None,
+                    "max_drawdown": self._native_float(drawdown[trough_idx]),
+                    "days_to_trough": (_dt(trough_date) - _dt(peak_date)).days,
                     "days_to_recovery": None,
-                    "duration_days": int((end_date - peak_date).days),
+                    "duration_days": (_dt(end_date) - _dt(peak_date)).days,
                     "recovered": False,
                 }
             )
 
         if not episodes:
-            return pd.DataFrame(
-                columns=[
-                    "peak_date",
-                    "trough_date",
-                    "recovery_date",
-                    "max_drawdown",
-                    "days_to_trough",
-                    "days_to_recovery",
-                    "duration_days",
-                    "recovered",
-                ]
-            )
+            return pl.DataFrame(schema={"peak_date": pl.Datetime, "trough_date": pl.Datetime, "recovery_date": pl.Datetime, "max_drawdown": pl.Float64, "days_to_trough": pl.Int64, "days_to_recovery": pl.Int64, "duration_days": pl.Int64, "recovered": pl.Boolean})
 
-        out = pd.DataFrame(episodes)
-        out = out.sort_values(["max_drawdown", "peak_date"], ascending=[True, True], kind="stable")
-        return out.head(int(top_n)).reset_index(drop=True)
+        out = pl.DataFrame(episodes)
+        out = out.sort(["max_drawdown", "peak_date"])
+        return out.head(int(top_n))
 
     def seasonality_profile(
         self,
@@ -196,62 +221,41 @@ class StrategyTimeSeriesAnalysisMixin:
         freq: str = "weekday",
         series: str = "returns",
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Return calendar-seasonality summary statistics."""
         frequency = freq.lower()
         if frequency not in {"weekday", "month"}:
             raise ValueError("freq must be one of: weekday, month")
 
         values = self._eda_value_series(series=series, price_col=price_col)
-        dates = pd.to_datetime(self._data["date"], errors="coerce")
-        frame = pd.DataFrame({"date": dates, "value": values})
-        frame = frame.dropna(subset=["date", "value"]).reset_index(drop=True)
+        dates = self._data["date"]
+        frame = pl.DataFrame({"date": dates, "value": values}).filter(pl.col("value").is_finite())
 
         if frequency == "weekday":
-            frame["period_id"] = frame["date"].dt.dayofweek
-            labels = {
-                0: "Mon",
-                1: "Tue",
-                2: "Wed",
-                3: "Thu",
-                4: "Fri",
-                5: "Sat",
-                6: "Sun",
-            }
+            frame = frame.with_columns(pl.col("date").dt.weekday().alias("period_id"))
+            labels = {1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"}
             expected_periods = list(labels.keys())
         else:
-            frame["period_id"] = frame["date"].dt.month
-            labels = {
-                1: "Jan",
-                2: "Feb",
-                3: "Mar",
-                4: "Apr",
-                5: "May",
-                6: "Jun",
-                7: "Jul",
-                8: "Aug",
-                9: "Sep",
-                10: "Oct",
-                11: "Nov",
-                12: "Dec",
-            }
+            frame = frame.with_columns(pl.col("date").dt.month().alias("period_id"))
+            labels = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
             expected_periods = list(labels.keys())
 
-        grouped = frame.groupby("period_id", sort=True)["value"]
         rows: list[dict[str, Any]] = []
         for period_id in expected_periods:
-            if period_id in grouped.indices:
-                subset = grouped.get_group(period_id)
+            subset = frame.filter(pl.col("period_id") == period_id)
+            if subset.height > 0:
+                v = subset["value"]
+                std_val = v.std()
                 rows.append(
                     {
                         "period_id": period_id,
                         "period_label": labels[period_id],
-                        "count": int(subset.shape[0]),
-                        "mean": self._native_float(subset.mean()),
-                        "median": self._native_float(subset.median()),
-                        "std": self._native_float(subset.std(ddof=0)),
-                        "min": self._native_float(subset.min()),
-                        "max": self._native_float(subset.max()),
+                        "count": int(subset.height),
+                        "mean": self._native_float(float(v.mean())),
+                        "median": self._native_float(float(v.median())),
+                        "std": self._native_float(float(std_val)) if std_val is not None else None,
+                        "min": self._native_float(float(v.min())),
+                        "max": self._native_float(float(v.max())),
                     }
                 )
             else:
@@ -267,7 +271,7 @@ class StrategyTimeSeriesAnalysisMixin:
                         "max": None,
                     }
                 )
-        return pd.DataFrame(rows)
+        return pl.DataFrame(rows)
 
     @staticmethod
     def _resolve_lags(lags: int | Iterable[int]) -> list[int]:
@@ -279,27 +283,33 @@ class StrategyTimeSeriesAnalysisMixin:
 
     def _resolve_series_like(
         self,
-        series_like: str | pd.Series,
+        series_like: str | pl.Series,
         *,
         default_price_col: str = "price_usd",
-    ) -> pd.Series:
-        if isinstance(series_like, pd.Series):
-            values = pd.to_numeric(series_like, errors="coerce")
-            values = values.reset_index(drop=True)
-            target_len = int(self._data.shape[0])
-            if values.shape[0] < target_len:
-                values = values.reindex(range(target_len))
-            return values.iloc[:target_len]
+    ) -> pl.Series:
+        if isinstance(series_like, pl.Series):
+            values = series_like.cast(pl.Float64, strict=False)
+        elif pd is not None and isinstance(series_like, pd.Series):
+            values = pl.from_pandas(series_like).cast(pl.Float64, strict=False)
+        else:
+            if series_like in self._data.columns:
+                return self._data[series_like].cast(pl.Float64, strict=False)
+            return self._eda_value_series(series=series_like, price_col=default_price_col)
 
-        if series_like in self._data.columns:
-            return pd.to_numeric(self._data[series_like], errors="coerce")
-        return self._eda_value_series(series=series_like, price_col=default_price_col)
+        target_len = self._data.height
+        if values.len() < target_len:
+            values = pl.concat([values, pl.Series([float("nan")] * (target_len - values.len()))])
+        return values.head(target_len)
 
     @staticmethod
-    def _pacf_at_lag(values: pd.Series, lag: int) -> float | None:
+    def _pacf_at_lag(values: pl.Series, lag: int) -> float | None:
         if lag <= 0:
             return None
-        arr = values.to_numpy(dtype=float)
+        if pd is not None and isinstance(values, pd.Series):
+            s = pl.from_pandas(values)
+        else:
+            s = values
+        arr = s.drop_nulls().to_numpy()
         if arr.shape[0] <= lag + 1:
             return None
         y = arr[lag:]
@@ -322,19 +332,26 @@ class StrategyTimeSeriesAnalysisMixin:
         corr = np.corrcoef(resid_y, resid_x)[0, 1]
         return float(corr) if np.isfinite(corr) else None
 
-    def resample(self, freq: str, agg: str = "mean") -> pd.DataFrame:
+    def resample(self, freq: str, agg: str = "mean") -> pl.DataFrame:
         """Resample to a coarser/finer frequency with controlled aggregation."""
         if not isinstance(freq, str) or not freq:
             raise ValueError("freq must be a non-empty pandas offset alias string.")
-        frame = self._data.copy(deep=True)
-        frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
-        frame = frame.dropna(subset=["date"]).set_index("date")
-        numeric_columns = frame.select_dtypes(include=[np.number]).columns.tolist()
-        if not numeric_columns:
-            return pd.DataFrame(columns=["date"])
-        out = frame[numeric_columns].resample(freq).agg(agg)
-        out = out.dropna(how="all").reset_index()
-        return out
+        frame = self._data.clone()
+        numeric_cols = [c for c in frame.columns if frame[c].dtype in (pl.Float64, pl.Int64)]
+        if not numeric_cols:
+            return pl.DataFrame(schema={"date": pl.Datetime})
+        # Polars: group_by_dynamic
+        interval = freq
+        if freq == "D":
+            interval = "1d"
+        elif freq == "W":
+            interval = "1w"
+        elif freq == "M":
+            interval = "1mo"
+        out = frame.group_by_dynamic("date", every=interval).agg(
+            pl.col(numeric_cols).mean() if agg == "mean" else pl.col(numeric_cols).sum()
+        )
+        return out.drop_nulls(subset=["date"])
 
     def decompose(
         self,
@@ -343,7 +360,7 @@ class StrategyTimeSeriesAnalysisMixin:
         model: str = "additive",
         series: str = "price",
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Classical seasonal decomposition into trend/seasonal/residual components."""
         model_name = model.lower()
         if model_name not in {"additive", "multiplicative"}:
@@ -352,38 +369,38 @@ class StrategyTimeSeriesAnalysisMixin:
             raise ValueError("period must be an integer > 1")
 
         values = self._eda_value_series(series=series, price_col=price_col)
-        values = values.astype(float)
-        trend = values.rolling(window=int(period), center=True, min_periods=1).mean()
+        trend = values.rolling_mean(window_size=int(period), center=True)
+        arr = values.to_numpy()
+        trend_arr = trend.to_numpy()
 
-        if model_name == "multiplicative" and bool((values <= 0).any()):
+        if model_name == "multiplicative" and np.any(arr <= 0):
             raise ValueError("multiplicative decomposition requires strictly positive values.")
 
-        detrended = values - trend if model_name == "additive" else values / trend.replace(0, np.nan)
-        seasonal = pd.Series(np.nan, index=values.index, dtype=float)
+        detrended = arr - trend_arr if model_name == "additive" else arr / np.where(trend_arr != 0, trend_arr, np.nan)
+        seasonal = np.full(len(arr), np.nan)
         for i in range(int(period)):
-            idx = np.arange(i, len(values), int(period))
-            if idx.size == 0:
-                continue
-            seasonal_value = float(np.nanmean(detrended.iloc[idx].to_numpy(dtype=float)))
-            seasonal.iloc[idx] = seasonal_value
+            idx = np.arange(i, len(arr), int(period))
+            if idx.size > 0:
+                seasonal_value = float(np.nanmean(detrended[idx]))
+                seasonal[idx] = seasonal_value
 
         if model_name == "additive":
-            seasonal = seasonal - float(np.nanmean(seasonal.to_numpy(dtype=float)))
-            residual = values - trend - seasonal
+            seasonal = seasonal - float(np.nanmean(seasonal))
+            residual = arr - trend_arr - seasonal
         else:
-            seasonal_mean = float(np.nanmean(seasonal.to_numpy(dtype=float)))
+            seasonal_mean = float(np.nanmean(seasonal))
             if not np.isfinite(seasonal_mean) or np.isclose(seasonal_mean, 0.0):
                 seasonal_mean = 1.0
             seasonal = seasonal / seasonal_mean
-            residual = values / (trend * seasonal)
+            residual = arr / (trend_arr * seasonal)
 
-        return pd.DataFrame(
+        return pl.DataFrame(
             {
-                "date": pd.to_datetime(self._data["date"], errors="coerce"),
+                "date": self._data["date"],
                 "observed": values,
                 "trend": trend,
-                "seasonal": seasonal,
-                "residual": residual,
+                "seasonal": pl.Series("seasonal", seasonal),
+                "residual": pl.Series("residual", residual),
                 "model": model_name,
                 "period": int(period),
                 "series": series,
@@ -395,37 +412,39 @@ class StrategyTimeSeriesAnalysisMixin:
         *,
         method: str = "linear",
         columns: list[str] | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Remove trend from numeric columns."""
         method_name = method.lower()
         if method_name not in {"linear", "difference"}:
             raise ValueError("method must be one of: linear, difference")
 
-        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
+        out = self._data.select(["date"])
         candidate_columns = columns or [
-            col
-            for col in self._data.columns
-            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
+            col for col in self._data.columns
+            if self._data[col].dtype in (pl.Float64, pl.Int64) and col != "day_index"
         ]
         unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for detrend: " + ", ".join(unknown))
 
         for column in candidate_columns:
-            values = pd.to_numeric(self._data[column], errors="coerce")
+            values = self._data[column].cast(pl.Float64, strict=False)
             if method_name == "difference":
-                out[f"{column}_detrended"] = values.diff()
+                out = out.with_columns(values.diff().alias(f"{column}_detrended"))
                 continue
-            mask = values.notna()
-            if int(mask.sum()) < 2:
-                out[f"{column}_detrended"] = np.nan
+            mask = values.is_not_null()
+            n_valid = mask.sum()
+            if n_valid < 2:
+                out = out.with_columns(pl.lit(float("nan")).alias(f"{column}_detrended"))
                 continue
             x = np.arange(len(values), dtype=float)
-            m, b = np.polyfit(x[mask], values.loc[mask].to_numpy(dtype=float), 1)
+            arr = values.to_numpy()
+            valid_x = x[mask.to_numpy()]
+            valid_y = arr[mask.to_numpy()]
+            m, b = np.polyfit(valid_x, valid_y, 1)
             trend = (m * x) + b
-            residual = pd.Series(np.nan, index=values.index, dtype=float)
-            residual.loc[mask] = values.loc[mask] - trend[mask]
-            out[f"{column}_detrended"] = residual
+            residual = np.where(mask.to_numpy(), arr - trend, np.nan)
+            out = out.with_columns(pl.Series(f"{column}_detrended", residual))
         return out
 
     def difference(
@@ -435,7 +454,7 @@ class StrategyTimeSeriesAnalysisMixin:
         seasonal_order: int = 0,
         seasonal_period: int | None = None,
         columns: list[str] | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Apply regular and optional seasonal differencing to numeric columns."""
         if int(order) < 0:
             raise ValueError("order must be >= 0")
@@ -444,26 +463,25 @@ class StrategyTimeSeriesAnalysisMixin:
         if seasonal_order > 0 and (seasonal_period is None or int(seasonal_period) <= 0):
             raise ValueError("seasonal_period must be a positive integer when seasonal_order > 0")
 
-        out = pd.DataFrame({"date": pd.to_datetime(self._data["date"], errors="coerce")})
+        out = self._data.select(["date"])
         candidate_columns = columns or [
-            col
-            for col in self._data.columns
-            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
+            col for col in self._data.columns
+            if self._data[col].dtype in (pl.Float64, pl.Int64) and col != "day_index"
         ]
         unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
             raise ValueError("Unknown columns for difference: " + ", ".join(unknown))
 
         for column in candidate_columns:
-            values = pd.to_numeric(self._data[column], errors="coerce")
-            transformed = values.copy()
+            values = self._data[column].cast(pl.Float64, strict=False)
+            transformed = values
             for _ in range(int(order)):
                 transformed = transformed.diff()
             if seasonal_order > 0:
                 step = int(seasonal_period)
                 for _ in range(int(seasonal_order)):
                     transformed = transformed.diff(step)
-            out[f"{column}_diff"] = transformed
+            out = out.with_columns(transformed.alias(f"{column}_diff"))
         return out
 
     def acf_pacf(
@@ -472,35 +490,37 @@ class StrategyTimeSeriesAnalysisMixin:
         lags: int | Iterable[int] = 30,
         series: str = "returns",
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Return ACF/PACF diagnostics at selected lags."""
         normalized_lags = self._resolve_lags(lags)
-        values = self._eda_value_series(series=series, price_col=price_col).dropna()
+        values = self._eda_value_series(series=series, price_col=price_col).drop_nulls()
         rows: list[dict[str, Any]] = []
         for lag in normalized_lags:
-            if lag >= int(values.shape[0]):
+            if lag >= values.len():
                 rows.append({"lag": lag, "acf": None, "pacf": None})
                 continue
             rows.append(
                 {
                     "lag": lag,
-                    "acf": self._native_float(values.autocorr(lag=lag)),
+                    "acf": self._native_float(_autocorr_pl(values, lag)),
                     "pacf": self._native_float(self._pacf_at_lag(values, lag)),
                 }
             )
-        out = pd.DataFrame(rows)
-        out["series"] = series.lower()
-        out["observations"] = int(values.shape[0])
+        out = pl.DataFrame(rows)
+        out = out.with_columns(
+            pl.lit(series.lower()).alias("series"),
+            pl.lit(int(values.len())).alias("observations"),
+        )
         return out
 
     def cross_correlation(
         self,
-        other_series: str | pd.Series,
+        other_series: str | pl.Series,
         *,
         max_lag: int = 30,
         series: str = "returns",
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Compute lead/lag cross-correlation between two series."""
         if int(max_lag) < 0:
             raise ValueError("max_lag must be >= 0")
@@ -508,16 +528,26 @@ class StrategyTimeSeriesAnalysisMixin:
         other = self._resolve_series_like(other_series, default_price_col=price_col)
         rows: list[dict[str, Any]] = []
         for lag in range(-int(max_lag), int(max_lag) + 1):
-            aligned = pd.DataFrame({"base": base.shift(lag), "other": other}).dropna()
-            corr = aligned["base"].corr(aligned["other"]) if not aligned.empty else np.nan
+            base_shifted = base.shift(-lag)
+            aligned = pl.DataFrame({"base": base_shifted, "other": other}).drop_nulls()
+            if aligned.height == 0:
+                corr = float("nan")
+            else:
+                corr = aligned["base"].to_numpy()
+                oth = aligned["other"].to_numpy()
+                valid = np.isfinite(corr) & np.isfinite(oth)
+                if valid.sum() < 2:
+                    corr = float("nan")
+                else:
+                    corr = float(np.corrcoef(corr[valid], oth[valid])[0, 1])
             rows.append(
                 {
                     "lag": lag,
-                    "correlation": self._native_float(corr) if pd.notna(corr) else None,
-                    "observations": int(aligned.shape[0]),
+                    "correlation": self._native_float(corr) if not (corr != corr) else None,
+                    "observations": int(aligned.height),
                 }
             )
-        return pd.DataFrame(rows)
+        return pl.DataFrame(rows)
 
     def spectral_density(
         self,
@@ -525,36 +555,41 @@ class StrategyTimeSeriesAnalysisMixin:
         method: str = "periodogram",
         series: str = "returns",
         price_col: str = "price_usd",
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Estimate frequency-domain power spectral density."""
         method_name = method.lower()
         if method_name != "periodogram":
             raise ValueError("method must be 'periodogram'")
 
-        values = self._eda_value_series(series=series, price_col=price_col).dropna()
-        if values.empty:
-            return pd.DataFrame(columns=["frequency", "power", "series", "method", "observations"])
-        frequencies, power = periodogram(values.to_numpy(dtype=float), scaling="density")
-        return pd.DataFrame(
+        raw = self._eda_value_series(series=series, price_col=price_col)
+        values = raw.filter(raw.is_finite())
+        if values.len() == 0:
+            return pl.DataFrame(schema={"frequency": pl.Float64, "power": pl.Float64, "series": pl.Utf8, "method": pl.Utf8, "observations": pl.Int64})
+        frequencies, power = periodogram(values.to_numpy(), scaling="density")
+        return pl.DataFrame(
             {
                 "frequency": frequencies,
                 "power": power,
                 "series": series.lower(),
                 "method": method_name,
-                "observations": int(values.shape[0]),
+                "observations": int(values.len()),
             }
         )
 
     @staticmethod
-    def _stationarity_proxy(values: pd.Series, acf_threshold: float) -> bool:
-        clean = values.dropna()
-        if clean.shape[0] < 3:
+    def _stationarity_proxy(values: pl.Series, acf_threshold: float) -> bool:
+        if pd is not None and isinstance(values, pd.Series):
+            s = pl.from_pandas(values)
+        else:
+            s = values
+        clean = s.drop_nulls()
+        if clean.len() < 3:
             return True
-        std = float(clean.std(ddof=0))
+        std = float(clean.std())
         if np.isclose(std, 0.0):
             return True
-        lag1 = clean.autocorr(lag=1)
-        if pd.isna(lag1):
+        lag1 = _autocorr_pl(clean, 1)
+        if lag1 is None:
             return True
         return bool(abs(float(lag1)) < float(acf_threshold))
 
@@ -564,7 +599,7 @@ class StrategyTimeSeriesAnalysisMixin:
         columns: list[str] | None = None,
         max_order: int = 2,
         acf_threshold: float = 0.8,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Heuristically estimate order of integration per numeric time series."""
         if int(max_order) < 0:
             raise ValueError("max_order must be >= 0")
@@ -572,9 +607,8 @@ class StrategyTimeSeriesAnalysisMixin:
             raise ValueError("acf_threshold must be between 0 and 1.")
 
         candidate_columns = columns or [
-            col
-            for col in self._data.columns
-            if pd.api.types.is_numeric_dtype(self._data[col]) and col != "day_index"
+            col for col in self._data.columns
+            if self._data[col].dtype in (pl.Float64, pl.Int64) and col != "day_index"
         ]
         unknown = [col for col in candidate_columns if col not in self._data.columns]
         if unknown:
@@ -582,18 +616,18 @@ class StrategyTimeSeriesAnalysisMixin:
 
         rows: list[dict[str, Any]] = []
         for column in candidate_columns:
-            base = pd.to_numeric(self._data[column], errors="coerce")
+            base = self._data[column].cast(pl.Float64, strict=False)
             found_order: int | None = None
             lag1_at_found: float | None = None
             for d in range(int(max_order) + 1):
-                transformed = base.copy()
+                transformed = base
                 for _ in range(d):
                     transformed = transformed.diff()
-                clean = transformed.dropna()
-                lag1 = clean.autocorr(lag=1) if clean.shape[0] >= 2 else np.nan
+                clean = transformed.drop_nulls()
+                lag1 = _autocorr_pl(clean, 1) if clean.len() >= 2 else None
                 if self._stationarity_proxy(clean, acf_threshold=float(acf_threshold)):
                     found_order = d
-                    lag1_at_found = self._native_float(lag1) if pd.notna(lag1) else None
+                    lag1_at_found = self._native_float(lag1) if lag1 is not None else None
                     break
             rows.append(
                 {
@@ -606,4 +640,4 @@ class StrategyTimeSeriesAnalysisMixin:
                     "acf_threshold": float(acf_threshold),
                 }
             )
-        return pd.DataFrame(rows)
+        return pl.DataFrame(rows)

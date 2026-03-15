@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Iterable
 
 import numpy as np
-import pandas as pd
+import polars as pl
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # type: ignore[assignment]
 
 from .strategy_time_series_analysis import StrategyTimeSeriesAnalysisMixin
 from .strategy_time_series_batch import WeightTimeSeriesBatch
@@ -29,17 +35,23 @@ from .strategy_time_series_schema import (
 )
 
 
+def _to_naive_dt(value: dt.datetime | object) -> dt.datetime:
+    """Normalize to naive datetime (midnight UTC) for comparison."""
+    from .framework_contract import _to_naive_utc
+
+    return _to_naive_utc(value)
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisMixin):
     """Single-window validated strategy output (weights, prices, metadata)."""
 
     metadata: StrategySeriesMetadata
     extra_schema: tuple[ColumnSpec, ...]
-    _data: pd.DataFrame = field(repr=False)
+    _data: pl.DataFrame = field(repr=False)
 
     REQUIRED_COLUMNS: ClassVar[tuple[str, ...]] = ("date", "weight", "price_usd")
     BRK_SOURCE_COLUMNS: ClassVar[tuple[str, ...]] = _DEFAULT_BRK_SOURCE_COLUMNS
-    # Backward-compatible alias kept for existing callers.
     BRK_BTC_CSV_COLUMNS: ClassVar[tuple[str, ...]] = _DEFAULT_BRK_BTC_CSV_COLUMNS
     BRK_LINEAGE: ClassVar[tuple[BRKLineageSpec, ...]] = _DEFAULT_BRK_LINEAGE
 
@@ -47,11 +59,15 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         self,
         *,
         metadata: StrategySeriesMetadata,
-        data: pd.DataFrame,
+        data: pl.DataFrame,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> None:
-        if not isinstance(data, pd.DataFrame):
-            raise TypeError("WeightTimeSeries.data must be a pandas DataFrame.")
+        if isinstance(data, pl.DataFrame):
+            pass
+        elif pd is not None and isinstance(data, pd.DataFrame):
+            data = pl.from_pandas(data)
+        else:
+            raise TypeError("WeightTimeSeries.data must be a Polars or pandas DataFrame.")
 
         normalized_extra_schema = validate_schema_specs(extra_schema, forbid_core_name_collisions=True)
         normalized_data = self._normalize_core_columns(data)
@@ -65,7 +81,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
     @classmethod
     def from_dataframe(
         cls,
-        data: pd.DataFrame,
+        data: pl.DataFrame | "pd.DataFrame",
         *,
         metadata: StrategySeriesMetadata,
         extra_schema: tuple[ColumnSpec, ...] = (),
@@ -85,30 +101,30 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         csv_path = Path(path)
         return cls(
             metadata=metadata,
-            data=pd.read_csv(csv_path),
+            data=pl.read_csv(csv_path),
             extra_schema=extra_schema,
         )
 
     @property
-    def data(self) -> pd.DataFrame:
+    def data(self) -> pl.DataFrame:
         """Return a defensive copy of the normalized payload."""
-        return self._data.copy(deep=True)
+        return self._data.clone()
 
     @property
     def columns(self) -> tuple[str, ...]:
         """Return normalized column names."""
-        return tuple(str(col) for col in self._data.columns)
+        return tuple(self._data.columns)
 
     @property
     def row_count(self) -> int:
         """Return normalized row count."""
-        return int(self._data.shape[0])
+        return self._data.height
 
-    def date_index(self) -> pd.DatetimeIndex:
-        """Return the normalized date column as a DatetimeIndex."""
-        return pd.DatetimeIndex(pd.to_datetime(self._data["date"], errors="coerce"))
+    def date_index(self) -> list[dt.datetime]:
+        """Return the normalized date column as a list of datetime."""
+        return self._data["date"].to_list()
 
-    def window_key(self) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+    def window_key(self) -> tuple[dt.datetime | None, dt.datetime | None]:
         """Return the metadata window key."""
         return (self.metadata.window_start, self.metadata.window_end)
 
@@ -124,24 +140,25 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         return merge_schema_specs(cls._core_schema_specs(), extra_schema)
 
     @staticmethod
-    def _normalize_core_columns(data: pd.DataFrame) -> pd.DataFrame:
-        normalized = data.copy(deep=True)
-        if "date" in normalized.columns:
-            normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce")
-            normalized["date"] = normalized["date"].dt.normalize()
-            normalized = normalized.sort_values("date").reset_index(drop=True)
-        return normalized
+    def _normalize_core_columns(data: pl.DataFrame) -> pl.DataFrame:
+        if "date" not in data.columns:
+            return data
+        if data["date"].dtype == pl.Utf8:
+            date_expr = pl.col("date").str.to_datetime().dt.replace_time_zone(None).dt.truncate("1d")
+        else:
+            date_expr = pl.col("date").cast(pl.Datetime).dt.replace_time_zone(None).dt.truncate("1d")
+        return data.with_columns(date_expr.alias("date")).sort("date")
 
     @staticmethod
-    def _coerce_validated_columns(data: pd.DataFrame) -> pd.DataFrame:
-        normalized = data.copy(deep=True)
-        if "weight" in normalized.columns:
-            normalized["weight"] = pd.to_numeric(normalized["weight"], errors="coerce")
-        if "price_usd" in normalized.columns:
-            normalized["price_usd"] = pd.to_numeric(normalized["price_usd"], errors="coerce")
-        if "day_index" in normalized.columns:
-            normalized["day_index"] = pd.to_numeric(normalized["day_index"], errors="coerce")
-        return normalized
+    def _coerce_validated_columns(data: pl.DataFrame) -> pl.DataFrame:
+        out = data
+        if "weight" in out.columns:
+            out = out.with_columns(pl.col("weight").cast(pl.Float64, strict=False))
+        if "price_usd" in out.columns:
+            out = out.with_columns(pl.col("price_usd").cast(pl.Float64, strict=False))
+        if "day_index" in out.columns:
+            out = out.with_columns(pl.col("day_index").cast(pl.Float64, strict=False))
+        return out
 
     def schema(self) -> dict[str, ColumnSpec]:
         """Return handwritten column schema specs keyed by column name."""
@@ -203,95 +220,100 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
                 + ", ".join(str(col) for col in missing)
             )
 
-    def _validate_date_contract(self, dates: pd.Series) -> None:
-        if dates.isna().any():
+    def _validate_date_contract(self, dates: pl.Series) -> None:
+        if dates.null_count() > 0:
             raise ValueError("Column 'date' must contain valid datetimes.")
-        if dates.duplicated().any():
+        if dates.is_duplicated().sum() > 0:
             raise ValueError("Column 'date' must not contain duplicates.")
-        if not dates.is_monotonic_increasing:
+        if not dates.is_sorted():
             raise ValueError("Column 'date' must be sorted ascending.")
 
         start = self.metadata.window_start
         end = self.metadata.window_end
-        if start is not None and len(dates) > 0 and pd.Timestamp(dates.iloc[0]) != pd.Timestamp(start):
+        first = dates[0] if dates.len() > 0 else None
+        last = dates[-1] if dates.len() > 0 else None
+        if start is not None and self._data.height > 0 and first is not None and _to_naive_dt(first) != _to_naive_dt(start):
             raise ValueError(
                 "Series start date does not match metadata.window_start: "
-                f"{dates.iloc[0]!s} != {pd.Timestamp(start)!s}"
+                f"{first!s} != {start!s}"
             )
-        if end is not None and len(dates) > 0 and pd.Timestamp(dates.iloc[-1]) != pd.Timestamp(end):
+        if end is not None and self._data.height > 0 and last is not None and _to_naive_dt(last) != _to_naive_dt(end):
             raise ValueError(
                 "Series end date does not match metadata.window_end: "
-                f"{dates.iloc[-1]!s} != {pd.Timestamp(end)!s}"
+                f"{last!s} != {end!s}"
             )
         if start is None or end is None:
             return
 
-        expected = pd.date_range(pd.Timestamp(start), pd.Timestamp(end), freq="D")
-        actual = pd.DatetimeIndex(pd.to_datetime(dates, errors="coerce"))
-        if actual.equals(expected):
-            return
+        from .prelude import date_range_list
 
-        missing = expected.difference(actual)
-        extra = actual.difference(expected)
+        expected = date_range_list(start, end)
+        actual = dates.to_list()
+        expected_set = set(_to_naive_dt(d) for d in expected)
+        actual_set = set(_to_naive_dt(d) for d in actual)
+        missing = expected_set - actual_set
+        extra = actual_set - expected_set
         if len(missing) > 0 and len(extra) == 0:
             raise ValueError(
                 "Column 'date' must exactly match the daily range from metadata.window_start "
                 "to metadata.window_end; missing or skipped dates detected: "
-                + ", ".join(ts.strftime("%Y-%m-%d") for ts in missing[:5])
+                + ", ".join(d.strftime("%Y-%m-%d") for d in sorted(missing)[:5])
             )
         if len(extra) > 0 and len(missing) == 0:
             raise ValueError(
                 "Column 'date' must exactly match the daily range from metadata.window_start "
                 "to metadata.window_end; unexpected dates detected: "
-                + ", ".join(ts.strftime("%Y-%m-%d") for ts in extra[:5])
+                + ", ".join(d.strftime("%Y-%m-%d") for d in sorted(extra)[:5])
             )
-        raise ValueError(
-            "Column 'date' must exactly match the daily range from metadata.window_start "
-            "to metadata.window_end."
-        )
+        if missing or extra:
+            raise ValueError(
+                "Column 'date' must exactly match the daily range from metadata.window_start "
+                "to metadata.window_end."
+            )
 
     def validate(self) -> None:
         """Validate data and metadata invariants."""
         self._validate_required_columns()
         self.validate_schema_coverage()
 
-        dates = pd.to_datetime(self._data["date"], errors="coerce")
+        dates = self._data["date"]
+        if dates.dtype == pl.Utf8:
+            dates = self._data.with_columns(pl.col("date").str.to_datetime())["date"]
         self._validate_date_contract(dates)
 
-        weights = pd.to_numeric(self._data["weight"], errors="coerce")
-        if weights.isna().any() or not np.isfinite(weights.to_numpy(dtype=float)).all():
+        weights = self._data["weight"].cast(pl.Float64, strict=False)
+        if weights.null_count() > 0 or (weights.is_nan() | weights.is_infinite()).any():
             raise ValueError("Column 'weight' must contain finite numeric values.")
-        if bool((weights < 0).any()):
+        if (weights < 0).any():
             raise ValueError("Column 'weight' must not contain negative values.")
-        if len(weights) > 0:
+        if weights.len() > 0:
             weight_sum = float(weights.sum())
             if not np.isclose(weight_sum, 1.0, rtol=1e-5, atol=1e-8):
                 raise ValueError("Column 'weight' must sum to 1.0 " f"(got {weight_sum:.10f}).")
 
         raw_price = self._data["price_usd"]
-        prices = pd.to_numeric(raw_price, errors="coerce")
-        invalid_non_null = raw_price.notna() & prices.isna()
+        prices = raw_price.cast(pl.Float64, strict=False)
+        invalid_non_null = raw_price.is_not_null() & prices.is_null()
         if invalid_non_null.any():
             raise ValueError("Column 'price_usd' must be numeric when present.")
-        finite_mask = prices.notna()
-        if finite_mask.any() and not np.isfinite(prices.loc[finite_mask].to_numpy(dtype=float)).all():
+        if prices.is_finite().any() and (~prices.is_finite()).any():
             raise ValueError("Column 'price_usd' must be finite when present.")
 
         if "locked" in self._data.columns:
             locked = self._data["locked"]
-            valid_locked = locked.isin([True, False])
-            if not bool(valid_locked.all()):
+            valid_locked = locked.is_in([True, False])
+            if not valid_locked.all():
                 raise ValueError("Column 'locked' must contain only boolean values.")
 
         if "day_index" in self._data.columns:
-            day_index = pd.to_numeric(self._data["day_index"], errors="coerce")
-            if day_index.isna().any():
+            day_index = self._data["day_index"].cast(pl.Float64, strict=False)
+            if day_index.null_count() > 0:
                 raise ValueError("Column 'day_index' must contain integer values.")
-            if bool((day_index < 0).any()):
+            if (day_index < 0).any():
                 raise ValueError("Column 'day_index' must be >= 0.")
-            if len(day_index) > 0:
-                expected = np.arange(len(day_index), dtype=float)
-                if not np.array_equal(day_index.to_numpy(dtype=float), expected):
+            if day_index.len() > 0:
+                expected = np.arange(day_index.len(), dtype=float)
+                if not np.array_equal(day_index.to_numpy(), expected):
                     raise ValueError("Column 'day_index' must be contiguous starting at 0.")
 
         for spec in self._merged_schema_specs(self.extra_schema):
@@ -305,29 +327,31 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
     def _validate_optional_numeric_column(self, column: str) -> None:
         """Validate optional numeric columns."""
         raw = self._data[column]
-        values = pd.to_numeric(raw, errors="coerce")
-        invalid_non_null = raw.notna() & values.isna()
+        values = raw.cast(pl.Float64, strict=False)
+        invalid_non_null = raw.is_not_null() & values.is_null()
         if invalid_non_null.any():
             raise ValueError(f"Column '{column}' must be numeric when present.")
-        finite_mask = values.notna()
-        if finite_mask.any() and not np.isfinite(values.loc[finite_mask].to_numpy(dtype=float)).all():
+        if values.is_finite().any() and (~values.is_finite()).any():
             raise ValueError(f"Column '{column}' must be finite when present.")
 
     def _validate_optional_datetime_column(self, column: str) -> None:
         """Validate optional datetime columns."""
         raw = self._data[column]
-        values = pd.to_datetime(raw, errors="coerce")
-        invalid_non_null = raw.notna() & values.isna()
+        if raw.dtype == pl.Utf8:
+            values = self._data.with_columns(pl.col(column).str.to_datetime(strict=False))[column]
+        else:
+            values = self._data.with_columns(pl.col(column).cast(pl.Datetime, strict=False))[column]
+        invalid_non_null = raw.is_not_null() & values.is_null()
         if invalid_non_null.any():
             raise ValueError(f"Column '{column}' must be datetime when present.")
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pl.DataFrame:
         """Return a copy of the normalized dataframe payload."""
-        return self._data.copy(deep=True)
+        return self._data.clone()
 
     def to_csv(self, path: str | Path, *, index: bool = False) -> None:
         """Write the normalized payload to CSV."""
-        self.to_dataframe().to_csv(Path(path), index=index)
+        self.to_dataframe().write_csv(Path(path), include_header=True)
 
     @staticmethod
     def _native_float(value: float | np.floating | int | None) -> float | None:
@@ -339,15 +363,25 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         return out
 
     @staticmethod
-    def _native_timestamp(value: pd.Timestamp | None) -> str | None:
-        if value is None or pd.isna(value):
+    def _native_timestamp(value: dt.datetime | object | None) -> str | None:
+        if value is None:
             return None
-        return pd.Timestamp(value).isoformat()
+        if pd is not None and hasattr(pd, "NaT") and value is pd.NaT:
+            return None
+        if hasattr(value, "is_null") and value.is_null():
+            return None
+        try:
+            d = _to_naive_dt(value)
+            return d.isoformat()
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
-    def _series_numeric_summary(values: pd.Series) -> dict[str, float | int | None]:
-        non_null = values.dropna()
-        if non_null.empty:
+    def _series_numeric_summary(values: pl.Series | "pd.Series") -> dict[str, float | int | None]:
+        if pd is not None and isinstance(values, pd.Series):
+            values = pl.from_pandas(values)
+        non_null = values.drop_nulls()
+        if non_null.len() == 0:
             return {
                 "count": 0,
                 "mean": None,
@@ -358,15 +392,16 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
                 "p75": None,
                 "max": None,
             }
+        arr = non_null.to_numpy()
         return {
-            "count": int(non_null.shape[0]),
-            "mean": WeightTimeSeries._native_float(non_null.mean()),
-            "std": WeightTimeSeries._native_float(non_null.std(ddof=0)),
-            "min": WeightTimeSeries._native_float(non_null.min()),
-            "p25": WeightTimeSeries._native_float(non_null.quantile(0.25)),
-            "median": WeightTimeSeries._native_float(non_null.median()),
-            "p75": WeightTimeSeries._native_float(non_null.quantile(0.75)),
-            "max": WeightTimeSeries._native_float(non_null.max()),
+            "count": int(non_null.len()),
+            "mean": WeightTimeSeries._native_float(float(np.mean(arr))),
+            "std": WeightTimeSeries._native_float(float(np.std(arr))),
+            "min": WeightTimeSeries._native_float(float(np.min(arr))),
+            "p25": WeightTimeSeries._native_float(float(np.percentile(arr, 25))),
+            "median": WeightTimeSeries._native_float(float(np.median(arr))),
+            "p75": WeightTimeSeries._native_float(float(np.percentile(arr, 75))),
+            "max": WeightTimeSeries._native_float(float(np.max(arr))),
         }
 
 

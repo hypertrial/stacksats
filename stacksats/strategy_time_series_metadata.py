@@ -2,29 +2,39 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 
-import pandas as pd
+
+def _utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
 
 
-def _utc_now() -> pd.Timestamp:
-    return pd.Timestamp.now(tz="UTC")
-
-
-def _normalize_generated_at(value: pd.Timestamp | str | None) -> pd.Timestamp:
-    ts = _utc_now() if value is None else pd.Timestamp(value)
+def _normalize_generated_at(value: dt.datetime | str | None) -> dt.datetime:
+    ts = _utc_now() if value is None else _parse_datetime(value)
     if ts.tzinfo is None:
-        return ts.tz_localize("UTC")
-    return ts.tz_convert("UTC")
+        return ts.replace(tzinfo=dt.timezone.utc)
+    return ts.astimezone(dt.timezone.utc)
 
 
-def _normalize_window_date(value: pd.Timestamp | str | None) -> pd.Timestamp | None:
+def _parse_datetime(value: str | dt.datetime) -> dt.datetime:
+    if isinstance(value, dt.datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return dt.datetime.strptime(value[:10], "%Y-%m-%d")
+    raise TypeError(f"Expected datetime or str, got {type(value)}")
+
+
+def _normalize_window_date(value: dt.datetime | str | None) -> dt.datetime | None:
     if value is None:
         return None
-    ts = pd.Timestamp(value)
+    ts = _parse_datetime(value) if isinstance(value, str) else value
     if ts.tzinfo is not None:
-        ts = ts.tz_convert("UTC").tz_localize(None)
-    return ts.normalize()
+        ts = ts.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return ts.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,9 +46,9 @@ class StrategySeriesMetadata:
     run_id: str
     config_hash: str
     schema_version: str = "1.0.0"
-    generated_at: pd.Timestamp = field(default_factory=_utc_now)
-    window_start: pd.Timestamp | None = None
-    window_end: pd.Timestamp | None = None
+    generated_at: dt.datetime = field(default_factory=_utc_now)
+    window_start: dt.datetime | None = None
+    window_end: dt.datetime | None = None
 
     def __post_init__(self) -> None:
         for field_name in (

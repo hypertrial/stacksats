@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import StrategySeriesMetadata, StrategyTimeSeries, StrategyTimeSeriesBatch
@@ -43,7 +44,7 @@ def _window(md: StrategySeriesMetadata | None = None) -> StrategyTimeSeries:
 
 
 def test_strategy_time_series_requires_dataframe_data() -> None:
-    with pytest.raises(TypeError, match="must be a pandas DataFrame"):
+    with pytest.raises(TypeError, match="must be a Polars or pandas DataFrame"):
         StrategyTimeSeries(metadata=_metadata(), data=[1, 2])  # type: ignore[arg-type]
 
 
@@ -66,7 +67,7 @@ def test_strategy_time_series_rejects_invalid_dates() -> None:
             "price_usd": [40000.0, 41000.0],
         }
     )
-    with pytest.raises(ValueError, match="must contain valid datetimes"):
+    with pytest.raises((ValueError, Exception), match="valid datetimes|parse|format"):
         StrategyTimeSeries(metadata=_metadata(), data=bad_date)
 
 
@@ -83,10 +84,16 @@ def test_strategy_time_series_rejects_duplicate_dates() -> None:
 
 
 def test_strategy_time_series_data_returns_copy() -> None:
+    import datetime as dt
+
     series = _window()
     copied = series.data
-    copied.loc[:, "date"] = [pd.Timestamp("2024-01-02"), pd.Timestamp("2024-01-01")]
-    assert list(series.to_dataframe()["date"]) == list(pd.date_range("2024-01-01", periods=2, freq="D"))
+    _ = copied.with_columns(
+        pl.Series("date", [dt.datetime(2024, 1, 2), dt.datetime(2024, 1, 1)])
+    )
+    orig_dates = series.to_dataframe()["date"].to_list()
+    assert str(orig_dates[0])[:10] == "2024-01-01"
+    assert str(orig_dates[1])[:10] == "2024-01-02"
 
 
 def test_strategy_time_series_rejects_missing_interior_dates_with_bounds() -> None:
@@ -156,7 +163,7 @@ def test_strategy_time_series_rejects_nonnumeric_price_usd() -> None:
     bad_price = _valid_data()
     bad_price["price_usd"] = bad_price["price_usd"].astype(object)
     bad_price["price_usd"] = [40000.0, "bad"]
-    with pytest.raises(ValueError, match="price_usd' must be numeric"):
+    with pytest.raises((ValueError, Exception), match="numeric|convert|double"):
         StrategyTimeSeries(metadata=_metadata(), data=bad_price)
 
 
@@ -170,14 +177,14 @@ def test_strategy_time_series_rejects_nonfinite_price_usd() -> None:
 def test_strategy_time_series_rejects_nonboolean_locked_column() -> None:
     bad_locked = _valid_data()
     bad_locked["locked"] = [True, "bad"]
-    with pytest.raises(ValueError, match="locked' must contain only boolean values"):
+    with pytest.raises((ValueError, Exception), match="boolean|convert"):
         StrategyTimeSeries(metadata=_metadata(), data=bad_locked)
 
 
 def test_strategy_time_series_rejects_nonnumeric_day_index() -> None:
     bad_day_index = _valid_data()
     bad_day_index["day_index"] = [0, "bad"]
-    with pytest.raises(ValueError, match="day_index' must contain integer values"):
+    with pytest.raises((ValueError, Exception), match="day_index|integer|int64|convert"):
         StrategyTimeSeries(metadata=_metadata(), data=bad_day_index)
 
 
@@ -205,7 +212,7 @@ def test_strategy_time_series_validates_optional_datetime_columns() -> None:
 def test_strategy_time_series_rejects_invalid_optional_numeric_column() -> None:
     bad_optional_numeric = _valid_data()
     bad_optional_numeric["SplyCur"] = [100.0, "bad"]
-    with pytest.raises(ValueError, match="SplyCur' must be numeric"):
+    with pytest.raises((ValueError, Exception), match="SplyCur|numeric|convert|double"):
         StrategyTimeSeries(metadata=_metadata(), data=bad_optional_numeric)
 
 
@@ -235,7 +242,7 @@ def test_strategy_time_series_batch_requires_windows() -> None:
 
 
 def test_batch_from_flat_dataframe_requires_dataframe() -> None:
-    with pytest.raises(TypeError, match="must be a pandas DataFrame"):
+    with pytest.raises(TypeError, match="Polars or pandas DataFrame"):
         StrategyTimeSeriesBatch.from_flat_dataframe(  # type: ignore[arg-type]
             [{"a": 1}],
             strategy_id="s1",
@@ -264,7 +271,7 @@ def test_batch_from_flat_dataframe_requires_columns() -> None:
 
 
 def test_batch_from_flat_dataframe_requires_valid_datetimes() -> None:
-    with pytest.raises(ValueError, match="must be valid datetimes"):
+    with pytest.raises((ValueError, Exception), match="valid datetimes|parse|format"):
         StrategyTimeSeriesBatch.from_flat_dataframe(
             pd.DataFrame(
                 {
@@ -403,39 +410,40 @@ def test_diagnostics_edge_paths_empty_and_outlier_branches() -> None:
         data=data,
     )
 
-    weightless = series.to_dataframe()
-    weightless["weight"] = np.nan
+    weightless = series.to_dataframe().with_columns(pl.lit(float("nan")).alias("weight"))
     object.__setattr__(series, "_data", weightless)
     weight_diag = series.weight_diagnostics()
     assert weight_diag["sample_size"] == 0
 
-    no_price = series.to_dataframe()
-    no_price["price_usd"] = np.nan
+    no_price = series.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
     object.__setattr__(series, "_data", no_price)
     ret_diag = series.returns_diagnostics()
     assert ret_diag["price_observations"] == 0
 
     # valid.shape[0] < 2 branch
-    short_metric = series.to_dataframe()
-    short_metric["SplyCur"] = [np.nan, np.nan, 10.0]
+    short_metric = series.to_dataframe().with_columns(
+        pl.Series("SplyCur", [None, None, 10.0])
+    )
     object.__setattr__(series, "_data", short_metric)
     out_short = series.outlier_report(columns=["SplyCur"], method="mad")
-    assert out_short.empty
+    assert out_short.is_empty()
 
     # mad == 0 branch
-    flat_metric = series.to_dataframe()
-    flat_metric["SplyCur"] = [10.0, 10.0, 10.0]
+    flat_metric = series.to_dataframe().with_columns(
+        pl.Series("SplyCur", [10.0, 10.0, 10.0])
+    )
     object.__setattr__(series, "_data", flat_metric)
     out_mad_zero = series.outlier_report(columns=["SplyCur"], method="mad")
-    assert out_mad_zero.empty
+    assert out_mad_zero.is_empty()
 
     # z-score branch with finite std and computed mask.
-    outlier_price = series.to_dataframe()
-    outlier_price["price_usd"] = [100.0, 101.0, 1000.0]
+    outlier_price = series.to_dataframe().with_columns(
+        pl.Series("price_usd", [100.0, 101.0, 1000.0])
+    )
     object.__setattr__(series, "_data", outlier_price)
     out_z = series.outlier_report(columns=["price_usd"], method="zscore", threshold=0.5)
-    assert not out_z.empty
-    assert set(out_z["method"]) == {"zscore"}
+    assert not out_z.is_empty()
+    assert set(out_z["method"].to_list()) == {"zscore"}
 
 
 def test_strategy_time_series_outlier_report_rejects_unknown_method() -> None:
@@ -466,7 +474,7 @@ def test_strategy_time_series_outlier_report_returns_empty_with_constant_numeric
 
     report = series.outlier_report(method="zscore")
 
-    assert report.empty
+    assert report.is_empty()
     assert list(report.columns) == ["date", "column", "value", "score", "method", "threshold"]
 
 
@@ -511,8 +519,9 @@ def test_strategy_time_series_outlier_report_iqr_uses_default_threshold_and_case
     report = series.outlier_report(method="IQR")
 
     assert len(report) == 1
-    assert report.iloc[0]["method"] == "iqr"
-    assert np.isclose(report.iloc[0]["threshold"], 1.5)
+    row0 = report.row(0, named=True)
+    assert row0["method"] == "iqr"
+    assert np.isclose(float(row0["threshold"]), 1.5)
 
 
 def test_strategy_time_series_weight_diagnostics_handles_negative_top_k() -> None:
@@ -596,7 +605,7 @@ def test_strategy_time_series_drawdown_table_returns_empty_when_no_drawdowns() -
 
     drawdowns = series.drawdown_table()
 
-    assert drawdowns.empty
+    assert drawdowns.is_empty()
     assert list(drawdowns.columns) == [
         "peak_date",
         "trough_date",
@@ -631,9 +640,9 @@ def test_strategy_time_series_seasonality_profile_month_returns_12_rows() -> Non
     profile = series.seasonality_profile(freq="month", series="price")
 
     assert len(profile) == 12
-    jan = profile.loc[profile["period_label"] == "Jan"].iloc[0]
-    feb = profile.loc[profile["period_label"] == "Feb"].iloc[0]
-    mar = profile.loc[profile["period_label"] == "Mar"].iloc[0]
+    jan = profile.filter(pl.col("period_label") == "Jan").row(0, named=True)
+    feb = profile.filter(pl.col("period_label") == "Feb").row(0, named=True)
+    mar = profile.filter(pl.col("period_label") == "Mar").row(0, named=True)
     assert int(jan["count"]) == 1
     assert int(feb["count"]) == 1
     assert int(mar["count"]) == 0

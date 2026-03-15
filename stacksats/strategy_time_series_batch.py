@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-import numpy as np
-import pandas as pd
+import polars as pl
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # type: ignore[assignment]
 
 from .strategy_time_series_metadata import (
     StrategySeriesMetadata,
@@ -21,6 +26,13 @@ if TYPE_CHECKING:
     from .strategy_time_series import WeightTimeSeries
 
 
+def _norm_window_dt(value: dt.datetime | str | object) -> dt.datetime:
+    """Normalize window date to naive midnight UTC."""
+    from .framework_contract import _to_naive_utc
+
+    return _to_naive_utc(value)
+
+
 @dataclass(frozen=True, slots=True)
 class WeightTimeSeriesBatch:
     """Collection of single-window strategy weight time-series outputs."""
@@ -31,9 +43,9 @@ class WeightTimeSeriesBatch:
     config_hash: str
     windows: tuple["WeightTimeSeries", ...]
     schema_version: str = "1.0.0"
-    generated_at: pd.Timestamp = field(default_factory=_utc_now)
+    generated_at: dt.datetime = field(default_factory=_utc_now)
     extra_schema: tuple[ColumnSpec, ...] = ()
-    _window_index: dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"] = field(
+    _window_index: dict[tuple[dt.datetime, dt.datetime], "WeightTimeSeries"] = field(
         init=False,
         repr=False,
         compare=False,
@@ -61,34 +73,38 @@ class WeightTimeSeriesBatch:
     @staticmethod
     def _build_window_index(
         windows: tuple["WeightTimeSeries", ...],
-    ) -> dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"]:
-        index: dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"] = {}
+    ) -> dict[tuple[dt.datetime, dt.datetime], "WeightTimeSeries"]:
+        index: dict[tuple[dt.datetime, dt.datetime], "WeightTimeSeries"] = {}
         for window in windows:
             md = window.metadata
             if md.window_start is None or md.window_end is None:
                 continue
-            key = (pd.Timestamp(md.window_start), pd.Timestamp(md.window_end))
+            key = (md.window_start, md.window_end)
             index[key] = window
         return index
 
     @classmethod
     def from_flat_dataframe(
         cls,
-        data: pd.DataFrame,
+        data: pl.DataFrame | "pd.DataFrame",
         *,
         strategy_id: str,
         strategy_version: str,
         run_id: str,
         config_hash: str,
         schema_version: str = "1.0.0",
-        generated_at: pd.Timestamp | None = None,
+        generated_at: dt.datetime | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> "WeightTimeSeriesBatch":
         """Build a batch object from a flattened export dataframe."""
         from .strategy_time_series import WeightTimeSeries
 
-        if not isinstance(data, pd.DataFrame):
-            raise TypeError("data must be a pandas DataFrame.")
+        if isinstance(data, pl.DataFrame):
+            pass
+        elif pd is not None and isinstance(data, pd.DataFrame):
+            data = pl.from_pandas(data)
+        else:
+            raise TypeError("data must be a Polars or pandas DataFrame.")
 
         required = {"start_date", "end_date", "date", "weight", "price_usd"}
         missing = [col for col in required if col not in data.columns]
@@ -103,33 +119,35 @@ class WeightTimeSeriesBatch:
         )
         batch_generated_at = _normalize_generated_at(generated_at)
 
-        normalized = data.copy(deep=True)
-        normalized["start_date"] = pd.to_datetime(normalized["start_date"], errors="coerce")
-        normalized["end_date"] = pd.to_datetime(normalized["end_date"], errors="coerce")
-        normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce")
+        def _to_dt(col: str):
+            c = pl.col(col)
+            if data[col].dtype == pl.Utf8:
+                c = c.str.to_datetime().dt.replace_time_zone(None).dt.truncate("1d")
+            else:
+                c = c.cast(pl.Datetime).dt.replace_time_zone(None).dt.truncate("1d")
+            return c
+
+        normalized = data.with_columns(
+            _to_dt("start_date").alias("start_date"),
+            _to_dt("end_date").alias("end_date"),
+            _to_dt("date").alias("date"),
+        ).sort(["start_date", "end_date", "date"])
         if (
-            normalized["start_date"].isna().any()
-            or normalized["end_date"].isna().any()
-            or normalized["date"].isna().any()
+            normalized["start_date"].null_count() > 0
+            or normalized["end_date"].null_count() > 0
+            or normalized["date"].null_count() > 0
         ):
             raise ValueError("start_date, end_date, and date must be valid datetimes.")
 
-        normalized["start_date"] = normalized["start_date"].dt.normalize()
-        normalized["end_date"] = normalized["end_date"].dt.normalize()
-        normalized["date"] = normalized["date"].dt.normalize()
-        normalized = normalized.sort_values(["start_date", "end_date", "date"]).reset_index(
-            drop=True
-        )
-
         windows: list[WeightTimeSeries] = []
-        grouped = normalized.groupby(["start_date", "end_date"], sort=True, dropna=False)
-        for (window_start, window_end), window_frame in grouped:
-            payload_columns = [
-                col for col in window_frame.columns if col not in {"start_date", "end_date"}
-            ]
-            payload = window_frame[payload_columns].reset_index(drop=True)
+        for sub_df in normalized.partition_by(["start_date", "end_date"]):
+            window_start = sub_df["start_date"][0]
+            window_end = sub_df["end_date"][0]
+            payload = sub_df.drop(["start_date", "end_date"])
             if "day_index" not in payload.columns:
-                payload.insert(0, "day_index", np.arange(len(payload), dtype=int))
+                payload = payload.with_columns(pl.arange(0, payload.height).alias("day_index"))
+            ws = _norm_window_dt(window_start)
+            we = _norm_window_dt(window_end)
             metadata = StrategySeriesMetadata(
                 strategy_id=strategy_id,
                 strategy_version=strategy_version,
@@ -137,8 +155,8 @@ class WeightTimeSeriesBatch:
                 config_hash=config_hash,
                 schema_version=schema_version,
                 generated_at=batch_generated_at,
-                window_start=pd.Timestamp(window_start),
-                window_end=pd.Timestamp(window_end),
+                window_start=ws,
+                window_end=we,
             )
             windows.append(
                 WeightTimeSeries(
@@ -169,12 +187,12 @@ class WeightTimeSeriesBatch:
         run_id: str,
         config_hash: str,
         schema_version: str = "1.0.0",
-        generated_at: pd.Timestamp | None = None,
+        generated_at: dt.datetime | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> "WeightTimeSeriesBatch":
         """Load a batch object from a flattened CSV export."""
         return cls.from_flat_dataframe(
-            pd.read_csv(Path(path)),
+            pl.read_csv(Path(path)),
             strategy_id=strategy_id,
             strategy_version=strategy_version,
             run_id=run_id,
@@ -252,7 +270,7 @@ class WeightTimeSeriesBatch:
 
     def validate(self) -> None:
         """Validate cross-window metadata and uniqueness invariants."""
-        seen_keys: set[tuple[pd.Timestamp, pd.Timestamp]] = set()
+        seen_keys: set[tuple[dt.datetime, dt.datetime]] = set()
         for window in self.windows:
             window.validate()
             md = window.metadata
@@ -276,7 +294,7 @@ class WeightTimeSeriesBatch:
                 raise ValueError("Window metadata generated_at does not match batch generated_at.")
             if window.extra_schema != self.extra_schema:
                 raise ValueError("All windows must share the batch extra_schema definition.")
-            key = (pd.Timestamp(md.window_start), pd.Timestamp(md.window_end))
+            key = (md.window_start, md.window_end)
             if key in seen_keys:
                 raise ValueError(
                     "Duplicate window key detected in batch: "
@@ -284,20 +302,25 @@ class WeightTimeSeriesBatch:
                 )
             seen_keys.add(key)
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pl.DataFrame:
         """Flatten the batch into one canonical dataframe."""
-        frames: list[pd.DataFrame] = []
+        frames: list[pl.DataFrame] = []
         for window in self.windows:
             md = window.metadata
             payload = window.to_dataframe()
-            payload.insert(0, "end_date", pd.Timestamp(md.window_end))
-            payload.insert(0, "start_date", pd.Timestamp(md.window_start))
+            payload = payload.with_columns(
+                pl.lit(md.window_start).alias("start_date"),
+                pl.lit(md.window_end).alias("end_date"),
+            )
+            payload = payload.select(
+                ["start_date", "end_date"] + [c for c in payload.columns if c not in ("start_date", "end_date")]
+            )
             frames.append(payload)
-        return pd.concat(frames, ignore_index=True)
+        return pl.concat(frames, how="vertical_relaxed")
 
     def to_csv(self, path: str | Path, *, index: bool = False) -> None:
         """Write the canonical flattened batch dataframe to CSV."""
-        self.to_dataframe().to_csv(Path(path), index=index)
+        self.to_dataframe().write_csv(Path(path), include_header=True)
 
     def schema_markdown(self) -> str:
         """Render the shared window schema as markdown."""
@@ -307,28 +330,28 @@ class WeightTimeSeriesBatch:
         """Yield windows in batch order."""
         return iter(self.windows)
 
-    def window_keys(self) -> tuple[tuple[pd.Timestamp, pd.Timestamp], ...]:
+    def window_keys(self) -> tuple[tuple[dt.datetime, dt.datetime], ...]:
         """Return all batch window keys in batch order."""
         return tuple(
-            (pd.Timestamp(window.metadata.window_start), pd.Timestamp(window.metadata.window_end))
+            (window.metadata.window_start, window.metadata.window_end)
             for window in self.windows
             if window.metadata.window_start is not None and window.metadata.window_end is not None
         )
 
-    def date_span(self) -> tuple[pd.Timestamp, pd.Timestamp]:
+    def date_span(self) -> tuple[dt.datetime, dt.datetime]:
         """Return the full date span covered by the batch."""
-        starts = [pd.Timestamp(window.metadata.window_start) for window in self.windows]
-        ends = [pd.Timestamp(window.metadata.window_end) for window in self.windows]
+        starts = [window.metadata.window_start for window in self.windows]
+        ends = [window.metadata.window_end for window in self.windows]
         return (min(starts), max(ends))
 
     def for_window(
         self,
-        start_date: str | pd.Timestamp,
-        end_date: str | pd.Timestamp,
+        start_date: str | dt.datetime,
+        end_date: str | dt.datetime,
     ) -> "WeightTimeSeries":
         """Return the window object for a specific date range."""
-        start = pd.Timestamp(start_date).normalize()
-        end = pd.Timestamp(end_date).normalize()
+        start = _norm_window_dt(start_date)
+        end = _norm_window_dt(end_date)
         try:
             return self._window_index[(start, end)]
         except KeyError as exc:

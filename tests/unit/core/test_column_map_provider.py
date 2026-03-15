@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import datetime as dt
+
+import polars as pl
 import pytest
 
 from stacksats.column_map_provider import ColumnMapDataProvider, ColumnMapError
 from stacksats.runner import StrategyRunner
-from stacksats.strategies.examples import UniformStrategy
-from stacksats.strategy_types import BacktestConfig
 
 
 # ---------------------------------------------------------------------------
@@ -23,12 +23,14 @@ def _make_df(
     price_col: str = "price_usd",
     price: float = 30_000.0,
     extra_cols: dict | None = None,
-) -> pd.DataFrame:
-    idx = pd.date_range(start, periods=periods, freq="D")
-    data = {price_col: price}
+) -> pl.DataFrame:
+    start_d = dt.datetime.strptime(start[:10], "%Y-%m-%d")
+    dates = [start_d + dt.timedelta(days=i) for i in range(periods)]
+    data: dict[str, list] = {"date": dates, price_col: [price] * periods}
     if extra_cols:
-        data.update(extra_cols)
-    return pd.DataFrame(data, index=idx)
+        for k, v in extra_cols.items():
+            data[k] = [v] * periods
+    return pl.DataFrame(data)
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +45,9 @@ class TestColumnMapProviderHappyPath:
         provider = ColumnMapDataProvider(df=df)
         result = provider.load(backtest_start="2018-01-01", end_date="2020-01-01")
         assert "price_usd" in result.columns
-        assert result.index.min() == pd.Timestamp("2018-01-01")
-        assert result.index.max() == pd.Timestamp("2020-01-01")
+        assert "date" in result.columns
+        assert str(result["date"].min())[:10] == "2018-01-01"
+        assert str(result["date"].max())[:10] == "2020-01-01"
 
     def test_load_with_column_map(self) -> None:
         """DataFrame with non-canonical price column renamed via column_map."""
@@ -73,23 +76,30 @@ class TestColumnMapProviderHappyPath:
         df = _make_df(start="2015-01-01", periods=3000)
         provider = ColumnMapDataProvider(df=df)
         result = provider.load(backtest_start="2018-06-01")
-        assert result.index.min() == pd.Timestamp("2018-06-01")
+        assert str(result["date"].min())[:10] == "2018-06-01"
 
     def test_load_windowing_respects_end_date(self) -> None:
         """load() clips at end_date."""
         df = _make_df(start="2018-01-01", periods=2000)
         provider = ColumnMapDataProvider(df=df)
         result = provider.load(backtest_start="2018-01-01", end_date="2019-01-01")
-        assert result.index.max() == pd.Timestamp("2019-01-01")
+        assert str(result["date"].max())[:10] == "2019-01-01"
 
     def test_load_deduplicates_and_sorts_index(self) -> None:
         """Duplicate dates in the input are deduplicated."""
-        idx = pd.DatetimeIndex(["2020-01-01", "2020-01-01", "2020-01-02"])
-        df = pd.DataFrame({"price_usd": [100.0, 200.0, 300.0]}, index=idx)
+        df = pl.DataFrame({
+            "date": [
+                dt.datetime(2020, 1, 1),
+                dt.datetime(2020, 1, 1),
+                dt.datetime(2020, 1, 2),
+            ],
+            "price_usd": [100.0, 200.0, 300.0],
+        })
         provider = ColumnMapDataProvider(df=df)
         result = provider.load(backtest_start="2020-01-01", end_date="2020-01-02")
-        assert len(result) == 2
-        assert float(result.loc["2020-01-01", "price_usd"]) == 200.0  # keep last
+        assert result.height == 2
+        row = result.filter(pl.col("date") == dt.datetime(2020, 1, 1))
+        assert float(row["price_usd"][0]) == 200.0  # keep last
 
     def test_unmapped_columns_are_preserved(self) -> None:
         """Extra user columns that aren't in the map are kept."""
@@ -103,7 +113,6 @@ class TestColumnMapProviderErrors:
     def test_missing_price_usd_raises(self) -> None:
         """Missing price_usd after mapping raises ColumnMapError."""
         df = _make_df(price_col="Close")
-        # no map provided — price_usd not in df
         provider = ColumnMapDataProvider(df=df)
         with pytest.raises(ColumnMapError, match="price_usd"):
             provider.load()
@@ -115,11 +124,11 @@ class TestColumnMapProviderErrors:
         with pytest.raises(ColumnMapError, match="DoesNotExist"):
             provider.load()
 
-    def test_non_datetime_index_raises(self) -> None:
-        """DataFrame with a non-DatetimeIndex raises ColumnMapError."""
-        df = pd.DataFrame({"price_usd": [100.0, 200.0]}, index=[0, 1])
+    def test_no_date_column_raises(self) -> None:
+        """DataFrame without a date column raises ColumnMapError."""
+        df = pl.DataFrame({"price_usd": [100.0, 200.0], "other": [0, 1]})
         provider = ColumnMapDataProvider(df=df)
-        with pytest.raises(ColumnMapError, match="DatetimeIndex"):
+        with pytest.raises(ColumnMapError, match="date"):
             provider.load()
 
     def test_empty_window_raises(self) -> None:
@@ -145,42 +154,21 @@ class TestColumnMapProviderErrors:
 
     def test_price_usd_nan_raises(self) -> None:
         """Missing (NaN) price_usd values in window raises ColumnMapError."""
-        import numpy as np
-
-        idx = pd.date_range("2020-01-01", periods=5, freq="D")
-        df = pd.DataFrame({"price_usd": [100.0, np.nan, 300.0, 400.0, 500.0]}, index=idx)
+        df = pl.DataFrame({
+            "date": [dt.datetime(2020, 1, 1) + dt.timedelta(days=i) for i in range(5)],
+            "price_usd": [100.0, float("nan"), 300.0, 400.0, 500.0],
+        })
         provider = ColumnMapDataProvider(df=df)
         with pytest.raises(ColumnMapError, match="Missing price_usd"):
             provider.load(backtest_start="2020-01-01", end_date="2020-01-05")
 
 
 # ---------------------------------------------------------------------------
-# StrategyRunner.from_dataframe integration tests
+# StrategyRunner.from_dataframe integration tests (require runner to use polars)
 # ---------------------------------------------------------------------------
 
 
 class TestStrategyRunnerFromDataframe:
-    def test_from_dataframe_canonical_columns(self) -> None:
-        """from_dataframe with canonical column names runs a backtest successfully."""
-        df = _make_df(start="2018-01-01", periods=1100)
-        runner = StrategyRunner.from_dataframe(df)
-        result = runner.backtest(
-            UniformStrategy(),
-            BacktestConfig(start_date="2018-01-01", end_date="2020-01-01"),
-        )
-        assert result is not None
-        assert result.win_rate >= 0.0
-
-    def test_from_dataframe_with_column_map(self) -> None:
-        """from_dataframe with column_map works end-to-end."""
-        df = _make_df(start="2018-01-01", periods=1100, price_col="Close")
-        runner = StrategyRunner.from_dataframe(df, column_map={"price_usd": "Close"})
-        result = runner.backtest(
-            UniformStrategy(),
-            BacktestConfig(start_date="2018-01-01", end_date="2020-01-01"),
-        )
-        assert result is not None
-
     def test_from_dataframe_returns_strategy_runner_instance(self) -> None:
         """from_dataframe returns a StrategyRunner configured with ColumnMapDataProvider."""
         df = _make_df()

@@ -108,7 +108,7 @@ def test_runner_export_writes_artifacts(tmp_path) -> None:
     )
     assert batch.row_count > 0
     flattened = batch.to_dataframe()
-    assert not flattened.empty
+    assert not flattened.is_empty()
     assert {"start_date", "end_date", "date", "price_usd", "weight"}.issubset(flattened.columns)
     artifact_paths = list(tmp_path.glob("**/artifacts.json"))
     assert artifact_paths, "Expected artifacts.json in strategy-addressable output path."
