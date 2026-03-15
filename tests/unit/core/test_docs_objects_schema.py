@@ -48,7 +48,7 @@ def test_lineage_coverage_raises_when_target_column_not_documented(
             ),
         ),
     )
-    with pytest.raises(ValueError, match="reference undocumented StrategyTimeSeries columns"):
+    with pytest.raises(ValueError, match="reference undocumented TimeSeries columns"):
         StrategyTimeSeries.validate_brk_lineage_coverage()
 
 

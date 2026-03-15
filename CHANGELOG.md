@@ -12,6 +12,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added `ColumnMapDataProvider` for flexible data ingestion without DuckDB. Users can supply any Pandas DataFrame by mapping library-canonical column names (e.g. `price_usd`, `mvrv`) to their DataFrame column names.
 - Added `StrategyRunner.from_dataframe(df, column_map=...)` as the primary entry point for using StackSats without a BRK DuckDB installation.
 
+### Changed
+- Renamed `StrategyTimeSeries` → `TimeSeries` and `StrategyTimeSeriesBatch` → `TimeSeriesBatch` for a cleaner public API. `Strategy` and `TimeSeries` are now the primary library objects.
+- Strategy export methods and runners now return `TimeSeriesBatch` (deprecated `StrategyTimeSeriesBatch` name remains supported).
+
 ## [0.7.2] - 2026-03-11
 
 ### Added

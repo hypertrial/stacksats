@@ -211,3 +211,4 @@ __marimo__/
 *.duckdb
 
 /output
+*.parquet

@@ -1,6 +1,6 @@
 ---
 title: Runtime Objects Overview
-description: Overview of strategy and StrategyTimeSeries runtime object model.
+description: Overview of strategy and TimeSeries runtime object model.
 ---
 
 # Runtime Objects Overview
@@ -8,7 +8,10 @@ description: Overview of strategy and StrategyTimeSeries runtime object model.
 StackSats has two core runtime object families:
 
 - `strategy`: user intent object (`BaseStrategy`)
-- `StrategyTimeSeries` / `StrategyTimeSeriesBatch`: validated output objects
+- `TimeSeries` / `TimeSeriesBatch`: validated output objects
+
+!!! tip "The Two-Object Model"
+    StackSats enforces a strict separation between **identity** (the strategy you define) and **outcome** (the time-series results). Strategies are for research and logic; TimeSeries are for validation, backtesting, and production execution.
 
 ## Read in this order
 

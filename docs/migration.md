@@ -38,8 +38,9 @@ This page covers migration for:
 | `coinmetrics_overlay_v1` provider ID | `brk_overlay_v1` provider ID |
 | `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
 | `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK DuckDB loader is canonical |
-| raw `strategy_id` / `version` / public attrs as the informal contract | `strategy.spec()` as the canonical public contract |
-| implicit dual-hook precedence | explicit `intent_preference = "propose"` or `"profile"` when both hooks exist |
+| `strategy.spec()` as the informal contract | `strategy.spec()` as the canonical public contract |
+| `StrategyTimeSeries` | `TimeSeries` (deprecated alias available until 0.9.0) |
+| `StrategyTimeSeriesBatch` | `TimeSeriesBatch` (deprecated alias available until 0.9.0) |
 
 ## Code Replacements
 

@@ -43,6 +43,12 @@ The mechanism by which the framework ensures that a proposed daily weight is val
 2.  **Maximum Weight:** Access to daily liquidity is capped (default: 10% of total budget).
 3.  **Remaining Budget:** The weight cannot exceed the budget remaining for the current allocation span.
 
+### Strategy
+User-defined logic for feature engineering, signals, and allocation intent.
+
+### TimeSeries
+Framework-validated output data containing normalized weights and prices.
+
 ### Locked Prefix
 The portion of the allocation timeline that is in the past. Once a day passes, its allocation is "locked" and cannot be changed by the strategy. This immutability ensures realistic backtesting and prevents "repainting" of history.
 

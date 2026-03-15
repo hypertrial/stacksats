@@ -1,4 +1,4 @@
-"""Schema and lineage definitions for StrategyTimeSeries."""
+"""Schema and lineage definitions for TimeSeries."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class ColumnSpec:
 
 @dataclass(frozen=True, slots=True)
 class BRKLineageSpec:
-    """BRK source column lineage into StrategyTimeSeries columns."""
+    """BRK source column lineage into TimeSeries columns."""
 
     source_column: str
     required: bool
@@ -99,7 +99,7 @@ BRK_LINEAGE: tuple[BRKLineageSpec, ...] = (
         required=True,
         description="BRK daily timestamp column.",
         strategy_column="date",
-        notes="Loaded as index, then represented by StrategyTimeSeries.date.",
+        notes="Loaded as index, then represented by TimeSeries.date.",
     ),
     BRKLineageSpec(
         source_column="AdrActCnt",
@@ -636,7 +636,7 @@ def validate_schema_specs(
         collisions = sorted(name for name in seen if name in core_names)
         if collisions:
             raise ValueError(
-                "Extra schema columns collide with core StrategyTimeSeries schema: "
+                "Extra schema columns collide with core TimeSeries schema: "
                 + ", ".join(collisions)
             )
     return specs
@@ -666,7 +666,7 @@ def validate_brk_lineage_coverage(
     ]
     if missing_targets:
         raise ValueError(
-            "BRK lineage mappings reference undocumented StrategyTimeSeries "
+            "BRK lineage mappings reference undocumented TimeSeries "
             "columns for source columns: " + ", ".join(missing_targets)
         )
 

@@ -7,12 +7,11 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.7.2 highlights
+## 0.7.3 highlights
 
-- Reorganized docs navigation around clear user intent paths (`Start`, `Run`, `Build`, `Reference`, `Maintainers`) while keeping compatibility anchors for high-traffic command links.
-- Split lifecycle command documentation into canonical pages under `docs/run/` to reduce duplication and make flags/reference details easier to maintain.
-- Refreshed docs visual styling with clearer light/dark theming, improved readability, and more consistent cards/code/admonition presentation.
-- Refactored docs UX guardrails to check structural outcomes rather than brittle exact heading strings.
+- Added `ColumnMapDataProvider` for flexible data ingestion without DuckDB. Users can supply any Pandas DataFrame by mapping library-canonical column names (e.g. `price_usd`, `mvrv`) to their DataFrame column names.
+- Added `StrategyRunner.from_dataframe(df, column_map=...)` as the primary entry point for using StackSats without a BRK DuckDB installation.
+- Renamed `StrategyTimeSeries` → `TimeSeries` and `StrategyTimeSeriesBatch` → `TimeSeriesBatch` for a cleaner public API. `Strategy` and `TimeSeries` are now the two lead objects.
 
 ## Upgrade notes
 

@@ -20,7 +20,7 @@ from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
     from .api import BacktestResult, DailyRunResult, ValidationResult
-    from .strategy_time_series import StrategyTimeSeriesBatch
+    from .strategy_time_series import TimeSeriesBatch
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class StrategyRunResult:
 
     validation: "ValidationResult"
     backtest: "BacktestResult"
-    export_batch: "StrategyTimeSeriesBatch | None" = None
+    export_batch: "TimeSeriesBatch | None" = None
     output_dir: str | None = None
 
 
@@ -525,7 +525,7 @@ class BaseStrategy(ABC):
         self,
         config: ExportConfig | None = None,
         **kwargs,
-    ) -> "StrategyTimeSeriesBatch":
+    ) -> "TimeSeriesBatch":
         from .runner import StrategyRunner
 
         runner = StrategyRunner()

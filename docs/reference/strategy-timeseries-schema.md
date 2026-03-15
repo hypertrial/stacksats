@@ -1,9 +1,9 @@
 ---
-title: Strategy TimeSeries Schema
-description: Generated schema and BRK lineage tables for StrategyTimeSeries.
+title: TimeSeries Schema
+description: Generated schema and BRK lineage tables for TimeSeries.
 ---
 
-# Strategy TimeSeries Schema
+# TimeSeries Schema
 
 This page is generated from runtime schema definitions in code.
 
@@ -16,7 +16,7 @@ Refresh with:
 
 ## Data columns (generated)
 
-<!-- BEGIN: STRATEGY_TIMESERIES_SCHEMA_TABLE -->
+<!-- BEGIN: TIMESERIES_SCHEMA_TABLE -->
 
 | name | dtype | required | description | unit | constraints | source | formula |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -58,15 +58,15 @@ Refresh with:
 | TxTfrCnt | float64 | False | BRK transfer transaction count. |  | finite when present | brk |  |
 | volume_reported_spot_usd_1d | float64 | False | BRK reported spot exchange volume in USD for 1 day. | USD | finite when present | brk |  |
 
-<!-- END: STRATEGY_TIMESERIES_SCHEMA_TABLE -->
+<!-- END: TIMESERIES_SCHEMA_TABLE -->
 
 ## BRK lineage (generated)
 
-<!-- BEGIN: STRATEGY_TIMESERIES_BRK_LINEAGE -->
+<!-- BEGIN: TIMESERIES_BRK_LINEAGE -->
 
 | source_column | required | description | strategy_column | notes |
 | --- | --- | --- | --- | --- |
-| time | True | BRK daily timestamp column. | date | Loaded as index, then represented by StrategyTimeSeries.date. |
+| time | True | BRK daily timestamp column. | date | Loaded as index, then represented by TimeSeries.date. |
 | AdrActCnt | False | BRK active addresses count. | AdrActCnt |  |
 | AdrBalCnt | False | BRK addresses with non-zero balance. | AdrBalCnt |  |
 | AssetCompletionTime | False | BRK ingestion completion timestamp for asset-day data. | AssetCompletionTime |  |
@@ -99,4 +99,4 @@ Refresh with:
 | TxTfrCnt | False | BRK transfer transaction count. | TxTfrCnt |  |
 | volume_reported_spot_usd_1d | False | BRK reported spot exchange volume in USD for 1 day. | volume_reported_spot_usd_1d |  |
 
-<!-- END: STRATEGY_TIMESERIES_BRK_LINEAGE -->
+<!-- END: TIMESERIES_BRK_LINEAGE -->

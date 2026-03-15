@@ -15,8 +15,8 @@ from .runner import StrategyRunner
 from .strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
-    StrategyTimeSeries,
-    StrategyTimeSeriesBatch,
+    TimeSeries,
+    TimeSeriesBatch,
 )
 from .strategies.model_example import ExampleMVRVStrategy
 from .strategies.model_mvrv_plus import MVRVPlusStrategy
@@ -37,26 +37,36 @@ from .strategy_types import (
     ValidationConfig,
 )
 
+# Deprecated aliases — remove in 0.9.0
+StrategyTimeSeries = TimeSeries
+StrategyTimeSeriesBatch = TimeSeriesBatch
+
 __all__ = [
-    "BacktestResult",
-    "BacktestConfig",
+    # Primary objects
+    "TimeSeries",
+    "TimeSeriesBatch",
     "BaseStrategy",
+    # Results
+    "BacktestResult",
+    "ValidationResult",
+    "DailyRunResult",
+    # Configs
+    "BacktestConfig",
+    "ExportConfig",
+    "RunDailyConfig",
+    "ValidationConfig",
+    # Supporting types
     "ColumnMapDataProvider",
     "ColumnMapError",
+    "ColumnSpec",
     "DailyOrderReceipt",
     "DailyOrderRequest",
-    "DailyRunResult",
     "DayState",
-    "ExportConfig",
     "ExampleMVRVStrategy",
     "MVRVStrategy",
     "MVRVPlusStrategy",
-    "RunDailyConfig",
-    "ColumnSpec",
     "StrategyRunner",
     "StrategySeriesMetadata",
-    "StrategyTimeSeries",
-    "StrategyTimeSeriesBatch",
     "StrategyArtifactSet",
     "StrategyContractWarning",
     "StrategyContext",
@@ -64,9 +74,10 @@ __all__ = [
     "StrategyRunResult",
     "StrategySpec",
     "TargetProfile",
-    "ValidationResult",
-    "ValidationConfig",
     "load_strategy",
     "load_data",
     "precompute_features",
+    # Deprecated aliases — remove in 0.9.0
+    "StrategyTimeSeries",
+    "StrategyTimeSeriesBatch",
 ]

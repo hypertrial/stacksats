@@ -14,6 +14,15 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
   </p>
 </div>
 
+## Core Objects
+
+StackSats is built around two primary runtime objects that separate strategy intent from framework execution:
+
+- **[Strategy](reference/strategy-object.md)**: User-defined logic for feature engineering, signals, and allocation intent.
+- **[TimeSeries](reference/strategy-timeseries.md)**: Framework-validated output data containing normalized weights and prices.
+
+---
+
 ## Choose Your Path
 
 <div class="grid cards" markdown>

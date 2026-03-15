@@ -1,12 +1,15 @@
 ---
-title: Strategy TimeSeries
-description: Metadata, guarantees, and export semantics for StrategyTimeSeries and StrategyTimeSeriesBatch.
+title: TimeSeries
+description: Metadata, guarantees, and export semantics for TimeSeries and TimeSeriesBatch.
 ---
 
-# Strategy TimeSeries
+# TimeSeries
 
-`StrategyTimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated export object used by `strategy export`.
-`StrategyTimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
+`TimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated export object used by `strategy export`.
+`TimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
+
+> [!NOTE]
+> `TimeSeries` was previously named `StrategyTimeSeries`. Both names are supported in 0.7.x, but `StrategyTimeSeries` is deprecated and will be removed in 0.9.0.
 
 ## Required metadata
 
@@ -30,14 +33,14 @@ Metadata invariants:
 
 ## Read-only object contract
 
-`StrategyTimeSeries` is immutable after construction.
+`TimeSeries` is immutable after construction.
 
 - the internal payload is stored privately
 - `data` returns a defensive copy
 - `to_dataframe()` returns a deep copy
 - analysis and diagnostics methods operate on the validated internal payload, not on copied frames
 
-If you need to transform data, do it outside the object and construct a new `StrategyTimeSeries`.
+If you need to transform data, do it outside the object and construct a new `TimeSeries`.
 
 ## Core methods
 
@@ -94,7 +97,7 @@ Strategy-specific columns must be declared explicitly with `extra_schema`.
 Example:
 
 ```python
-from stacksats import ColumnSpec, StrategyTimeSeries
+from stacksats import ColumnSpec, TimeSeries
 
 extra_schema = (
     ColumnSpec(
@@ -107,7 +110,7 @@ extra_schema = (
     ),
 )
 
-series = StrategyTimeSeries(metadata=metadata, data=df, extra_schema=extra_schema)
+series = TimeSeries(metadata=metadata, data=df, extra_schema=extra_schema)
 ```
 
 Rules:
@@ -118,7 +121,7 @@ Rules:
 
 ## Batch guarantees
 
-`StrategyTimeSeriesBatch` guarantees:
+`TimeSeriesBatch` guarantees:
 
 - one or more windows
 - unique `(window_start, window_end)` per window
@@ -128,7 +131,7 @@ Rules:
 
 ## Export contract
 
-`StrategyRunner.export(...)` returns `StrategyTimeSeriesBatch`.
+`StrategyRunner.export(...)` returns `TimeSeriesBatch`.
 
 Artifacts are written under:
 
@@ -156,15 +159,15 @@ Canonical `weights.csv` columns:
 Rebuild a batch object from export artifacts:
 
 ```python
-from stacksats import StrategyTimeSeriesBatch
+from stacksats import TimeSeriesBatch
 
-batch = StrategyTimeSeriesBatch.from_artifact_dir("output/simple-zscore/1.0.0/<run_id>")
+batch = TimeSeriesBatch.from_artifact_dir("output/simple-zscore/1.0.0/<run_id>")
 ```
 
 Or from a flattened CSV directly:
 
 ```python
-batch = StrategyTimeSeriesBatch.from_csv(
+batch = TimeSeriesBatch.from_csv(
     "weights.csv",
     strategy_id="simple-zscore",
     strategy_version="1.0.0",
@@ -199,8 +202,8 @@ Example `artifacts.json` (shape):
 
 ## Schema details
 
-See [Strategy TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and BRK lineage tables.
+See [TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and BRK lineage tables.
 
 ## Feedback
 
-- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+Strategy+TimeSeries)
+- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+TimeSeries)

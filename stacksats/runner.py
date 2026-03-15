@@ -24,7 +24,7 @@ from .runner_validation import (
     WeightValidationError,
     _ValidationState,
 )
-from .strategy_time_series import StrategyTimeSeriesBatch
+from .strategy_time_series import TimeSeriesBatch
 from .strategy_types import (
     BacktestConfig,
     BaseStrategy,
@@ -952,7 +952,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pd.DataFrame | None = None,
         current_date: pd.Timestamp | None = None,
-    ) -> StrategyTimeSeriesBatch:
+    ) -> TimeSeriesBatch:
         from .export_weights import process_start_date_batch
         from .prelude import generate_date_ranges, group_ranges_by_start_date
 
@@ -989,7 +989,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         result_df = pd.concat(all_results, ignore_index=True)
 
         provenance = self._provenance(strategy, config)
-        series_batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+        series_batch = TimeSeriesBatch.from_flat_dataframe(
             result_df,
             strategy_id=provenance["strategy_id"],
             strategy_version=provenance["version"],

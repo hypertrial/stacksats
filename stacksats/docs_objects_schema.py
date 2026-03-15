@@ -1,19 +1,19 @@
-"""Helpers for keeping StrategyTimeSeries schema docs in sync with code."""
+"""Helpers for keeping TimeSeries schema docs in sync with code."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from .strategy_time_series import StrategyTimeSeries
+from .strategy_time_series import TimeSeries
 
-STRATEGY_SCHEMA_BEGIN = "<!-- BEGIN: STRATEGY_TIMESERIES_SCHEMA_TABLE -->"
-STRATEGY_SCHEMA_END = "<!-- END: STRATEGY_TIMESERIES_SCHEMA_TABLE -->"
-BRK_LINEAGE_BEGIN = "<!-- BEGIN: STRATEGY_TIMESERIES_BRK_LINEAGE -->"
-BRK_LINEAGE_END = "<!-- END: STRATEGY_TIMESERIES_BRK_LINEAGE -->"
+TIMESERIES_SCHEMA_BEGIN = "<!-- BEGIN: TIMESERIES_SCHEMA_TABLE -->"
+TIMESERIES_SCHEMA_END = "<!-- END: TIMESERIES_SCHEMA_TABLE -->"
+TIMESERIES_LINEAGE_BEGIN = "<!-- BEGIN: TIMESERIES_BRK_LINEAGE -->"
+TIMESERIES_LINEAGE_END = "<!-- END: TIMESERIES_BRK_LINEAGE -->"
 
 
 def objects_docs_path(root_dir: Path | None = None) -> Path:
-    """Return generated StrategyTimeSeries schema docs path for repository root."""
+    """Return generated TimeSeries schema docs path for repository root."""
     base = root_dir or Path(__file__).resolve().parents[1]
     return base / "docs" / "reference" / "strategy-timeseries-schema.md"
 
@@ -30,16 +30,16 @@ def _replace_section(content: str, begin: str, end: str, body: str) -> str:
 
 
 def render_objects_docs(content: str) -> str:
-    """Return schema docs content with generated StrategyTimeSeries sections."""
+    """Return schema docs content with generated TimeSeries sections."""
     updated = _replace_section(
         content,
-        STRATEGY_SCHEMA_BEGIN,
-        STRATEGY_SCHEMA_END,
-        StrategyTimeSeries.schema_markdown_table(),
+        TIMESERIES_SCHEMA_BEGIN,
+        TIMESERIES_SCHEMA_END,
+        TimeSeries.schema_markdown_table(),
     )
     return _replace_section(
         updated,
-        BRK_LINEAGE_BEGIN,
-        BRK_LINEAGE_END,
-        StrategyTimeSeries.brk_lineage_markdown(),
+        TIMESERIES_LINEAGE_BEGIN,
+        TIMESERIES_LINEAGE_END,
+        TimeSeries.brk_lineage_markdown(),
     )

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .strategy_time_series_analysis import StrategyTimeSeriesAnalysisMixin
-from .strategy_time_series_batch import StrategyTimeSeriesBatch
+from .strategy_time_series_batch import TimeSeriesBatch
 from .strategy_time_series_diagnostics import StrategyTimeSeriesDiagnosticsMixin
 from .strategy_time_series_metadata import StrategySeriesMetadata
 from .strategy_time_series_schema import (
@@ -30,7 +30,7 @@ from .strategy_time_series_schema import (
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisMixin):
+class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisMixin):
     """Single-window normalized strategy output time series."""
 
     metadata: StrategySeriesMetadata
@@ -51,7 +51,7 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> None:
         if not isinstance(data, pd.DataFrame):
-            raise TypeError("StrategyTimeSeries.data must be a pandas DataFrame.")
+            raise TypeError("TimeSeries.data must be a pandas DataFrame.")
 
         normalized_extra_schema = validate_schema_specs(extra_schema, forbid_core_name_collisions=True)
         normalized_data = self._normalize_core_columns(data)
@@ -69,8 +69,8 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
         *,
         metadata: StrategySeriesMetadata,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "StrategyTimeSeries":
-        """Build a validated StrategyTimeSeries from a dataframe payload."""
+    ) -> "TimeSeries":
+        """Build a validated TimeSeries from a dataframe payload."""
         return cls(metadata=metadata, data=data, extra_schema=extra_schema)
 
     @classmethod
@@ -80,8 +80,8 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
         metadata: StrategySeriesMetadata,
         *,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "StrategyTimeSeries":
-        """Load a StrategyTimeSeries from CSV."""
+    ) -> "TimeSeries":
+        """Load a TimeSeries from CSV."""
         csv_path = Path(path)
         return cls(
             metadata=metadata,
@@ -157,7 +157,7 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
 
     @classmethod
     def validate_brk_lineage_coverage(cls) -> None:
-        """Ensure lineage mappings target documented core StrategyTimeSeries columns."""
+        """Ensure lineage mappings target documented core TimeSeries columns."""
         validate_lineage_coverage(
             lineage=cls.BRK_LINEAGE,
             schema_specs_iter=cls._core_schema_specs(),
@@ -172,7 +172,7 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
 
     @classmethod
     def schema_markdown_table(cls, extra_schema: Iterable[ColumnSpec] = ()) -> str:
-        """Render StrategyTimeSeries schema specs as a markdown table."""
+        """Render TimeSeries schema specs as a markdown table."""
         cls.validate_brk_lineage_coverage()
         return cls._render_schema_markdown(cls._merged_schema_specs(extra_schema))
 
@@ -199,7 +199,7 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
         missing = [col for col in schema_required if col not in self._data.columns]
         if missing:
             raise ValueError(
-                "StrategyTimeSeries missing required columns: "
+                "TimeSeries missing required columns: "
                 + ", ".join(str(col) for col in missing)
             )
 
@@ -360,20 +360,27 @@ class StrategyTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesA
             }
         return {
             "count": int(non_null.shape[0]),
-            "mean": StrategyTimeSeries._native_float(non_null.mean()),
-            "std": StrategyTimeSeries._native_float(non_null.std(ddof=0)),
-            "min": StrategyTimeSeries._native_float(non_null.min()),
-            "p25": StrategyTimeSeries._native_float(non_null.quantile(0.25)),
-            "median": StrategyTimeSeries._native_float(non_null.median()),
-            "p75": StrategyTimeSeries._native_float(non_null.quantile(0.75)),
-            "max": StrategyTimeSeries._native_float(non_null.max()),
+            "mean": TimeSeries._native_float(non_null.mean()),
+            "std": TimeSeries._native_float(non_null.std(ddof=0)),
+            "min": TimeSeries._native_float(non_null.min()),
+            "p25": TimeSeries._native_float(non_null.quantile(0.25)),
+            "median": TimeSeries._native_float(non_null.median()),
+            "p75": TimeSeries._native_float(non_null.quantile(0.75)),
+            "max": TimeSeries._native_float(non_null.max()),
         }
 
+
+# Deprecated aliases — remove in 0.9.0
+StrategyTimeSeries = TimeSeries
+StrategyTimeSeriesBatch = TimeSeriesBatch
 
 __all__ = [
     "ColumnSpec",
     "BRKLineageSpec",
     "StrategySeriesMetadata",
+    "TimeSeries",
+    "TimeSeriesBatch",
+    # Deprecated aliases
     "StrategyTimeSeries",
     "StrategyTimeSeriesBatch",
 ]

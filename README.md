@@ -7,10 +7,9 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats, developed by [Hypertrial](https://www.hypertrial.ai), is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
+StackSats is a **strategy-first backtesting and execution framework** for Bitcoin weight management. It separates **Strategy** intent from **TimeSeries** outcomes, providing a strict boundary for causal validation.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
-Current release line: `0.7.1`.
 
 ## Start Here
 
@@ -142,8 +141,8 @@ stacksats strategy export \
 
 Use date bounds that are covered by available BTC source data.
 
-Exported `StrategyTimeSeries` objects are read-only validated artifacts.
-If you need to reload an export later, use `StrategyTimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
+Exported `TimeSeries` objects are read-only validated artifacts.
+If you need to reload an export later, use `TimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
 
 ## Public API
 
@@ -154,7 +153,7 @@ Top-level exports:
 - `RunDailyConfig`
 - `StrategyMetadata`, `StrategySpec`, `StrategyContractWarning`
 - `StrategyArtifactSet`
-- `StrategyTimeSeries`, `StrategyTimeSeriesBatch`
+- `TimeSeries`, `TimeSeriesBatch`
 - `BacktestResult`, `ValidationResult`, `DailyRunResult`
 - `load_strategy()`, `load_data()`, `precompute_features()`
 - `MVRVStrategy`

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync generated schema sections in StrategyTimeSeries schema docs."""
+"""Sync generated schema sections in TimeSeries schema docs."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Sync StrategyTimeSeries schema docs in "
+            "Sync TimeSeries schema docs in "
             "docs/reference/strategy-timeseries-schema.md."
         )
     )

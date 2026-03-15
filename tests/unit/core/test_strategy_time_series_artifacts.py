@@ -130,7 +130,7 @@ def test_strategy_time_series_extra_schema_rejects_duplicate_and_core_collision(
             source="strategy",
         ),
     )
-    with pytest.raises(ValueError, match="collide with core StrategyTimeSeries schema"):
+    with pytest.raises(ValueError, match="collide with core TimeSeries schema"):
         StrategyTimeSeries(metadata=_metadata(), data=_data(), extra_schema=collision)
 
 
