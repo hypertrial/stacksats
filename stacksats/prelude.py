@@ -31,6 +31,15 @@ def load_data(
 ):
     """Load strict BRK BTC data through the canonical provider path.
 
+    Requires a local BRK DuckDB file. Install the optional extra with::
+
+        pip install stacksats[brk]
+
+    If you want to supply your own data without DuckDB, use
+    :class:`stacksats.ColumnMapDataProvider` instead, or construct a
+    :class:`stacksats.runner.StrategyRunner` with
+    :meth:`~stacksats.runner.StrategyRunner.from_dataframe`.
+
     This path intentionally enforces source-only data integrity:
     - local DuckDB only
     - no synthetic row filling

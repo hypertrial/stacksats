@@ -224,8 +224,11 @@ class BRKOverlayFeatureProvider:
         db_path = _resolve_duckdb_path(self.default_duckdb_path)
         try:
             import duckdb
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("duckdb is required for provider 'brk_overlay_v1'.") from exc
+        except ImportError as exc:
+            raise RuntimeError(
+                "duckdb is not installed. Provider 'brk_overlay_v1' requires the BRK "
+                "DuckDB backend. Install it with: pip install stacksats[brk]"
+            ) from exc
 
         con = duckdb.connect(str(db_path), read_only=True)
         try:
@@ -519,10 +522,10 @@ class DuckDBAnalyticsFeatureProvider:
     def _load_duckdb_frame(self, path: Path) -> pd.DataFrame:
         try:
             import duckdb
-        except ImportError as exc:  # pragma: no cover - dependency should be installed
+        except ImportError as exc:
             raise RuntimeError(
-                "duckdb is required for provider 'duckdb_analytics_factors_v1'. "
-                "Install stacksats with duckdb dependency support."
+                "duckdb is not installed. Provider 'duckdb_analytics_factors_v1' requires "
+                "the BRK DuckDB backend. Install it with: pip install stacksats[brk]"
             ) from exc
 
         con = duckdb.connect(str(path), read_only=True)

@@ -26,7 +26,6 @@ dependencies = [
   "pandas==3.0.0",
   "numpy==2.4.2",
   "scipy==1.17.0",
-  "duckdb==1.4.4",
   "requests==2.32.5",
   "matplotlib==3.10.8",
   "Pillow==11.3.0",
@@ -44,6 +43,9 @@ Changelog = "https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md"
 Security = "https://github.com/hypertrial/stacksats/security/policy"
 
 [project.optional-dependencies]
+brk = [
+  "duckdb==1.4.4",
+]
 deploy = [
   "psycopg2-binary==2.9.11",
   "python-dotenv==1.2.1",
@@ -78,6 +80,7 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/integration/backtest/*.py" = ["E402"]
+"tests/unit/core/test_feature_registry.py" = ["E402"]
 
 [project.scripts]
 stacksats = "stacksats.cli:main"

@@ -7,9 +7,11 @@ from .api import (
     DailyRunResult,
     ValidationResult,
 )
+from .column_map_provider import ColumnMapDataProvider, ColumnMapError
 from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
+from .runner import StrategyRunner
 from .strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
@@ -39,6 +41,8 @@ __all__ = [
     "BacktestResult",
     "BacktestConfig",
     "BaseStrategy",
+    "ColumnMapDataProvider",
+    "ColumnMapError",
     "DailyOrderReceipt",
     "DailyOrderRequest",
     "DailyRunResult",
@@ -49,6 +53,7 @@ __all__ = [
     "MVRVPlusStrategy",
     "RunDailyConfig",
     "ColumnSpec",
+    "StrategyRunner",
     "StrategySeriesMetadata",
     "StrategyTimeSeries",
     "StrategyTimeSeriesBatch",

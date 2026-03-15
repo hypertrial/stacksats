@@ -40,8 +40,11 @@ def _require_daily_index(df: pd.DataFrame, *, backtest_start_ts: pd.Timestamp, t
 def _load_btc_from_duckdb(path: Path) -> pd.DataFrame:
     try:
         import duckdb
-    except ImportError as exc:  # pragma: no cover
-        raise DataLoadError("duckdb package is required for BTCDataProvider.") from exc
+    except ImportError as exc:
+        raise DataLoadError(
+            "duckdb is not installed. The BTCDataProvider requires the BRK local-node "
+            "DuckDB backend. Install it with: pip install stacksats[brk]"
+        ) from exc
 
     con = duckdb.connect(str(path), read_only=True)
     try:

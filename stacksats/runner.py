@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pandas as pd
 
+from .column_map_provider import ColumnMapDataProvider
 from .data_btc import BTCDataProvider
 from .feature_materialization import hash_dataframe
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
@@ -44,6 +45,50 @@ class StrategyRunner(StrategyRunnerValidationMixin):
     def __init__(self, data_provider=None):
         self._data_provider = data_provider or BTCDataProvider()
         self._feature_registry = DEFAULT_FEATURE_REGISTRY
+
+    @classmethod
+    def from_dataframe(
+        cls,
+        df,
+        *,
+        column_map: dict[str, str] | None = None,
+    ) -> "StrategyRunner":
+        """Construct a StrategyRunner backed by a user-supplied DataFrame.
+
+        This is the primary entry point for using StackSats without a BRK
+        DuckDB installation.
+
+        Parameters
+        ----------
+        df:
+            A Pandas DataFrame with a ``DatetimeIndex``. At minimum it must
+            contain a column that maps to ``price_usd``.
+        column_map:
+            Mapping from **library column names** to **DataFrame column names**.
+            Example: ``{"price_usd": "Close", "mvrv": "MVRV_Ratio"}``.
+            If *None*, the DataFrame columns are used as-is.
+
+        Returns
+        -------
+        StrategyRunner
+            A fully configured runner using ``ColumnMapDataProvider``.
+
+        Example
+        -------
+        ::
+
+            runner = StrategyRunner.from_dataframe(
+                df,
+                column_map={"price_usd": "Close"},
+            )
+            result = runner.backtest(MyStrategy(), BacktestConfig())
+        """
+        return cls(
+            data_provider=ColumnMapDataProvider(
+                df=df,
+                column_map=column_map or {},
+            )
+        )
 
     def _load_btc_df(
         self,

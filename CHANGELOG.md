@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-03-15
+
+### Added
+- Added `ColumnMapDataProvider` for flexible data ingestion without DuckDB. Users can supply any Pandas DataFrame by mapping library-canonical column names (e.g. `price_usd`, `mvrv`) to their DataFrame column names.
+- Added `StrategyRunner.from_dataframe(df, column_map=...)` as the primary entry point for using StackSats without a BRK DuckDB installation.
+
 ## [0.7.2] - 2026-03-11
 
 ### Added

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import duckdb
 import pandas as pd
 import pytest
+
+duckdb = pytest.importorskip("duckdb", reason="duckdb not installed (pip install stacksats[brk])")
 
 from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY, FeatureRegistry
 from stacksats.strategy_types import BaseStrategy
