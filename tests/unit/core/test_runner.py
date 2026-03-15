@@ -202,7 +202,7 @@ def test_runner_backtest_materializes_features_per_window_end(
         start_date,
         end_date,
         current_date,
-        cache_namespace=None,
+        **kwargs,
     ):
         seen_current_dates.append(current_date)
         return original_materialize(
@@ -211,7 +211,7 @@ def test_runner_backtest_materializes_features_per_window_end(
             start_date=start_date,
             end_date=end_date,
             current_date=current_date,
-            cache_namespace=cache_namespace,
+            **kwargs,
         )
 
     monkeypatch.setattr(runner, "_materialize_strategy_features", _wrapped_materialize)

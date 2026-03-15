@@ -455,6 +455,14 @@ class StrategyRunnerValidationMixin:
         return ok, messages
 
     @staticmethod
+    def _mutation_message_for_strategy(strategy: BaseStrategy) -> str:
+        return (
+            STRICT_PROFILE_MUTATION_MESSAGE
+            if strategy.intent_mode() == "profile"
+            else STRICT_MUTATION_MESSAGE
+        )
+
+    @staticmethod
     def _mark_mutation_failure(
         state: _ValidationState,
         *,
@@ -629,6 +637,7 @@ class StrategyRunnerValidationMixin:
                     strict_mode=strict_mode,
                     mutated=full_mutated,
                     state=state,
+                    message=self._mutation_message_for_strategy(strategy),
                 ):
                     break
 
@@ -663,6 +672,7 @@ class StrategyRunnerValidationMixin:
                     strict_mode=strict_mode,
                     mutated=masked_mutated,
                     state=state,
+                    message=self._mutation_message_for_strategy(strategy),
                 ):
                     break
 
@@ -687,6 +697,7 @@ class StrategyRunnerValidationMixin:
                     strict_mode=strict_mode,
                     mutated=perturbed_mutated,
                     state=state,
+                    message=self._mutation_message_for_strategy(strategy),
                 ):
                     break
 
@@ -855,6 +866,7 @@ class StrategyRunnerValidationMixin:
                         strict_mode=strict_mode,
                         mutated=mutated,
                         state=state,
+                        message=self._mutation_message_for_strategy(strategy),
                     ):
                         break
                     if weights.is_empty():
@@ -942,6 +954,7 @@ class StrategyRunnerValidationMixin:
             strict_mode=True,
             mutated=base_mutated,
             state=state,
+            message=self._mutation_message_for_strategy(strategy),
         ):
             return
         if base_lock_weights.is_empty():
@@ -979,6 +992,7 @@ class StrategyRunnerValidationMixin:
             strict_mode=True,
             mutated=locked_mutated,
             state=state,
+            message=self._mutation_message_for_strategy(strategy),
         ):
             return
         if n_past > 0:

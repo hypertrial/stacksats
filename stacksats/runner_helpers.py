@@ -157,10 +157,22 @@ def build_fold_ranges(
 ) -> list[tuple[dt.datetime, dt.datetime]]:
     """Build fold boundaries for walk-forward validation."""
     all_days = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True)
-    if all_days.len() < (ALLOCATION_SPAN_DAYS * 2):
+    total_days = all_days.len()
+    if total_days < (ALLOCATION_SPAN_DAYS * 2):
         return []
-    max_folds = min(4, all_days.len() // ALLOCATION_SPAN_DAYS)
-    boundaries = np.linspace(0, all_days.len(), num=max_folds + 1, dtype=int)
+    max_folds = min(4, total_days // ALLOCATION_SPAN_DAYS)
+    boundaries = np.asarray(np.linspace(0, total_days, num=max_folds + 1, dtype=int), dtype=int)
+    if boundaries.shape[0] != (max_folds + 1):
+        return []
+    if (
+        boundaries[0] != 0
+        or boundaries[-1] != total_days
+        or np.any(np.diff(boundaries) <= 0)
+    ):
+        boundaries = np.array(
+            [(idx * total_days) // max_folds for idx in range(max_folds + 1)],
+            dtype=int,
+        )
     folds: list[tuple[dt.datetime, dt.datetime]] = []
     for i in range(max_folds):
         left = int(boundaries[i])
