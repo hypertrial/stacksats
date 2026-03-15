@@ -7,15 +7,15 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.7.3 highlights
+## 0.8.0 highlights
 
-- Added `ColumnMapDataProvider` for flexible data ingestion without a parquet file. Users can supply any Polars DataFrame by mapping library-canonical column names (e.g. `price_usd`, `mvrv`) to their DataFrame column names.
-- Added `StrategyRunner.from_dataframe(df, column_map=...)` as the primary entry point for using StackSats without a BRK parquet file.
-- Renamed `StrategyTimeSeries` → `TimeSeries` and `StrategyTimeSeriesBatch` → `TimeSeriesBatch` for a cleaner public API. `Strategy` and `TimeSeries` are now the two lead objects.
+- Completed the hard-cut Polars-only migration across runtime contracts, framework helpers, tests, and docs.
+- Finalized the parquet-only BRK data path and removed the remaining DuckDB runtime surface.
+- Added strategy hot-path profiling and hardened the built-in strategy audit flow with projected `merged_metrics*.parquet` loading and partial-failure reporting.
 
 ## Upgrade notes
 
-- No new runtime feature APIs are introduced in this release.
+- No new top-level public API families are introduced in this release; the major change is the Polars-only and parquet-only contract cutover.
 - Source-contract posture is strict: BRK parquet (or user-supplied Polars DataFrame) is the supported metrics source for strategy workflows.
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.
 - For behavior and compatibility notes, use [Migration Guide](migration.md) and [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).

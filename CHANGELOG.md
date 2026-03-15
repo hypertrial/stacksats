@@ -6,11 +6,26 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-15
+
 ### Changed
 - **Pandas removed; Polars-only:** (1) `pandas` removed from project dependencies. (2) All data types use `datetime.datetime` and `pl.DataFrame`; `StrategyContext`, `DayState`, `WeightTimeSeriesBatch`, prelude, and framework contract are Polars-only. (3) `BTCDataProvider`, `ColumnMapDataProvider`, `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`, export_weights, animation_data, and btc_price_fetcher use Polars. (4) Strategy hooks (`transform_features`, `build_signals`, `build_target_profile`) use `pl.DataFrame` and `pl.Series`. (5) Example strategies (`UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`) migrated to Polars.
 - Default data path is now 100% parquet: `BTCDataProvider` and `load_data()` use `STACKSATS_ANALYTICS_PARQUET` / `./bitcoin_analytics.parquet`. Removed DuckDB dependency and all DuckDB-only code (feature providers, strategies, scripts, docs).
 - `BRKOverlayFeatureProvider` now reads overlay metrics from `btc_df` columns only (parquet or user DataFrame); no separate database.
 - Fetch script and manifest use `parquet` asset; see [BRK Data Source](docs/data-source.md).
+- Validation and strategy docs now report the leakage gate as `No Forward Leakage` to make pass/fail semantics explicit.
+- Built-in strategy audit tooling now lazily projects long-format `merged_metrics*.parquet` inputs and lifts the overlay metrics required by BRK-aware strategies into the temporary BRK-wide frame.
+
+### Added
+- Added `scripts/profile_strategy_hotpaths.py` to profile validation, backtest window iteration, and allocation kernel performance against local workspace code.
+- Added targeted runtime optimization regression coverage for allocation equivalence, `compute_cycle_spd(...)` equivalence, overlay-feature materialization, and validation cache lifecycle behavior.
+
+### Fixed
+- Optimized `allocate_sequential_stable(...)` to reuse prefix-stable signals instead of recomputing cumulative normalization for every day.
+- Reused cached materialized features and computed weights across validation and nested backtests to reduce repeated work without changing validation semantics.
+- Reduced `compute_cycle_spd(...)` window overhead by reusing sorted date indices for positional slicing and skipping unnecessary join work when strategy weights already align to the window dates.
+- Fixed BRK overlay feature lagging so early observed prefixes preserve overlay columns instead of shifting away the `date` column.
+- Hardened `scripts/run_all_strategies.py` so strategy failures are recorded in the audit report instead of aborting the full batch.
 
 ### Removed
 - Optional extra `brk` (duckdb). Parquet support is provided by default dependency `pyarrow`.
