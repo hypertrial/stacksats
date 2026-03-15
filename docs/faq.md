@@ -49,7 +49,7 @@ Common files:
 - backtest: `backtest_result.json`, `metrics.json`, plot `.svg` files
 - export: `weights.csv`, `timeseries_schema.md`, `artifacts.json`
 
-See: [Backtest Runtime](model_backtest.md) and [Strategy TimeSeries](reference/strategy-timeseries.md).
+See: [Backtest Runtime](model_backtest.md) and [WeightTimeSeries](reference/strategy-timeseries.md).
 
 ## Migration and compatibility
 

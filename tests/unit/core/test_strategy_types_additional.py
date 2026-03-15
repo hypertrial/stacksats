@@ -5,7 +5,13 @@ import pandas as pd
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
-from stacksats.strategy_types import BacktestConfig, BaseStrategy, DayState, StrategyContext
+from stacksats.strategy_types import (
+    BacktestConfig,
+    BaseStrategy,
+    DayState,
+    StrategyContext,
+    strategy_context_from_features_df,
+)
 
 
 def _context(*, start: str = "2024-01-01", periods: int = 3) -> StrategyContext:
@@ -17,11 +23,11 @@ def _context(*, start: str = "2024-01-01", periods: int = 3) -> StrategyContext:
         },
         index=idx,
     )
-    return StrategyContext(
-        features_df=features_df,
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+    return strategy_context_from_features_df(
+        features_df,
+        idx.min(),
+        idx.max(),
+        idx.max(),
     )
 
 
@@ -300,11 +306,11 @@ def test_run_executes_lifecycle_with_optional_export_and_save() -> None:
 
 def test_compute_weights_returns_empty_when_context_range_is_empty() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    ctx = StrategyContext(
-        features_df=pd.DataFrame({"price_usd": [100, 101, 102]}, index=idx),
-        start_date=pd.Timestamp("2024-01-03"),
-        end_date=pd.Timestamp("2024-01-01"),
-        current_date=pd.Timestamp("2024-01-01"),
+    ctx = strategy_context_from_features_df(
+        pd.DataFrame({"price_usd": [100, 101, 102]}, index=idx),
+        pd.Timestamp("2024-01-03"),
+        pd.Timestamp("2024-01-01"),
+        pd.Timestamp("2024-01-01"),
     )
 
     result = _SimpleProposeStrategy().compute_weights(ctx)

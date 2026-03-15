@@ -40,7 +40,7 @@ def test_validate_strict_rejects_strategy_that_mutates_context_features(
     )
 
     assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
+    assert any("mutated ctx.features" in message for message in result.messages)
 
 
 def test_validate_strict_rejects_non_deterministic_strategy(
@@ -201,7 +201,7 @@ def test_validate_strict_detects_profile_build_mutation(monkeypatch: pytest.Monk
     )
 
     assert bool(result.passed) is False
-    assert any("mutated ctx.features_df during profile build" in msg for msg in result.messages)
+    assert any("mutated ctx.features" in msg and "profile build" in msg for msg in result.messages)
 
 
 def test_stop_on_mutation_helper_marks_state_only_in_strict_mode() -> None:
@@ -228,7 +228,7 @@ def test_stop_on_mutation_helper_marks_state_only_in_strict_mode() -> None:
     )
     assert state.strict_checks_ok is False
     assert state.mutation_safe is False
-    assert any("mutated ctx.features_df in-place" in msg for msg in state.messages)
+    assert any("mutated ctx.features" in msg and "in-place" in msg for msg in state.messages)
 
 
 def test_strict_statistical_checks_skip_when_spd_table_missing() -> None:

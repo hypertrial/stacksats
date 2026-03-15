@@ -215,7 +215,7 @@ def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
     captured_max: list[pd.Timestamp] = []
 
     def _compute_weights(ctx):
-        captured_max.append(ctx.features_df.index.max())
+        captured_max.append(ctx.features.to_pandas().index.max())
         return pd.Series([0.5, 0.5], index=pd.date_range(idx[0], idx[1], freq="D"))
 
     strategy.compute_weights = MagicMock(side_effect=_compute_weights)

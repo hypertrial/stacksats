@@ -115,8 +115,9 @@ nav:
       - Glossary: glossary.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
-      - Strategy TimeSeries: reference/strategy-timeseries.md
-      - Strategy TimeSeries Schema: reference/strategy-timeseries-schema.md
+      - FeatureTimeSeries: reference/feature-timeseries.md
+      - WeightTimeSeries: reference/strategy-timeseries.md
+      - WeightTimeSeries Schema: reference/strategy-timeseries-schema.md
       - API Reference:
           - API Index: reference/api/index.md
           - strategy_types: reference/api/strategy-types.md

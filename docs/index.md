@@ -16,10 +16,11 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
 ## Core Objects
 
-StackSats is built around two primary runtime objects that separate strategy intent from framework execution:
+StackSats is built around three fundamental runtime objects:
 
+- **[FeatureTimeSeries](reference/feature-timeseries.md)**: Validated input to a strategy (feature time series with schema and time-series validation).
 - **[Strategy](reference/strategy-object.md)**: User-defined logic for feature engineering, signals, and allocation intent.
-- **[TimeSeries](reference/strategy-timeseries.md)**: Framework-validated output data containing normalized weights and prices.
+- **[WeightTimeSeries](reference/strategy-timeseries.md)**: Framework-validated output data containing normalized weights and prices.
 
 ---
 

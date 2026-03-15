@@ -9,7 +9,11 @@ import numpy as np
 import pandas as pd
 
 from stacksats.strategies.model_example import ExampleMVRVStrategy, main
-from stacksats.strategy_types import BaseStrategy, validate_strategy_contract
+from stacksats.strategy_types import (
+    BaseStrategy,
+    validate_strategy_contract,
+    strategy_context_from_features_df,
+)
 
 
 def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -66,11 +70,9 @@ def test_transform_features_uses_observed_window_and_handles_nan_inf() -> None:
     base.loc[idx[3], "brk_netflow_slow"] = np.nan
 
     strategy = ExampleMVRVStrategy()
-    ctx = type(
-        "Ctx",
-        (),
-        {"features_df": base, "start_date": idx[1], "end_date": idx[8]},
-    )()
+    ctx = strategy_context_from_features_df(
+        base, idx[1], idx[8], idx[8], required_columns=tuple(strategy.required_feature_columns())
+    )
     transformed = strategy.transform_features(ctx)
     assert transformed.index.min() == idx[1]
     assert transformed.index.max() == idx[8]
@@ -81,11 +83,14 @@ def test_transform_features_uses_observed_window_and_handles_nan_inf() -> None:
 def test_transform_features_returns_empty_when_window_invalid() -> None:
     idx = pd.date_range("2024-01-01", periods=5, freq="D")
     strategy = ExampleMVRVStrategy()
-    ctx = type(
-        "Ctx",
-        (),
-        {"features_df": _base_features(idx), "start_date": idx[-1], "end_date": idx[0]},
-    )()
+    ctx = strategy_context_from_features_df(
+        _base_features(idx),
+        idx[-1],
+        idx[0],
+        idx[0],
+        required_columns=tuple(strategy.required_feature_columns()),
+        as_of_date=None,
+    )
     transformed = strategy.transform_features(ctx)
     assert transformed.empty
 

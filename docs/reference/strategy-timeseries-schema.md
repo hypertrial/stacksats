@@ -1,9 +1,9 @@
 ---
-title: TimeSeries Schema
-description: Generated schema and BRK lineage tables for TimeSeries.
+title: WeightTimeSeries Schema
+description: Generated schema and BRK lineage tables for WeightTimeSeries.
 ---
 
-# TimeSeries Schema
+# WeightTimeSeries Schema
 
 This page is generated from runtime schema definitions in code.
 

@@ -19,6 +19,7 @@ from stacksats.strategy_types import (
     StrategyContext,
     TargetProfile,
     ValidationConfig,
+    strategy_context_from_features_df,
 )
 
 
@@ -41,8 +42,9 @@ class _LeakyProfileStrategy(BaseStrategy):
     strategy_id = "leaky-profile"
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
-        leak_value = float(ctx.features_df["price_usd"].mean(skipna=True))
+        features = ctx.features.to_pandas()
+        window = features.loc[ctx.start_date : ctx.end_date].copy()
+        leak_value = float(features["price_usd"].mean(skipna=True))
         window["leak"] = leak_value
         return window
 
@@ -342,11 +344,11 @@ def _strategy_context(periods: int = 3) -> StrategyContext:
         {"price_usd": np.linspace(100.0, 110.0, len(idx))},
         index=idx,
     )
-    return StrategyContext(
-        features_df=features_df,
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+    return strategy_context_from_features_df(
+        features_df,
+        idx.min(),
+        idx.max(),
+        idx.max(),
     )
 
 

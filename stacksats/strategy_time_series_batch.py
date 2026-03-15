@@ -18,22 +18,22 @@ from .strategy_time_series_metadata import (
 from .strategy_time_series_schema import ColumnSpec, validate_schema_specs
 
 if TYPE_CHECKING:
-    from .strategy_time_series import TimeSeries
+    from .strategy_time_series import WeightTimeSeries
 
 
 @dataclass(frozen=True, slots=True)
-class TimeSeriesBatch:
-    """Collection of single-window strategy time-series outputs."""
+class WeightTimeSeriesBatch:
+    """Collection of single-window strategy weight time-series outputs."""
 
     strategy_id: str
     strategy_version: str
     run_id: str
     config_hash: str
-    windows: tuple["TimeSeries", ...]
+    windows: tuple["WeightTimeSeries", ...]
     schema_version: str = "1.0.0"
     generated_at: pd.Timestamp = field(default_factory=_utc_now)
     extra_schema: tuple[ColumnSpec, ...] = ()
-    _window_index: dict[tuple[pd.Timestamp, pd.Timestamp], "TimeSeries"] = field(
+    _window_index: dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"] = field(
         init=False,
         repr=False,
         compare=False,
@@ -41,7 +41,7 @@ class TimeSeriesBatch:
 
     def __post_init__(self) -> None:
         if len(self.windows) == 0:
-            raise ValueError("TimeSeriesBatch.windows must not be empty.")
+            raise ValueError("WeightTimeSeriesBatch.windows must not be empty.")
         normalized_generated_at = _normalize_generated_at(self.generated_at)
         if self.windows:
             normalized_generated_at = self.windows[0].metadata.generated_at
@@ -60,9 +60,9 @@ class TimeSeriesBatch:
 
     @staticmethod
     def _build_window_index(
-        windows: tuple["TimeSeries", ...],
-    ) -> dict[tuple[pd.Timestamp, pd.Timestamp], "TimeSeries"]:
-        index: dict[tuple[pd.Timestamp, pd.Timestamp], "TimeSeries"] = {}
+        windows: tuple["WeightTimeSeries", ...],
+    ) -> dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"]:
+        index: dict[tuple[pd.Timestamp, pd.Timestamp], "WeightTimeSeries"] = {}
         for window in windows:
             md = window.metadata
             if md.window_start is None or md.window_end is None:
@@ -83,9 +83,9 @@ class TimeSeriesBatch:
         schema_version: str = "1.0.0",
         generated_at: pd.Timestamp | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "TimeSeriesBatch":
+    ) -> "WeightTimeSeriesBatch":
         """Build a batch object from a flattened export dataframe."""
-        from .strategy_time_series import TimeSeries
+        from .strategy_time_series import WeightTimeSeries
 
         if not isinstance(data, pd.DataFrame):
             raise TypeError("data must be a pandas DataFrame.")
@@ -121,7 +121,7 @@ class TimeSeriesBatch:
             drop=True
         )
 
-        windows: list[TimeSeries] = []
+        windows: list[WeightTimeSeries] = []
         grouped = normalized.groupby(["start_date", "end_date"], sort=True, dropna=False)
         for (window_start, window_end), window_frame in grouped:
             payload_columns = [
@@ -141,7 +141,7 @@ class TimeSeriesBatch:
                 window_end=pd.Timestamp(window_end),
             )
             windows.append(
-                TimeSeries(
+                WeightTimeSeries(
                     metadata=metadata,
                     data=payload,
                     extra_schema=normalized_extra_schema,
@@ -171,7 +171,7 @@ class TimeSeriesBatch:
         schema_version: str = "1.0.0",
         generated_at: pd.Timestamp | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "TimeSeriesBatch":
+    ) -> "WeightTimeSeriesBatch":
         """Load a batch object from a flattened CSV export."""
         return cls.from_flat_dataframe(
             pd.read_csv(Path(path)),
@@ -190,7 +190,7 @@ class TimeSeriesBatch:
         path: str | Path,
         *,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "TimeSeriesBatch":
+    ) -> "WeightTimeSeriesBatch":
         """Load a batch object from a strategy export artifact directory."""
         artifact_dir = Path(path)
         artifact_json_path = artifact_dir / "artifacts.json"
@@ -303,7 +303,7 @@ class TimeSeriesBatch:
         """Render the shared window schema as markdown."""
         return self.windows[0].schema_markdown()
 
-    def iter_windows(self) -> Iterable["TimeSeries"]:
+    def iter_windows(self) -> Iterable["WeightTimeSeries"]:
         """Yield windows in batch order."""
         return iter(self.windows)
 
@@ -325,7 +325,7 @@ class TimeSeriesBatch:
         self,
         start_date: str | pd.Timestamp,
         end_date: str | pd.Timestamp,
-    ) -> "TimeSeries":
+    ) -> "WeightTimeSeries":
         """Return the window object for a specific date range."""
         start = pd.Timestamp(start_date).normalize()
         end = pd.Timestamp(end_date).normalize()
@@ -337,5 +337,6 @@ class TimeSeriesBatch:
             ) from exc
 
 
-# Deprecated alias — remove in 0.9.0
-StrategyTimeSeriesBatch = TimeSeriesBatch
+# Deprecated aliases — remove in 0.9.0
+TimeSeriesBatch = WeightTimeSeriesBatch
+StrategyTimeSeriesBatch = WeightTimeSeriesBatch

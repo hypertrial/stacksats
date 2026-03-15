@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .strategy_time_series_analysis import StrategyTimeSeriesAnalysisMixin
-from .strategy_time_series_batch import TimeSeriesBatch
+from .strategy_time_series_batch import WeightTimeSeriesBatch
 from .strategy_time_series_diagnostics import StrategyTimeSeriesDiagnosticsMixin
 from .strategy_time_series_metadata import StrategySeriesMetadata
 from .strategy_time_series_schema import (
@@ -30,8 +30,8 @@ from .strategy_time_series_schema import (
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisMixin):
-    """Single-window normalized strategy output time series."""
+class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisMixin):
+    """Single-window validated strategy output (weights, prices, metadata)."""
 
     metadata: StrategySeriesMetadata
     extra_schema: tuple[ColumnSpec, ...]
@@ -51,7 +51,7 @@ class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisM
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> None:
         if not isinstance(data, pd.DataFrame):
-            raise TypeError("TimeSeries.data must be a pandas DataFrame.")
+            raise TypeError("WeightTimeSeries.data must be a pandas DataFrame.")
 
         normalized_extra_schema = validate_schema_specs(extra_schema, forbid_core_name_collisions=True)
         normalized_data = self._normalize_core_columns(data)
@@ -69,8 +69,8 @@ class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisM
         *,
         metadata: StrategySeriesMetadata,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "TimeSeries":
-        """Build a validated TimeSeries from a dataframe payload."""
+    ) -> "WeightTimeSeries":
+        """Build a validated WeightTimeSeries from a dataframe payload."""
         return cls(metadata=metadata, data=data, extra_schema=extra_schema)
 
     @classmethod
@@ -80,8 +80,8 @@ class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisM
         metadata: StrategySeriesMetadata,
         *,
         extra_schema: tuple[ColumnSpec, ...] = (),
-    ) -> "TimeSeries":
-        """Load a TimeSeries from CSV."""
+    ) -> "WeightTimeSeries":
+        """Load a WeightTimeSeries from CSV."""
         csv_path = Path(path)
         return cls(
             metadata=metadata,
@@ -199,7 +199,7 @@ class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisM
         missing = [col for col in schema_required if col not in self._data.columns]
         if missing:
             raise ValueError(
-                "TimeSeries missing required columns: "
+                "WeightTimeSeries missing required columns: "
                 + ", ".join(str(col) for col in missing)
             )
 
@@ -360,27 +360,30 @@ class TimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAnalysisM
             }
         return {
             "count": int(non_null.shape[0]),
-            "mean": TimeSeries._native_float(non_null.mean()),
-            "std": TimeSeries._native_float(non_null.std(ddof=0)),
-            "min": TimeSeries._native_float(non_null.min()),
-            "p25": TimeSeries._native_float(non_null.quantile(0.25)),
-            "median": TimeSeries._native_float(non_null.median()),
-            "p75": TimeSeries._native_float(non_null.quantile(0.75)),
-            "max": TimeSeries._native_float(non_null.max()),
+            "mean": WeightTimeSeries._native_float(non_null.mean()),
+            "std": WeightTimeSeries._native_float(non_null.std(ddof=0)),
+            "min": WeightTimeSeries._native_float(non_null.min()),
+            "p25": WeightTimeSeries._native_float(non_null.quantile(0.25)),
+            "median": WeightTimeSeries._native_float(non_null.median()),
+            "p75": WeightTimeSeries._native_float(non_null.quantile(0.75)),
+            "max": WeightTimeSeries._native_float(non_null.max()),
         }
 
 
 # Deprecated aliases — remove in 0.9.0
-StrategyTimeSeries = TimeSeries
-StrategyTimeSeriesBatch = TimeSeriesBatch
+TimeSeries = WeightTimeSeries
+TimeSeriesBatch = WeightTimeSeriesBatch
+StrategyTimeSeries = WeightTimeSeries
+StrategyTimeSeriesBatch = WeightTimeSeriesBatch
 
 __all__ = [
     "ColumnSpec",
     "BRKLineageSpec",
     "StrategySeriesMetadata",
+    "WeightTimeSeries",
+    "WeightTimeSeriesBatch",
     "TimeSeries",
     "TimeSeriesBatch",
-    # Deprecated aliases
     "StrategyTimeSeries",
     "StrategyTimeSeriesBatch",
 ]

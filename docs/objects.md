@@ -1,28 +1,39 @@
 ---
 title: Runtime Objects Overview
-description: Overview of strategy and TimeSeries runtime object model.
+description: Overview of strategy, FeatureTimeSeries, and WeightTimeSeries runtime object model.
 ---
 
 # Runtime Objects Overview
 
-StackSats has two core runtime object families:
+StackSats has three fundamental runtime objects:
 
-- `strategy`: user intent object (`BaseStrategy`)
-- `TimeSeries` / `TimeSeriesBatch`: validated output objects
+- **FeatureTimeSeries**: validated input to a strategy (Polars-backed feature time series with schema and time-series validation).
+- **BaseStrategy**: user intent and logic (hooks, identity, allocation intent).
+- **WeightTimeSeries** / **WeightTimeSeriesBatch**: validated output of a strategy (weights, prices, metadata; framework invariants per [Framework](framework.md)).
 
-!!! tip "The Two-Object Model"
-    StackSats enforces a strict separation between **identity** (the strategy you define) and **outcome** (the time-series results). Strategies are for research and logic; TimeSeries are for validation, backtesting, and production execution.
+!!! tip "Input → Strategy → Output"
+    **FeatureTimeSeries** is the input (features, schema, no forward-looking). **BaseStrategy** consumes it and produces allocation intent. **WeightTimeSeries** is the output object that enforces budget, daily bounds, and validation guards.
+
+## Fundamental objects
+
+| Object | Role | Validation |
+|--------|------|------------|
+| **FeatureTimeSeries** | Input to strategy | Schema (required columns), sorted unique dates, optional no-future-data and finite-numeric checks. |
+| **BaseStrategy** | Strategy logic | User-defined hooks; framework runs the allocation kernel. |
+| **WeightTimeSeries** / **WeightTimeSeriesBatch** | Output of strategy | Framework invariants: weight sum = 1, min/max daily weight, no forward-looking at export, NaN/inf/range guards. See [Framework](framework.md). |
 
 ## Read in this order
 
 1. [Strategy Object](reference/strategy-object.md)
-2. [Strategy TimeSeries](reference/strategy-timeseries.md)
-3. [Strategy TimeSeries Schema](reference/strategy-timeseries-schema.md)
+2. [FeatureTimeSeries](reference/feature-timeseries.md)
+3. [WeightTimeSeries](reference/strategy-timeseries.md)
+4. [WeightTimeSeries Schema](reference/strategy-timeseries-schema.md)
 
 ## Why this split exists
 
-- Strategy objects define user-owned hooks and metadata.
-- TimeSeries objects define framework-validated outputs and export contracts.
+- **FeatureTimeSeries** defines validated feature input (schema and time-series checks).
+- **BaseStrategy** defines user-owned hooks and metadata.
+- **WeightTimeSeries** defines framework-validated outputs and export contracts.
 - Schema docs are generated from code and kept synchronized in CI.
 
 ## Comprehensive list of library objects
@@ -33,15 +44,16 @@ All public types and functions below are exported from the top-level `stacksats`
 
 | Object | Description |
 |--------|-------------|
+| `FeatureTimeSeries` | Validated input to strategy: Polars DataFrame with datetime index; feature columns; schema and time-series validation. |
 | `BaseStrategy` | Abstract base class for defining strategy logic (hooks, identity, intent). |
-| `TimeSeries` | Single-window validated strategy output (weights, prices, metadata). |
-| `TimeSeriesBatch` | Multi-window container of `TimeSeries` (e.g. from export or backtest). |
+| `WeightTimeSeries` | Single-window validated strategy output (weights, prices, metadata). |
+| `WeightTimeSeriesBatch` | Multi-window container of `WeightTimeSeries` (e.g. from export or backtest). |
 
 ### Strategy input and context
 
 | Object | Description |
 |--------|-------------|
-| `StrategyContext` | Input passed into strategy computation: `features_df`, date range, `current_date`, optional `locked_weights`, column names. |
+| `StrategyContext` | Input passed into strategy computation: `features` (`FeatureTimeSeries`), date range, `current_date`, optional `locked_weights`, column names. Build from a pandas DataFrame with **`StrategyContext.from_features_df(...)`**. |
 
 ### Results
 
@@ -69,7 +81,7 @@ All public types and functions below are exported from the top-level `stacksats`
 |--------|-------------|
 | `StrategyMetadata` | Strategy identity (id, version, description). |
 | `StrategySpec` | Full public contract (metadata, intent_mode, params, required features). |
-| `StrategySeriesMetadata` | Metadata on a `TimeSeries` (strategy_id, version, run_id, window, etc.). |
+| `StrategySeriesMetadata` | Metadata on a `WeightTimeSeries` (strategy_id, version, run_id, window, etc.). |
 | `StrategyArtifactSet` | Set of artifacts produced by a strategy. |
 | `StrategyContractWarning` | Warning type for contract violations. |
 
@@ -80,11 +92,11 @@ All public types and functions below are exported from the top-level `stacksats`
 | `TargetProfile` | Target allocation profile returned by `build_target_profile`. |
 | `DayState` | Per-day state used in allocation. |
 
-### TimeSeries schema
+### WeightTimeSeries schema
 
 | Object | Description |
 |--------|-------------|
-| `ColumnSpec` | Spec for a column in the TimeSeries schema. |
+| `ColumnSpec` | Spec for a column in the WeightTimeSeries schema. |
 
 ### Data and loading
 
@@ -114,8 +126,10 @@ All public types and functions below are exported from the top-level `stacksats`
 
 | Alias | Use instead | Notes |
 |-------|-------------|-------|
-| `StrategyTimeSeries` | `TimeSeries` | Deprecated; removed in 0.9.0. |
-| `StrategyTimeSeriesBatch` | `TimeSeriesBatch` | Deprecated; removed in 0.9.0. |
+| `TimeSeries` | `WeightTimeSeries` | Deprecated; removed in 0.9.0. |
+| `TimeSeriesBatch` | `WeightTimeSeriesBatch` | Deprecated; removed in 0.9.0. |
+| `StrategyTimeSeries` | `WeightTimeSeries` | Deprecated; removed in 0.9.0. |
+| `StrategyTimeSeriesBatch` | `WeightTimeSeriesBatch` | Deprecated; removed in 0.9.0. |
 
 ## API pointers
 

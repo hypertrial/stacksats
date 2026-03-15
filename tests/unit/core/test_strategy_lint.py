@@ -10,7 +10,7 @@ class _NegativeShiftStrategy(BaseStrategy):
     strategy_id = "lint-negative-shift"
 
     def transform_features(self, ctx):
-        features = ctx.features_df.copy()
+        features = ctx.features.to_pandas().copy()
         features["bad"] = features["price_usd"].shift(-1)
         return features
 
@@ -22,7 +22,7 @@ class _CenteredRollingStrategy(BaseStrategy):
     strategy_id = "lint-centered"
 
     def transform_features(self, ctx):
-        features = ctx.features_df.copy()
+        features = ctx.features.to_pandas().copy()
         features["bad"] = features["price_usd"].rolling(3, center=True).mean()
         return features
 
@@ -35,7 +35,7 @@ class _ExternalIOStrategy(BaseStrategy):
 
     def transform_features(self, ctx):
         pd.read_csv("demo.csv")
-        return ctx.features_df.copy()
+        return ctx.features.to_pandas().copy()
 
     def propose_weight(self, state):
         return state.uniform_weight
@@ -45,7 +45,7 @@ class _WarningStrategy(BaseStrategy):
     strategy_id = "lint-warning"
 
     def transform_features(self, ctx):
-        features = ctx.features_df.copy()
+        features = ctx.features.to_pandas().copy()
         _ = features.tail(1)
         _ = features["price_usd"].quantile(0.5)
         return features

@@ -143,7 +143,7 @@ stacksats strategy export \
 
 ### Next step
 
-- Review schema guarantees: [Strategy TimeSeries](reference/strategy-timeseries.md).
+- Review schema guarantees: [WeightTimeSeries](reference/strategy-timeseries.md).
 - Full flag reference: [Export Command](run/export.md).
 
 ## I want to run daily execution safely

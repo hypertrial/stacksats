@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .strategy_types import strategy_context_from_features_df
+
 
 def process_start_date_batch(
     start_date,
@@ -19,7 +21,6 @@ def process_start_date_batch(
     *,
     compute_window_weights_fn,
     validate_span_length_fn,
-    strategy_context_cls,
     base_strategy_cls,
     validate_strategy_contract_fn,
 ):
@@ -51,15 +52,16 @@ def process_start_date_batch(
             )
         else:
             observed_end = min(pd.Timestamp(current_date), pd.Timestamp(end_date))
-            weights = strategy.compute_weights(
-                strategy_context_cls(
-                    features_df=features_df.loc[start_date:observed_end].copy(),
-                    start_date=start_date,
-                    end_date=end_date,
-                    current_date=current_date,
-                    locked_weights=locked_weights,
-                )
+            ctx = strategy_context_from_features_df(
+                features_df.loc[start_date:observed_end].copy(),
+                start_date,
+                end_date,
+                current_date,
+                required_columns=tuple(strategy.required_feature_columns()),
+                as_of_date=current_date,
+                locked_weights=locked_weights,
             )
+            weights = strategy.compute_weights(ctx)
             if weights.empty:
                 weights = compute_window_weights_fn(
                     features_df,

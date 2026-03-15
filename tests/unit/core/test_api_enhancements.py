@@ -10,7 +10,13 @@ import pandas as pd
 import pytest
 
 from stacksats.api import BacktestResult, ValidationResult
-from stacksats.strategy_types import BaseStrategy, StrategyContext, TargetProfile, ValidationConfig
+from stacksats.strategy_types import (
+    BaseStrategy,
+    StrategyContext,
+    TargetProfile,
+    ValidationConfig,
+    strategy_context_from_features_df,
+)
 from stacksats.strategies.examples import (
     MomentumStrategy,
     SimpleZScoreStrategy,
@@ -285,7 +291,7 @@ def test_validate_strategy_observed_only_input_blocks_peeking_strategy():
             preference = pd.Series(0.0, index=idx)
             lookahead_date = pd.Timestamp(ctx.end_date) + pd.Timedelta(days=1)
             future_signal = 0.0
-            if lookahead_date in ctx.features_df.index:
+            if lookahead_date in ctx.features.to_pandas().index:
                 future_signal = 1.0
             preference.iloc[-1] = future_signal
             return preference
@@ -312,11 +318,11 @@ def test_example_strategies_return_valid_weight_vectors():
 
     for strategy in (UniformStrategy(), SimpleZScoreStrategy(), MomentumStrategy()):
         weights = strategy.compute_weights(
-            StrategyContext(
-                features_df=features_df,
-                start_date=start_date,
-                end_date=end_date,
-                current_date=end_date,
+            strategy_context_from_features_df(
+                features_df,
+                start_date,
+                end_date,
+                end_date,
             )
         )
         assert not weights.empty
@@ -327,11 +333,11 @@ def test_example_strategies_return_valid_weight_vectors():
 def test_example_profile_strategies_return_empty_profile_for_empty_window():
     idx = pd.DatetimeIndex([])
     empty_features = pd.DataFrame(index=idx)
-    ctx = StrategyContext(
-        features_df=empty_features,
-        start_date=pd.Timestamp("2024-01-01"),
-        end_date=pd.Timestamp("2024-01-01"),
-        current_date=pd.Timestamp("2024-01-01"),
+    ctx = strategy_context_from_features_df(
+        empty_features,
+        pd.Timestamp("2024-01-01"),
+        pd.Timestamp("2024-01-01"),
+        pd.Timestamp("2024-01-01"),
     )
 
     simple_profile = SimpleZScoreStrategy().build_target_profile(ctx, empty_features, {})

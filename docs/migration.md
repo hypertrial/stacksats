@@ -39,8 +39,10 @@ This page covers migration for:
 | `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
 | `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK parquet loader is canonical |
 | `strategy.spec()` as the informal contract | `strategy.spec()` as the canonical public contract |
-| `StrategyTimeSeries` | `TimeSeries` (deprecated alias available until 0.9.0) |
-| `StrategyTimeSeriesBatch` | `TimeSeriesBatch` (deprecated alias available until 0.9.0) |
+| `StrategyTimeSeries` | `WeightTimeSeries` (deprecated alias available until 0.9.0) |
+| `StrategyTimeSeriesBatch` | `WeightTimeSeriesBatch` (deprecated alias available until 0.9.0) |
+| `TimeSeries` | `WeightTimeSeries` (deprecated alias available until 0.9.0) |
+| `TimeSeriesBatch` | `WeightTimeSeriesBatch` (deprecated alias available until 0.9.0) |
 
 ## Code Replacements
 

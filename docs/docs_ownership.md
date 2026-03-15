@@ -36,7 +36,7 @@ Update docs in the same PR when any of these change:
 
 - `stacksats/runner.py` or lifecycle APIs: update runtime/backtest/reference pages.
 - `stacksats/strategy_types.py`: update strategy object docs and API reference.
-- `stacksats/strategy_time_series.py`: run schema sync script and update TimeSeries docs.
+- `stacksats/strategy_time_series.py`: run schema sync script and update WeightTimeSeries docs.
 - CLI flag or command behavior changes: update the relevant `docs/run/*.md` page, `docs/commands.md`, and relevant recipes.
 - Breaking or removed compatibility surfaces: update `docs/migration.md`, `docs/whats-new.md`, and `CHANGELOG.md`.
 - Repeated docs feedback questions: fold updates into `docs/faq.md` and link affected task/start pages.

@@ -12,7 +12,12 @@ from stacksats.model_development import (
     compute_weights_from_proposals,
 )
 from stacksats.runner import StrategyRunner
-from stacksats.strategy_types import BaseStrategy, StrategyContext, TargetProfile
+from stacksats.strategy_types import (
+    BaseStrategy,
+    StrategyContext,
+    TargetProfile,
+    strategy_context_from_features_df,
+)
 
 
 def _context(days: int = 5, *, current_day_index: int | None = None) -> StrategyContext:
@@ -26,11 +31,11 @@ def _context(days: int = 5, *, current_day_index: int | None = None) -> Strategy
     )
     if current_day_index is None:
         current_day_index = days - 1
-    return StrategyContext(
-        features_df=features_df,
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx[current_day_index],
+    return strategy_context_from_features_df(
+        features_df,
+        idx.min(),
+        idx.max(),
+        idx[current_day_index],
     )
 
 

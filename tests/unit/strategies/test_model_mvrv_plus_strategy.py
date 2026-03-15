@@ -10,7 +10,11 @@ import pandas as pd
 
 from stacksats.strategies import model_mvrv_plus
 from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy, main
-from stacksats.strategy_types import BaseStrategy, validate_strategy_contract
+from stacksats.strategy_types import (
+    BaseStrategy,
+    validate_strategy_contract,
+    strategy_context_from_features_df,
+)
 
 
 def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -65,17 +69,26 @@ def test_transform_features_and_build_target_profile(monkeypatch) -> None:
     features = _base_features(idx)
     strategy = MVRVPlusStrategy()
 
-    # Empty window branch.
-    empty_ctx = type(
-        "Ctx",
-        (),
-        {"features_df": features, "start_date": idx[-1] + pd.Timedelta(days=1), "end_date": idx[-1]},
-    )()
+    # Empty window branch (required_columns=() so test data need not include every strategy column).
+    empty_ctx = strategy_context_from_features_df(
+        features,
+        idx[-1] + pd.Timedelta(days=1),
+        idx[-1],
+        idx[-1],
+        required_columns=(),
+        as_of_date=None,
+    )
     transformed_empty = strategy.transform_features(empty_ctx)
     assert transformed_empty.empty
 
     # Normal branch with provider-supplied overlay columns already present.
-    ctx = type("Ctx", (), {"features_df": features, "start_date": idx[0], "end_date": idx[-1]})()
+    ctx = strategy_context_from_features_df(
+        features,
+        idx[0],
+        idx[-1],
+        idx[-1],
+        required_columns=(),
+    )
     transformed = strategy.transform_features(ctx)
     assert "plus_vol21" in transformed.columns
     assert "plus_drawdown90" in transformed.columns
@@ -107,7 +120,13 @@ def test_transform_features_is_collision_safe_with_provider_columns() -> None:
     features.loc[idx[0], "plus_vol21"] = 1.23
     features["plus_drawdown90"] = np.nan
     features.loc[idx[1], "plus_drawdown90"] = -0.45
-    ctx = type("Ctx", (), {"features_df": features, "start_date": idx[0], "end_date": idx[-1]})()
+    ctx = strategy_context_from_features_df(
+        features,
+        idx[0],
+        idx[-1],
+        idx[-1],
+        required_columns=(),
+    )
     transformed = strategy.transform_features(ctx)
     assert transformed.index.equals(idx)
     assert "brk_exchange_share" in transformed.columns

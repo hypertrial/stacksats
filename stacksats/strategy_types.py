@@ -15,25 +15,96 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
+from .feature_time_series import FeatureTimeSeries
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
     from .api import BacktestResult, DailyRunResult, ValidationResult
-    from .strategy_time_series import TimeSeriesBatch
+    from .strategy_time_series import WeightTimeSeriesBatch
+
+
+def strategy_context_from_features_df(
+    features_df: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    current_date: pd.Timestamp,
+    *,
+    required_columns: tuple[str, ...] = (),
+    as_of_date: pd.Timestamp | None = None,
+    locked_weights: np.ndarray | None = None,
+    btc_price_col: str = "price_usd",
+    mvrv_col: str = "mvrv",
+) -> StrategyContext:
+    """Build a StrategyContext from a pandas feature DataFrame. Prefer StrategyContext.from_features_df()."""
+    return StrategyContext.from_features_df(
+        features_df,
+        start_date,
+        end_date,
+        current_date,
+        required_columns=required_columns,
+        as_of_date=as_of_date,
+        locked_weights=locked_weights,
+        btc_price_col=btc_price_col,
+        mvrv_col=mvrv_col,
+    )
 
 
 @dataclass(frozen=True)
 class StrategyContext:
     """Normalized context passed into strategy computation."""
 
-    features_df: pd.DataFrame
+    features: FeatureTimeSeries
     start_date: pd.Timestamp
     end_date: pd.Timestamp
     current_date: pd.Timestamp
     locked_weights: np.ndarray | None = None
     btc_price_col: str = "price_usd"
     mvrv_col: str = "mvrv"
+
+    @classmethod
+    def from_features_df(
+        cls,
+        features_df: pd.DataFrame,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        current_date: pd.Timestamp,
+        *,
+        required_columns: tuple[str, ...] = (),
+        as_of_date: pd.Timestamp | None = None,
+        locked_weights: np.ndarray | None = None,
+        btc_price_col: str = "price_usd",
+        mvrv_col: str = "mvrv",
+    ) -> StrategyContext:
+        """Build a StrategyContext from a pandas feature DataFrame (wraps in FeatureTimeSeries).
+
+        When as_of_date is provided, validates no forward-looking data
+        (max date in features <= as_of_date).
+        """
+        features = FeatureTimeSeries.from_pandas(
+            features_df,
+            required_columns=required_columns,
+            as_of_date=as_of_date,
+        )
+        return cls(
+            features=features,
+            start_date=start_date,
+            end_date=end_date,
+            current_date=current_date,
+            locked_weights=locked_weights,
+            btc_price_col=btc_price_col,
+            mvrv_col=mvrv_col,
+        )
+
+    @property
+    def features_df(self) -> pd.DataFrame:
+        """Pandas view of features. Deprecated: use ctx.features or ctx.features.to_pandas()."""
+        warnings.warn(
+            "StrategyContext.features_df is deprecated; use ctx.features or ctx.features.to_pandas().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.features.to_pandas()
 
 
 @dataclass(frozen=True)
@@ -143,7 +214,7 @@ class StrategyRunResult:
 
     validation: "ValidationResult"
     backtest: "BacktestResult"
-    export_batch: "TimeSeriesBatch | None" = None
+    export_batch: "WeightTimeSeriesBatch | None" = None
     output_dir: str | None = None
 
 
@@ -326,7 +397,7 @@ class BaseStrategy(ABC):
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
         """Hook for user-defined feature transforms on the active window."""
-        return ctx.features_df.copy()
+        return ctx.features.to_pandas().copy()
 
     def build_signals(
         self,
@@ -525,7 +596,7 @@ class BaseStrategy(ABC):
         self,
         config: ExportConfig | None = None,
         **kwargs,
-    ) -> "TimeSeriesBatch":
+    ) -> "WeightTimeSeriesBatch":
         from .runner import StrategyRunner
 
         runner = StrategyRunner()

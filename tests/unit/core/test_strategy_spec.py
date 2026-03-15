@@ -12,6 +12,7 @@ from stacksats.strategy_types import (
     StrategyContractWarning,
     StrategyMetadata,
     StrategySpec,
+    strategy_context_from_features_df,
 )
 
 
@@ -27,11 +28,11 @@ def _context(*, start: str = "2024-01-01", periods: int = 4) -> StrategyContext:
         },
         index=idx,
     )
-    return StrategyContext(
-        features_df=features_df,
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+    return strategy_context_from_features_df(
+        features_df,
+        idx.min(),
+        idx.max(),
+        idx.max(),
     )
 
 

@@ -45,7 +45,7 @@ from .export_weights_sql import (
 from .framework_contract import validate_span_length
 from .model_development import compute_window_weights
 from .prelude import generate_date_ranges, group_ranges_by_start_date  # noqa: F401
-from .strategy_types import BaseStrategy, StrategyContext, validate_strategy_contract
+from .strategy_types import BaseStrategy, validate_strategy_contract
 
 
 def _missing_psycopg2(*_args, **_kwargs):
@@ -98,7 +98,6 @@ def process_start_date_batch(
         enforce_span_contract=enforce_span_contract,
         compute_window_weights_fn=compute_window_weights,
         validate_span_length_fn=validate_span_length,
-        strategy_context_cls=StrategyContext,
         base_strategy_cls=BaseStrategy,
         validate_strategy_contract_fn=validate_strategy_contract,
     )

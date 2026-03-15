@@ -25,6 +25,8 @@ This document is the canonical strategy contract for StackSats.
    - Use only current and past data—no peeking into the future.
 8. Validation guards (`NaN`/`inf`/range checks) and final invariants.
 
+**WeightTimeSeries** is the output object that enforces these invariants: required columns (date, weight, price_usd), weight sum = 1, non-negative and finite weights, daily weight within min/max bounds, date contract, and optional locked/day_index. Input features are provided as **FeatureTimeSeries** (schema and time-series validation, including optional no-forward-looking checks).
+
 ## User Owns (Flexible)
 
 1. Feature engineering from lagged/base data

@@ -32,12 +32,15 @@ from .strategy_types import (
     StrategyContext,
     TargetProfile,
     ValidationConfig,
+    strategy_context_from_features_df,
 )
 
 WIN_RATE_TOLERANCE = 1e-10
-STRICT_MUTATION_MESSAGE = "Strict check failed: strategy mutated ctx.features_df in-place."
+STRICT_MUTATION_MESSAGE = (
+    "Strict check failed: strategy mutated ctx.features (feature data) in-place."
+)
 STRICT_PROFILE_MUTATION_MESSAGE = (
-    "Strict check failed: strategy mutated ctx.features_df during profile build."
+    "Strict check failed: strategy mutated ctx.features (feature data) during profile build."
 )
 
 
@@ -317,9 +320,9 @@ class StrategyRunnerValidationMixin:
     ) -> tuple[pd.Series, bool]:
         if not strict_mode:
             return strategy.compute_weights(ctx), False
-        before = self._frame_signature(ctx.features_df)
+        before = self._frame_signature(ctx.features.to_pandas())
         weights = strategy.compute_weights(ctx)
-        after = self._frame_signature(ctx.features_df)
+        after = self._frame_signature(ctx.features.to_pandas())
         return weights, before != after
 
     def _build_profile_with_mutation_guard(
@@ -329,11 +332,11 @@ class StrategyRunnerValidationMixin:
         *,
         strict_mode: bool,
     ) -> tuple[pd.Series, bool]:
-        before = self._frame_signature(ctx.features_df) if strict_mode else ()
+        before = self._frame_signature(ctx.features.to_pandas()) if strict_mode else ()
         profile_features = strategy.transform_features(ctx)
         profile_signals = strategy.build_signals(ctx, profile_features)
         profile = strategy.build_target_profile(ctx, profile_features, profile_signals)
-        after = self._frame_signature(ctx.features_df) if strict_mode else before
+        after = self._frame_signature(ctx.features.to_pandas()) if strict_mode else before
         return self._profile_values(profile), before != after
 
     def _strict_determinism_check(
@@ -346,11 +349,13 @@ class StrategyRunnerValidationMixin:
         full_weights: pd.Series,
         state: _ValidationState,
     ) -> bool:
-        repeat_ctx = StrategyContext(
-            features_df=full_features_df.loc[window_start:probe].copy(deep=True),
-            start_date=window_start,
-            end_date=probe,
-            current_date=probe,
+        repeat_ctx = strategy_context_from_features_df(
+            full_features_df.loc[window_start:probe].copy(deep=True),
+            window_start,
+            probe,
+            probe,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=probe,
         )
         repeat_weights, repeat_mutated = self._compute_with_mutation_guard(
             strategy,
@@ -377,17 +382,19 @@ class StrategyRunnerValidationMixin:
         window_start: pd.Timestamp,
         probe: pd.Timestamp,
     ) -> StrategyContext:
-        return StrategyContext(
-            features_df=self._materialize_strategy_features(
+        return strategy_context_from_features_df(
+            self._materialize_strategy_features(
                 strategy,
                 source_df,
                 start_date=window_start,
                 end_date=probe,
                 current_date=probe,
             ),
-            start_date=window_start,
-            end_date=probe,
-            current_date=probe,
+            window_start,
+            probe,
+            probe,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=probe,
         )
 
     def _check_prefix_invariance(
@@ -428,11 +435,13 @@ class StrategyRunnerValidationMixin:
             if window_start > probe:
                 continue
 
-            full_ctx = StrategyContext(
-                features_df=full_features_df.loc[window_start:probe].copy(deep=True),
-                start_date=window_start,
-                end_date=probe,
-                current_date=probe,
+            full_ctx = strategy_context_from_features_df(
+                full_features_df.loc[window_start:probe].copy(deep=True),
+                window_start,
+                probe,
+                probe,
+                required_columns=tuple(strategy.required_feature_columns()),
+                as_of_date=probe,
             )
             full_weights, full_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -519,23 +528,29 @@ class StrategyRunnerValidationMixin:
                 break
 
             if has_profile_hook and not has_propose_hook:
-                profile_full_ctx = StrategyContext(
-                    features_df=full_features_df.loc[window_start:probe].copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
+                profile_full_ctx = strategy_context_from_features_df(
+                    full_features_df.loc[window_start:probe].copy(deep=True),
+                    window_start,
+                    probe,
+                    probe,
+                    required_columns=tuple(strategy.required_feature_columns()),
+                    as_of_date=probe,
                 )
-                profile_masked_ctx = StrategyContext(
-                    features_df=masked_ctx.features_df.copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
+                profile_masked_ctx = strategy_context_from_features_df(
+                    masked_ctx.features.to_pandas().copy(deep=True),
+                    window_start,
+                    probe,
+                    probe,
+                    required_columns=tuple(strategy.required_feature_columns()),
+                    as_of_date=probe,
                 )
-                profile_perturbed_ctx = StrategyContext(
-                    features_df=perturbed_ctx.features_df.copy(deep=True),
-                    start_date=window_start,
-                    end_date=probe,
-                    current_date=probe,
+                profile_perturbed_ctx = strategy_context_from_features_df(
+                    perturbed_ctx.features.to_pandas().copy(deep=True),
+                    window_start,
+                    probe,
+                    probe,
+                    required_columns=tuple(strategy.required_feature_columns()),
+                    as_of_date=probe,
                 )
                 full_profile_series, full_profile_mutated = self._build_profile_with_mutation_guard(
                     strategy,
@@ -619,11 +634,13 @@ class StrategyRunnerValidationMixin:
                     end_date=window_end,
                     current_date=window_end,
                 )
-                ctx = StrategyContext(
-                    features_df=window_features,
-                    start_date=window_start,
-                    end_date=window_end,
-                    current_date=window_end,
+                ctx = strategy_context_from_features_df(
+                    window_features,
+                    window_start,
+                    window_end,
+                    window_end,
+                    required_columns=tuple(strategy.required_feature_columns()),
+                    as_of_date=window_end,
                 )
                 weights, mutated = self._compute_with_mutation_guard(
                     strategy,
@@ -688,17 +705,19 @@ class StrategyRunnerValidationMixin:
         lock_end = lock_start + window_offset
         lock_mid_offset = max(ALLOCATION_SPAN_DAYS // 2 - 1, 0)
         lock_current = min(lock_start + pd.Timedelta(days=lock_mid_offset), lock_end)
-        base_lock_ctx = StrategyContext(
-            features_df=self._materialize_strategy_features(
+        base_lock_ctx = strategy_context_from_features_df(
+            self._materialize_strategy_features(
                 strategy,
                 btc_df if btc_df is not None else features_df,
                 start_date=lock_start,
                 end_date=lock_end,
                 current_date=lock_current,
             ),
-            start_date=lock_start,
-            end_date=lock_end,
-            current_date=lock_current,
+            lock_start,
+            lock_end,
+            lock_current,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=lock_current,
         )
         base_lock_weights, base_mutated = self._compute_with_mutation_guard(
             strategy,
@@ -721,17 +740,19 @@ class StrategyRunnerValidationMixin:
             if btc_df is not None
             else features_df
         )
-        locked_ctx = StrategyContext(
-            features_df=self._materialize_strategy_features(
+        locked_ctx = strategy_context_from_features_df(
+            self._materialize_strategy_features(
                 strategy,
                 perturbed_source,
                 start_date=lock_start,
                 end_date=lock_end,
                 current_date=lock_current,
             ),
-            start_date=lock_start,
-            end_date=lock_end,
-            current_date=lock_current,
+            lock_start,
+            lock_end,
+            lock_current,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=lock_current,
             locked_weights=locked_prefix,
         )
         locked_run_weights, locked_mutated = self._compute_with_mutation_guard(

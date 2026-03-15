@@ -8,6 +8,7 @@ from .api import (
     ValidationResult,
 )
 from .column_map_provider import ColumnMapDataProvider, ColumnMapError
+from .feature_time_series import FeatureTimeSeries
 from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
@@ -17,6 +18,8 @@ from .strategy_time_series import (
     StrategySeriesMetadata,
     TimeSeries,
     TimeSeriesBatch,
+    WeightTimeSeries,
+    WeightTimeSeriesBatch,
 )
 from .strategies.model_example import ExampleMVRVStrategy
 from .strategies.model_mvrv_plus import MVRVPlusStrategy
@@ -35,6 +38,7 @@ from .strategy_types import (
     StrategySpec,
     TargetProfile,
     ValidationConfig,
+    strategy_context_from_features_df,
 )
 
 # Deprecated aliases — remove in 0.9.0
@@ -43,8 +47,9 @@ StrategyTimeSeriesBatch = TimeSeriesBatch
 
 __all__ = [
     # Primary objects
-    "TimeSeries",
-    "TimeSeriesBatch",
+    "FeatureTimeSeries",
+    "WeightTimeSeries",
+    "WeightTimeSeriesBatch",
     "BaseStrategy",
     # Results
     "BacktestResult",
@@ -77,7 +82,10 @@ __all__ = [
     "load_strategy",
     "load_data",
     "precompute_features",
+    "strategy_context_from_features_df",
     # Deprecated aliases — remove in 0.9.0
+    "TimeSeries",
+    "TimeSeriesBatch",
     "StrategyTimeSeries",
     "StrategyTimeSeriesBatch",
 ]

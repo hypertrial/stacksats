@@ -89,7 +89,7 @@ If a strategy implements both intent hooks:
 
 - `validate(config=None, **kwargs)`: returns `ValidationResult`
 - `backtest(config=None, **kwargs)`: returns `BacktestResult`
-- `export(config=None, **kwargs)`: returns `TimeSeriesBatch`
+- `export(config=None, **kwargs)`: returns `WeightTimeSeriesBatch`
 - `backtest_and_save(config=None, output_dir=..., ...)`: runs backtest and writes standard artifacts under `output/<strategy_id>/<version>/<run_id>/`
 - `run(...)`: runs validate + backtest, with optional export and optional artifact writing
 - `metadata()`: returns `StrategyMetadata`
@@ -105,5 +105,6 @@ If a strategy implements both intent hooks:
 
 - [Framework Boundary](../framework.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
-- [TimeSeries](strategy-timeseries.md)
+- [WeightTimeSeries](strategy-timeseries.md)
+- [FeatureTimeSeries](feature-timeseries.md)
 - [FAQ](../faq.md)

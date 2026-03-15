@@ -76,7 +76,7 @@ class ExampleMVRVStrategy(BaseStrategy):
         return np.where(np.isfinite(arr), arr, 0.0)
 
     def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features_df.copy()
+        window = ctx.features.to_pandas().copy()
         if window.empty:
             return window
         start_date = pd.Timestamp(ctx.start_date).normalize()

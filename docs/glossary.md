@@ -49,8 +49,11 @@ The mechanism by which the framework ensures that a proposed daily weight is val
 ### Strategy
 User-defined logic for feature engineering, signals, and allocation intent.
 
-### TimeSeries
-Framework-validated output data containing normalized weights and prices.
+### FeatureTimeSeries
+Validated **input** to a strategy: a Polars-backed time series with datetime index and feature columns. Enforces schema (required columns) and time-series invariants (sorted unique dates; optional no-forward-looking check). Passed to the strategy via `StrategyContext.features`.
+
+### WeightTimeSeries
+Validated **output** of a strategy: single-window weights, prices, and metadata. Enforces framework invariants (weight sum = 1, min/max daily weight, no forward-looking at export). Use **WeightTimeSeriesBatch** for multi-window exports. (Deprecated aliases: `TimeSeries`, `TimeSeriesBatch`.)
 
 ### Locked Prefix
 The portion of the allocation timeline that is in the past. Once a day passes, its allocation is "locked" and cannot be changed by the strategy. This immutability ensures realistic backtesting and prevents "repainting" of history.

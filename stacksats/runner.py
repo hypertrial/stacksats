@@ -24,16 +24,16 @@ from .runner_validation import (
     WeightValidationError,
     _ValidationState,
 )
-from .strategy_time_series import TimeSeriesBatch
+from .strategy_time_series import WeightTimeSeriesBatch
 from .strategy_types import (
     BacktestConfig,
     BaseStrategy,
     ExportConfig,
     RunDailyConfig,
     StrategyArtifactSet,
-    StrategyContext,
     StrategyMetadata,
     ValidationConfig,
+    strategy_context_from_features_df,
     validate_strategy_contract,
 )
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
@@ -449,11 +449,13 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 end_date=window_end,
                 current_date=window_end,
             )
-            ctx = StrategyContext(
-                features_df=window_features,
-                start_date=window_start,
-                end_date=window_end,
-                current_date=window_end,
+            ctx = strategy_context_from_features_df(
+                window_features,
+                window_start,
+                window_end,
+                window_end,
+                required_columns=tuple(strategy.required_feature_columns()),
+                as_of_date=window_end,
             )
             weights = strategy.compute_weights(ctx)
             self._validate_weights(weights, window_start, window_end)
@@ -742,11 +744,13 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
             if locked_prefix is None:
                 bootstrap = True
-            ctx = StrategyContext(
-                features_df=observed_features,
-                start_date=window_start,
-                end_date=window_end,
-                current_date=window_end,
+            ctx = strategy_context_from_features_df(
+                observed_features,
+                window_start,
+                window_end,
+                window_end,
+                required_columns=tuple(strategy.required_feature_columns()),
+                as_of_date=window_end,
                 locked_weights=locked_prefix,
                 btc_price_col=config.btc_price_col,
             )
@@ -918,11 +922,13 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             current_date=window_end,
         )
         weights = strategy.compute_weights(
-            StrategyContext(
-                features_df=features_df,
-                start_date=window_start,
-                end_date=window_end,
-                current_date=window_end,
+            strategy_context_from_features_df(
+                features_df,
+                window_start,
+                window_end,
+                window_end,
+                required_columns=tuple(strategy.required_feature_columns()),
+                as_of_date=window_end,
                 locked_weights=locked_prefix,
             )
         )
@@ -952,7 +958,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pd.DataFrame | None = None,
         current_date: pd.Timestamp | None = None,
-    ) -> TimeSeriesBatch:
+    ) -> WeightTimeSeriesBatch:
         from .export_weights import process_start_date_batch
         from .prelude import generate_date_ranges, group_ranges_by_start_date
 
@@ -989,7 +995,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         result_df = pd.concat(all_results, ignore_index=True)
 
         provenance = self._provenance(strategy, config)
-        series_batch = TimeSeriesBatch.from_flat_dataframe(
+        series_batch = WeightTimeSeriesBatch.from_flat_dataframe(
             result_df,
             strategy_id=provenance["strategy_id"],
             strategy_version=provenance["version"],

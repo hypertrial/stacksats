@@ -1,15 +1,15 @@
 ---
-title: TimeSeries
-description: Metadata, guarantees, and export semantics for TimeSeries and TimeSeriesBatch.
+title: WeightTimeSeries
+description: Metadata, guarantees, and export semantics for WeightTimeSeries and WeightTimeSeriesBatch.
 ---
 
-# TimeSeries
+# WeightTimeSeries
 
-`TimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated export object used by `strategy export`.
-`TimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
+`WeightTimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated **output** of a strategy (weights, prices, metadata). It is used by `strategy export` and enforces framework invariants (see [Framework](../framework.md)).
+`WeightTimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
 
 > [!NOTE]
-> `TimeSeries` was previously named `StrategyTimeSeries`. Both names are supported in 0.7.x, but `StrategyTimeSeries` is deprecated and will be removed in 0.9.0.
+> The names `TimeSeries` and `TimeSeriesBatch` are deprecated aliases for `WeightTimeSeries` and `WeightTimeSeriesBatch`; they will be removed in 0.9.0. Do not confuse with **FeatureTimeSeries**, which is the **input** to a strategy.
 
 ## Required metadata
 
@@ -33,14 +33,14 @@ Metadata invariants:
 
 ## Read-only object contract
 
-`TimeSeries` is immutable after construction.
+`WeightTimeSeries` is immutable after construction.
 
 - the internal payload is stored privately
 - `data` returns a defensive copy
 - `to_dataframe()` returns a deep copy
 - analysis and diagnostics methods operate on the validated internal payload, not on copied frames
 
-If you need to transform data, do it outside the object and construct a new `TimeSeries`.
+If you need to transform data, do it outside the object and construct a new `WeightTimeSeries`.
 
 ## Core methods
 
@@ -97,7 +97,7 @@ Strategy-specific columns must be declared explicitly with `extra_schema`.
 Example:
 
 ```python
-from stacksats import ColumnSpec, TimeSeries
+from stacksats import ColumnSpec, WeightTimeSeries
 
 extra_schema = (
     ColumnSpec(
@@ -110,7 +110,7 @@ extra_schema = (
     ),
 )
 
-series = TimeSeries(metadata=metadata, data=df, extra_schema=extra_schema)
+series = WeightTimeSeries(metadata=metadata, data=df, extra_schema=extra_schema)
 ```
 
 Rules:
@@ -121,7 +121,7 @@ Rules:
 
 ## Batch guarantees
 
-`TimeSeriesBatch` guarantees:
+`WeightTimeSeriesBatch` guarantees:
 
 - one or more windows
 - unique `(window_start, window_end)` per window
@@ -131,7 +131,7 @@ Rules:
 
 ## Export contract
 
-`StrategyRunner.export(...)` returns `TimeSeriesBatch`.
+`StrategyRunner.export(...)` returns `WeightTimeSeriesBatch`.
 
 Artifacts are written under:
 
@@ -159,15 +159,15 @@ Canonical `weights.csv` columns:
 Rebuild a batch object from export artifacts:
 
 ```python
-from stacksats import TimeSeriesBatch
+from stacksats import WeightTimeSeriesBatch
 
-batch = TimeSeriesBatch.from_artifact_dir("output/simple-zscore/1.0.0/<run_id>")
+batch = WeightTimeSeriesBatch.from_artifact_dir("output/simple-zscore/1.0.0/<run_id>")
 ```
 
 Or from a flattened CSV directly:
 
 ```python
-batch = TimeSeriesBatch.from_csv(
+batch = WeightTimeSeriesBatch.from_csv(
     "weights.csv",
     strategy_id="simple-zscore",
     strategy_version="1.0.0",
@@ -202,8 +202,8 @@ Example `artifacts.json` (shape):
 
 ## Schema details
 
-See [TimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and BRK lineage tables.
+See [WeightTimeSeries Schema](strategy-timeseries-schema.md) for generated core schema and BRK lineage tables.
 
 ## Feedback
 
-- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+TimeSeries)
+- [Was this page helpful? Open docs feedback issue](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md&title=%5Bdocs%5D+Feedback%3A+WeightTimeSeries)

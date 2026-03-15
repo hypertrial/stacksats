@@ -10,18 +10,18 @@ from stacksats.strategy_types import (
     StrategyArtifactSet,
     StrategyMetadata,
     StrategySpec,
-    StrategyContext,
     ValidationConfig,
+    strategy_context_from_features_df,
 )
 
 
 def test_strategy_context_defaults() -> None:
     idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    ctx = StrategyContext(
-        features_df=pd.DataFrame({"price_usd": [1, 2, 3]}, index=idx),
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+    ctx = strategy_context_from_features_df(
+        pd.DataFrame({"price_usd": [1, 2, 3]}, index=idx),
+        idx.min(),
+        idx.max(),
+        idx.max(),
     )
     assert ctx.btc_price_col == "price_usd"
     assert ctx.mvrv_col == "mvrv"
@@ -65,11 +65,11 @@ def test_strategy_metadata_and_spec_dataclasses() -> None:
 
 def test_strategy_context_is_frozen() -> None:
     idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    ctx = StrategyContext(
-        features_df=pd.DataFrame({"price_usd": [1, 2]}, index=idx),
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+    ctx = strategy_context_from_features_df(
+        pd.DataFrame({"price_usd": [1, 2]}, index=idx),
+        idx.min(),
+        idx.max(),
+        idx.max(),
     )
     try:
         ctx.btc_price_col = "other"
