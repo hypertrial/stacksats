@@ -48,7 +48,9 @@ ensure_packaging_tools() {
 
 is_ssl_constraint_failure() {
   local error_file="$1"
-  grep -Eqi "SSLCertVerificationError|CERTIFICATE_VERIFY_FAILED|SSL: CERTIFICATE_VERIFY_FAILED|OSStatus -26276" "$error_file"
+  grep -Eqi \
+    "SSLCertVerificationError|CERTIFICATE_VERIFY_FAILED|SSL: CERTIFICATE_VERIFY_FAILED|OSStatus -26276|Failed to establish a new connection|Temporary failure in name resolution|nodename nor servname provided|No matching distribution found|Could not find a version that satisfies the requirement" \
+    "$error_file"
 }
 
 build_with_ssl_fallback() {
