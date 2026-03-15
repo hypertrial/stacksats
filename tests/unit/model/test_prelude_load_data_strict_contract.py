@@ -24,7 +24,7 @@ def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
 
     df = load_data()
 
-    provider_cls.assert_called_once_with(duckdb_path=None, max_staleness_days=3)
+    provider_cls.assert_called_once_with(parquet_path=None, max_staleness_days=3)
     load_mock.assert_called_once_with(backtest_start="2018-01-01", end_date=None)
     assert df is expected_df
 
@@ -36,7 +36,7 @@ def test_load_data_propagates_missing_price_failure(mocker) -> None:
     mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
 
     with pytest.raises(DataLoadError, match="missing price_usd values"):
-        load_data(duckdb_path=None)
+        load_data(parquet_path=None)
 
 
 def test_load_data_propagates_missing_dates_failure(mocker) -> None:
@@ -46,7 +46,7 @@ def test_load_data_propagates_missing_dates_failure(mocker) -> None:
     mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
 
     with pytest.raises(DataLoadError, match="missing dates"):
-        load_data(duckdb_path=None)
+        load_data(parquet_path=None)
 
 
 def test_load_data_propagates_past_only_cache_failure(mocker) -> None:
@@ -61,10 +61,10 @@ def test_load_data_propagates_past_only_cache_failure(mocker) -> None:
     mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
 
     with pytest.raises(DataLoadError, match="does not cover requested end_date"):
-        load_data(duckdb_path="~/analytics.duckdb", end_date="2020-12-31")
+        load_data(parquet_path="~/analytics.parquet", end_date="2020-12-31")
 
     provider_cls.assert_called_once_with(
-        duckdb_path="~/analytics.duckdb",
+        parquet_path="~/analytics.parquet",
         max_staleness_days=3,
     )
     provider_instance.load.assert_called_once_with(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download BRK DuckDB + schema assets from Google Drive with checksum validation."""
+"""Download BRK parquet + schema assets from Google Drive with checksum validation."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class AssetSpec:
 @dataclass(frozen=True)
 class DataManifest:
     gdrive_folder_url: str
-    duckdb: AssetSpec
+    parquet: AssetSpec
     schema: AssetSpec
     updated_at_utc: str
 
@@ -102,7 +102,7 @@ def load_manifest(path: Path) -> DataManifest:
     if not isinstance(raw, dict):
         raise ManifestError("Manifest root must be an object.")
 
-    required = ("gdrive_folder_url", "duckdb", "schema", "updated_at_utc")
+    required = ("gdrive_folder_url", "parquet", "schema", "updated_at_utc")
     missing = [key for key in required if key not in raw]
     if missing:
         raise ManifestError(f"Manifest missing top-level keys: {', '.join(missing)}.")
@@ -116,7 +116,7 @@ def load_manifest(path: Path) -> DataManifest:
 
     return DataManifest(
         gdrive_folder_url=folder_url,
-        duckdb=_parse_asset("duckdb", raw["duckdb"]),
+        parquet=_parse_asset("parquet", raw["parquet"]),
         schema=_parse_asset("schema", raw["schema"]),
         updated_at_utc=updated,
     )
@@ -240,12 +240,12 @@ def fetch_assets(
 
     manifest = load_manifest(manifest_path)
 
-    duckdb_path = (target_dir / manifest.duckdb.name).resolve()
+    parquet_path = (target_dir / manifest.parquet.name).resolve()
     schema_path = (schema_dir / manifest.schema.name).resolve()
 
     _download_and_verify(
-        manifest.duckdb,
-        duckdb_path,
+        manifest.parquet,
+        parquet_path,
         overwrite=overwrite,
         downloader=downloader,
     )
@@ -258,14 +258,14 @@ def fetch_assets(
 
     print(f"[fetch_brk_data] Source folder: {manifest.gdrive_folder_url}")
     print(f"[fetch_brk_data] Manifest updated_at_utc: {manifest.updated_at_utc}")
-    print(f"export STACKSATS_ANALYTICS_DUCKDB={duckdb_path}")
+    print(f"export STACKSATS_ANALYTICS_PARQUET={parquet_path}")
 
-    return duckdb_path, schema_path
+    return parquet_path, schema_path
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch BRK DuckDB and schema assets from Google Drive using manifest checksums."
+        description="Fetch BRK parquet and schema assets from Google Drive using manifest checksums."
     )
     parser.add_argument(
         "--manifest",
@@ -275,7 +275,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--target-dir",
         default=".",
-        help="Directory where the DuckDB file will be written.",
+        help="Directory where the parquet file will be written.",
     )
     parser.add_argument(
         "--schema-dir",

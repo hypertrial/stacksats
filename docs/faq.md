@@ -77,7 +77,7 @@ Yes. `stacksats.load_data(...)` now follows strict `BTCDataProvider` source-only
 - no historical gap filling
 - no MVRV fallback substitution
 
-Use `end_date=...` when you need an explicit end bound.
+The supported source is BRK parquet (see [BRK Data Source](data-source.md)); for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Use `end_date=...` when you need an explicit end bound.
 
 ### Which modules are stable public API?
 

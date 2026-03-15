@@ -113,7 +113,6 @@ nav:
       - Migration Guide: migration.md
   - Reference:
       - Glossary: glossary.md
-      - DuckDB Schema: reference/bitcoin-analytics-duckdb-schema.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - Strategy TimeSeries: reference/strategy-timeseries.md

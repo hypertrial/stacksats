@@ -27,7 +27,7 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 
 ## Prerequisites
 
-- Use BRK-only runtime source (`STACKSATS_ANALYTICS_DUCKDB` or `./bitcoin_analytics.duckdb` fallback).
+- Use BRK-only runtime source (`STACKSATS_ANALYTICS_PARQUET` or `./bitcoin_analytics.parquet` fallback).
 - Use editable install for local command consistency:
 
 ```bash
@@ -64,7 +64,7 @@ Canonical page: [Animate Command](run/animate.md)
 ## Troubleshooting
 
 - If a command errors with import issues, verify editable install from repo root.
-- If a command errors with data coverage/staleness, verify BRK DuckDB path and date bounds.
+- If a command errors with data coverage/staleness, verify BRK parquet path and date bounds.
 - For strict validation failures, use [Validation Checklist](validation_checklist.md).
 - For task-first troubleshooting, use [Task Hub](tasks.md#i-want-to-troubleshoot-command-failures-quickly).
 

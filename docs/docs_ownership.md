@@ -70,6 +70,5 @@ bash scripts/check_docs_refs.sh
 venv/bin/python scripts/check_docs_ux.py
 venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
-venv/bin/python scripts/render_duckdb_schema_doc.py --check
 venv/bin/python -m mkdocs build --strict
 ```

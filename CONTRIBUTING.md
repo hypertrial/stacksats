@@ -54,7 +54,7 @@ Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
 
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
-Current source contract is hard-break BRK-only; keep runtime/docs/tests aligned with canonical BRK naming and providers.
+Current source contract is BRK parquet–only; keep runtime, docs, and tests aligned with canonical BRK parquet naming and providers.
 
 ## Contribution workflow
 

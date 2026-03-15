@@ -34,10 +34,10 @@ This page covers migration for:
 | `RANGE_START` / `RANGE_END` / `MIN_RANGE_LENGTH_DAYS` module defaults | set explicit app-level defaults in your own code/config |
 | `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
 | `BaseStrategy.export_weights(config=None, **kwargs)` | `BaseStrategy.export(config=None, **kwargs)` |
-| `stacksats.load_data(cache_dir=..., max_age_hours=...)` | `stacksats.load_data(duckdb_path=..., max_staleness_days=..., end_date=...)` |
+| `stacksats.load_data(cache_dir=..., max_age_hours=...)` | `stacksats.load_data(parquet_path=..., max_staleness_days=..., end_date=...)` |
 | `coinmetrics_overlay_v1` provider ID | `brk_overlay_v1` provider ID |
 | `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
-| `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK DuckDB loader is canonical |
+| `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK parquet loader is canonical |
 | `strategy.spec()` as the informal contract | `strategy.spec()` as the canonical public contract |
 | `StrategyTimeSeries` | `TimeSeries` (deprecated alias available until 0.9.0) |
 | `StrategyTimeSeriesBatch` | `TimeSeriesBatch` (deprecated alias available until 0.9.0) |
@@ -102,11 +102,11 @@ batch = strategy.export(config=my_export_config)
 
 ```python
 # old (assumed synthetic fill/fallback behavior)
-df = load_data(duckdb_path="./bitcoin_analytics.duckdb")
+df = load_data(parquet_path="./bitcoin_analytics.parquet")
 
 # new (strict source-only and optional explicit end bound)
 df = load_data(
-    duckdb_path="./bitcoin_analytics.duckdb",
+    parquet_path="./bitcoin_analytics.parquet",
     max_staleness_days=3,
     end_date="2025-12-31",
 )
@@ -116,7 +116,7 @@ df = load_data(
 - no synthetic "today" row creation
 - no historical date gap filling
 - no MVRV fallback substitution
-- BRK DuckDB is the only supported source path
+- BRK parquet (or user-supplied DataFrame) is the supported source path
 
 ### 7) Strategy contract hardening
 

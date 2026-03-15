@@ -25,28 +25,25 @@ def get_backtest_end() -> str:
 
 def load_data(
     *,
-    duckdb_path: str | None = None,
+    parquet_path: str | None = None,
     max_staleness_days: int = 3,
     end_date: str | None = None,
 ):
     """Load strict BRK BTC data through the canonical provider path.
 
-    Requires a local BRK DuckDB file. Install the optional extra with::
-
-        pip install stacksats[brk]
-
-    If you want to supply your own data without DuckDB, use
+    Requires a local BRK parquet file (or set STACKSATS_ANALYTICS_PARQUET).
+    If you want to supply your own data without a parquet file, use
     :class:`stacksats.ColumnMapDataProvider` instead, or construct a
     :class:`stacksats.runner.StrategyRunner` with
     :meth:`~stacksats.runner.StrategyRunner.from_dataframe`.
 
     This path intentionally enforces source-only data integrity:
-    - local DuckDB only
+    - local parquet only
     - no synthetic row filling
     - no fallback source blending
     """
     provider = BTCDataProvider(
-        duckdb_path=duckdb_path,
+        parquet_path=parquet_path,
         max_staleness_days=max_staleness_days,
     )
     return provider.load(backtest_start=BACKTEST_START, end_date=end_date)

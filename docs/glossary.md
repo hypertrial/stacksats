@@ -34,6 +34,9 @@ The amount of new Bitcoin created in each block (approximately every 10 minutes)
 
 ## System Terms
 
+### BRK parquet / Data source
+The canonical Bitcoin analytics dataset used by StackSats for strategy metrics. Runtime reads from a single parquet file: set `STACKSATS_ANALYTICS_PARQUET` or place `bitcoin_analytics.parquet` at repo root. The file must have at least `price_usd`; optional columns (e.g. `mvrv`) enable overlay features. See [BRK Data Source](data-source.md). For custom DataFrames, use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe(...)`.
+
 ### Allocation Span
 The fixed window of time (default: 365 days) over which a fixed budget must be fully allocated. The model solves for the optimal distribution of capital over this rolling window.
 

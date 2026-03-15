@@ -8,7 +8,7 @@ description: Reference for `stacksats strategy validate`.
 ## Prerequisites
 
 - Strategy spec format: `module_or_path:ClassName`
-- BRK data source available (`STACKSATS_ANALYTICS_DUCKDB` or `./bitcoin_analytics.duckdb`)
+- BRK parquet available (`STACKSATS_ANALYTICS_PARQUET` or `./bitcoin_analytics.parquet`)
 
 ## Command
 

@@ -1,4 +1,4 @@
-"""Column-mapping data provider for flexible data ingestion without DuckDB.
+"""Column-mapping data provider for flexible data ingestion without a BRK parquet file.
 
 Allows users to supply any Pandas DataFrame by declaring a column map that
 maps library-canonical column names (e.g. ``price_usd``, ``mvrv``) to the

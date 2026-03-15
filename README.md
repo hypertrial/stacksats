@@ -92,7 +92,7 @@ stacksats strategy animate \
   --output-name strategy_vs_uniform_hd.gif
 ```
 
-## Data Source (BRK DuckDB)
+## Data Source (BRK parquet)
 
 Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
 
@@ -100,23 +100,13 @@ Quick command:
 
 ```bash
 venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ```
 
-DuckDB artifact size is `~10.13 GiB`; keep at least `~12 GiB` free disk.
-If manifest file IDs are placeholders, fetch fails by design and you should place DuckDB locally, then export `STACKSATS_ANALYTICS_DUCKDB`.
+If manifest file IDs are placeholders, fetch fails by design and you should place the parquet file locally, then export `STACKSATS_ANALYTICS_PARQUET`.
 
-DuckDB factor strategy workflow (shared-horizon research):
-
-```bash
-export STACKSATS_ANALYTICS_DUCKDB=./bitcoin_analytics.duckdb
-venv/bin/python scripts/train_duckdb_factor_strategy.py --start-date 2018-01-01 --end-date 2025-05-31
-venv/bin/python scripts/compare_duckdb_alpha.py --start-date 2018-01-01 --end-date 2025-05-31
-```
-
-If `STACKSATS_ANALYTICS_DUCKDB` is unset, runtime falls back to `./bitcoin_analytics.duckdb`.
+If `STACKSATS_ANALYTICS_PARQUET` is unset, runtime falls back to `./bitcoin_analytics.parquet`.
 StackSats runtime is BRK-only for strategy metrics sourcing.
-For quick candidate-only loops, `scripts/compare_duckdb_alpha.py` supports `--skip-strict` plus baseline metric overrides.
 
 Run idempotent daily execution (paper mode):
 
@@ -173,8 +163,6 @@ bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
 bash scripts/clean_local.sh
 bash scripts/release_check.sh
-venv/bin/python scripts/train_duckdb_factor_strategy.py --help
-venv/bin/python scripts/compare_duckdb_alpha.py --help
 ```
 
 If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.

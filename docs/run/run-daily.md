@@ -38,7 +38,7 @@ stacksats strategy run-daily \
 ## Troubleshooting
 
 - If live mode fails without adapter, pass `--adapter`.
-- If price coverage fails, verify BRK source freshness and run date.
+- If price coverage fails, verify BRK parquet path and run-date coverage.
 
 ## Next step
 

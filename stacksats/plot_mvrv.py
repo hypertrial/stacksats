@@ -108,7 +108,7 @@ Examples:
     except ValueError as e:
         logging.error(f"Error: {e}")
         print(f"\n❌ Error: {e}")
-        print("\nTip: Verify your BRK DuckDB has metrics_distribution.mvrv.")
+        print("\nTip: Verify your BRK parquet data has a 'mvrv' column.")
         return 1
     except Exception as e:
         logging.error(f"Unexpected error: {e}", exc_info=True)

@@ -27,9 +27,9 @@ def _sha256(data: bytes) -> str:
 def _write_manifest(
     path: Path,
     *,
-    duckdb_payload: bytes,
+    parquet_payload: bytes,
     schema_payload: bytes,
-    duckdb_file_id: str = "duckdb_file_id_123",
+    parquet_file_id: str = "parquet_file_id_123",
     schema_file_id: str = "schema_file_id_123",
 ) -> None:
     manifest = {
@@ -37,15 +37,15 @@ def _write_manifest(
             "https://drive.google.com/drive/folders/"
             "1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link"
         ),
-        "duckdb": {
-            "name": "bitcoin_analytics.duckdb",
-            "file_id": duckdb_file_id,
-            "sha256": _sha256(duckdb_payload),
-            "size_bytes": len(duckdb_payload),
+        "parquet": {
+            "name": "bitcoin_analytics.parquet",
+            "file_id": parquet_file_id,
+            "sha256": _sha256(parquet_payload),
+            "size_bytes": len(parquet_payload),
             "version": "test",
         },
         "schema": {
-            "name": "bitcoin-analytics-duckdb-schema.md",
+            "name": "bitcoin-analytics-parquet-schema.md",
             "file_id": schema_file_id,
             "sha256": _sha256(schema_payload),
             "size_bytes": len(schema_payload),
@@ -61,13 +61,13 @@ def test_load_manifest_validates_required_keys(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(
         manifest_path,
-        duckdb_payload=b"duckdb-bytes",
+        parquet_payload=b"parquet-bytes",
         schema_payload=b"schema-bytes",
     )
 
     manifest = mod.load_manifest(manifest_path)
-    assert manifest.duckdb.name == "bitcoin_analytics.duckdb"
-    assert manifest.schema.name == "bitcoin-analytics-duckdb-schema.md"
+    assert manifest.parquet.name == "bitcoin_analytics.parquet"
+    assert manifest.schema.name == "bitcoin-analytics-parquet-schema.md"
 
     broken = json.loads(manifest_path.read_text(encoding="utf-8"))
     broken.pop("schema")
@@ -81,9 +81,9 @@ def test_load_manifest_rejects_missing_drive_metadata(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(
         manifest_path,
-        duckdb_payload=b"a",
+        parquet_payload=b"a",
         schema_payload=b"b",
-        duckdb_file_id="REPLACE_WITH_DUCKDB_FILE_ID",
+        parquet_file_id="REPLACE_WITH_PARQUET_FILE_ID",
     )
 
     with pytest.raises(mod.ManifestError, match="missing or placeholder"):
@@ -95,28 +95,28 @@ def test_load_manifest_does_not_reject_valid_file_id_with_todo_substring(tmp_pat
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(
         manifest_path,
-        duckdb_payload=b"x",
+        parquet_payload=b"x",
         schema_payload=b"y",
-        duckdb_file_id="1a2b3cTodoLikeButValidId",
+        parquet_file_id="1a2b3cTodoLikeButValidId",
     )
 
     manifest = mod.load_manifest(manifest_path)
-    assert manifest.duckdb.file_id == "1a2b3cTodoLikeButValidId"
+    assert manifest.parquet.file_id == "1a2b3cTodoLikeButValidId"
 
 
 def test_fetch_assets_downloads_and_verifies_hashes(tmp_path: Path) -> None:
     mod = _load_fetch_module()
     manifest_path = tmp_path / "manifest.json"
-    duckdb_payload = b"D" * 128
+    parquet_payload = b"D" * 128
     schema_payload = b"S" * 64
     _write_manifest(
         manifest_path,
-        duckdb_payload=duckdb_payload,
+        parquet_payload=parquet_payload,
         schema_payload=schema_payload,
     )
 
     payload_by_id = {
-        "duckdb_file_id_123": duckdb_payload,
+        "parquet_file_id_123": parquet_payload,
         "schema_file_id_123": schema_payload,
     }
 
@@ -127,14 +127,14 @@ def test_fetch_assets_downloads_and_verifies_hashes(tmp_path: Path) -> None:
 
     target_dir = tmp_path / "target"
     schema_dir = tmp_path / "schema"
-    duckdb_path, schema_path = mod.fetch_assets(
+    parquet_path, schema_path = mod.fetch_assets(
         manifest_path=manifest_path,
         target_dir=target_dir,
         schema_dir=schema_dir,
         downloader=fake_downloader,
     )
 
-    assert duckdb_path.read_bytes() == duckdb_payload
+    assert parquet_path.read_bytes() == parquet_payload
     assert schema_path.read_bytes() == schema_payload
 
 
@@ -143,12 +143,12 @@ def test_fetch_assets_fails_on_checksum_mismatch(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(
         manifest_path,
-        duckdb_payload=b"duckdb-expected",
+        parquet_payload=b"parquet-expected",
         schema_payload=b"schema-expected",
     )
 
     payload_by_id = {
-        "duckdb_file_id_123": b"duckdb-expected",
+        "parquet_file_id_123": b"parquet-expected",
         "schema_file_id_123": b"schema-expectee",
     }
 
@@ -169,11 +169,11 @@ def test_fetch_assets_fails_on_checksum_mismatch(tmp_path: Path) -> None:
 def test_existing_file_skip_and_overwrite_behavior(tmp_path: Path) -> None:
     mod = _load_fetch_module()
     manifest_path = tmp_path / "manifest.json"
-    duckdb_payload = b"duckdb-good"
+    parquet_payload = b"parquet-good"
     schema_payload = b"schema-good"
     _write_manifest(
         manifest_path,
-        duckdb_payload=duckdb_payload,
+        parquet_payload=parquet_payload,
         schema_payload=schema_payload,
     )
 
@@ -181,9 +181,9 @@ def test_existing_file_skip_and_overwrite_behavior(tmp_path: Path) -> None:
     schema_dir = tmp_path / "schema"
     target_dir.mkdir(parents=True, exist_ok=True)
     schema_dir.mkdir(parents=True, exist_ok=True)
-    duckdb_path = target_dir / "bitcoin_analytics.duckdb"
-    schema_path = schema_dir / "bitcoin-analytics-duckdb-schema.md"
-    duckdb_path.write_bytes(duckdb_payload)
+    parquet_path = target_dir / "bitcoin_analytics.parquet"
+    schema_path = schema_dir / "bitcoin-analytics-parquet-schema.md"
+    parquet_path.write_bytes(parquet_payload)
     schema_path.write_bytes(schema_payload)
 
     calls: list[str] = []
@@ -201,7 +201,7 @@ def test_existing_file_skip_and_overwrite_behavior(tmp_path: Path) -> None:
     )
     assert calls == []
 
-    duckdb_path.write_bytes(b"bad")
+    parquet_path.write_bytes(b"bad")
     with pytest.raises(mod.DownloadError, match="Pass --overwrite"):
         mod.fetch_assets(
             manifest_path=manifest_path,
@@ -211,9 +211,9 @@ def test_existing_file_skip_and_overwrite_behavior(tmp_path: Path) -> None:
         )
 
     def overwrite_downloader(file_id: str, output_path: Path) -> int:
-        if file_id == "duckdb_file_id_123":
-            output_path.write_bytes(duckdb_payload)
-            return len(duckdb_payload)
+        if file_id == "parquet_file_id_123":
+            output_path.write_bytes(parquet_payload)
+            return len(parquet_payload)
         output_path.write_bytes(schema_payload)
         return len(schema_payload)
 
@@ -224,7 +224,7 @@ def test_existing_file_skip_and_overwrite_behavior(tmp_path: Path) -> None:
         overwrite=True,
         downloader=overwrite_downloader,
     )
-    assert duckdb_path.read_bytes() == duckdb_payload
+    assert parquet_path.read_bytes() == parquet_payload
 
 
 def test_main_prints_export_command_and_writes_assets(
@@ -232,16 +232,16 @@ def test_main_prints_export_command_and_writes_assets(
 ) -> None:
     mod = _load_fetch_module()
     manifest_path = tmp_path / "manifest.json"
-    duckdb_payload = b"D" * 32
+    parquet_payload = b"D" * 32
     schema_payload = b"S" * 32
     _write_manifest(
         manifest_path,
-        duckdb_payload=duckdb_payload,
+        parquet_payload=parquet_payload,
         schema_payload=schema_payload,
     )
 
     payload_by_id = {
-        "duckdb_file_id_123": duckdb_payload,
+        "parquet_file_id_123": parquet_payload,
         "schema_file_id_123": schema_payload,
     }
 
@@ -267,10 +267,10 @@ def test_main_prints_export_command_and_writes_assets(
     output = capsys.readouterr().out
 
     assert exit_code == 0
-    assert "export STACKSATS_ANALYTICS_DUCKDB=" in output
-    assert str((target_dir / "bitcoin_analytics.duckdb").resolve()) in output
-    assert (target_dir / "bitcoin_analytics.duckdb").read_bytes() == duckdb_payload
-    assert (schema_dir / "bitcoin-analytics-duckdb-schema.md").read_bytes() == schema_payload
+    assert "export STACKSATS_ANALYTICS_PARQUET=" in output
+    assert str((target_dir / "bitcoin_analytics.parquet").resolve()) in output
+    assert (target_dir / "bitcoin_analytics.parquet").read_bytes() == parquet_payload
+    assert (schema_dir / "bitcoin-analytics-parquet-schema.md").read_bytes() == schema_payload
 
 
 def test_main_returns_1_on_manifest_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -278,9 +278,9 @@ def test_main_returns_1_on_manifest_error(tmp_path: Path, capsys: pytest.Capture
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(
         manifest_path,
-        duckdb_payload=b"x",
+        parquet_payload=b"x",
         schema_payload=b"y",
-        duckdb_file_id="REPLACE_WITH_DUCKDB_FILE_ID",
+        parquet_file_id="REPLACE_WITH_PARQUET_FILE_ID",
     )
 
     exit_code = mod.main(["--manifest", str(manifest_path)])

@@ -35,10 +35,10 @@ Most direct path:
 
 ```bash
 venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ```
 
-If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.duckdb` at repo root manually and set `STACKSATS_ANALYTICS_DUCKDB` to that path.
+If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.parquet` at repo root manually and set `STACKSATS_ANALYTICS_PARQUET` to that path.
 
 ## 3) Run an example strategy
 

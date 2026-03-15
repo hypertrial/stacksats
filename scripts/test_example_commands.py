@@ -10,35 +10,29 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pandas as pd
+
 EXAMPLE_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 
 
-def _write_synthetic_brk_duckdb(
-    db_path: Path,
+def _write_synthetic_brk_parquet(
+    pq_path: Path,
     *,
     end_date: date,
     lookback_days: int = 2200,
 ) -> None:
-    import duckdb
-
     start = end_date - timedelta(days=lookback_days)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(db_path))
-    try:
-        con.execute("CREATE TABLE metrics_price (date_day DATE, metric VARCHAR, value DOUBLE)")
-        con.execute("CREATE TABLE metrics_distribution (date_day DATE, metric VARCHAR, value DOUBLE)")
-        price_rows: list[tuple[str, str, float]] = []
-        mvrv_rows: list[tuple[str, str, float]] = []
-        for offset in range(lookback_days + 1):
-            day = start + timedelta(days=offset)
-            price = 10000.0 + (offset * 6.5)
-            mvrv = 0.8 + (0.00035 * offset)
-            price_rows.append((day.isoformat(), "price_close", float(price)))
-            mvrv_rows.append((day.isoformat(), "mvrv", float(mvrv)))
-        con.executemany("INSERT INTO metrics_price VALUES (?, ?, ?)", price_rows)
-        con.executemany("INSERT INTO metrics_distribution VALUES (?, ?, ?)", mvrv_rows)
-    finally:
-        con.close()
+    pq_path.parent.mkdir(parents=True, exist_ok=True)
+    dates = [start + timedelta(days=offset) for offset in range(lookback_days + 1)]
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(dates),
+            "price_usd": [10000.0 + (i * 6.5) for i in range(len(dates))],
+            "mvrv": [0.8 + (0.00035 * i) for i in range(len(dates))],
+        }
+    )
+    df = df.set_index("date")
+    df.to_parquet(pq_path)
 
 
 def run_step(label: str, cmd: list[str], *, cwd: Path, env: dict[str, str]) -> bool:
@@ -82,13 +76,13 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="stacksats-example-smoke-") as tmp_home:
         synthetic_home = Path(tmp_home)
-        db_path = synthetic_home / "bitcoin_analytics.duckdb"
-        _write_synthetic_brk_duckdb(db_path, end_date=today)
+        pq_path = synthetic_home / "bitcoin_analytics.parquet"
+        _write_synthetic_brk_parquet(pq_path, end_date=today)
         mpl_config_dir = synthetic_home / ".mplconfig"
         mpl_config_dir.mkdir(parents=True, exist_ok=True)
         env["HOME"] = str(synthetic_home)
         env["MPLCONFIGDIR"] = str(mpl_config_dir)
-        env["STACKSATS_ANALYTICS_DUCKDB"] = str(db_path)
+        env["STACKSATS_ANALYTICS_PARQUET"] = str(pq_path)
 
         steps: list[tuple[str, list[str]]] = [
             (

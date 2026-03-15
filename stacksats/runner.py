@@ -56,7 +56,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         """Construct a StrategyRunner backed by a user-supplied DataFrame.
 
         This is the primary entry point for using StackSats without a BRK
-        DuckDB installation.
+        parquet file.
 
         Parameters
         ----------

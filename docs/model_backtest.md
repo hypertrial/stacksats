@@ -37,7 +37,7 @@ Backtesting is orchestrated through these modules:
    - `StrategyRunner.backtest(...)` is the canonical entry point.
    - Validates strategy contract, builds `StrategyContext`, computes per-window weights, and enforces weight constraints.
 2. `stacksats/prelude.py`
-   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only BRK validation (no synthetic fill behavior).
+   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only BRK parquet validation (no synthetic fill behavior).
    - `compute_cycle_spd(...)` builds rolling windows and computes sats-per-dollar metrics.
    - `backtest_dynamic_dca(...)` aggregates window-level results and computes the exponential-decay percentile.
 3. `stacksats/model_development.py`

@@ -53,10 +53,10 @@ Use [BRK Data Source](../data-source.md) before validation/backtest.
 
 ```bash
 venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
+export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ```
 
-If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.duckdb` at repo root manually and export `STACKSATS_ANALYTICS_DUCKDB` to that file.
+If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.parquet` at repo root manually and export `STACKSATS_ANALYTICS_PARQUET` to that file.
 
 ## 3) Validate your strategy
 

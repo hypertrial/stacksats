@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Changed
+- Default data path is now 100% parquet: `BTCDataProvider` and `load_data()` use `STACKSATS_ANALYTICS_PARQUET` / `./bitcoin_analytics.parquet`. Removed DuckDB dependency and all DuckDB-only code (feature providers, strategies, scripts, docs).
+- `BRKOverlayFeatureProvider` now reads overlay metrics from `btc_df` columns only (parquet or user DataFrame); no separate database.
+- Fetch script and manifest use `parquet` asset; see [BRK Data Source](docs/data-source.md).
+
+### Removed
+- Optional extra `brk` (duckdb). Parquet support is provided by default dependency `pyarrow`.
+- `DuckDBAnalyticsFeatureProvider`, `DuckDBAlphaStrategy`, DuckDB scripts (render_duckdb_schema_doc, train_duckdb_factor_strategy, compare_duckdb_alpha), and related tests/docs.
+
 ## [0.7.3] - 2026-03-15
 
 ### Added

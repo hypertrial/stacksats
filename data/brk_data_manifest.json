@@ -1,17 +1,17 @@
 {
   "gdrive_folder_url": "https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link",
-  "duckdb": {
-    "name": "bitcoin_analytics.duckdb",
-    "file_id": "REPLACE_WITH_DUCKDB_FILE_ID",
-    "sha256": "24505ae869af340077ba4025a9583150a01a946fb4b8d658f98463412c81cada",
-    "size_bytes": 10876104704,
+  "parquet": {
+    "name": "bitcoin_analytics.parquet",
+    "file_id": "REPLACE_WITH_PARQUET_FILE_ID",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 1,
     "version": "2026-03-08"
   },
   "schema": {
-    "name": "bitcoin-analytics-duckdb-schema.md",
+    "name": "bitcoin-analytics-parquet-schema.md",
     "file_id": "REPLACE_WITH_SCHEMA_FILE_ID",
-    "sha256": "8cd590150bc20595b9b65a8ec415511af4fd80516a51f178ad3c963186caa247",
-    "size_bytes": 4946,
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 1,
     "version": "2026-03-08"
   },
   "updated_at_utc": "2026-03-08T20:20:00Z"

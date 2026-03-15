@@ -8,7 +8,7 @@ description: Reference for `stacksats strategy backtest`.
 ## Prerequisites
 
 - Strategy validates successfully on target date bounds.
-- BRK data covers requested window.
+- BRK parquet (or data source) covers the requested window.
 
 ## Command
 

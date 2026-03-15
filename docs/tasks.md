@@ -8,8 +8,8 @@ description: Task-first workflows for common StackSats goals.
 Use this page to jump directly to the workflow you need.
 
 Global source contract:
-- Strategy runtime and validation are BRK-only in `0.7.x`.
-- Set `STACKSATS_ANALYTICS_DUCKDB` or place `bitcoin_analytics.duckdb` at repo root.
+- Strategy runtime and validation use BRK parquet only (no other data backends).
+- Set `STACKSATS_ANALYTICS_PARQUET` or place `bitcoin_analytics.parquet` at repo root.
 - For canonical Drive-distributed artifacts + checksum workflow, see [BRK Data Source](data-source.md).
 
 ## I want to validate a strategy
@@ -224,41 +224,6 @@ stacksats strategy run-daily \
 ### Next step
 
 - Validate your copied strategy using the [Validate Command](run/validate.md).
-
-## I want to train and promote the DuckDB alpha strategy
-
-### Prerequisites
-
-- `bitcoin_analytics.duckdb` is present locally, or `STACKSATS_ANALYTICS_DUCKDB` points to it.
-- Local editable install is ready (`venv/bin/python -m pip install -e ".[dev]"`).
-
-### Commands
-
-```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_DUCKDB=$(pwd)/bitcoin_analytics.duckdb
-venv/bin/python scripts/train_duckdb_factor_strategy.py \
-  --start-date 2018-01-01 \
-  --end-date 2025-05-31 \
-  --output stacksats/strategies/duckdb_alpha_v1.json
-
-venv/bin/python scripts/compare_duckdb_alpha.py \
-  --start-date 2018-01-01 \
-  --end-date 2025-05-31
-```
-
-### Expected output
-
-- A refreshed frozen artifact JSON at `stacksats/strategies/duckdb_alpha_v1.json`.
-- Baseline-vs-candidate comparison JSON with score, win-rate, and BTC-per-$1M uplift.
-- Strict diagnostics included when `--skip-strict` is not set.
-
-### Promotion checklist
-
-- Candidate score delta and win-rate delta are positive on the shared horizon.
-- Strict diagnostics are reviewed for permutation p-value, fold stability, and feature drift.
-- Comparison output + artifact hash are captured in PR notes.
-- If manifest file IDs are placeholders, skip fetch and place DuckDB locally before exporting `STACKSATS_ANALYTICS_DUCKDB`.
 
 ## I want to troubleshoot command failures quickly
 
