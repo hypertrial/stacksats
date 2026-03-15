@@ -76,7 +76,7 @@ stacksats strategy backtest \
 - Interpret metrics consistently: [Interpret Backtest Metrics](recipes/interpret-backtest.md).
 - Full flag reference: [Backtest Command](run/backtest.md).
 
-## I want animated performance visuals
+## I want to create animated performance visuals
 
 ### Prerequisites
 
@@ -202,7 +202,7 @@ stacksats strategy run-daily \
 
 - Re-run fast tests and docs checks (`venv/bin/python -m pytest -q`, `venv/bin/python -m mkdocs build --strict`).
 
-## I want minimal strategy code templates
+## I want to start from minimal strategy code templates
 
 ### Prerequisites
 
