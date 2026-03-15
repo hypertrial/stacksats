@@ -70,6 +70,7 @@ stacksats strategy validate --strategy my_strategy.py:MyStrategy
 Expected output:
 
 - A validation summary line including pass/fail and gate results.
+- The leakage gate now prints as `No Forward Leakage: True/False` to make pass/fail semantics explicit.
 - Strict validation is enabled by default. Use `--no-strict` only if you intentionally want the lighter path.
 
 ## 4) Run backtest and export

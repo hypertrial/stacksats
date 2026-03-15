@@ -228,7 +228,11 @@ class BRKOverlayFeatureProvider:
             _rolling_zscore_pl(mom_90, 365).alias("brk_roi1y"),
         )
 
-        features = features.shift(1)
+        lagged_cols = [c for c in features.columns if c != DATE_COL]
+        if lagged_cols:
+            features = features.with_columns(
+                [pl.col(c).shift(1).fill_null(0.0).alias(c) for c in lagged_cols]
+            )
         features = features.fill_null(0)
         float_cols = [
             c for c in features.columns

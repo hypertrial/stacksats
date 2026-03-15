@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import time
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -435,6 +436,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
+        _, created_cache = self._ensure_runtime_cache(strategy, btc_df)
+        started_at = time.perf_counter()
         start_ts = dt.datetime.strptime(
             (config.start_date or BACKTEST_START)[:10], "%Y-%m-%d"
         )
@@ -447,69 +450,93 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 if isinstance(end_col, dt.datetime)
                 else dt.datetime.fromisoformat(str(end_col)[:10])
             )
-        full_features_df = self._materialize_strategy_features(
-            strategy,
-            btc_df,
-            start_date=start_ts,
-            end_date=end_ts,
-            current_date=end_ts,
-        )
-
-        def _strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
-            if df_window.is_empty():
-                return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
-
-            window_start = df_window["date"].min()
-            window_end = df_window["date"].max()
-            window_features = self._materialize_strategy_features(
+        try:
+            full_features_df = self._materialize_strategy_features(
                 strategy,
                 btc_df,
-                start_date=window_start,
-                end_date=window_end,
-                current_date=window_end,
-            )
-            ctx = strategy_context_from_features_df(
-                window_features,
-                window_start,
-                window_end,
-                window_end,
-                required_columns=tuple(strategy.required_feature_columns()),
-                as_of_date=window_end,
-            )
-            weights = strategy.compute_weights(ctx)
-            self._validate_weights(weights, window_start, window_end)
-            strategy.validate_weights(weights, ctx)
-            return weights
-
-        strategy_label = config.strategy_label or metadata.strategy_id
-        spd_table, exp_decay_percentile, uniform_exp_decay_percentile = backtest_dynamic_dca(
-            btc_df,
-            _strategy_fn,
-            features_df=full_features_df,
-            strategy_label=strategy_label,
-            start_date=config.start_date,
-            end_date=config.end_date,
-        )
-        if spd_table.is_empty():
-            raise ValueError(
-                "No backtest windows were generated for the requested date range."
+                start_date=start_ts,
+                end_date=end_ts,
+                current_date=end_ts,
+                cache_namespace="base-full",
             )
 
-        win_rate = self._compute_win_rate(spd_table)
-        score = (0.5 * win_rate) + (0.5 * exp_decay_percentile)
-        provenance = self._provenance(strategy, config)
+            def _strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
+                if df_window.is_empty():
+                    return pl.DataFrame(
+                        schema={"date": pl.Datetime("us"), "weight": pl.Float64}
+                    )
 
-        return BacktestResult(
-            spd_table=spd_table,
-            exp_decay_percentile=exp_decay_percentile,
-            uniform_exp_decay_percentile=uniform_exp_decay_percentile,
-            win_rate=win_rate,
-            score=score,
-            strategy_id=provenance["strategy_id"],
-            strategy_version=provenance["version"],
-            config_hash=provenance["config_hash"],
-            run_id=provenance["run_id"],
-        )
+                window_start = df_window["date"].min()
+                window_end = df_window["date"].max()
+                window_features = self._materialize_strategy_features(
+                    strategy,
+                    btc_df,
+                    start_date=window_start,
+                    end_date=window_end,
+                    current_date=window_end,
+                    cache_namespace="base",
+                )
+                weights, mutated = self._compute_strategy_weights(
+                    strategy,
+                    features_df=window_features,
+                    start_date=window_start,
+                    end_date=window_end,
+                    current_date=window_end,
+                    strict_mode=False,
+                    cache_namespace="base",
+                )
+                if mutated:
+                    raise ValueError(
+                        "Strategy mutated ctx.features during backtest weight computation."
+                    )
+                ctx = strategy_context_from_features_df(
+                    window_features,
+                    window_start,
+                    window_end,
+                    window_end,
+                    required_columns=tuple(strategy.required_feature_columns()),
+                    as_of_date=window_end,
+                )
+                self._validate_weights(weights, window_start, window_end)
+                strategy.validate_weights(weights, ctx)
+                return weights
+
+            strategy_label = config.strategy_label or metadata.strategy_id
+            spd_table, exp_decay_percentile, uniform_exp_decay_percentile = (
+                backtest_dynamic_dca(
+                    btc_df,
+                    _strategy_fn,
+                    features_df=full_features_df,
+                    strategy_label=strategy_label,
+                    start_date=config.start_date,
+                    end_date=config.end_date,
+                )
+            )
+            if spd_table.is_empty():
+                raise ValueError(
+                    "No backtest windows were generated for the requested date range."
+                )
+
+            win_rate = self._compute_win_rate(spd_table)
+            score = (0.5 * win_rate) + (0.5 * exp_decay_percentile)
+            provenance = self._provenance(strategy, config)
+
+            return BacktestResult(
+                spd_table=spd_table,
+                exp_decay_percentile=exp_decay_percentile,
+                uniform_exp_decay_percentile=uniform_exp_decay_percentile,
+                win_rate=win_rate,
+                score=score,
+                strategy_id=provenance["strategy_id"],
+                strategy_version=provenance["version"],
+                config_hash=provenance["config_hash"],
+                run_id=provenance["run_id"],
+            )
+        finally:
+            profile = self._runtime_profile()
+            if profile is not None:
+                profile.backtest_seconds += time.perf_counter() - started_at
+            self._release_runtime_cache(clear=created_cache)
 
     def validate(
         self,
@@ -567,131 +594,139 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 diagnostics={},
             )
 
-        features_df = self._materialize_strategy_features(
-            strategy,
-            btc_df,
-            start_date=start_ts,
-            end_date=end_ts,
-            current_date=end_ts,
-        )
-        if strict_mode:
-            probe_step = 1 if len(backtest_idx) <= (ALLOCATION_SPAN_DAYS * 2) else max(
-                len(backtest_idx) // 100,
-                1,
+        cache, created_cache = self._ensure_runtime_cache(strategy, btc_df)
+        try:
+            features_df = self._materialize_strategy_features(
+                strategy,
+                btc_df,
+                start_date=start_ts,
+                end_date=end_ts,
+                current_date=end_ts,
+                cache_namespace="base-full",
             )
-        else:
-            probe_step = max(len(backtest_idx) // 50, 1)
-        active_intent_mode = strategy.intent_mode()
-        has_propose_hook = active_intent_mode == "propose"
-        has_profile_hook = active_intent_mode == "profile"
-        self._run_forward_leakage_checks(
-            strategy=strategy,
-            btc_df=btc_df,
-            full_features_df=features_df,
-            backtest_idx=backtest_idx,
-            start_ts=start_ts,
-            strict_mode=strict_mode,
-            has_propose_hook=has_propose_hook,
-            has_profile_hook=has_profile_hook,
-            probe_step=probe_step,
-            state=state,
-        )
-        max_window_start = self._run_weight_constraint_checks(
-            strategy=strategy,
-            btc_df=btc_df,
-            features_df=features_df,
-            start_ts=start_ts,
-            end_ts=end_ts,
-            strict_mode=strict_mode,
-            config=config,
-            state=state,
-        )
-        self._run_locked_prefix_check(
-            strategy=strategy,
-            btc_df=btc_df,
-            features_df=features_df,
-            start_ts=start_ts,
-            max_window_start=max_window_start,
-            strict_mode=strict_mode,
-            state=state,
-        )
-
-        backtest_result = self.backtest(
-            strategy,
-            BacktestConfig(
-                start_date=start_date,
-                end_date=end_date,
-                strategy_label="validation-run",
-            ),
-            btc_df=btc_df,
-        )
-        win_rate_ok = backtest_result.win_rate >= config.min_win_rate
-        if not win_rate_ok:
-            state.messages.append(
-                f"Win rate below threshold: {backtest_result.win_rate:.2f}% < "
-                f"{config.min_win_rate:.2f}%."
-            )
-
-        if strict_mode and state.strict_checks_ok:
-            fold_ok, fold_messages = self._strict_fold_checks(
+            if strict_mode:
+                probe_step = 1 if len(backtest_idx) <= (ALLOCATION_SPAN_DAYS * 2) else max(
+                    len(backtest_idx) // 100,
+                    1,
+                )
+            else:
+                probe_step = max(len(backtest_idx) // 50, 1)
+            active_intent_mode = strategy.intent_mode()
+            has_propose_hook = active_intent_mode == "propose"
+            has_profile_hook = active_intent_mode == "profile"
+            self._run_forward_leakage_checks(
                 strategy=strategy,
                 btc_df=btc_df,
+                full_features_df=features_df,
+                backtest_idx=backtest_idx,
                 start_ts=start_ts,
-                end_ts=end_ts,
-                config=config,
+                strict_mode=strict_mode,
+                has_propose_hook=has_propose_hook,
+                has_profile_hook=has_profile_hook,
+                probe_step=probe_step,
+                state=state,
             )
-            self._merge_strict_check_result(
-                state,
-                ok=fold_ok,
-                messages=fold_messages,
-            )
-
-            shuffled_days = max(ALLOCATION_SPAN_DAYS * 2, 730)
-            shuffled_start = max(start_ts, end_ts - dt.timedelta(days=shuffled_days - 1))
-            shuffled_ok, shuffled_messages = self._strict_shuffled_check(
-                strategy=strategy,
-                btc_df=btc_df,
-                start_ts=shuffled_start,
-                end_ts=end_ts,
-                config=config,
-            )
-            self._merge_strict_check_result(
-                state,
-                ok=shuffled_ok,
-                messages=shuffled_messages,
-            )
-            self._strict_statistical_checks(
+            max_window_start = self._run_weight_constraint_checks(
                 strategy=strategy,
                 btc_df=btc_df,
                 features_df=features_df,
                 start_ts=start_ts,
                 end_ts=end_ts,
+                strict_mode=strict_mode,
                 config=config,
                 state=state,
-                backtest_result=backtest_result,
+            )
+            self._run_locked_prefix_check(
+                strategy=strategy,
+                btc_df=btc_df,
+                features_df=features_df,
+                start_ts=start_ts,
+                max_window_start=max_window_start,
+                strict_mode=strict_mode,
+                state=state,
             )
 
-        if strict_mode and not state.mutation_safe:
-            state.strict_checks_ok = False
-        if strict_mode and not state.deterministic_ok:
-            state.strict_checks_ok = False
+            backtest_result = self.backtest(
+                strategy,
+                BacktestConfig(
+                    start_date=start_date,
+                    end_date=end_date,
+                    strategy_label="validation-run",
+                ),
+                btc_df=btc_df,
+            )
+            win_rate_ok = backtest_result.win_rate >= config.min_win_rate
+            if not win_rate_ok:
+                state.messages.append(
+                    f"Win rate below threshold: {backtest_result.win_rate:.2f}% < "
+                    f"{config.min_win_rate:.2f}%."
+                )
 
-        if not state.messages:
-            state.messages.append("All validation checks passed.")
+            if strict_mode and state.strict_checks_ok:
+                fold_ok, fold_messages = self._strict_fold_checks(
+                    strategy=strategy,
+                    btc_df=btc_df,
+                    start_ts=start_ts,
+                    end_ts=end_ts,
+                    config=config,
+                )
+                self._merge_strict_check_result(
+                    state,
+                    ok=fold_ok,
+                    messages=fold_messages,
+                )
 
-        return ValidationResult(
-            passed=state.forward_leakage_ok
-            and state.weight_constraints_ok
-            and win_rate_ok
-            and (state.strict_checks_ok if strict_mode else True),
-            forward_leakage_ok=state.forward_leakage_ok,
-            weight_constraints_ok=state.weight_constraints_ok,
-            win_rate=float(backtest_result.win_rate),
-            win_rate_ok=win_rate_ok,
-            messages=state.messages,
-            min_win_rate=float(config.min_win_rate),
-            diagnostics=state.diagnostics or {},
-        )
+                shuffled_days = max(ALLOCATION_SPAN_DAYS * 2, 730)
+                shuffled_start = max(start_ts, end_ts - dt.timedelta(days=shuffled_days - 1))
+                shuffled_ok, shuffled_messages = self._strict_shuffled_check(
+                    strategy=strategy,
+                    btc_df=btc_df,
+                    start_ts=shuffled_start,
+                    end_ts=end_ts,
+                    config=config,
+                )
+                self._merge_strict_check_result(
+                    state,
+                    ok=shuffled_ok,
+                    messages=shuffled_messages,
+                )
+                self._strict_statistical_checks(
+                    strategy=strategy,
+                    btc_df=btc_df,
+                    features_df=features_df,
+                    start_ts=start_ts,
+                    end_ts=end_ts,
+                    config=config,
+                    state=state,
+                    backtest_result=backtest_result,
+                )
+
+            if strict_mode and not state.mutation_safe:
+                state.strict_checks_ok = False
+            if strict_mode and not state.deterministic_ok:
+                state.strict_checks_ok = False
+
+            if not state.messages:
+                state.messages.append("All validation checks passed.")
+
+            state.diagnostics = dict(state.diagnostics or {})
+            state.diagnostics["hot_path_profile"] = cache.profile.to_dict()
+
+            return ValidationResult(
+                passed=state.forward_leakage_ok
+                and state.weight_constraints_ok
+                and win_rate_ok
+                and (state.strict_checks_ok if strict_mode else True),
+                forward_leakage_ok=state.forward_leakage_ok,
+                weight_constraints_ok=state.weight_constraints_ok,
+                win_rate=float(backtest_result.win_rate),
+                win_rate_ok=win_rate_ok,
+                messages=state.messages,
+                min_win_rate=float(config.min_win_rate),
+                diagnostics=state.diagnostics or {},
+            )
+        finally:
+            self._release_runtime_cache(clear=created_cache)
 
     def run_daily(
         self,

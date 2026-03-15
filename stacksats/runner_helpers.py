@@ -36,7 +36,7 @@ def weights_match(lhs: pl.DataFrame, rhs: pl.DataFrame, *, atol: float = 1e-12) 
     merged = lhs.select([DATE_COL, pl.col(lcol).alias("l")]).join(
         rhs.select([DATE_COL, pl.col(rcol).alias("r")]),
         on=DATE_COL,
-        how="outer",
+        how="full",
     )
     l_vals = merged["l"].fill_null(0.0).to_numpy()
     r_vals = merged["r"].fill_null(0.0).to_numpy()

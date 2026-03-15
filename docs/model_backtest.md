@@ -118,7 +118,7 @@ Validation (`StrategyRunner.validate`) runs a backtest and additional gates:
 Validation summary output includes the configured threshold (not just the default):
 
 ```text
-Validation PASSED | Forward Leakage: True | Weight Constraints: True | Win Rate: 62.40% (>=50.00%: True)
+Validation PASSED | No Forward Leakage: True | Weight Constraints: True | Win Rate: 62.40% (>=50.00%: True)
 ```
 
 ## Output Artifacts

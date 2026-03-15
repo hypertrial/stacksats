@@ -173,6 +173,75 @@ def _ensure_pl_with_date(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
+def _build_window_index(frame: pl.DataFrame) -> tuple[pl.DataFrame, dict[dt.datetime, int]]:
+    """Return date-sorted frame and a start-position index for fast window slicing."""
+    sorted_frame = frame.sort(DATE_COL)
+    return sorted_frame, {
+        value: idx for idx, value in enumerate(sorted_frame[DATE_COL].to_list())
+    }
+
+
+def _slice_window_or_filter(
+    frame: pl.DataFrame,
+    date_index: dict[dt.datetime, int],
+    start: dt.datetime,
+    end: dt.datetime,
+    *,
+    expected_days: int,
+) -> pl.DataFrame:
+    """Slice contiguous daily windows by position, falling back to date filtering."""
+    start_idx = date_index.get(start)
+    if start_idx is not None:
+        window = frame.slice(start_idx, expected_days)
+        if window.height == expected_days and window[DATE_COL][-1] == end:
+            return window
+    return frame.filter((pl.col(DATE_COL) >= start) & (pl.col(DATE_COL) <= end))
+
+
+def _uniform_weight_frame(price_slice: pl.DataFrame) -> pl.DataFrame:
+    """Return uniform weights aligned to the provided price window."""
+    n = price_slice.height
+    return pl.DataFrame({
+        DATE_COL: price_slice[DATE_COL],
+        "weight": [1.0 / n] * n,
+    })
+
+
+def _normalize_weight_frame(
+    price_slice: pl.DataFrame,
+    weight_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """Align strategy weights to a price window and normalize safely."""
+    if weight_df.is_empty() or "weight" not in weight_df.columns:
+        return _uniform_weight_frame(price_slice)
+
+    if (
+        DATE_COL in weight_df.columns
+        and weight_df.height == price_slice.height
+        and weight_df[DATE_COL].equals(price_slice[DATE_COL])
+    ):
+        aligned = weight_df.select([DATE_COL, pl.col("weight").cast(pl.Float64, strict=False)])
+    else:
+        merged = price_slice.select(DATE_COL).join(
+            weight_df.select([DATE_COL, "weight"]),
+            on=DATE_COL,
+            how="left",
+        )
+        aligned = merged.select(
+            DATE_COL,
+            pl.col("weight").cast(pl.Float64, strict=False).fill_null(0.0),
+        )
+
+    weights = aligned["weight"].fill_null(0.0)
+    total = float(weights.sum())
+    if not np.isfinite(total) or total <= 0.0:
+        return _uniform_weight_frame(price_slice)
+    return pl.DataFrame({
+        DATE_COL: aligned[DATE_COL],
+        "weight": weights / total,
+    })
+
+
 def compute_cycle_spd(
     dataframe: pl.DataFrame,
     strategy_function,
@@ -229,6 +298,9 @@ def compute_cycle_spd(
                 end = min(end, source_end)
                 full_feat = full_feat.filter(pl.col(DATE_COL) <= end)
 
+    dataframe, price_index = _build_window_index(dataframe.filter(pl.col(DATE_COL) >= start_ts))
+    full_feat, feature_index = _build_window_index(full_feat)
+
     max_start_date = end - WINDOW_OFFSET
     start_dates = pl.datetime_range(start_ts, max_start_date, interval="1d", eager=True)
 
@@ -247,8 +319,12 @@ def compute_cycle_spd(
         if window_end > end:
             continue
 
-        price_slice = dataframe.filter(
-            (pl.col(DATE_COL) >= window_start) & (pl.col(DATE_COL) <= window_end)
+        price_slice = _slice_window_or_filter(
+            dataframe,
+            price_index,
+            window_start,
+            window_end,
+            expected_days=WINDOW_DAYS,
         )
         if price_slice.is_empty():
             continue
@@ -256,38 +332,17 @@ def compute_cycle_spd(
             # Re-check source mask for this window
             pass
 
-        window_feat = full_feat.filter(
-            (pl.col(DATE_COL) >= window_start) & (pl.col(DATE_COL) <= window_end)
+        window_feat = _slice_window_or_filter(
+            full_feat,
+            feature_index,
+            window_start,
+            window_end,
+            expected_days=WINDOW_DAYS,
         )
         if window_feat.height != WINDOW_DAYS:
             continue
 
-        weight_df = strategy_function(window_feat)
-        if weight_df.is_empty() or "weight" not in weight_df.columns:
-            n = price_slice.height
-            weight_df = pl.DataFrame({
-                DATE_COL: price_slice[DATE_COL].to_list(),
-                "weight": [1.0 / n] * n,
-            })
-        else:
-            merged = price_slice.select(DATE_COL).join(
-                weight_df.select([DATE_COL, "weight"]),
-                on=DATE_COL,
-                how="left",
-            )
-            w = merged["weight"].fill_null(0.0)
-            total = w.sum()
-            if not np.isfinite(total) or total <= 0:
-                n = price_slice.height
-                weight_df = pl.DataFrame({
-                    DATE_COL: price_slice[DATE_COL].to_list(),
-                    "weight": [1.0 / n] * n,
-                })
-            else:
-                weight_df = pl.DataFrame({
-                    DATE_COL: merged[DATE_COL].to_list(),
-                    "weight": (w / total).to_list(),
-                })
+        weight_df = _normalize_weight_frame(price_slice, strategy_function(window_feat))
 
         if validate_weights:
             weight_sum = weight_df["weight"].sum()

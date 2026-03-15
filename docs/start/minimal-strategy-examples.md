@@ -120,6 +120,7 @@ A successful run for either style should show:
 - strategy loads with no import/spec errors
 - `spec()` reports stable metadata, intent mode, and params
 - validation summary prints pass/fail with gate details
+- the leakage gate is reported as `No Forward Leakage`, where `True` means the strategy passed the check
 - no forward-leakage or weight-constraint failures for a sane configuration
 
 ## Contract Notes

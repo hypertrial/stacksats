@@ -49,6 +49,7 @@ def allocate_sequential_stable(
 
     n_past = min(n_past, n)
     raw_arr = np.asarray(raw, dtype=float)
+    stable_signal = _compute_stable_signal(raw_arr[:n_past]) if n_past > 0 else np.array([])
     w = np.zeros(n, dtype=float)
     base_weight = 1.0 / n
     locked_prefix = validate_locked_prefix(locked_weights, n_past)
@@ -58,7 +59,7 @@ def allocate_sequential_stable(
 
     remaining_budget = 1.0 - float(w[:prefix_len].sum())
     for i in range(prefix_len, n_past):
-        signal = float(_compute_stable_signal(raw_arr[: i + 1])[-1])
+        signal = float(stable_signal[i])
         proposed = signal * base_weight
         clipped, remaining_budget = apply_clipped_weight(
             proposed,

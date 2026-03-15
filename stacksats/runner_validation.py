@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 import numpy as np
 import polars as pl
@@ -65,6 +66,41 @@ class WeightValidationError(ValueError):
     """Raised when strategy weights violate required constraints."""
 
 
+@dataclass
+class _HotPathProfile:
+    materialize_calls: int = 0
+    materialize_cache_hits: int = 0
+    compute_weights_calls: int = 0
+    compute_weights_cache_hits: int = 0
+    forward_leakage_seconds: float = 0.0
+    weight_constraint_seconds: float = 0.0
+    backtest_seconds: float = 0.0
+
+    def to_dict(self) -> dict[str, float | int]:
+        return {
+            "materialize_calls": self.materialize_calls,
+            "materialize_cache_hits": self.materialize_cache_hits,
+            "compute_weights_calls": self.compute_weights_calls,
+            "compute_weights_cache_hits": self.compute_weights_cache_hits,
+            "forward_leakage_seconds": self.forward_leakage_seconds,
+            "weight_constraint_seconds": self.weight_constraint_seconds,
+            "backtest_seconds": self.backtest_seconds,
+        }
+
+
+@dataclass
+class _StrategyRuntimeCache:
+    strategy_key: tuple[str, str]
+    base_source_id: int
+    feature_frames: dict[tuple[str, str, str, str], pl.DataFrame] = field(
+        default_factory=dict
+    )
+    weight_frames: dict[tuple[str, str, str, str], pl.DataFrame] = field(
+        default_factory=dict
+    )
+    profile: _HotPathProfile = field(default_factory=_HotPathProfile)
+
+
 class StrategyRunnerValidationMixin:
     """Validation and strict-check helpers for strategy execution."""
 
@@ -72,6 +108,64 @@ class StrategyRunnerValidationMixin:
     ITER_RANGE = range
     BUILD_FOLD_RANGES = staticmethod(build_fold_ranges)
     FEATURE_REGISTRY = DEFAULT_FEATURE_REGISTRY
+
+    @staticmethod
+    def _cache_dt(value: dt.datetime) -> str:
+        return value.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _runtime_cache_key(
+        namespace: str,
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> tuple[str, str, str, str]:
+        return (
+            namespace,
+            StrategyRunnerValidationMixin._cache_dt(start_date),
+            StrategyRunnerValidationMixin._cache_dt(end_date),
+            StrategyRunnerValidationMixin._cache_dt(current_date),
+        )
+
+    def _active_runtime_cache(self) -> _StrategyRuntimeCache | None:
+        cache = getattr(self, "_strategy_runtime_cache", None)
+        return cache if isinstance(cache, _StrategyRuntimeCache) else None
+
+    def _last_runtime_profile(self) -> dict[str, float | int]:
+        profile = getattr(self, "_last_runtime_hotpath_profile", None)
+        return profile if isinstance(profile, dict) else {}
+
+    def _runtime_profile(self) -> _HotPathProfile | None:
+        cache = self._active_runtime_cache()
+        return cache.profile if cache is not None else None
+
+    def _ensure_runtime_cache(
+        self,
+        strategy: BaseStrategy,
+        btc_df: pl.DataFrame,
+    ) -> tuple[_StrategyRuntimeCache, bool]:
+        metadata = strategy.metadata()
+        strategy_key = (metadata.strategy_id, metadata.version)
+        cache = self._active_runtime_cache()
+        if (
+            cache is not None
+            and cache.strategy_key == strategy_key
+            and cache.base_source_id == id(btc_df)
+        ):
+            return cache, False
+        cache = _StrategyRuntimeCache(
+            strategy_key=strategy_key,
+            base_source_id=id(btc_df),
+        )
+        self._strategy_runtime_cache = cache
+        return cache, True
+
+    def _release_runtime_cache(self, *, clear: bool) -> None:
+        cache = self._active_runtime_cache()
+        if cache is not None:
+            self._last_runtime_hotpath_profile = cache.profile.to_dict()
+        if clear and hasattr(self, "_strategy_runtime_cache"):
+            delattr(self, "_strategy_runtime_cache")
 
     def _validate_weights(
         self,
@@ -133,14 +227,77 @@ class StrategyRunnerValidationMixin:
         start_date: dt.datetime,
         end_date: dt.datetime,
         current_date: dt.datetime,
+        cache_namespace: str | None = None,
     ) -> pl.DataFrame:
-        return self.FEATURE_REGISTRY.materialize_for_strategy(
+        cache = self._active_runtime_cache()
+        cache_key = None
+        if cache is not None and cache_namespace is not None:
+            cache_key = self._runtime_cache_key(
+                f"features:{cache_namespace}",
+                start_date,
+                end_date,
+                current_date,
+            )
+            cached = cache.feature_frames.get(cache_key)
+            if cached is not None:
+                cache.profile.materialize_cache_hits += 1
+                return cached.clone()
+        frame = self.FEATURE_REGISTRY.materialize_for_strategy(
             strategy,
             btc_df,
             start_date=start_date,
             end_date=end_date,
             current_date=current_date,
         )
+        if cache is not None:
+            cache.profile.materialize_calls += 1
+            if cache_key is not None:
+                cache.feature_frames[cache_key] = frame.clone()
+        return frame
+
+    def _compute_strategy_weights(
+        self,
+        strategy: BaseStrategy,
+        *,
+        features_df: pl.DataFrame,
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+        strict_mode: bool,
+        cache_namespace: str | None = None,
+    ) -> tuple[pl.DataFrame, bool]:
+        cache = self._active_runtime_cache()
+        cache_key = None
+        if cache is not None and cache_namespace is not None and not strict_mode:
+            cache_key = self._runtime_cache_key(
+                f"weights:{cache_namespace}",
+                start_date,
+                end_date,
+                current_date,
+            )
+            cached = cache.weight_frames.get(cache_key)
+            if cached is not None:
+                cache.profile.compute_weights_cache_hits += 1
+                return cached.clone(), False
+
+        ctx = strategy_context_from_features_df(
+            features_df,
+            start_date,
+            end_date,
+            current_date,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=current_date,
+        )
+        weights, mutated = self._compute_with_mutation_guard(
+            strategy,
+            ctx,
+            strict_mode=strict_mode,
+        )
+        if cache is not None:
+            cache.profile.compute_weights_calls += 1
+            if cache_key is not None and not mutated:
+                cache.weight_frames[cache_key] = weights.clone()
+        return weights, mutated
 
     @staticmethod
     def _compute_win_rate(
@@ -396,6 +553,7 @@ class StrategyRunnerValidationMixin:
         source_df: pl.DataFrame,
         window_start: dt.datetime,
         probe: dt.datetime,
+        cache_namespace: str | None = None,
     ) -> StrategyContext:
         return strategy_context_from_features_df(
             self._materialize_strategy_features(
@@ -404,6 +562,7 @@ class StrategyRunnerValidationMixin:
                 start_date=window_start,
                 end_date=probe,
                 current_date=probe,
+                cache_namespace=cache_namespace,
             ),
             window_start,
             probe,
@@ -444,185 +603,208 @@ class StrategyRunnerValidationMixin:
         probe_step: int,
         state: _ValidationState,
     ) -> None:
+        started_at = time.perf_counter()
         window_offset = self.WINDOW_OFFSET
         probes = backtest_idx.to_list()[::probe_step]
-        for probe in probes:
-            probe_ts = _to_naive_utc(probe)
-            window_start = max(start_ts, probe_ts - window_offset)
-            if window_start > probe_ts:
-                continue
+        try:
+            for probe in probes:
+                probe_ts = _to_naive_utc(probe)
+                window_start = max(start_ts, probe_ts - window_offset)
+                if window_start > probe_ts:
+                    continue
 
-            window_feat = full_features_df.filter(
-                (pl.col("date") >= window_start) & (pl.col("date") <= probe_ts)
-            )
-            full_ctx = strategy_context_from_features_df(
-                window_feat,
-                window_start,
-                probe_ts,
-                probe_ts,
-                required_columns=tuple(strategy.required_feature_columns()),
-                as_of_date=probe_ts,
-            )
-            full_weights, full_mutated = self._compute_with_mutation_guard(
-                strategy,
-                full_ctx,
-                strict_mode=strict_mode,
-            )
-            if self._stop_on_mutation(
-                strict_mode=strict_mode,
-                mutated=full_mutated,
-                state=state,
-            ):
-                break
-
-            if strict_mode and not self._strict_determinism_check(
-                strategy=strategy,
-                full_features_df=full_features_df,
-                window_start=window_start,
-                probe=probe_ts,
-                full_weights=full_weights,
-                state=state,
-            ):
-                break
-
-            masked_source = btc_df.filter(pl.col("date") <= probe_ts)
-            masked_ctx = self._strategy_ctx_from_source(
-                strategy=strategy,
-                source_df=masked_source,
-                window_start=window_start,
-                probe=probe_ts,
-            )
-            masked_weights, masked_mutated = self._compute_with_mutation_guard(
-                strategy,
-                masked_ctx,
-                strict_mode=strict_mode,
-            )
-            if self._stop_on_mutation(
-                strict_mode=strict_mode,
-                mutated=masked_mutated,
-                state=state,
-            ):
-                break
-
-            perturbed_source = self._perturb_future_source_data(btc_df, probe_ts)
-            perturbed_ctx = self._strategy_ctx_from_source(
-                strategy=strategy,
-                source_df=perturbed_source,
-                window_start=window_start,
-                probe=probe_ts,
-            )
-            perturbed_weights, perturbed_mutated = self._compute_with_mutation_guard(
-                strategy,
-                perturbed_ctx,
-                strict_mode=strict_mode,
-            )
-            if self._stop_on_mutation(
-                strict_mode=strict_mode,
-                mutated=perturbed_mutated,
-                state=state,
-            ):
-                break
-
-            prefix_dates = full_weights.filter(pl.col("date") <= probe_ts)
-            if prefix_dates.is_empty():
-                continue
-            full_prefix = full_weights.filter(pl.col("date") <= probe_ts)
-            date_list = prefix_dates["date"].to_list()
-            masked_prefix = masked_weights.filter(pl.col("date").is_in(date_list))
-            perturbed_prefix = perturbed_weights.filter(pl.col("date").is_in(date_list))
-
-            if not self._check_prefix_invariance(
-                state=state,
-                probe=probe_ts,
-                full_prefix=full_prefix,
-                candidate_prefix=masked_prefix,
-                check_label="masked-future weights diverge",
-            ):
-                break
-            if not self._check_prefix_invariance(
-                state=state,
-                probe=probe_ts,
-                full_prefix=full_prefix,
-                candidate_prefix=perturbed_prefix,
-                check_label="perturbed-future weights diverge",
-            ):
-                break
-
-            if has_profile_hook and not has_propose_hook:
-                profile_full_ctx = strategy_context_from_features_df(
-                    window_feat,
-                    window_start,
-                    probe_ts,
-                    probe_ts,
-                    required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe_ts,
+                window_feat = full_features_df.filter(
+                    (pl.col("date") >= window_start) & (pl.col("date") <= probe_ts)
                 )
-                profile_masked_ctx = strategy_context_from_features_df(
-                    masked_ctx.features.data,
-                    window_start,
-                    probe_ts,
-                    probe_ts,
-                    required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe_ts,
-                )
-                profile_perturbed_ctx = strategy_context_from_features_df(
-                    perturbed_ctx.features.data,
-                    window_start,
-                    probe_ts,
-                    probe_ts,
-                    required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe_ts,
-                )
-                full_profile_series, full_profile_mutated = self._build_profile_with_mutation_guard(
+                full_weights, full_mutated = self._compute_strategy_weights(
                     strategy,
-                    profile_full_ctx,
+                    features_df=window_feat,
+                    start_date=window_start,
+                    end_date=probe_ts,
+                    current_date=probe_ts,
                     strict_mode=strict_mode,
-                )
-                (
-                    masked_profile_series,
-                    masked_profile_mutated,
-                ) = self._build_profile_with_mutation_guard(
-                    strategy,
-                    profile_masked_ctx,
-                    strict_mode=strict_mode,
-                )
-                (
-                    perturbed_profile_series,
-                    perturbed_profile_mutated,
-                ) = self._build_profile_with_mutation_guard(
-                    strategy,
-                    profile_perturbed_ctx,
-                    strict_mode=strict_mode,
+                    cache_namespace="base",
                 )
                 if self._stop_on_mutation(
                     strict_mode=strict_mode,
-                    mutated=(
-                        full_profile_mutated or masked_profile_mutated or perturbed_profile_mutated
-                    ),
+                    mutated=full_mutated,
                     state=state,
-                    message=STRICT_PROFILE_MUTATION_MESSAGE,
                 ):
                     break
 
-                full_profile_prefix = full_profile_series.filter(pl.col("date").is_in(date_list))
-                masked_profile_prefix = masked_profile_series.filter(pl.col("date").is_in(date_list))
-                perturbed_profile_prefix = perturbed_profile_series.filter(pl.col("date").is_in(date_list))
+                if strict_mode and not self._strict_determinism_check(
+                    strategy=strategy,
+                    full_features_df=full_features_df,
+                    window_start=window_start,
+                    probe=probe_ts,
+                    full_weights=full_weights,
+                    state=state,
+                ):
+                    break
+
+                masked_source = btc_df.filter(pl.col("date") <= probe_ts)
+                masked_ctx = self._strategy_ctx_from_source(
+                    strategy=strategy,
+                    source_df=masked_source,
+                    window_start=window_start,
+                    probe=probe_ts,
+                    cache_namespace=f"masked:{self._cache_dt(probe_ts)}",
+                )
+                masked_weights, masked_mutated = self._compute_strategy_weights(
+                    strategy,
+                    features_df=masked_ctx.features.data,
+                    start_date=window_start,
+                    end_date=probe_ts,
+                    current_date=probe_ts,
+                    strict_mode=strict_mode,
+                    cache_namespace=f"masked:{self._cache_dt(probe_ts)}",
+                )
+                if self._stop_on_mutation(
+                    strict_mode=strict_mode,
+                    mutated=masked_mutated,
+                    state=state,
+                ):
+                    break
+
+                perturbed_source = self._perturb_future_source_data(btc_df, probe_ts)
+                perturbed_ctx = self._strategy_ctx_from_source(
+                    strategy=strategy,
+                    source_df=perturbed_source,
+                    window_start=window_start,
+                    probe=probe_ts,
+                    cache_namespace=f"perturbed:{self._cache_dt(probe_ts)}",
+                )
+                perturbed_weights, perturbed_mutated = self._compute_strategy_weights(
+                    strategy,
+                    features_df=perturbed_ctx.features.data,
+                    start_date=window_start,
+                    end_date=probe_ts,
+                    current_date=probe_ts,
+                    strict_mode=strict_mode,
+                    cache_namespace=f"perturbed:{self._cache_dt(probe_ts)}",
+                )
+                if self._stop_on_mutation(
+                    strict_mode=strict_mode,
+                    mutated=perturbed_mutated,
+                    state=state,
+                ):
+                    break
+
+                prefix_dates = full_weights.filter(pl.col("date") <= probe_ts)
+                if prefix_dates.is_empty():
+                    continue
+                full_prefix = full_weights.filter(pl.col("date") <= probe_ts)
+                date_list = prefix_dates["date"].to_list()
+                masked_prefix = masked_weights.filter(pl.col("date").is_in(date_list))
+                perturbed_prefix = perturbed_weights.filter(pl.col("date").is_in(date_list))
+
                 if not self._check_prefix_invariance(
                     state=state,
                     probe=probe_ts,
-                    full_prefix=full_profile_prefix,
-                    candidate_prefix=masked_profile_prefix,
-                    check_label="profile values diverge (masked-future)",
+                    full_prefix=full_prefix,
+                    candidate_prefix=masked_prefix,
+                    check_label="masked-future weights diverge",
                 ):
                     break
                 if not self._check_prefix_invariance(
                     state=state,
                     probe=probe_ts,
-                    full_prefix=full_profile_prefix,
-                    candidate_prefix=perturbed_profile_prefix,
-                    check_label="profile values diverge (perturbed-future)",
+                    full_prefix=full_prefix,
+                    candidate_prefix=perturbed_prefix,
+                    check_label="perturbed-future weights diverge",
                 ):
                     break
+
+                if has_profile_hook and not has_propose_hook:
+                    profile_full_ctx = strategy_context_from_features_df(
+                        window_feat,
+                        window_start,
+                        probe_ts,
+                        probe_ts,
+                        required_columns=tuple(strategy.required_feature_columns()),
+                        as_of_date=probe_ts,
+                    )
+                    profile_masked_ctx = strategy_context_from_features_df(
+                        masked_ctx.features.data,
+                        window_start,
+                        probe_ts,
+                        probe_ts,
+                        required_columns=tuple(strategy.required_feature_columns()),
+                        as_of_date=probe_ts,
+                    )
+                    profile_perturbed_ctx = strategy_context_from_features_df(
+                        perturbed_ctx.features.data,
+                        window_start,
+                        probe_ts,
+                        probe_ts,
+                        required_columns=tuple(strategy.required_feature_columns()),
+                        as_of_date=probe_ts,
+                    )
+                    (
+                        full_profile_series,
+                        full_profile_mutated,
+                    ) = self._build_profile_with_mutation_guard(
+                        strategy,
+                        profile_full_ctx,
+                        strict_mode=strict_mode,
+                    )
+                    (
+                        masked_profile_series,
+                        masked_profile_mutated,
+                    ) = self._build_profile_with_mutation_guard(
+                        strategy,
+                        profile_masked_ctx,
+                        strict_mode=strict_mode,
+                    )
+                    (
+                        perturbed_profile_series,
+                        perturbed_profile_mutated,
+                    ) = self._build_profile_with_mutation_guard(
+                        strategy,
+                        profile_perturbed_ctx,
+                        strict_mode=strict_mode,
+                    )
+                    if self._stop_on_mutation(
+                        strict_mode=strict_mode,
+                        mutated=(
+                            full_profile_mutated
+                            or masked_profile_mutated
+                            or perturbed_profile_mutated
+                        ),
+                        state=state,
+                        message=STRICT_PROFILE_MUTATION_MESSAGE,
+                    ):
+                        break
+
+                    full_profile_prefix = full_profile_series.filter(
+                        pl.col("date").is_in(date_list)
+                    )
+                    masked_profile_prefix = masked_profile_series.filter(
+                        pl.col("date").is_in(date_list)
+                    )
+                    perturbed_profile_prefix = perturbed_profile_series.filter(
+                        pl.col("date").is_in(date_list)
+                    )
+                    if not self._check_prefix_invariance(
+                        state=state,
+                        probe=probe_ts,
+                        full_prefix=full_profile_prefix,
+                        candidate_prefix=masked_profile_prefix,
+                        check_label="profile values diverge (masked-future)",
+                    ):
+                        break
+                    if not self._check_prefix_invariance(
+                        state=state,
+                        probe=probe_ts,
+                        full_prefix=full_profile_prefix,
+                        candidate_prefix=perturbed_profile_prefix,
+                        check_label="profile values diverge (perturbed-future)",
+                    ):
+                        break
+        finally:
+            profile = self._runtime_profile()
+            if profile is not None:
+                profile.forward_leakage_seconds += time.perf_counter() - started_at
 
     def _run_weight_constraint_checks(
         self,
@@ -636,63 +818,70 @@ class StrategyRunnerValidationMixin:
         config: ValidationConfig,
         state: _ValidationState,
     ) -> dt.datetime:
+        started_at = time.perf_counter()
         window_offset = self.WINDOW_OFFSET
         max_window_start = end_ts - window_offset
         boundary_hits = 0
         boundary_total = 0
-        if start_ts <= max_window_start:
-            window_starts = pl.datetime_range(
-                start_ts, max_window_start, interval="1d", eager=True
-            ).to_list()
-            step = 1 if (not strict_mode or len(window_starts) <= 200) else max(
-                len(window_starts) // 200,
-                1,
-            )
-            for window_start in window_starts[::step]:
-                window_end = window_start + window_offset
-                window_features = self._materialize_strategy_features(
-                    strategy,
-                    btc_df,
-                    start_date=window_start,
-                    end_date=window_end,
-                    current_date=window_end,
+        try:
+            if start_ts <= max_window_start:
+                window_starts = pl.datetime_range(
+                    start_ts, max_window_start, interval="1d", eager=True
+                ).to_list()
+                step = 1 if (not strict_mode or len(window_starts) <= 200) else max(
+                    len(window_starts) // 200,
+                    1,
                 )
-                ctx = strategy_context_from_features_df(
-                    window_features,
-                    window_start,
-                    window_end,
-                    window_end,
-                    required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=window_end,
-                )
-                weights, mutated = self._compute_with_mutation_guard(
-                    strategy,
-                    ctx,
-                    strict_mode=strict_mode,
-                )
-                if self._stop_on_mutation(
-                    strict_mode=strict_mode,
-                    mutated=mutated,
-                    state=state,
-                ):
-                    break
-                if weights.is_empty():
-                    continue
-                try:
-                    self._validate_weights(weights, window_start, window_end)
-                except WeightValidationError as exc:
-                    state.weight_constraints_ok = False
-                    state.messages.append(str(exc))
-                    break
-                if strict_mode and weights.height == ALLOCATION_SPAN_DAYS:
-                    arr = weights["weight"].to_numpy().astype(float)
-                    at_bounds = np.isclose(arr, MIN_DAILY_WEIGHT, atol=1e-12) | np.isclose(
-                        arr,
-                        MAX_DAILY_WEIGHT,
-                        atol=1e-12,
+                for window_start in window_starts[::step]:
+                    window_end = window_start + window_offset
+                    window_features = self._materialize_strategy_features(
+                        strategy,
+                        btc_df,
+                        start_date=window_start,
+                        end_date=window_end,
+                        current_date=window_end,
+                        cache_namespace="base",
                     )
-                    boundary_hits += int(at_bounds.sum())
-                    boundary_total += int(len(arr))
+                    weights, mutated = self._compute_strategy_weights(
+                        strategy,
+                        features_df=window_features,
+                        start_date=window_start,
+                        end_date=window_end,
+                        current_date=window_end,
+                        strict_mode=strict_mode,
+                        cache_namespace="base",
+                    )
+                    if self._stop_on_mutation(
+                        strict_mode=strict_mode,
+                        mutated=mutated,
+                        state=state,
+                    ):
+                        break
+                    if weights.is_empty():
+                        continue
+                    try:
+                        self._validate_weights(weights, window_start, window_end)
+                    except WeightValidationError as exc:
+                        state.weight_constraints_ok = False
+                        state.messages.append(str(exc))
+                        break
+                    if strict_mode and weights.height == ALLOCATION_SPAN_DAYS:
+                        arr = weights["weight"].to_numpy().astype(float)
+                        at_bounds = np.isclose(
+                            arr,
+                            MIN_DAILY_WEIGHT,
+                            atol=1e-12,
+                        ) | np.isclose(
+                            arr,
+                            MAX_DAILY_WEIGHT,
+                            atol=1e-12,
+                        )
+                        boundary_hits += int(at_bounds.sum())
+                        boundary_total += int(len(arr))
+        finally:
+            profile = self._runtime_profile()
+            if profile is not None:
+                profile.weight_constraint_seconds += time.perf_counter() - started_at
 
         if strict_mode and boundary_total > 0:
             boundary_hit_rate = boundary_hits / boundary_total

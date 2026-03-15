@@ -186,7 +186,7 @@ def test_validation_result_summary_format():
 
     summary = result.summary()
     assert "Validation PASSED" in summary
-    assert "Forward Leakage: True" in summary
+    assert "No Forward Leakage: True" in summary
     assert "Weight Constraints: True" in summary
     assert "Win Rate: 72.30%" in summary
 

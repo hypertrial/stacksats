@@ -20,6 +20,8 @@ The parquet file must have a daily datetime index (or a `date` column) and at le
 
 Optional overlay columns (when present, used by `brk_overlay_v1`): `adjusted_sopr`, `adjusted_sopr_7d_ema`, `realized_cap_growth_rate`, `market_cap_growth_rate`, `tx_count_pct10`, `annualized_volume_usd`, `hash_rate_1y_sma`, `subsidy_usd_average`, `net_sentiment`, `greed_index`, `pain_index`.
 
+For repo audit helpers that start from long-format `merged_metrics*.parquet`, the current projection explicitly lifts `market_cap`, `supply_btc`, `mvrv`, `adjusted_sopr`, `adjusted_sopr_7d_ema`, `realized_cap_growth_rate`, and `market_cap_growth_rate` into the temporary BRK-wide frame.
+
 ## Canonical Source of Truth
 
 - Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>

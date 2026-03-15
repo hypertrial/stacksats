@@ -33,7 +33,7 @@ stacksats strategy validate \
 A summary line similar to:
 
 ```text
-Validation PASSED | Forward Leakage: True | Weight Constraints: True | Win Rate: 62.40% (>=50.00%: True)
+Validation PASSED | No Forward Leakage: True | Weight Constraints: True | Win Rate: 62.40% (>=50.00%: True)
 ```
 
 ## If it fails
