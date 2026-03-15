@@ -9,8 +9,10 @@ smaller internal modules:
 
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from .framework_contract import (
     MIN_DAILY_WEIGHT,
@@ -77,7 +79,7 @@ FEATS = [
 ]
 
 
-def precompute_features(df: pd.DataFrame) -> pd.DataFrame:
+def precompute_features(df: pl.DataFrame) -> pl.DataFrame:
     """Compute MVRV/MA features used by weight-generation paths."""
     return _precompute_features_impl(
         df,
@@ -124,10 +126,10 @@ def compute_dynamic_multiplier(
 
 
 def compute_preference_scores(
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-) -> pd.Series:
+    features_df: pl.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+) -> pl.DataFrame:
     """Compute daily preference scores from model features."""
     return _compute_preference_scores_impl(
         features_df,
@@ -139,15 +141,15 @@ def compute_preference_scores(
 
 def compute_weights_from_target_profile(
     *,
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-    current_date: pd.Timestamp,
-    target_profile: pd.Series,
+    features_df: pl.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+    current_date: dt.datetime | str,
+    target_profile: pl.DataFrame,
     mode: str = "preference",
     locked_weights: np.ndarray | None = None,
     n_past: int | None = None,
-) -> pd.Series:
+) -> pl.DataFrame:
     """Convert a target profile into final iterative stable allocation weights."""
     del features_df
     return _compute_weights_from_target_profile_impl(
@@ -163,12 +165,12 @@ def compute_weights_from_target_profile(
 
 def compute_weights_from_proposals(
     *,
-    proposals: pd.Series,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
+    proposals: pl.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
     n_past: int,
     locked_weights: np.ndarray | None = None,
-) -> pd.Series:
+) -> pl.DataFrame:
     """Convert per-day user proposals into final framework weights."""
     return _compute_weights_from_proposals_impl(
         proposals=proposals,
@@ -180,12 +182,12 @@ def compute_weights_from_proposals(
 
 
 def compute_weights_fast(
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
+    features_df: pl.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
     n_past: int | None = None,
     locked_weights: np.ndarray | None = None,
-) -> pd.Series:
+) -> pl.DataFrame:
     """Compute weights for a date window using precomputed features."""
     return _compute_weights_fast_impl(
         features_df,
@@ -199,12 +201,12 @@ def compute_weights_fast(
 
 
 def compute_window_weights(
-    features_df: pd.DataFrame,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-    current_date: pd.Timestamp,
+    features_df: pl.DataFrame,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+    current_date: dt.datetime | str,
     locked_weights: np.ndarray | None = None,
-) -> pd.Series:
+) -> pl.DataFrame:
     """Compute weights for a date range with lock-on-compute stability."""
     return _compute_window_weights_impl(
         features_df,

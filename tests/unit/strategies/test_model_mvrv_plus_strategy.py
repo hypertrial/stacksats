@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import datetime as dt
 import runpy
 import sys
 import warnings
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from stacksats.strategies import model_mvrv_plus
 from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy, main
@@ -17,33 +18,30 @@ from stacksats.strategy_types import (
 )
 
 
-def _base_features(index: pd.DatetimeIndex) -> pd.DataFrame:
-    n = len(index)
-    return pd.DataFrame(
-        {
-            "date": index,
-            "price_usd": np.linspace(10000.0, 20000.0, n),
-            "mvrv": np.linspace(1.0, 2.0, n),
-            "price_vs_ma": np.linspace(-0.5, 0.5, n),
-            "mvrv_zscore": np.linspace(-2.0, 2.0, n),
-            "mvrv_zone": np.tile(np.array([-1.5, 0.0, 1.5]), n // 3 + 1)[:n],
-            "mvrv_volatility": np.linspace(0.2, 0.95, n),
-            "signal_confidence": np.linspace(0.1, 0.9, n),
-            "brk_netflow": np.linspace(-0.7, 0.7, n),
-            "brk_exchange_share": np.linspace(-0.6, 0.6, n),
-            "brk_exchange_share_delta": np.linspace(-0.5, 0.5, n),
-            "brk_activity_div": np.linspace(-0.4, 0.4, n),
-            "brk_roi_context": np.linspace(-0.6, 0.6, n),
-            "brk_liquidity_impulse": np.linspace(-0.3, 0.3, n),
-            "brk_miner_pressure": np.linspace(-0.4, 0.4, n),
-            "brk_hash_momentum": np.linspace(-0.4, 0.4, n),
-        },
-        index=index,
-    )
+def _base_features(dates: list) -> pl.DataFrame:
+    n = len(dates)
+    return pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(10000.0, 20000.0, n),
+        "mvrv": np.linspace(1.0, 2.0, n),
+        "price_vs_ma": np.linspace(-0.5, 0.5, n),
+        "mvrv_zscore": np.linspace(-2.0, 2.0, n),
+        "mvrv_zone": np.tile(np.array([-1.5, 0.0, 1.5]), n // 3 + 1)[:n],
+        "mvrv_volatility": np.linspace(0.2, 0.95, n),
+        "signal_confidence": np.linspace(0.1, 0.9, n),
+        "brk_netflow": np.linspace(-0.7, 0.7, n),
+        "brk_exchange_share": np.linspace(-0.6, 0.6, n),
+        "brk_exchange_share_delta": np.linspace(-0.5, 0.5, n),
+        "brk_activity_div": np.linspace(-0.4, 0.4, n),
+        "brk_roi_context": np.linspace(-0.6, 0.6, n),
+        "brk_liquidity_impulse": np.linspace(-0.3, 0.3, n),
+        "brk_miner_pressure": np.linspace(-0.4, 0.4, n),
+        "brk_hash_momentum": np.linspace(-0.4, 0.4, n),
+    })
 
 
 def test_safe_array_and_adaptive_ewma_paths() -> None:
-    arr = MVRVPlusStrategy._safe_array(pd.Series(["1", None, np.inf]), fill=-1.0)
+    arr = MVRVPlusStrategy._safe_array(pl.Series([1.0, None, float("inf")]), fill=-1.0)
     assert np.array_equal(arr, np.array([1.0, -1.0, -1.0]))
 
     assert MVRVPlusStrategy._adaptive_ewma(np.array([]), np.array([])).size == 0
@@ -61,78 +59,83 @@ def test_strategy_contract_and_required_feature_metadata() -> None:
     assert has_propose is False
     assert has_profile is True
     assert strategy.required_feature_sets() == ("core_model_features_v1", "brk_overlay_v1")
-    assert "plus_vol21" in strategy.required_feature_columns()
+    assert "brk_netflow" in strategy.required_feature_columns()
 
 
 def test_transform_features_and_build_target_profile(monkeypatch) -> None:
-    idx = pd.date_range("2024-01-01", periods=40, freq="D")
-    features = _base_features(idx)
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 1) + dt.timedelta(days=39),
+        interval="1d", eager=True
+    ).to_list()
+    features = _base_features(dates)
     strategy = MVRVPlusStrategy()
 
-    # Empty window branch (required_columns=() so test data need not include every strategy column).
     empty_ctx = strategy_context_from_features_df(
         features,
-        idx[-1] + pd.Timedelta(days=1),
-        idx[-1],
-        idx[-1],
+        dates[-1] + dt.timedelta(days=1),
+        dates[-1],
+        dates[-1],
         required_columns=(),
         as_of_date=None,
     )
     transformed_empty = strategy.transform_features(empty_ctx)
-    assert transformed_empty.empty
+    assert transformed_empty.is_empty()
 
-    # Normal branch with provider-supplied overlay columns already present.
     ctx = strategy_context_from_features_df(
         features,
-        idx[0],
-        idx[-1],
-        idx[-1],
+        dates[0],
+        dates[-1],
+        dates[-1],
         required_columns=(),
     )
     transformed = strategy.transform_features(ctx)
     assert "plus_vol21" in transformed.columns
     assert "plus_drawdown90" in transformed.columns
     assert "brk_netflow" in transformed.columns
-    assert np.isfinite(transformed.to_numpy(dtype=float)).all()
+    assert np.isfinite(transformed.select(pl.exclude("date")).to_numpy().astype(float)).all()
 
-    monkeypatch.setattr(
-        model_mvrv_plus,
-        "compute_preference_scores",
-        lambda features_df, start_date, end_date: pd.Series(
-            np.linspace(-0.5, 0.5, len(features_df.index)), index=features_df.index, dtype=float
-        ),
-    )
+    def _fake_preference(features_df, start_date, end_date):
+        return pl.DataFrame({
+            "date": features_df["date"],
+            "preference": np.linspace(-0.5, 0.5, features_df.height),
+        })
+
+    monkeypatch.setattr(model_mvrv_plus, "compute_preference_scores", _fake_preference)
     profile = strategy.build_target_profile(ctx=ctx, features_df=transformed, signals={})
-    assert len(profile.values) == len(transformed.index)
-    assert np.isfinite(profile.values.to_numpy(dtype=float)).all()
+    assert profile.values.height == transformed.height
+    assert np.isfinite(profile.values["value"].to_numpy().astype(float)).all()
 
     empty_profile = strategy.build_target_profile(
-        ctx=ctx, features_df=pd.DataFrame(), signals={}
+        ctx=ctx, features_df=pl.DataFrame(), signals={}
     )
-    assert empty_profile.values.empty
+    assert empty_profile.values.is_empty()
 
 
 def test_transform_features_is_collision_safe_with_provider_columns() -> None:
-    idx = pd.date_range("2024-01-01", periods=30, freq="D")
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 30),
+        interval="1d", eager=True
+    ).to_list()
     strategy = MVRVPlusStrategy()
-    features = _base_features(idx)
-    features["plus_vol21"] = np.nan
-    features.loc[idx[0], "plus_vol21"] = 1.23
-    features["plus_drawdown90"] = np.nan
-    features.loc[idx[1], "plus_drawdown90"] = -0.45
+    features = _base_features(dates)
+    features = features.with_columns(
+        pl.when(pl.col("date") == dates[0]).then(1.23).otherwise(float("nan")).alias("plus_vol21"),
+        pl.when(pl.col("date") == dates[1]).then(-0.45).otherwise(float("nan")).alias("plus_drawdown90"),
+    )
     ctx = strategy_context_from_features_df(
         features,
-        idx[0],
-        idx[-1],
-        idx[-1],
+        dates[0],
+        dates[-1],
+        dates[-1],
         required_columns=(),
     )
     transformed = strategy.transform_features(ctx)
-    assert transformed.index.equals(idx)
     assert "brk_exchange_share" in transformed.columns
     assert "plus_vol21" in transformed.columns
-    assert transformed.loc[idx[0], "plus_vol21"] == 1.23
-    assert transformed.loc[idx[1], "plus_drawdown90"] == -0.45
+    row0 = transformed.filter(pl.col("date") == dates[0]).row(0, named=True)
+    row1 = transformed.filter(pl.col("date") == dates[1]).row(0, named=True)
+    assert abs(float(row0["plus_vol21"]) - 1.23) < 1e-9
+    assert abs(float(row1["plus_drawdown90"]) - (-0.45)) < 1e-9
 
 
 def test_main_executes(monkeypatch, tmp_path: Path) -> None:

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from scipy import stats
 
 
@@ -17,26 +18,26 @@ class BootstrapInterval:
 
 
 def build_purged_walk_forward_folds(
-    start_ts: pd.Timestamp,
-    end_ts: pd.Timestamp,
+    start_ts: dt.datetime,
+    end_ts: dt.datetime,
     *,
     n_folds: int,
     min_train_days: int,
     test_days: int,
     embargo_days: int,
-) -> list[tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]]:
+) -> list[tuple[dt.datetime, dt.datetime, dt.datetime, dt.datetime]]:
     """Build purged walk-forward folds with a fixed embargo."""
-    all_days = pd.date_range(start_ts, end_ts, freq="D")
+    all_days = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True).to_list()
     if len(all_days) < (min_train_days + test_days + embargo_days):
         return []
 
-    folds: list[tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]] = []
+    folds: list[tuple[dt.datetime, dt.datetime, dt.datetime, dt.datetime]] = []
     train_start = all_days[0]
     cursor = min_train_days - 1
     while len(folds) < n_folds:
-        train_end = train_start + pd.Timedelta(days=cursor)
-        test_start = train_end + pd.Timedelta(days=embargo_days + 1)
-        test_end = test_start + pd.Timedelta(days=test_days - 1)
+        train_end = train_start + dt.timedelta(days=cursor)
+        test_start = train_end + dt.timedelta(days=embargo_days + 1)
+        test_end = test_start + dt.timedelta(days=test_days - 1)
         if test_end > end_ts:
             break
         folds.append((train_start, train_end, test_start, test_end))
@@ -45,14 +46,14 @@ def build_purged_walk_forward_folds(
 
 
 def anchored_window_excess(
-    spd_table: pd.DataFrame,
+    spd_table: pl.DataFrame,
     *,
     step: int,
 ) -> np.ndarray:
     """Return non-overlapping excess values sampled at a fixed step."""
-    if spd_table.empty or "excess_percentile" not in spd_table.columns:
+    if spd_table.is_empty() or "excess_percentile" not in spd_table.columns:
         return np.array([], dtype=float)
-    values = pd.to_numeric(spd_table["excess_percentile"], errors="coerce").to_numpy(dtype=float)
+    values = spd_table["excess_percentile"].cast(pl.Float64, strict=False).to_numpy()
     values = values[np.isfinite(values)]
     if values.size == 0:
         return np.array([], dtype=float)
@@ -60,7 +61,7 @@ def anchored_window_excess(
 
 
 def block_bootstrap_confidence_interval(
-    values: np.ndarray | pd.Series,
+    values: np.ndarray | pl.Series,
     *,
     block_size: int,
     trials: int,
@@ -89,8 +90,8 @@ def block_bootstrap_confidence_interval(
 
 
 def paired_block_permutation_pvalue(
-    lhs: np.ndarray | pd.Series,
-    rhs: np.ndarray | pd.Series,
+    lhs: np.ndarray | pl.Series,
+    rhs: np.ndarray | pl.Series,
     *,
     block_size: int,
     trials: int,
@@ -123,8 +124,8 @@ def paired_block_permutation_pvalue(
 
 
 def population_stability_index(
-    baseline: np.ndarray | pd.Series,
-    candidate: np.ndarray | pd.Series,
+    baseline: np.ndarray | pl.Series,
+    candidate: np.ndarray | pl.Series,
     *,
     bins: int = 10,
 ) -> float:
@@ -148,8 +149,8 @@ def population_stability_index(
 
 
 def ks_statistic(
-    baseline: np.ndarray | pd.Series,
-    candidate: np.ndarray | pd.Series,
+    baseline: np.ndarray | pl.Series,
+    candidate: np.ndarray | pl.Series,
 ) -> float:
     """Compute the two-sample KS statistic."""
     base = _finite_array(baseline)
@@ -160,7 +161,7 @@ def ks_statistic(
 
 
 def whites_reality_check(
-    candidate_excess: dict[str, np.ndarray | pd.Series],
+    candidate_excess: dict[str, np.ndarray | pl.Series],
     *,
     block_size: int,
     trials: int,
@@ -201,7 +202,6 @@ def _sample_blocks(values: np.ndarray, block_size: int, rng: np.random.Generator
     return sampled[: values.size]
 
 
-def _finite_array(values: np.ndarray | pd.Series) -> np.ndarray:
+def _finite_array(values: np.ndarray | pl.Series) -> np.ndarray:
     arr = np.asarray(values, dtype=float)
     return arr[np.isfinite(arr)]
-

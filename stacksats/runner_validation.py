@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
-from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
+from .framework_contract import (
+    ALLOCATION_SPAN_DAYS,
+    MAX_DAILY_WEIGHT,
+    MIN_DAILY_WEIGHT,
+    _to_naive_utc,
+)
 from .prelude import WINDOW_OFFSET as DEFAULT_WINDOW_OFFSET
 from .runner_helpers import (
     build_fold_ranges,
@@ -69,64 +75,65 @@ class StrategyRunnerValidationMixin:
 
     def _validate_weights(
         self,
-        weights: pd.Series,
-        window_start: pd.Timestamp,
-        window_end: pd.Timestamp,
+        weights: pl.DataFrame,
+        window_start: dt.datetime,
+        window_end: dt.datetime,
     ) -> None:
-        if weights.empty:
+        if weights.is_empty() or "weight" not in weights.columns:
             return
-        weight_sum = float(weights.sum())
+        w = weights["weight"]
+        weight_sum = float(w.sum())
         if not np.isclose(weight_sum, 1.0, rtol=1e-5, atol=1e-8):
             raise WeightValidationError(
                 f"Weights for range {window_start.date()} to {window_end.date()} "
                 f"sum to {weight_sum:.10f}, expected 1.0"
             )
-        if bool((weights < 0).any()):
+        if bool((w < 0).any()):
             raise WeightValidationError(
                 f"Weights for range {window_start.date()} to {window_end.date()} "
                 "contain negative values"
             )
-        if len(weights) == ALLOCATION_SPAN_DAYS:
-            if bool((weights < (MIN_DAILY_WEIGHT - 1e-12)).any()):
+        if weights.height == ALLOCATION_SPAN_DAYS:
+            if bool((w < (MIN_DAILY_WEIGHT - 1e-12)).any()):
                 raise WeightValidationError(
                     f"Weights for range {window_start.date()} to {window_end.date()} "
                     f"contain values below minimum {MIN_DAILY_WEIGHT}"
                 )
-            if bool((weights > (MAX_DAILY_WEIGHT + 1e-12)).any()):
+            if bool((w > (MAX_DAILY_WEIGHT + 1e-12)).any()):
                 raise WeightValidationError(
                     f"Weights for range {window_start.date()} to {window_end.date()} "
                     f"contain values above maximum {MAX_DAILY_WEIGHT}"
                 )
 
     @staticmethod
-    def _weights_match(lhs: pd.Series, rhs: pd.Series, *, atol: float = 1e-12) -> bool:
+    def _weights_match(lhs: pl.DataFrame, rhs: pl.DataFrame, *, atol: float = 1e-12) -> bool:
         return weights_match(lhs, rhs, atol=atol)
 
     @staticmethod
-    def _profile_values(profile: TargetProfile | pd.Series) -> pd.Series:
+    def _profile_values(profile: TargetProfile | pl.DataFrame) -> pl.DataFrame:
         return profile_values(profile)
 
     @staticmethod
-    def _frame_signature(df: pd.DataFrame) -> tuple:
+    def _frame_signature(df: pl.DataFrame) -> tuple:
         return frame_signature(df)
 
     @staticmethod
-    def _perturb_future_features(features_df: pd.DataFrame, probe: pd.Timestamp) -> pd.DataFrame:
+    def _perturb_future_features(features_df: pl.DataFrame, probe: dt.datetime) -> pl.DataFrame:
         return perturb_future_features(features_df, probe)
 
     @staticmethod
-    def _perturb_future_source_data(btc_df: pd.DataFrame, probe: pd.Timestamp) -> pd.DataFrame:
+    def _perturb_future_source_data(btc_df: pl.DataFrame, probe: dt.datetime) -> pl.DataFrame:
         return perturb_future_source_data(btc_df, probe)
 
     def _materialize_strategy_features(
         self,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
+        btc_df: pl.DataFrame,
         *,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        current_date: pd.Timestamp,
-    ) -> pd.DataFrame:
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> pl.DataFrame:
         return self.FEATURE_REGISTRY.materialize_for_strategy(
             strategy,
             btc_df,
@@ -137,16 +144,16 @@ class StrategyRunnerValidationMixin:
 
     @staticmethod
     def _compute_win_rate(
-        spd_table: pd.DataFrame,
+        spd_table: pl.DataFrame,
         *,
         atol: float = WIN_RATE_TOLERANCE,
     ) -> float:
         """Compute win rate with tolerance against floating-point noise."""
-        if spd_table.empty:
+        if spd_table.is_empty():
             return 0.0
-        dynamic = pd.to_numeric(spd_table["dynamic_percentile"], errors="coerce")
-        uniform = pd.to_numeric(spd_table["uniform_percentile"], errors="coerce")
-        delta = (dynamic - uniform).to_numpy(dtype=float)
+        dynamic = spd_table["dynamic_percentile"].cast(pl.Float64, strict=False)
+        uniform = spd_table["uniform_percentile"].cast(pl.Float64, strict=False)
+        delta = (dynamic - uniform).to_numpy().astype(float)
         finite = np.isfinite(delta)
         if not finite.any():
             return 0.0
@@ -156,17 +163,17 @@ class StrategyRunnerValidationMixin:
     @classmethod
     def _build_fold_ranges(
         cls,
-        start_ts: pd.Timestamp,
-        end_ts: pd.Timestamp,
-    ) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+        start_ts: dt.datetime,
+        end_ts: dt.datetime,
+    ) -> list[tuple[dt.datetime, dt.datetime]]:
         return cls.BUILD_FOLD_RANGES(start_ts, end_ts)
 
     def _strict_fold_checks(
         self,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
-        start_ts: pd.Timestamp,
-        end_ts: pd.Timestamp,
+        btc_df: pl.DataFrame,
+        start_ts: dt.datetime,
+        end_ts: dt.datetime,
         config: ValidationConfig,
     ) -> tuple[bool, list[str]]:
         messages: list[str] = []
@@ -226,9 +233,9 @@ class StrategyRunnerValidationMixin:
     def _strict_shuffled_check(
         self,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
-        start_ts: pd.Timestamp,
-        end_ts: pd.Timestamp,
+        btc_df: pl.DataFrame,
+        start_ts: dt.datetime,
+        end_ts: dt.datetime,
         config: ValidationConfig,
     ) -> tuple[bool, list[str]]:
         messages: list[str] = []
@@ -241,12 +248,11 @@ class StrategyRunnerValidationMixin:
 
         shuffled_win_rates: list[float] = []
         for seed in self.ITER_RANGE(int(config.shuffled_trials)):
-            shuffled_df = btc_df.copy(deep=True)
-            window_values = np.array(
-                shuffled_df.loc[start_ts:end_ts, "price_usd"].to_numpy(dtype=float),
-                dtype=float,
-                copy=True,
+            window_df = btc_df.filter(
+                (pl.col("date") >= start_ts) & (pl.col("date") <= end_ts)
             )
+            window_values = window_df["price_usd"].cast(pl.Float64, strict=False).to_numpy()
+            window_values = np.asarray(window_values, dtype=float)
             if window_values.size == 0:
                 messages.append("Strict shuffled check skipped: empty validation window.")
                 return True, messages
@@ -257,9 +263,12 @@ class StrategyRunnerValidationMixin:
                 for idx in range(0, window_values.size, block_size)
             ]
             rng.shuffle(blocks)
-            shuffled_df.loc[start_ts:end_ts, "price_usd"] = np.concatenate(blocks)[
-                : window_values.size
-            ]
+            shuffled_prices = np.concatenate(blocks)[: window_values.size]
+            outside = btc_df.filter((pl.col("date") < start_ts) | (pl.col("date") > end_ts))
+            window_df = btc_df.filter(
+                (pl.col("date") >= start_ts) & (pl.col("date") <= end_ts)
+            ).with_columns(pl.Series("price_usd", shuffled_prices))
+            shuffled_df = pl.concat([outside, window_df]).sort("date")
             shuffled_result = self.backtest(
                 strategy,
                 BacktestConfig(
@@ -317,12 +326,14 @@ class StrategyRunnerValidationMixin:
         ctx: StrategyContext,
         *,
         strict_mode: bool,
-    ) -> tuple[pd.Series, bool]:
+    ) -> tuple[pl.DataFrame, bool]:
         if not strict_mode:
             return strategy.compute_weights(ctx), False
-        before = self._frame_signature(ctx.features.to_pandas())
+        # Use ctx.features_df so mutation of it (deprecated but still used by strategies)
+        # is detected against the canonical Polars feature frame.
+        before = self._frame_signature(ctx.features_df)
         weights = strategy.compute_weights(ctx)
-        after = self._frame_signature(ctx.features.to_pandas())
+        after = self._frame_signature(ctx.features_df)
         return weights, before != after
 
     def _build_profile_with_mutation_guard(
@@ -331,26 +342,30 @@ class StrategyRunnerValidationMixin:
         ctx: StrategyContext,
         *,
         strict_mode: bool,
-    ) -> tuple[pd.Series, bool]:
-        before = self._frame_signature(ctx.features.to_pandas()) if strict_mode else ()
+    ) -> tuple[pl.DataFrame, bool]:
+        # Use ctx.features_df so mutation during profile build is detected.
+        before = self._frame_signature(ctx.features_df) if strict_mode else ()
         profile_features = strategy.transform_features(ctx)
         profile_signals = strategy.build_signals(ctx, profile_features)
         profile = strategy.build_target_profile(ctx, profile_features, profile_signals)
-        after = self._frame_signature(ctx.features.to_pandas()) if strict_mode else before
+        after = self._frame_signature(ctx.features_df) if strict_mode else before
         return self._profile_values(profile), before != after
 
     def _strict_determinism_check(
         self,
         *,
         strategy: BaseStrategy,
-        full_features_df: pd.DataFrame,
-        window_start: pd.Timestamp,
-        probe: pd.Timestamp,
-        full_weights: pd.Series,
+        full_features_df: pl.DataFrame,
+        window_start: dt.datetime,
+        probe: dt.datetime,
+        full_weights: pl.DataFrame,
         state: _ValidationState,
     ) -> bool:
+        window_feat = full_features_df.filter(
+            (pl.col("date") >= window_start) & (pl.col("date") <= probe)
+        )
         repeat_ctx = strategy_context_from_features_df(
-            full_features_df.loc[window_start:probe].copy(deep=True),
+            window_feat,
             window_start,
             probe,
             probe,
@@ -378,9 +393,9 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         strategy: BaseStrategy,
-        source_df: pd.DataFrame,
-        window_start: pd.Timestamp,
-        probe: pd.Timestamp,
+        source_df: pl.DataFrame,
+        window_start: dt.datetime,
+        probe: dt.datetime,
     ) -> StrategyContext:
         return strategy_context_from_features_df(
             self._materialize_strategy_features(
@@ -401,9 +416,9 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         state: _ValidationState,
-        probe: pd.Timestamp,
-        full_prefix: pd.Series,
-        candidate_prefix: pd.Series,
+        probe: dt.datetime,
+        full_prefix: pl.DataFrame,
+        candidate_prefix: pl.DataFrame,
         check_label: str,
     ) -> bool:
         if self._weights_match(full_prefix, candidate_prefix):
@@ -419,10 +434,10 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
-        full_features_df: pd.DataFrame,
-        backtest_idx: pd.DatetimeIndex,
-        start_ts: pd.Timestamp,
+        btc_df: pl.DataFrame,
+        full_features_df: pl.DataFrame,
+        backtest_idx: pl.Series,
+        start_ts: dt.datetime,
         strict_mode: bool,
         has_propose_hook: bool,
         has_profile_hook: bool,
@@ -430,18 +445,23 @@ class StrategyRunnerValidationMixin:
         state: _ValidationState,
     ) -> None:
         window_offset = self.WINDOW_OFFSET
-        for probe in backtest_idx[::probe_step]:
-            window_start = max(start_ts, probe - window_offset)
-            if window_start > probe:
+        probes = backtest_idx.to_list()[::probe_step]
+        for probe in probes:
+            probe_ts = _to_naive_utc(probe)
+            window_start = max(start_ts, probe_ts - window_offset)
+            if window_start > probe_ts:
                 continue
 
+            window_feat = full_features_df.filter(
+                (pl.col("date") >= window_start) & (pl.col("date") <= probe_ts)
+            )
             full_ctx = strategy_context_from_features_df(
-                full_features_df.loc[window_start:probe].copy(deep=True),
+                window_feat,
                 window_start,
-                probe,
-                probe,
+                probe_ts,
+                probe_ts,
                 required_columns=tuple(strategy.required_feature_columns()),
-                as_of_date=probe,
+                as_of_date=probe_ts,
             )
             full_weights, full_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -459,18 +479,18 @@ class StrategyRunnerValidationMixin:
                 strategy=strategy,
                 full_features_df=full_features_df,
                 window_start=window_start,
-                probe=probe,
+                probe=probe_ts,
                 full_weights=full_weights,
                 state=state,
             ):
                 break
 
-            masked_source = btc_df.loc[:probe].copy(deep=True)
+            masked_source = btc_df.filter(pl.col("date") <= probe_ts)
             masked_ctx = self._strategy_ctx_from_source(
                 strategy=strategy,
                 source_df=masked_source,
                 window_start=window_start,
-                probe=probe,
+                probe=probe_ts,
             )
             masked_weights, masked_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -484,12 +504,12 @@ class StrategyRunnerValidationMixin:
             ):
                 break
 
-            perturbed_source = self._perturb_future_source_data(btc_df, probe)
+            perturbed_source = self._perturb_future_source_data(btc_df, probe_ts)
             perturbed_ctx = self._strategy_ctx_from_source(
                 strategy=strategy,
                 source_df=perturbed_source,
                 window_start=window_start,
-                probe=probe,
+                probe=probe_ts,
             )
             perturbed_weights, perturbed_mutated = self._compute_with_mutation_guard(
                 strategy,
@@ -503,16 +523,17 @@ class StrategyRunnerValidationMixin:
             ):
                 break
 
-            prefix_idx = full_weights.index[full_weights.index <= probe]
-            if len(prefix_idx) == 0:
+            prefix_dates = full_weights.filter(pl.col("date") <= probe_ts)
+            if prefix_dates.is_empty():
                 continue
-            full_prefix = full_weights.loc[prefix_idx]
-            masked_prefix = masked_weights.reindex(prefix_idx)
-            perturbed_prefix = perturbed_weights.reindex(prefix_idx)
+            full_prefix = full_weights.filter(pl.col("date") <= probe_ts)
+            date_list = prefix_dates["date"].to_list()
+            masked_prefix = masked_weights.filter(pl.col("date").is_in(date_list))
+            perturbed_prefix = perturbed_weights.filter(pl.col("date").is_in(date_list))
 
             if not self._check_prefix_invariance(
                 state=state,
-                probe=probe,
+                probe=probe_ts,
                 full_prefix=full_prefix,
                 candidate_prefix=masked_prefix,
                 check_label="masked-future weights diverge",
@@ -520,7 +541,7 @@ class StrategyRunnerValidationMixin:
                 break
             if not self._check_prefix_invariance(
                 state=state,
-                probe=probe,
+                probe=probe_ts,
                 full_prefix=full_prefix,
                 candidate_prefix=perturbed_prefix,
                 check_label="perturbed-future weights diverge",
@@ -529,28 +550,28 @@ class StrategyRunnerValidationMixin:
 
             if has_profile_hook and not has_propose_hook:
                 profile_full_ctx = strategy_context_from_features_df(
-                    full_features_df.loc[window_start:probe].copy(deep=True),
+                    window_feat,
                     window_start,
-                    probe,
-                    probe,
+                    probe_ts,
+                    probe_ts,
                     required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe,
+                    as_of_date=probe_ts,
                 )
                 profile_masked_ctx = strategy_context_from_features_df(
-                    masked_ctx.features.to_pandas().copy(deep=True),
+                    masked_ctx.features.data,
                     window_start,
-                    probe,
-                    probe,
+                    probe_ts,
+                    probe_ts,
                     required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe,
+                    as_of_date=probe_ts,
                 )
                 profile_perturbed_ctx = strategy_context_from_features_df(
-                    perturbed_ctx.features.to_pandas().copy(deep=True),
+                    perturbed_ctx.features.data,
                     window_start,
-                    probe,
-                    probe,
+                    probe_ts,
+                    probe_ts,
                     required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=probe,
+                    as_of_date=probe_ts,
                 )
                 full_profile_series, full_profile_mutated = self._build_profile_with_mutation_guard(
                     strategy,
@@ -583,12 +604,12 @@ class StrategyRunnerValidationMixin:
                 ):
                     break
 
-                full_profile_prefix = full_profile_series.reindex(prefix_idx)
-                masked_profile_prefix = masked_profile_series.reindex(prefix_idx)
-                perturbed_profile_prefix = perturbed_profile_series.reindex(prefix_idx)
+                full_profile_prefix = full_profile_series.filter(pl.col("date").is_in(date_list))
+                masked_profile_prefix = masked_profile_series.filter(pl.col("date").is_in(date_list))
+                perturbed_profile_prefix = perturbed_profile_series.filter(pl.col("date").is_in(date_list))
                 if not self._check_prefix_invariance(
                     state=state,
-                    probe=probe,
+                    probe=probe_ts,
                     full_prefix=full_profile_prefix,
                     candidate_prefix=masked_profile_prefix,
                     check_label="profile values diverge (masked-future)",
@@ -596,7 +617,7 @@ class StrategyRunnerValidationMixin:
                     break
                 if not self._check_prefix_invariance(
                     state=state,
-                    probe=probe,
+                    probe=probe_ts,
                     full_prefix=full_profile_prefix,
                     candidate_prefix=perturbed_profile_prefix,
                     check_label="profile values diverge (perturbed-future)",
@@ -607,20 +628,22 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
-        features_df: pd.DataFrame,
-        start_ts: pd.Timestamp,
-        end_ts: pd.Timestamp,
+        btc_df: pl.DataFrame,
+        features_df: pl.DataFrame,
+        start_ts: dt.datetime,
+        end_ts: dt.datetime,
         strict_mode: bool,
         config: ValidationConfig,
         state: _ValidationState,
-    ) -> pd.Timestamp:
+    ) -> dt.datetime:
         window_offset = self.WINDOW_OFFSET
         max_window_start = end_ts - window_offset
         boundary_hits = 0
         boundary_total = 0
         if start_ts <= max_window_start:
-            window_starts = pd.date_range(start=start_ts, end=max_window_start, freq="D")
+            window_starts = pl.datetime_range(
+                start_ts, max_window_start, interval="1d", eager=True
+            ).to_list()
             step = 1 if (not strict_mode or len(window_starts) <= 200) else max(
                 len(window_starts) // 200,
                 1,
@@ -653,7 +676,7 @@ class StrategyRunnerValidationMixin:
                     state=state,
                 ):
                     break
-                if weights.empty:
+                if weights.is_empty():
                     continue
                 try:
                     self._validate_weights(weights, window_start, window_end)
@@ -661,8 +684,8 @@ class StrategyRunnerValidationMixin:
                     state.weight_constraints_ok = False
                     state.messages.append(str(exc))
                     break
-                if strict_mode and len(weights) == ALLOCATION_SPAN_DAYS:
-                    arr = weights.to_numpy(dtype=float)
+                if strict_mode and weights.height == ALLOCATION_SPAN_DAYS:
+                    arr = weights["weight"].to_numpy().astype(float)
                     at_bounds = np.isclose(arr, MIN_DAILY_WEIGHT, atol=1e-12) | np.isclose(
                         arr,
                         MAX_DAILY_WEIGHT,
@@ -690,10 +713,10 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame | None = None,
-        features_df: pd.DataFrame,
-        start_ts: pd.Timestamp,
-        max_window_start: pd.Timestamp,
+        btc_df: pl.DataFrame | None = None,
+        features_df: pl.DataFrame,
+        start_ts: dt.datetime,
+        max_window_start: dt.datetime,
         strict_mode: bool,
         state: _ValidationState,
     ) -> None:
@@ -704,7 +727,9 @@ class StrategyRunnerValidationMixin:
         lock_start = start_ts
         lock_end = lock_start + window_offset
         lock_mid_offset = max(ALLOCATION_SPAN_DAYS // 2 - 1, 0)
-        lock_current = min(lock_start + pd.Timedelta(days=lock_mid_offset), lock_end)
+        lock_current = min(
+            lock_start + dt.timedelta(days=lock_mid_offset), lock_end
+        )
         base_lock_ctx = strategy_context_from_features_df(
             self._materialize_strategy_features(
                 strategy,
@@ -730,11 +755,12 @@ class StrategyRunnerValidationMixin:
             state=state,
         ):
             return
-        if base_lock_weights.empty:
+        if base_lock_weights.is_empty():
             return
 
-        n_past = int((base_lock_weights.index <= lock_current).sum())
-        locked_prefix = base_lock_weights.iloc[:n_past].to_numpy(dtype=float)
+        prefix_df = base_lock_weights.filter(pl.col("date") <= lock_current).sort("date")
+        n_past = prefix_df.height
+        locked_prefix = prefix_df["weight"].to_numpy().astype(float)
         perturbed_source = (
             self._perturb_future_source_data(btc_df, lock_current)
             if btc_df is not None
@@ -767,7 +793,12 @@ class StrategyRunnerValidationMixin:
         ):
             return
         if n_past > 0:
-            observed_prefix = locked_run_weights.iloc[:n_past].to_numpy(dtype=float)
+            observed_prefix = (
+                locked_run_weights.filter(pl.col("date") <= lock_current)
+                .sort("date")["weight"]
+                .to_numpy()
+                .astype(float)
+            )
             if not np.allclose(observed_prefix, locked_prefix, atol=1e-12, rtol=0.0):
                 state.strict_checks_ok = False
                 state.messages.append(
@@ -778,10 +809,10 @@ class StrategyRunnerValidationMixin:
         self,
         *,
         strategy: BaseStrategy,
-        btc_df: pd.DataFrame,
-        features_df: pd.DataFrame,
-        start_ts: pd.Timestamp,
-        end_ts: pd.Timestamp,
+        btc_df: pl.DataFrame,
+        features_df: pl.DataFrame,
+        start_ts: dt.datetime,
+        end_ts: dt.datetime,
         config: ValidationConfig,
         state: _ValidationState,
         backtest_result,
@@ -805,8 +836,12 @@ class StrategyRunnerValidationMixin:
             seed=17,
         )
         permutation_pvalue = paired_block_permutation_pvalue(
-            backtest_result.spd_table.get("dynamic_percentile", pd.Series(dtype=float)),
-            backtest_result.spd_table.get("uniform_percentile", pd.Series(dtype=float)),
+            backtest_result.spd_table["dynamic_percentile"]
+            if "dynamic_percentile" in backtest_result.spd_table.columns
+            else pl.Series("d", []),
+            backtest_result.spd_table["uniform_percentile"]
+            if "uniform_percentile" in backtest_result.spd_table.columns
+            else pl.Series("u", []),
             block_size=config.block_size,
             trials=config.permutation_trials,
             seed=23,
@@ -850,8 +885,10 @@ class StrategyRunnerValidationMixin:
         max_psi = 0.0
         max_ks = 0.0
         for _, _, test_start, test_end in folds:
-            prior_end = test_start - pd.Timedelta(days=1)
-            prior_start = max(start_ts, prior_end - pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1))
+            prior_end = test_start - dt.timedelta(days=1)
+            prior_start = max(
+                start_ts, prior_end - dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+            )
             if prior_end < prior_start:
                 continue
             baseline = self._materialize_strategy_features(

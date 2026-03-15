@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import datetime as dt
+import polars as pl
 import pytest
 
 from stacksats.data_btc import DataLoadError
@@ -10,12 +11,12 @@ from stacksats.prelude import load_data
 
 
 def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
-    expected_df = pd.DataFrame(
+    expected_df = pl.DataFrame(
         {
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
             "PriceUSD": [40000.0, 41000.0],
             "price_usd": [40000.0, 41000.0],
         },
-        index=pd.date_range("2024-01-01", periods=2, freq="D"),
     )
     load_mock = mocker.Mock(return_value=expected_df)
     provider_instance = mocker.Mock(load=load_mock)

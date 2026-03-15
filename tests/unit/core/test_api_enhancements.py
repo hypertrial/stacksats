@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.api import BacktestResult, ValidationResult
@@ -24,37 +25,34 @@ from stacksats.strategies.examples import (
 )
 
 
-def _sample_btc_df() -> pd.DataFrame:
-    dates = pd.date_range("2022-01-01", periods=520, freq="D")
+def _sample_btc_df() -> pl.DataFrame:
+    base = datetime(2022, 1, 1)
+    dates = [base + timedelta(days=i) for i in range(520)]
     price = np.linspace(20000.0, 45000.0, len(dates))
     mvrv = np.linspace(0.8, 2.2, len(dates))
-    return pd.DataFrame(
-        {
-            "price_usd": price,
-            "mvrv": mvrv,
-        },
-        index=dates,
-    )
+    return pl.DataFrame({
+        "date": dates,
+        "price_usd": price,
+        "mvrv": mvrv,
+    })
 
 
-def _sample_spd_df() -> pd.DataFrame:
+def _sample_spd_df() -> pl.DataFrame:
     windows = [
         "2022-01-01 → 2023-01-01",
         "2022-02-01 → 2023-02-01",
         "2022-03-01 → 2023-03-01",
     ]
-    return pd.DataFrame(
-        {
-            "min_sats_per_dollar": [1000.0, 1200.0, 900.0],
-            "max_sats_per_dollar": [5000.0, 5200.0, 4800.0],
-            "uniform_sats_per_dollar": [2500.0, 2600.0, 2300.0],
-            "dynamic_sats_per_dollar": [2800.0, 2900.0, 2400.0],
-            "uniform_percentile": [37.5, 35.0, 36.8],
-            "dynamic_percentile": [45.0, 42.0, 39.5],
-            "excess_percentile": [7.5, 7.0, 2.7],
-        },
-        index=windows,
-    )
+    return pl.DataFrame({
+        "window": windows,
+        "min_sats_per_dollar": [1000.0, 1200.0, 900.0],
+        "max_sats_per_dollar": [5000.0, 5200.0, 4800.0],
+        "uniform_sats_per_dollar": [2500.0, 2600.0, 2300.0],
+        "dynamic_sats_per_dollar": [2800.0, 2900.0, 2400.0],
+        "uniform_percentile": [37.5, 35.0, 36.8],
+        "dynamic_percentile": [45.0, 42.0, 39.5],
+        "excess_percentile": [7.5, 7.0, 2.7],
+    })
 
 
 def test_backtest_result_summary_dataframe_and_json(tmp_path: Path):
@@ -85,11 +83,11 @@ def test_backtest_result_summary_dataframe_and_json(tmp_path: Path):
     assert payload["summary_metrics"]["score"] == 55.4
     assert payload["summary_metrics"]["uniform_exp_decay_percentile"] == 35.0
     assert payload["summary_metrics"]["exp_decay_multiple_vs_uniform"] == 44.2 / 35.0
-    assert len(payload["window_level_data"]) == len(result.spd_table)
+    assert len(payload["window_level_data"]) == result.spd_table.height
 
 
 def test_backtest_result_plot_delegates_to_backtest_module(mocker):
-    """BacktestResult.plot should call all plot/export helpers exactly once."""
+    """BacktestResult.plot should call export_metrics_json and return metrics path."""
     result = BacktestResult(
         spd_table=_sample_spd_df(),
         exp_decay_percentile=44.2,
@@ -98,24 +96,15 @@ def test_backtest_result_plot_delegates_to_backtest_module(mocker):
         uniform_exp_decay_percentile=35.0,
     )
 
-    mocked_calls = [
-        mocker.patch("stacksats.backtest.create_performance_comparison_chart"),
-        mocker.patch("stacksats.backtest.create_excess_percentile_distribution"),
-        mocker.patch("stacksats.backtest.create_win_loss_comparison"),
-        mocker.patch("stacksats.backtest.create_cumulative_performance"),
-        mocker.patch("stacksats.backtest.create_performance_metrics_summary"),
-        mocker.patch("stacksats.backtest.export_metrics_json"),
-    ]
+    mock_export = mocker.patch("stacksats.backtest.export_metrics_json")
 
     paths = result.plot(output_dir="my-output")
 
-    for mocked in mocked_calls:
-        mocked.assert_called_once()
-    metrics_args = mocked_calls[4].call_args.args
+    mock_export.assert_called_once()
+    metrics_args = mock_export.call_args.args
     assert "uniform_exp_decay_percentile" in metrics_args[1]
     assert "exp_decay_multiple_vs_uniform" in metrics_args[1]
-    assert paths["metrics_json"].endswith("my-output/metrics.json")
-    assert paths["performance_comparison"].endswith("my-output/performance_comparison.svg")
+    assert paths["metrics_json"].endswith("metrics.json")
 
 
 def test_backtest_result_animate_writes_manifest_and_returns_paths(
@@ -249,12 +238,15 @@ def test_validate_strategy_fails_weight_constraints_for_bad_strategy():
         def build_target_profile(
             self,
             ctx: StrategyContext,
-            features_df: pd.DataFrame,
-            signals: dict[str, pd.Series],
+            features_df: pl.DataFrame,
+            signals: dict[str, pl.Series],
         ) -> TargetProfile:
             del ctx, signals
             return TargetProfile(
-                values=pd.Series(np.nan, index=features_df.index),
+                values=pl.DataFrame({
+                    "date": features_df["date"],
+                    "value": [float("nan")] * features_df.height,
+                }),
                 mode="preference",
             )
 
@@ -283,18 +275,22 @@ def test_validate_strategy_observed_only_input_blocks_peeking_strategy():
         def build_target_profile(
             self,
             ctx: StrategyContext,
-            features_df: pd.DataFrame,
-            signals: dict[str, pd.Series],
-        ) -> pd.Series:
+            features_df: pl.DataFrame,
+            signals: dict[str, pl.Series],
+        ) -> pl.DataFrame:
             del signals
-            idx = features_df.index
-            preference = pd.Series(0.0, index=idx)
-            lookahead_date = pd.Timestamp(ctx.end_date) + pd.Timedelta(days=1)
+            from datetime import timedelta
+
+            dates = features_df["date"]
+            lookahead_date = ctx.end_date + timedelta(days=1)
             future_signal = 0.0
-            if lookahead_date in ctx.features.to_pandas().index:
+            date_list = dates.to_list()
+            if date_list and lookahead_date in date_list:
                 future_signal = 1.0
-            preference.iloc[-1] = future_signal
-            return preference
+            values = [0.0] * features_df.height
+            if values:
+                values[-1] = future_signal
+            return pl.DataFrame({"date": dates, "value": values})
 
     result = LeakyStrategy().validate(
         ValidationConfig(
@@ -313,8 +309,8 @@ def test_example_strategies_return_valid_weight_vectors():
     from stacksats.model_development import precompute_features
 
     features_df = precompute_features(btc_df)
-    start_date = pd.Timestamp("2022-01-01")
-    end_date = pd.Timestamp("2022-12-31")
+    start_date = datetime(2022, 1, 1)
+    end_date = datetime(2022, 12, 31)
 
     for strategy in (UniformStrategy(), SimpleZScoreStrategy(), MomentumStrategy()):
         weights = strategy.compute_weights(
@@ -325,23 +321,22 @@ def test_example_strategies_return_valid_weight_vectors():
                 end_date,
             )
         )
-        assert not weights.empty
-        assert bool((weights >= 0).all())
-        assert np.isclose(float(weights.sum()), 1.0, atol=1e-8)
+        assert not weights.is_empty()
+        assert bool((weights["weight"] >= 0).all())
+        assert np.isclose(float(weights["weight"].sum()), 1.0, atol=1e-8)
 
 
 def test_example_profile_strategies_return_empty_profile_for_empty_window():
-    idx = pd.DatetimeIndex([])
-    empty_features = pd.DataFrame(index=idx)
+    empty_features = pl.DataFrame(schema={"date": pl.Datetime("us")})
     ctx = strategy_context_from_features_df(
         empty_features,
-        pd.Timestamp("2024-01-01"),
-        pd.Timestamp("2024-01-01"),
-        pd.Timestamp("2024-01-01"),
+        datetime(2024, 1, 1),
+        datetime(2024, 1, 1),
+        datetime(2024, 1, 1),
     )
 
     simple_profile = SimpleZScoreStrategy().build_target_profile(ctx, empty_features, {})
     momentum_profile = MomentumStrategy().build_target_profile(ctx, empty_features, {})
 
-    assert simple_profile.empty
-    assert momentum_profile.empty
+    assert simple_profile.is_empty()
+    assert momentum_profile.is_empty()

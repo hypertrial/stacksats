@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from .. import model_development as model_lib
 from ..strategy_types import (
@@ -71,39 +73,63 @@ class ExampleMVRVStrategy(BaseStrategy):
         return ("core_model_features_v1", "brk_overlay_v1")
 
     @staticmethod
-    def _clean_array(values: pd.Series) -> np.ndarray:
-        arr = values.to_numpy(dtype=float)
+    def _clean_array(values: pl.Series) -> np.ndarray:
+        arr = values.cast(pl.Float64, strict=False).fill_null(0.0).to_numpy()
         return np.where(np.isfinite(arr), arr, 0.0)
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features.to_pandas().copy()
-        if window.empty:
+    @staticmethod
+    def _to_dt(val) -> dt.datetime:
+        if isinstance(val, dt.datetime):
+            return val.replace(hour=0, minute=0, second=0, microsecond=0)
+        return dt.datetime.strptime(str(val)[:10], "%Y-%m-%d")
+
+    def _get_col_array(self, features_df: pl.DataFrame, name: str) -> np.ndarray:
+        if name in features_df.columns:
+            return self._clean_array(features_df[name])
+        return np.zeros(features_df.height)
+
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
+        window = ctx.features.data.clone()
+        if window.is_empty():
             return window
-        start_date = pd.Timestamp(ctx.start_date).normalize()
-        end_date = pd.Timestamp(ctx.end_date).normalize()
-        if start_date > end_date:
-            return window.iloc[0:0].copy()
-        window = window.loc[(window.index >= start_date) & (window.index <= end_date)].copy()
-        window = window.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        return window
+        start_dt = self._to_dt(ctx.start_date)
+        end_dt = self._to_dt(ctx.end_date)
+        if start_dt > end_dt:
+            return window.head(0)
+        window = window.filter(
+            (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
+        )
+        # Replace inf/nan with 0 for float columns
+        for c in window.columns:
+            if window[c].dtype in (pl.Float32, pl.Float64):
+                window = window.with_columns(
+                    pl.when(pl.col(c).is_infinite() | pl.col(c).is_nan())
+                    .then(0.0)
+                    .otherwise(pl.col(c))
+                    .alias(c)
+                )
+        return window.fill_null(0.0)
 
     def build_signals(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-    ) -> dict[str, pd.Series]:
+        features_df: pl.DataFrame,
+    ) -> dict[str, pl.Series]:
         del ctx, features_df
         return {}
 
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
-        del ctx, signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="preference")
+        del signals
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="preference",
+            )
 
         price_vs_ma = self._clean_array(features_df["price_vs_ma"])
         mvrv_zscore = self._clean_array(features_df["mvrv_zscore"])
@@ -144,7 +170,7 @@ class ExampleMVRVStrategy(BaseStrategy):
         base_preference = np.log(np.clip(multiplier, 1e-12, None))
 
         def _col(name: str) -> np.ndarray:
-            return self._clean_array(features_df.get(name, pd.Series(0.0, index=features_df.index)))
+            return self._get_col_array(features_df, name)
 
         netflow_fast = _col("brk_netflow_fast")
         netflow_slow = _col("brk_netflow_slow")
@@ -167,12 +193,9 @@ class ExampleMVRVStrategy(BaseStrategy):
         roi1y = _col("brk_roi1y")
 
         mvrv_zone = _col("mvrv_zone")
-        volatility = _col("mvrv_volatility") if "mvrv_volatility" in features_df else np.full(
-            len(features_df.index), 0.5
-        )
-        confidence = _col("signal_confidence") if "signal_confidence" in features_df else np.full(
-            len(features_df.index), 0.5
-        )
+        n = features_df.height
+        volatility = _col("mvrv_volatility") if "mvrv_volatility" in features_df.columns else np.full(n, 0.5)
+        confidence = _col("signal_confidence") if "signal_confidence" in features_df.columns else np.full(n, 0.5)
 
         high_vol = np.clip((volatility - 0.5) / 0.5, 0.0, 1.0)
         value_gate = np.where(mvrv_zone <= -1.0, 1.25, np.where(mvrv_zone >= 1.0, 0.75, 1.00))
@@ -241,8 +264,18 @@ class ExampleMVRVStrategy(BaseStrategy):
         preference = np.where(np.isfinite(preference), preference, 0.0)
         preference = np.clip(preference, -50.0, 50.0)
 
-        profile = pd.Series(preference, index=features_df.index, dtype=float)
-        return TargetProfile(values=profile, mode="preference")
+        date_col = features_df["date"] if "date" in features_df.columns else pl.Series(
+            "date",
+            pl.datetime_range(
+                self._to_dt(ctx.start_date), self._to_dt(ctx.end_date),
+                interval="1d", eager=True
+            ).to_list(),
+        )
+        values_df = pl.DataFrame({
+            "date": date_col,
+            "value": pl.Series(preference.astype(float)),
+        })
+        return TargetProfile(values=values_df, mode="preference")
 
 
 def main() -> None:

@@ -50,12 +50,12 @@ This page covers migration for:
 
 | If you use | Update to |
 | --- | --- |
-| `series.to_dataframe()` expecting pandas | Returns `pl.DataFrame`; use `pl` APIs (e.g. `.filter()`, `.row()`, `.is_empty()`) or convert with `.to_pandas()` if needed |
-| `batch.to_dataframe()` expecting pandas | Same as above |
-| `WeightTimeSeries.from_dataframe(pd_df)` | Still supported; pandas is converted to Polars internally |
-| `FeatureTimeSeries.from_pandas(df)` | Still supported; use `from_dataframe(pl_df)` for Polars |
-| `StrategyContext.from_features_df(df)` | Accepts Polars or pandas |
-| Strategy hooks (`transform_features`, `build_signals`, `build_target_profile`) | Continue to use pandas; framework passes `ctx.features.to_pandas()` |
+| `series.to_dataframe()` expecting index-based DataFrame semantics | Returns `pl.DataFrame`; use `pl` APIs directly (e.g. `.filter()`, `.row()`, `.is_empty()`) |
+| `batch.to_dataframe()` expecting index-based DataFrame semantics | Same as above |
+| `WeightTimeSeries.from_dataframe(pd_df)` | Removed. Pass a Polars DataFrame |
+| legacy `FeatureTimeSeries` constructor | Removed. Use `from_dataframe(pl_df)` |
+| `StrategyContext.from_features_df(df)` | Polars-only; pass a DataFrame with canonical `date` column |
+| Strategy hooks (`transform_features`, `build_signals`, `build_target_profile`) | Polars-only; framework passes `ctx.features_df` |
 
 ## Code Replacements
 
@@ -79,7 +79,9 @@ weights = compute_weights_with_features(
 assert max_received <= BACKTEST_END
 
 # new
-backtest_end = pd.to_datetime(get_backtest_end())
+from datetime import datetime
+
+backtest_end = datetime.strptime(get_backtest_end(), "%Y-%m-%d")
 assert max_received <= backtest_end
 ```
 

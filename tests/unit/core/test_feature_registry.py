@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY, FeatureRegistry
@@ -26,20 +27,27 @@ class _ConstantProvider:
     def required_source_columns(self) -> tuple[str, ...]:
         return ("price_usd",)
 
-    def materialize(self, btc_df, *, start_date, end_date, as_of_date) -> pd.DataFrame:
-        idx = pd.date_range(start_date, as_of_date, freq="D")
-        return pd.DataFrame({"const": 1.0}, index=idx)
+    def materialize(self, btc_df, *, start_date, end_date, as_of_date) -> pl.DataFrame:
+        del btc_df, end_date
+        dates = pl.datetime_range(start_date, as_of_date, interval="1d", eager=True)
+        return pl.DataFrame({"date": dates, "const": [1.0] * len(dates)})
 
 
-def _btc_df() -> pd.DataFrame:
-    idx = pd.date_range("2024-01-01", periods=400, freq="D")
-    return pd.DataFrame(
+def _btc_df() -> pl.DataFrame:
+    dates = pl.datetime_range(
+        datetime(2024, 1, 1),
+        datetime(2025, 2, 3),
+        interval="1d",
+        eager=True,
+    )
+    rows = len(dates)
+    return pl.DataFrame(
         {
-            "price_usd": pd.Series(range(1, 401), index=idx, dtype=float),
-            "PriceUSD": pd.Series(range(1, 401), index=idx, dtype=float),
-            "mvrv": pd.Series(range(400), index=idx, dtype=float) / 100.0 + 1.0,
-        },
-        index=idx,
+            "date": dates,
+            "price_usd": [float(i) for i in range(1, rows + 1)],
+            "PriceUSD": [float(i) for i in range(1, rows + 1)],
+            "mvrv": [1.0 + (i / 100.0) for i in range(rows)],
+        }
     )
 
 
@@ -59,13 +67,13 @@ def test_default_registry_materializes_strategy_features() -> None:
     frame = DEFAULT_FEATURE_REGISTRY.materialize_for_strategy(
         _ProviderStrategy(),
         _btc_df(),
-        start_date=pd.Timestamp("2024-06-01"),
-        end_date=pd.Timestamp("2024-12-31"),
-        current_date=pd.Timestamp("2024-07-01"),
+        start_date=datetime(2024, 6, 1),
+        end_date=datetime(2024, 12, 31),
+        current_date=datetime(2024, 7, 1),
     )
 
-    assert frame.index.min() == pd.Timestamp("2024-06-01")
-    assert frame.index.max() == pd.Timestamp("2024-07-01")
+    assert frame["date"][0] == datetime(2024, 6, 1)
+    assert frame["date"][-1] == datetime(2024, 7, 1)
     assert "price_vs_ma" in frame.columns
     assert "brk_netflow_fast" in frame.columns
 
@@ -77,30 +85,30 @@ def test_materialization_fingerprint_is_stable() -> None:
     _, first = DEFAULT_FEATURE_REGISTRY.materialization_fingerprint(
         strategy,
         btc_df,
-        start_date=pd.Timestamp("2024-06-01"),
-        end_date=pd.Timestamp("2024-12-31"),
-        current_date=pd.Timestamp("2024-07-01"),
+        start_date=datetime(2024, 6, 1),
+        end_date=datetime(2024, 12, 31),
+        current_date=datetime(2024, 7, 1),
     )
     _, second = DEFAULT_FEATURE_REGISTRY.materialization_fingerprint(
         strategy,
         btc_df,
-        start_date=pd.Timestamp("2024-06-01"),
-        end_date=pd.Timestamp("2024-12-31"),
-        current_date=pd.Timestamp("2024-07-01"),
+        start_date=datetime(2024, 6, 1),
+        end_date=datetime(2024, 12, 31),
+        current_date=datetime(2024, 7, 1),
     )
 
     assert first == second
 
 
 def test_provider_missing_required_columns_fails() -> None:
-    btc_df = pd.DataFrame(index=pd.date_range("2024-01-01", periods=5, freq="D"))
     strategy = _ProviderStrategy()
+    btc_df = pl.DataFrame({"date": pl.datetime_range(datetime(2024, 1, 1), datetime(2024, 1, 5), interval="1d", eager=True)})
 
     with pytest.raises(ValueError, match="missing source columns"):
         DEFAULT_FEATURE_REGISTRY.materialize_for_strategy(
             strategy,
             btc_df,
-            start_date=pd.Timestamp("2024-01-01"),
-            end_date=pd.Timestamp("2024-01-05"),
-            current_date=pd.Timestamp("2024-01-05"),
+            start_date=datetime(2024, 1, 1),
+            end_date=datetime(2024, 1, 5),
+            current_date=datetime(2024, 1, 5),
         )

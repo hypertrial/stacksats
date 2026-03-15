@@ -8,12 +8,13 @@ Tests are split into two categories:
 2. Threshold tests (use time.perf_counter) - always run
 """
 
+import datetime as dt
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 # Add parent directory to path for imports
@@ -30,8 +31,10 @@ from stacksats.model_development import (
 from stacksats.model_development_helpers import softmax
 
 
-def _span_end(start_date: pd.Timestamp) -> pd.Timestamp:
-    return start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+def _span_end(start_date):
+    if isinstance(start_date, str):
+        start_date = dt.datetime.strptime(start_date[:10], "%Y-%m-%d")
+    return start_date + dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
 # Check if pytest-benchmark is available
 try:
@@ -56,15 +59,20 @@ requires_benchmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def benchmark_btc_df():
     """Create BTC price data for benchmarking."""
-    dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+    dates = pl.datetime_range(
+        dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
+        interval="1d", eager=True
+    ).to_list()
     np.random.seed(42)
     base_price = 10000
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
+    df = pl.DataFrame({
+        "date": dates,
+        "price_usd": prices,
+        "PriceUSD": prices,
+    })
     return df
 
 
@@ -107,7 +115,7 @@ class TestComputeWeightsBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2024-01-01")
+        start_date = dt.datetime(2024, 1, 1)
         end_date = _span_end(start_date)
 
         result = benchmark(
@@ -123,8 +131,8 @@ class TestComputeWeightsBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-06-30")
+        start_date = dt.datetime(2024, 1, 1)
+        end_date = dt.datetime(2024, 6, 30)
 
         result = benchmark(
             compute_weights_fast, benchmark_features_df, start_date, end_date
@@ -139,8 +147,8 @@ class TestComputeWeightsBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2024-06-01")
-        end_date = pd.Timestamp("2024-06-30")
+        start_date = dt.datetime(2024, 6, 1)
+        end_date = dt.datetime(2024, 6, 30)
 
         result = benchmark(
             compute_weights_fast, benchmark_features_df, start_date, end_date
@@ -204,9 +212,9 @@ class TestBatchProcessingBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2025-01-01")
+        start_date = dt.datetime(2025, 1, 1)
         end_date = _span_end(start_date)
-        current_date = pd.Timestamp("2025-12-31")
+        current_date = dt.datetime(2025, 12, 31)
 
         result = benchmark(
             process_start_date_batch,
@@ -228,10 +236,10 @@ class TestBatchProcessingBenchmark:
         if not BENCHMARK_AVAILABLE:
             pytest.skip("pytest-benchmark not installed")
 
-        start_date = pd.Timestamp("2024-01-01")
+        start_date = dt.datetime(2024, 1, 1)
         end_date = _span_end(start_date)
         end_dates = [end_date, end_date]
-        current_date = pd.Timestamp("2025-12-31")
+        current_date = dt.datetime(2025, 12, 31)
 
         result = benchmark(
             process_start_date_batch,
@@ -270,16 +278,19 @@ class TestPerformanceThresholds:
     @pytest.fixture
     def perf_btc_df(self):
         """Create BTC price data for performance tests."""
-        dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+        dates = pl.datetime_range(
+            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
+            interval="1d", eager=True
+        ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-
-        df = pd.DataFrame({"price_usd": prices}, index=dates)
-        df["PriceUSD"] = df["price_usd"]
-        df.index.name = "time"
-        return df
+        return pl.DataFrame({
+            "date": dates,
+            "price_usd": prices,
+            "PriceUSD": prices,
+        })
 
     @pytest.fixture
     def perf_features_df(self, perf_btc_df):
@@ -299,8 +310,8 @@ class TestPerformanceThresholds:
 
         Note: First call may be slower due to JIT compilation and cache warming.
         """
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
+        start_date = dt.datetime(2024, 1, 1)
+        end_date = dt.datetime(2024, 12, 31)
 
         # Warm up - first call is often slower
         _ = compute_weights_fast(perf_features_df, start_date, end_date)
@@ -315,8 +326,8 @@ class TestPerformanceThresholds:
 
     def test_1000_weight_computations_under_10_seconds(self, perf_features_df):
         """Verify 1000 weight computations complete in under 10 seconds."""
-        start_date = pd.Timestamp("2024-06-01")
-        end_date = pd.Timestamp("2024-06-30")
+        start_date = dt.datetime(2024, 6, 1)
+        end_date = dt.datetime(2024, 6, 30)
 
         start = time.perf_counter()
         for _ in range(1000):
@@ -329,10 +340,10 @@ class TestPerformanceThresholds:
 
     def test_batch_processing_under_1_second(self, perf_features_df, perf_btc_df):
         """Verify batch processing valid ranges completes in under 1 second."""
-        start_date = pd.Timestamp("2024-01-01")
+        start_date = dt.datetime(2024, 1, 1)
         end_date = _span_end(start_date)
         end_dates = [end_date, end_date]
-        current_date = pd.Timestamp("2025-12-31")
+        current_date = dt.datetime(2025, 12, 31)
 
         start = time.perf_counter()
         _ = process_start_date_batch(
@@ -362,16 +373,19 @@ class TestMemoryUsage:
     @pytest.fixture
     def mem_btc_df(self):
         """Create BTC price data for memory tests."""
-        dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+        dates = pl.datetime_range(
+            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
+            interval="1d", eager=True
+        ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-
-        df = pd.DataFrame({"price_usd": prices}, index=dates)
-        df["PriceUSD"] = df["price_usd"]
-        df.index.name = "time"
-        return df
+        return pl.DataFrame({
+            "date": dates,
+            "price_usd": prices,
+            "PriceUSD": prices,
+        })
 
     @pytest.fixture
     def mem_features_df(self, mem_btc_df):
@@ -381,7 +395,7 @@ class TestMemoryUsage:
     def test_features_dataframe_size(self, mem_features_df):
         """Verify features DataFrame has reasonable size."""
         # Get memory usage in MB
-        memory_mb = mem_features_df.memory_usage(deep=True).sum() / (1024 * 1024)
+        memory_mb = mem_features_df.estimated_size() / (1024 * 1024)
 
         # Should be less than 50MB for 6 years of data
         assert memory_mb < 50, (
@@ -389,17 +403,17 @@ class TestMemoryUsage:
         )
 
     def test_weights_series_size(self, mem_features_df):
-        """Verify weights Series has reasonable size."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
+        """Verify weights DataFrame has reasonable size."""
+        start_date = dt.datetime(2024, 1, 1)
+        end_date = dt.datetime(2024, 12, 31)
 
         weights = compute_weights_fast(mem_features_df, start_date, end_date)
 
         # Get memory usage in KB
-        memory_kb = weights.memory_usage(deep=True) / 1024
+        memory_kb = weights.estimated_size() / 1024
 
         # Should be less than 10KB for 1 year
-        assert memory_kb < 10, f"Weights Series uses {memory_kb:.1f}KB, expected < 10KB"
+        assert memory_kb < 10, f"Weights DataFrame uses {memory_kb:.1f}KB, expected < 10KB"
 
 
 # -----------------------------------------------------------------------------
@@ -414,16 +428,19 @@ class TestScaling:
     @pytest.fixture
     def scale_btc_df(self):
         """Create BTC price data for scaling tests."""
-        dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+        dates = pl.datetime_range(
+            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
+            interval="1d", eager=True
+        ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-
-        df = pd.DataFrame({"price_usd": prices}, index=dates)
-        df["PriceUSD"] = df["price_usd"]
-        df.index.name = "time"
-        return df
+        return pl.DataFrame({
+            "date": dates,
+            "price_usd": prices,
+            "PriceUSD": prices,
+        })
 
     @pytest.fixture
     def scale_features_df(self, scale_btc_df):
@@ -436,10 +453,10 @@ class TestScaling:
         sizes = [30, 90, 180, 365]
         times = []
 
-        base_date = pd.Timestamp("2024-01-01")
+        base_date = dt.datetime(2024, 1, 1)
 
         for days in sizes:
-            end_date = base_date + pd.Timedelta(days=days - 1)
+            end_date = base_date + dt.timedelta(days=days - 1)
 
             start = time.perf_counter()
             for _ in range(100):  # Average over 100 runs
@@ -466,7 +483,7 @@ class TestScaling:
         times = []
 
         for days in sizes:
-            subset = scale_btc_df.iloc[:days]
+            subset = scale_btc_df.head(days)
 
             start = time.perf_counter()
             _ = precompute_features(subset)

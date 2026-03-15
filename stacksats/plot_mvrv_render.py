@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import datetime as dt
+
+import polars as pl
+
+
+def _parse_date(s: str | None) -> dt.datetime | None:
+    if s is None:
+        return None
+    if "T" in s or " " in s:
+        return dt.datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None)
+    return dt.datetime.strptime(s, "%Y-%m-%d")
 
 
 def plot_mvrv_metrics(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     start_date: str | None = None,
     end_date: str | None = None,
     output_path: str = "mvrv_metrics.svg",
@@ -29,57 +39,74 @@ def plot_mvrv_metrics(
             f"Available MVRV/Cap columns: {available_cols if available_cols else 'None'}"
         )
 
+    if "date" not in df.columns:
+        raise ValueError("DataFrame must have a 'date' column.")
+
     if "CapMVRVZ" not in df.columns:
         logging_mod.info(
             "CapMVRVZ not found in data. Calculating MVRV Z-Score from mvrv..."
         )
-        mvrv_mean = df["mvrv"].rolling(window=365, min_periods=30).mean()
-        mvrv_std = df["mvrv"].rolling(window=365, min_periods=30).std()
-        df["CapMVRVZ"] = (df["mvrv"] - mvrv_mean) / mvrv_std
+        mvrv_mean = df["mvrv"].rolling_mean(window_size=365, min_samples=30)
+        mvrv_std = df["mvrv"].rolling_std(window_size=365, min_samples=30)
+        df = df.with_columns(
+            ((pl.col("mvrv") - mvrv_mean) / mvrv_std).alias("CapMVRVZ")
+        )
         logging_mod.info(
             "✓ Calculated CapMVRVZ from mvrv using 365-day rolling window"
         )
 
-    if start_date:
-        df = df[df.index >= pd.to_datetime(start_date)]
-    if end_date:
-        df = df[df.index <= pd.to_datetime(end_date)]
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
+    if start_dt is not None:
+        df = df.filter(pl.col("date") >= start_dt)
+    if end_dt is not None:
+        df = df.filter(pl.col("date") <= end_dt)
 
-    if len(df) == 0:
+    if df.is_empty():
         raise ValueError("No data available for the specified date range")
 
-    df_clean = df[["mvrv", "CapMVRVZ"]].dropna()
+    df_clean = (
+        df.select(["date", "mvrv", "CapMVRVZ"])
+        .drop_nulls()
+        .filter(pl.col("mvrv").is_finite() & pl.col("CapMVRVZ").is_finite())
+    )
 
-    if len(df_clean) == 0:
+    if df_clean.is_empty():
         raise ValueError("No valid MVRV data available after removing missing values")
+
+    date_col = df_clean["date"]
+    date_min = date_col.min()
+    date_max = date_col.max()
+    date_min_py = date_min if isinstance(date_min, dt.datetime) else dt.datetime.fromisoformat(str(date_min)[:10])
+    date_max_py = date_max if isinstance(date_max, dt.datetime) else dt.datetime.fromisoformat(str(date_max)[:10])
 
     logging_mod.info(
         f"Plotting MVRV metrics: {len(df_clean)} data points from "
-        f"{df_clean.index.min().date()} to {df_clean.index.max().date()}"
+        f"{date_min_py.date()} to {date_max_py.date()}"
     )
 
-    mvrv_ma30 = df_clean["mvrv"].rolling(window=30, min_periods=1).mean()
-    zscore_ma30 = df_clean["CapMVRVZ"].rolling(window=30, min_periods=1).mean()
+    mvrv_ma30 = df_clean["mvrv"].rolling_mean(window_size=30, min_samples=1)
+    zscore_ma30 = df_clean["CapMVRVZ"].rolling_mean(window_size=30, min_samples=1)
 
     fig, (ax1, ax2) = plt_mod.subplots(2, 1, figsize=(14, 10), sharex=True)
 
     ax1.plot(
-        df_clean.index,
-        df_clean["mvrv"],
+        date_col.to_list(),
+        df_clean["mvrv"].to_list(),
         linewidth=1.5,
         color="#2563eb",
         alpha=0.5,
         label="MVRV Ratio (Daily)",
     )
     ax1.fill_between(
-        df_clean.index,
-        df_clean["mvrv"],
+        date_col.to_list(),
+        df_clean["mvrv"].to_list(),
         alpha=0.2,
         color="#2563eb",
     )
     ax1.plot(
-        df_clean.index,
-        mvrv_ma30,
+        date_col.to_list(),
+        mvrv_ma30.to_list(),
         linewidth=2.5,
         color="#1e40af",
         label="30-Day MA",
@@ -104,12 +131,12 @@ def plot_mvrv_metrics(
     ax1.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
     ax1.legend(loc="upper left", fontsize=10, framealpha=0.95)
 
-    mvrv_mean = df_clean["mvrv"].mean()
-    mvrv_median = df_clean["mvrv"].median()
-    mvrv_min = df_clean["mvrv"].min()
-    mvrv_max = df_clean["mvrv"].max()
-    mvrv_current = df_clean["mvrv"].iloc[-1]
-    mvrv_ma30_current = mvrv_ma30.iloc[-1]
+    mvrv_mean = float(df_clean["mvrv"].mean())
+    mvrv_median = float(df_clean["mvrv"].median())
+    mvrv_min = float(df_clean["mvrv"].min())
+    mvrv_max = float(df_clean["mvrv"].max())
+    mvrv_current = float(df_clean["mvrv"][-1])
+    mvrv_ma30_current = float(mvrv_ma30[-1])
 
     stats_text1 = (
         f"Current: {mvrv_current:.2f}\n"
@@ -138,22 +165,22 @@ def plot_mvrv_metrics(
     )
 
     ax2.plot(
-        df_clean.index,
-        df_clean["CapMVRVZ"],
+        date_col.to_list(),
+        df_clean["CapMVRVZ"].to_list(),
         linewidth=1.5,
         color="#16a34a",
         alpha=0.5,
         label="MVRV Z-Score (Daily)",
     )
     ax2.fill_between(
-        df_clean.index,
-        df_clean["CapMVRVZ"],
+        date_col.to_list(),
+        df_clean["CapMVRVZ"].to_list(),
         alpha=0.2,
         color="#16a34a",
     )
     ax2.plot(
-        df_clean.index,
-        zscore_ma30,
+        date_col.to_list(),
+        zscore_ma30.to_list(),
         linewidth=2.5,
         color="#15803d",
         label="30-Day MA",
@@ -183,12 +210,12 @@ def plot_mvrv_metrics(
     ax2.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
     ax2.legend(loc="upper left", fontsize=10, framealpha=0.95)
 
-    zscore_mean = df_clean["CapMVRVZ"].mean()
-    zscore_median = df_clean["CapMVRVZ"].median()
-    zscore_min = df_clean["CapMVRVZ"].min()
-    zscore_max = df_clean["CapMVRVZ"].max()
-    zscore_current = df_clean["CapMVRVZ"].iloc[-1]
-    zscore_ma30_current = zscore_ma30.iloc[-1]
+    zscore_mean = float(df_clean["CapMVRVZ"].mean())
+    zscore_median = float(df_clean["CapMVRVZ"].median())
+    zscore_min = float(df_clean["CapMVRVZ"].min())
+    zscore_max = float(df_clean["CapMVRVZ"].max())
+    zscore_current = float(df_clean["CapMVRVZ"][-1])
+    zscore_ma30_current = float(zscore_ma30[-1])
 
     stats_text2 = (
         f"Current: {zscore_current:.2f}\n"
@@ -217,7 +244,7 @@ def plot_mvrv_metrics(
     )
 
     ax2.xaxis.set_major_formatter(mdates_mod.DateFormatter("%Y-%m-%d"))
-    date_range_days = (df_clean.index.max() - df_clean.index.min()).days
+    date_range_days = (date_max_py - date_min_py).days
     if date_range_days > 365:
         ax2.xaxis.set_major_locator(mdates_mod.YearLocator())
         ax2.xaxis.set_minor_locator(mdates_mod.MonthLocator((1, 7)))
@@ -239,7 +266,7 @@ def plot_mvrv_metrics(
 
     logging_mod.info(f"✓ Plot saved to {output_path}")
     logging_mod.info(
-        f"  Date range: {df_clean.index.min().date()} to {df_clean.index.max().date()}"
+        f"  Date range: {date_min_py.date()} to {date_max_py.date()}"
     )
     logging_mod.info(f"  Data points: {len(df_clean)}")
     logging_mod.info(

@@ -5,20 +5,6 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
-
-def _to_pl_series(s) -> pl.Series:
-    """Convert to Polars Series for processing."""
-    if isinstance(s, pl.Series):
-        return s
-    if pd is not None and isinstance(s, pd.Series):
-        return pl.from_pandas(s)
-    raise TypeError("Expected pl.Series or pd.Series")
-
 
 def softmax(x: np.ndarray) -> np.ndarray:
     """Compute softmax probabilities."""
@@ -26,22 +12,16 @@ def softmax(x: np.ndarray) -> np.ndarray:
     return ex / ex.sum()
 
 
-def zscore(series: pl.Series | "pd.Series", window: int) -> pl.Series | "pd.Series":
-    """Compute rolling z-score. Returns same type as input."""
-    s = _to_pl_series(series)
-    mean = s.rolling_mean(window_size=window, min_samples=window // 2)
-    std = s.rolling_std(window_size=window, min_samples=window // 2)
-    out = (s - mean) / std
-    result = out.fill_null(0)
-    if pd is not None and isinstance(series, pd.Series):
-        out_pd = result.to_pandas()
-        out_pd.index = series.index
-        return out_pd
-    return result
+def zscore(series: pl.Series, window: int) -> pl.Series:
+    """Compute rolling z-score."""
+    mean = series.rolling_mean(window_size=window, min_samples=window // 2)
+    std = series.rolling_std(window_size=window, min_samples=window // 2)
+    out = (series - mean) / std
+    return out.fill_null(0)
 
 
-def rolling_percentile(series: pl.Series | "pd.Series", window: int) -> pl.Series | "pd.Series":
-    """Compute rolling percentile rank (0 to 1). Returns same type as input."""
+def rolling_percentile(series: pl.Series, window: int) -> pl.Series:
+    """Compute rolling percentile rank (0 to 1)."""
 
     def pct_rank(x: np.ndarray) -> float:
         if len(x) < 2:
@@ -49,20 +29,14 @@ def rolling_percentile(series: pl.Series | "pd.Series", window: int) -> pl.Serie
         rank = (x[-1] > x[:-1]).sum() / (len(x) - 1)
         return float(rank)
 
-    s = _to_pl_series(series)
-    arr = s.to_numpy()
+    arr = series.to_numpy()
     out = np.full(len(arr), 0.5)
     min_periods = window // 4
     for i in range(min_periods - 1, len(arr)):
         start = max(0, i - window + 1)
         window_slice = arr[start : i + 1]
         out[i] = pct_rank(window_slice)
-    result = pl.Series("pct", out)
-    if pd is not None and isinstance(series, pd.Series):
-        out_pd = result.to_pandas()
-        out_pd.index = series.index
-        return out_pd
-    return result
+    return pl.Series("pct", out)
 
 
 def classify_mvrv_zone(
@@ -86,10 +60,9 @@ def classify_mvrv_zone(
     )
 
 
-def compute_mvrv_volatility(mvrv_zscore: pl.Series | "pd.Series", window: int) -> pl.Series | "pd.Series":
-    """Compute rolling volatility of MVRV Z-score. Returns same type as input."""
-    s = _to_pl_series(mvrv_zscore)
-    vol = s.rolling_std(window_size=window, min_samples=window // 4)
+def compute_mvrv_volatility(mvrv_zscore: pl.Series, window: int) -> pl.Series:
+    """Compute rolling volatility of MVRV Z-score."""
+    vol = mvrv_zscore.rolling_std(window_size=window, min_samples=window // 4)
     arr = vol.to_numpy()
     rank_window = window * 4
     out = np.full(len(arr), 0.5)
@@ -98,12 +71,7 @@ def compute_mvrv_volatility(mvrv_zscore: pl.Series | "pd.Series", window: int) -
         window_slice = arr[start : i + 1]
         if len(window_slice) > 1:
             out[i] = (window_slice[-1] > window_slice[:-1]).sum() / (len(window_slice) - 1)
-    result = pl.Series("vol", np.where(np.isnan(out), 0.5, out))
-    if pd is not None and isinstance(mvrv_zscore, pd.Series):
-        out_pd = result.to_pandas()
-        out_pd.index = mvrv_zscore.index
-        return out_pd
-    return result
+    return pl.Series("vol", np.where(np.isnan(out), 0.5, out))
 
 
 def compute_signal_confidence(

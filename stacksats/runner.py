@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
-import pandas as pd
 import polars as pl
 
 from .column_map_provider import ColumnMapDataProvider
@@ -50,7 +50,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
     @classmethod
     def from_dataframe(
         cls,
-        df,
+        df: pl.DataFrame,
         *,
         column_map: dict[str, str] | None = None,
     ) -> "StrategyRunner":
@@ -62,8 +62,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         Parameters
         ----------
         df:
-            A Pandas DataFrame with a ``DatetimeIndex``. At minimum it must
-            contain a column that maps to ``price_usd``.
+            A Polars DataFrame with a canonical ``date`` column. At minimum it
+            must contain a column that maps to ``price_usd``.
         column_map:
             Mapping from **library column names** to **DataFrame column names**.
             Example: ``{"price_usd": "Close", "mvrv": "MVRV_Ratio"}``.
@@ -93,10 +93,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
     def _load_btc_df(
         self,
-        btc_df: pd.DataFrame | None,
+        btc_df: pl.DataFrame | None,
         *,
         end_date: str | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         if btc_df is not None:
             return btc_df
         return self._data_provider.load(backtest_start=BACKTEST_START, end_date=end_date)
@@ -169,20 +169,20 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         self,
         strategy: BaseStrategy,
         config: RunDailyConfig,
-    ) -> tuple[StrategyMetadata, float, pd.Timestamp, str]:
+    ) -> tuple[StrategyMetadata, float, dt.datetime, str]:
         metadata = strategy.metadata()
         budget = float(config.total_window_budget_usd)
-        if not pd.notna(budget) or budget <= 0.0:
+        if not (budget == budget) or budget <= 0.0:
             raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
         if config.mode not in {"paper", "live"}:
             raise ValueError("mode must be either 'paper' or 'live'.")
         if config.mode == "live" and not config.adapter_spec:
             raise ValueError("Live mode requires --adapter.")
-        run_ts = (
-            pd.Timestamp(config.run_date).normalize()
-            if config.run_date is not None
-            else pd.Timestamp.now().normalize()
-        )
+        if config.run_date is not None:
+            run_ts = dt.datetime.strptime(config.run_date[:10], "%Y-%m-%d")
+        else:
+            now = dt.datetime.now(dt.timezone.utc)
+            run_ts = now.replace(hour=0, minute=0, second=0, microsecond=0)
         run_date = run_ts.strftime("%Y-%m-%d")
         return metadata, budget, run_ts, run_date
 
@@ -337,15 +337,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         metadata: StrategyMetadata,
         config: RunDailyConfig,
         run_date: str,
-        run_ts: pd.Timestamp,
+        run_ts: dt.datetime,
         fingerprint: str,
         state_store,
-        btc_df: pd.DataFrame | None = None,
+        btc_df: pl.DataFrame | None = None,
     ) -> tuple[
-        pd.DataFrame,
-        pd.Timestamp,
-        pd.Timestamp,
-        pd.DataFrame,
+        pl.DataFrame,
+        dt.datetime,
+        dt.datetime,
+        pl.DataFrame,
         bool,
         list[str],
         int,
@@ -359,9 +359,16 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
         window_end = run_ts
         window_start = window_end - ALLOCATION_WINDOW_OFFSET
-        required_index = pd.date_range(window_start, window_end, freq="D")
-        required_window = btc_df_loaded.reindex(required_index)
-        if required_window[config.btc_price_col].isna().any():
+        required_dates = pl.datetime_range(
+            window_start, window_end, interval="1d", eager=True
+        ).to_list()
+        required_dates_df = pl.DataFrame({"date": required_dates})
+        required_window = required_dates_df.join(
+            btc_df_loaded.select(["date", config.btc_price_col]),
+            on="date",
+            how="left",
+        )
+        if required_window[config.btc_price_col].null_count() > 0:
             raise ValueError(
                 "Missing BTC price data for required allocation window ending on run_date."
             )
@@ -386,7 +393,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             end_date=window_end,
             current_date=window_end,
         )
-        data_hash = hash_dataframe(btc_df_loaded.loc[:window_end].copy())
+        btc_slice = btc_df_loaded.filter(pl.col("date") <= window_end)
+        data_hash = hash_dataframe(btc_slice)
         validation_receipt = state_store.create_validation_receipt(
             strategy_id=metadata.strategy_id,
             strategy_version=metadata.version,
@@ -420,15 +428,25 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: BacktestConfig,
         *,
-        btc_df: pd.DataFrame | None = None,
+        btc_df: pl.DataFrame | None = None,
     ):
         from .api import BacktestResult
 
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
-        start_ts = pd.Timestamp(config.start_date or BACKTEST_START)
-        end_ts = pd.Timestamp(config.end_date or btc_df.index.max()).normalize()
+        start_ts = dt.datetime.strptime(
+            (config.start_date or BACKTEST_START)[:10], "%Y-%m-%d"
+        )
+        end_col = btc_df["date"].max()
+        if config.end_date:
+            end_ts = dt.datetime.strptime(config.end_date[:10], "%Y-%m-%d")
+        else:
+            end_ts = (
+                end_col
+                if isinstance(end_col, dt.datetime)
+                else dt.datetime.fromisoformat(str(end_col)[:10])
+            )
         full_features_df = self._materialize_strategy_features(
             strategy,
             btc_df,
@@ -437,12 +455,12 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             current_date=end_ts,
         )
 
-        def _strategy_fn(df_window: pd.DataFrame) -> pd.Series:
-            if df_window.empty:
-                return pd.Series(dtype=float)
+        def _strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
+            if df_window.is_empty():
+                return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 
-            window_start = df_window.index.min()
-            window_end = df_window.index.max()
+            window_start = df_window["date"].min()
+            window_end = df_window["date"].max()
             window_features = self._materialize_strategy_features(
                 strategy,
                 btc_df,
@@ -472,7 +490,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             start_date=config.start_date,
             end_date=config.end_date,
         )
-        if spd_table.empty:
+        if spd_table.is_empty():
             raise ValueError(
                 "No backtest windows were generated for the requested date range."
             )
@@ -498,7 +516,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: ValidationConfig,
         *,
-        btc_df: pd.DataFrame | None = None,
+        btc_df: pl.DataFrame | None = None,
     ):
         from .api import ValidationResult
 
@@ -518,10 +536,18 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         btc_df = self._load_btc_df(btc_df, end_date=config.end_date)
 
         start_date = config.start_date or BACKTEST_START
-        end_date = config.end_date or btc_df.index.max().strftime("%Y-%m-%d")
-        start_ts = pd.to_datetime(start_date)
-        end_ts = pd.to_datetime(end_date)
-        backtest_idx = btc_df.loc[start_ts:end_ts].index
+        end_col = btc_df["date"].max()
+        end_date = config.end_date or (
+            end_col.strftime("%Y-%m-%d")
+            if hasattr(end_col, "strftime")
+            else str(end_col)[:10]
+        )
+        start_ts = dt.datetime.strptime(start_date[:10], "%Y-%m-%d")
+        end_ts = dt.datetime.strptime(end_date[:10], "%Y-%m-%d")
+        backtest_slice = btc_df.filter(
+            (pl.col("date") >= start_ts) & (pl.col("date") <= end_ts)
+        )
+        backtest_idx = backtest_slice["date"].unique().sort()
 
         strict_mode = bool(config.strict)
         state = _ValidationState(messages=[], diagnostics={})
@@ -621,7 +647,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
 
             shuffled_days = max(ALLOCATION_SPAN_DAYS * 2, 730)
-            shuffled_start = max(start_ts, end_ts - pd.Timedelta(days=shuffled_days - 1))
+            shuffled_start = max(start_ts, end_ts - dt.timedelta(days=shuffled_days - 1))
             shuffled_ok, shuffled_messages = self._strict_shuffled_check(
                 strategy=strategy,
                 btc_df=btc_df,
@@ -672,7 +698,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: RunDailyConfig,
         *,
-        btc_df: pd.DataFrame | None = None,
+        btc_df: pl.DataFrame | None = None,
     ):
         from .api import DailyOrderReceipt, DailyOrderRequest, DailyRunResult
         from .execution_adapters import PaperExecutionAdapter, load_execution_adapter
@@ -732,7 +758,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
             if not validation_passed:
                 raise ValueError(self._strict_validation_failure_message(validation_messages))
-            required_window = btc_df_loaded.reindex(pd.date_range(window_start, window_end, freq="D"))
+            required_dates = pl.datetime_range(
+                window_start, window_end, interval="1d", eager=True
+            ).to_list()
+            required_dates_df = pl.DataFrame({"date": required_dates})
+            required_window = required_dates_df.join(
+                btc_df_loaded.select(["date", config.btc_price_col]),
+                on="date",
+                how="left",
+            )
 
             # Prefix-lock invariant: once prior daily allocations exist, the strategy
             # cannot rewrite historical weights for this allocation window.
@@ -758,11 +792,13 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             weights = strategy.compute_weights(ctx)
             self._validate_weights(weights, window_start, window_end)
             strategy.validate_weights(weights, ctx)
-            if run_ts not in weights.index:
+            run_row = weights.filter(pl.col("date") == run_ts)
+            if run_row.is_empty():
                 raise ValueError("Strategy weights are missing run_date allocation.")
 
-            weight_today = float(weights.loc[run_ts])
-            price_usd = float(required_window.loc[run_ts, config.btc_price_col])
+            weight_today = float(run_row["weight"][0])
+            price_row = required_window.filter(pl.col("date") == run_ts)
+            price_usd = float(price_row[config.btc_price_col][0])
             if price_usd <= 0.0:
                 raise ValueError("BTC price must be greater than 0 for run_date.")
             order_notional_usd = budget * weight_today
@@ -889,7 +925,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         run_date: str,
         mode: str = "paper",
         state_db_path: str = ".stacksats/run_state.sqlite3",
-        btc_df: pd.DataFrame | None = None,
+        btc_df: pl.DataFrame | None = None,
     ) -> dict[str, object]:
         from .execution_state import SQLiteExecutionStateStore
 
@@ -905,7 +941,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         if stored is None:
             raise ValueError("No stored daily run exists for the requested key.")
         btc_df_loaded = self._load_btc_df(btc_df, end_date=run_date)
-        run_ts = pd.Timestamp(run_date).normalize()
+        run_ts = dt.datetime.strptime(run_date[:10], "%Y-%m-%d")
         window_end = run_ts
         window_start = window_end - ALLOCATION_WINDOW_OFFSET
         locked_prefix = state_store.load_locked_prefix(
@@ -933,7 +969,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 locked_weights=locked_prefix,
             )
         )
-        weight_today = float(weights.loc[run_ts]) if run_ts in weights.index else None
+        run_row = weights.filter(pl.col("date") == run_ts)
+        weight_today = float(run_row["weight"][0]) if not run_row.is_empty() else None
         prior_weight = stored.payload.get("weight_today")
         previous_feature_snapshot_hash = stored.payload.get("feature_snapshot_hash", "")
         status = self._classify_reconciliation_status(
@@ -957,8 +994,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: ExportConfig,
         *,
-        btc_df: pd.DataFrame | None = None,
-        current_date: pd.Timestamp | None = None,
+        btc_df: pl.DataFrame | None = None,
+        current_date: dt.datetime | None = None,
     ) -> WeightTimeSeriesBatch:
         from .export_weights import process_start_date_batch
         from .prelude import generate_date_ranges, group_ranges_by_start_date
@@ -966,12 +1003,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
         btc_df = self._load_btc_df(btc_df, end_date=config.range_end)
-        run_date = current_date or pd.Timestamp.now().normalize()
+        now = dt.datetime.now(dt.timezone.utc)
+        run_date = current_date or now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_ts = dt.datetime.strptime(config.range_start[:10], "%Y-%m-%d")
+        end_ts = dt.datetime.strptime(config.range_end[:10], "%Y-%m-%d")
         features_df = self._materialize_strategy_features(
             strategy,
             btc_df,
-            start_date=pd.Timestamp(config.range_start),
-            end_date=pd.Timestamp(config.range_end),
+            start_date=start_ts,
+            end_date=end_ts,
             current_date=run_date,
         )
 
@@ -993,7 +1033,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             )
         if not all_results:
             raise ValueError("No export ranges generated from provided export config.")
-        result_df = pd.concat(all_results, ignore_index=True)
+        result_df = pl.concat(all_results, how="vertical_relaxed")
 
         provenance = self._provenance(strategy, config)
         series_batch = WeightTimeSeriesBatch.from_flat_dataframe(

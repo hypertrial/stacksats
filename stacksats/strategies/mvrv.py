@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import polars as pl
 
 from ..model_development import FEATS, compute_preference_scores
 from ..strategy_types import BaseStrategy, StrategyContext
@@ -21,12 +21,13 @@ class MVRVStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del signals
-        return compute_preference_scores(
+        scores = compute_preference_scores(
             features_df=features_df,
             start_date=ctx.start_date,
             end_date=ctx.end_date,
         )
+        return scores.select("date", pl.col("preference").alias("value"))

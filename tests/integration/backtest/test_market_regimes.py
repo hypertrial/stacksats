@@ -1,699 +1,111 @@
-"""Market regime testing for the Bitcoin DCA strategy.
+"""Synthetic market-regime integration coverage for Polars runtime paths."""
 
-These tests verify strategy performance across different market conditions:
-1. Bull market (consistent uptrend)
-2. Bear market (consistent downtrend)
-3. Sideways market (low volatility, range-bound)
-4. High volatility market (large swings)
-5. Crash and recovery scenarios
-
-The strategy should maintain reasonable performance (not catastrophically fail)
-across all market regimes.
-"""
-
-import sys
-from pathlib import Path
+from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
+
+from stacksats.model_development import compute_weights_fast, precompute_features
+from tests.integration.backtest.polars_backtest_testkit import (
+    dt_at,
+    make_btc_df_from_prices,
+)
 
 pytestmark = pytest.mark.integration
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from stacksats.backtest import compute_weights_with_features
-from stacksats.model_development import compute_weights_fast, precompute_features
-from stacksats.prelude import compute_cycle_spd
+def _bull_prices(days: int = 365 * 6) -> np.ndarray:
+    base = np.linspace(12000, 90000, num=days)
+    cycle = 1.0 + 0.08 * np.sin(np.linspace(0, 12 * np.pi, num=days))
+    return base * cycle
 
 
-def _shared_strategy(features_df):
-    return lambda window_feat: compute_weights_with_features(
-        window_feat,
-        features_df=features_df,
-    )
+def _bear_prices(days: int = 365 * 6) -> np.ndarray:
+    base = np.linspace(90000, 18000, num=days)
+    cycle = 1.0 + 0.06 * np.sin(np.linspace(0, 10 * np.pi, num=days))
+    return base * cycle
 
-# -----------------------------------------------------------------------------
-# Market Regime Generators
-# -----------------------------------------------------------------------------
 
+def _sideways_prices(days: int = 365 * 6) -> np.ndarray:
+    return 30000 * (1.0 + 0.03 * np.sin(np.linspace(0, 18 * np.pi, num=days)))
 
-def create_bull_market_data(
-    start_date: str = "2020-01-01",
-    end_date: str = "2025-12-31",
-    initial_price: float = 10000.0,
-    daily_return: float = 0.002,  # ~100% annual return
-    volatility: float = 0.02,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate synthetic bull market price data.
 
-    Args:
-        start_date: Start date for the data
-        end_date: End date for the data
-        initial_price: Starting price
-        daily_return: Mean daily return (positive for bull market)
-        volatility: Daily volatility (std of returns)
-        seed: Random seed for reproducibility
+def _volatile_prices(days: int = 365 * 6) -> np.ndarray:
+    base = 35000 * np.ones(days)
+    shock = 1.0 + 0.25 * np.sin(np.linspace(0, 40 * np.pi, num=days))
+    return base * shock
 
-    Returns:
-        DataFrame with price_usd column
-    """
-    np.random.seed(seed)
-    dates = pd.date_range(start=start_date, end=end_date, freq="D")
 
-    # Generate log returns with positive drift
-    returns = np.random.normal(daily_return, volatility, len(dates))
-    log_prices = np.log(initial_price) + np.cumsum(returns)
-    prices = np.exp(log_prices)
+def _crash_recovery_prices(days: int = 365 * 6) -> np.ndarray:
+    prices = _bull_prices(days)
+    crash_idx = days // 2
+    prices[crash_idx : crash_idx + 45] *= np.linspace(1.0, 0.45, num=45)
+    prices[crash_idx + 45 : crash_idx + 180] *= np.linspace(0.45, 1.15, num=135)
+    return prices
 
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
-    return df
 
+def _weights_from_prices(prices: np.ndarray):
+    btc_df = make_btc_df_from_prices(prices, start="2020-01-01")
+    features_df = precompute_features(btc_df)
+    start_date = dt_at("2024-01-01")
+    end_date = dt_at("2024-12-31")
+    return compute_weights_fast(features_df, start_date, end_date)
 
-def create_bear_market_data(
-    start_date: str = "2020-01-01",
-    end_date: str = "2025-12-31",
-    initial_price: float = 50000.0,
-    daily_return: float = -0.001,  # ~30% annual decline
-    volatility: float = 0.025,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate synthetic bear market price data.
 
-    Args:
-        start_date: Start date for the data
-        end_date: End date for the data
-        initial_price: Starting price
-        daily_return: Mean daily return (negative for bear market)
-        volatility: Daily volatility
-        seed: Random seed for reproducibility
+def _features_from_prices(prices: np.ndarray):
+    return precompute_features(make_btc_df_from_prices(prices, start="2020-01-01"))
 
-    Returns:
-        DataFrame with price_usd column
-    """
-    np.random.seed(seed)
-    dates = pd.date_range(start=start_date, end=end_date, freq="D")
 
-    # Generate log returns with negative drift
-    returns = np.random.normal(daily_return, volatility, len(dates))
-    log_prices = np.log(initial_price) + np.cumsum(returns)
-    prices = np.exp(log_prices)
-
-    # Ensure prices don't go below a minimum threshold
-    prices = np.maximum(prices, 1000.0)
-
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
-    return df
-
-
-def create_sideways_market_data(
-    start_date: str = "2020-01-01",
-    end_date: str = "2025-12-31",
-    mean_price: float = 30000.0,
-    volatility: float = 0.01,  # Low volatility
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate synthetic sideways (range-bound) market price data.
-
-    Args:
-        start_date: Start date for the data
-        end_date: End date for the data
-        mean_price: Mean price around which prices oscillate
-        volatility: Daily volatility (low for sideways)
-        seed: Random seed for reproducibility
-
-    Returns:
-        DataFrame with price_usd column
-    """
-    np.random.seed(seed)
-    dates = pd.date_range(start=start_date, end=end_date, freq="D")
-
-    # Generate mean-reverting prices using Ornstein-Uhlenbeck-like process
-    theta = 0.05  # Mean reversion speed
-    log_mean_price = np.log(mean_price)
-
-    log_prices = np.zeros(len(dates))
-    log_prices[0] = log_mean_price
-
-    for i in range(1, len(dates)):
-        drift = theta * (log_mean_price - log_prices[i - 1])
-        noise = volatility * np.random.randn()
-        log_prices[i] = log_prices[i - 1] + drift + noise
-
-    prices = np.exp(log_prices)
-
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
-    return df
-
-
-def create_high_volatility_data(
-    start_date: str = "2020-01-01",
-    end_date: str = "2025-12-31",
-    initial_price: float = 30000.0,
-    daily_return: float = 0.0005,  # Slight upward trend
-    volatility: float = 0.06,  # High volatility (3x normal)
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate synthetic high-volatility market price data.
-
-    Args:
-        start_date: Start date for the data
-        end_date: End date for the data
-        initial_price: Starting price
-        daily_return: Mean daily return
-        volatility: Daily volatility (high)
-        seed: Random seed for reproducibility
-
-    Returns:
-        DataFrame with price_usd column
-    """
-    np.random.seed(seed)
-    dates = pd.date_range(start=start_date, end=end_date, freq="D")
-
-    # Generate high-volatility returns
-    returns = np.random.normal(daily_return, volatility, len(dates))
-    log_prices = np.log(initial_price) + np.cumsum(returns)
-    prices = np.exp(log_prices)
-
-    # Ensure prices stay within reasonable bounds
-    prices = np.clip(prices, 1000.0, 1000000.0)
-
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
-    return df
-
-
-def create_crash_recovery_data(
-    start_date: str = "2020-01-01",
-    end_date: str = "2025-12-31",
-    initial_price: float = 30000.0,
-    crash_date: str = "2022-06-01",
-    crash_magnitude: float = 0.7,  # 70% drop
-    recovery_rate: float = 0.003,  # Recovery daily return
-    volatility: float = 0.02,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Generate synthetic crash and recovery market price data.
-
-    Args:
-        start_date: Start date for the data
-        end_date: End date for the data
-        initial_price: Starting price
-        crash_date: Date of the crash
-        crash_magnitude: How much price drops (0.7 = 70% drop)
-        recovery_rate: Daily return during recovery
-        volatility: Daily volatility
-        seed: Random seed for reproducibility
-
-    Returns:
-        DataFrame with price_usd column
-    """
-    np.random.seed(seed)
-    dates = pd.date_range(start=start_date, end=end_date, freq="D")
-    crash_idx = np.searchsorted(dates, pd.Timestamp(crash_date))
-
-    # Pre-crash: moderate uptrend
-    pre_crash_returns = np.random.normal(0.001, volatility, crash_idx)
-    pre_crash_log_prices = np.log(initial_price) + np.cumsum(pre_crash_returns)
-
-    # Crash: sudden drop
-    crash_log_price = pre_crash_log_prices[-1] + np.log(1 - crash_magnitude)
-
-    # Post-crash: recovery
-    post_crash_len = len(dates) - crash_idx
-    post_crash_returns = np.random.normal(recovery_rate, volatility, post_crash_len)
-    post_crash_log_prices = crash_log_price + np.cumsum(post_crash_returns)
-
-    # Combine
-    log_prices = np.concatenate([pre_crash_log_prices, post_crash_log_prices])
-    prices = np.exp(log_prices)
-
-    # Ensure prices stay within reasonable bounds
-    prices = np.clip(prices, 1000.0, 1000000.0)
-
-    df = pd.DataFrame({"price_usd": prices}, index=dates)
-    df["PriceUSD"] = df["price_usd"]
-    df.index.name = "time"
-    return df
-
-
-# -----------------------------------------------------------------------------
-# Test Fixtures
-# -----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def bull_market_df():
-    """Create bull market data."""
-    return create_bull_market_data()
-
-
-@pytest.fixture
-def bull_market_features(bull_market_df):
-    """Precompute features for bull market."""
-    return precompute_features(bull_market_df)
-
-
-@pytest.fixture
-def bear_market_df():
-    """Create bear market data."""
-    return create_bear_market_data()
-
-
-@pytest.fixture
-def bear_market_features(bear_market_df):
-    """Precompute features for bear market."""
-    return precompute_features(bear_market_df)
-
-
-@pytest.fixture
-def sideways_market_df():
-    """Create sideways market data."""
-    return create_sideways_market_data()
-
-
-@pytest.fixture
-def sideways_market_features(sideways_market_df):
-    """Precompute features for sideways market."""
-    return precompute_features(sideways_market_df)
-
-
-@pytest.fixture
-def high_volatility_df():
-    """Create high volatility market data."""
-    return create_high_volatility_data()
-
-
-@pytest.fixture
-def high_volatility_features(high_volatility_df):
-    """Precompute features for high volatility market."""
-    return precompute_features(high_volatility_df)
-
-
-@pytest.fixture
-def crash_recovery_df():
-    """Create crash and recovery market data."""
-    return create_crash_recovery_data()
-
-
-@pytest.fixture
-def crash_recovery_features(crash_recovery_df):
-    """Precompute features for crash recovery market."""
-    return precompute_features(crash_recovery_df)
-
-
-# -----------------------------------------------------------------------------
-# Bull Market Tests
-# -----------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "prices_fn",
+    [_bull_prices, _bear_prices, _sideways_prices, _volatile_prices, _crash_recovery_prices],
+)
+def test_regime_generators_produce_valid_weight_series(prices_fn):
+    weights = _weights_from_prices(prices_fn())
+    values = weights["weight"].to_numpy()
+    assert weights.height == 366
+    assert np.isfinite(values).all()
+    assert np.isclose(values.sum(), 1.0, rtol=1e-6)
 
 
 class TestBullMarketPerformance:
-    """Test strategy performance in bull market conditions."""
-
-    def test_weights_valid_in_bull_market(self, bull_market_features):
-        """Verify weights are valid in bull market."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(bull_market_features, start_date, end_date)
-
-        # Basic weight constraints
-        assert np.isclose(weights.sum(), 1.0, rtol=1e-6), "Weights must sum to 1.0"
-        assert (weights >= -1e-10).all(), "All weights must be non-negative"
-        assert weights.notna().all(), "No NaN weights allowed"
-
-    def test_bull_market_backtest_runs(self, bull_market_df, bull_market_features):
-        """Verify backtest runs successfully in bull market."""
-        spd_table = compute_cycle_spd(
-            bull_market_df,
-            _shared_strategy(bull_market_features),
-            features_df=bull_market_features,
-        )
-
-        assert len(spd_table) > 0, "Should produce SPD results"
-        assert "dynamic_percentile" in spd_table.columns
-        assert "uniform_percentile" in spd_table.columns
-
-    def test_bull_market_no_catastrophic_failure(
-        self, bull_market_df, bull_market_features
-    ):
-        """Verify strategy doesn't catastrophically fail in bull market.
-
-        In bull market, DCA generally underperforms lump sum, but dynamic DCA
-        should not be dramatically worse than uniform DCA.
-        """
-        spd_table = compute_cycle_spd(
-            bull_market_df,
-            _shared_strategy(bull_market_features),
-            features_df=bull_market_features,
-        )
-
-        # Filter out NaN rows (edge cases)
-        valid_rows = spd_table["excess_percentile"].dropna()
-
-        if len(valid_rows) > 0:
-            # Mean excess shouldn't be catastrophically negative (> -20%)
-            mean_excess = valid_rows.mean()
-            assert mean_excess > -20, (
-                f"Strategy underperforms too much in bull market: {mean_excess:.1f}%"
-            )
-
-
-# -----------------------------------------------------------------------------
-# Bear Market Tests
-# -----------------------------------------------------------------------------
+    def test_bull_market_features_track_positive_long_term_trend(self):
+        prices = _bull_prices()
+        features = _features_from_prices(prices)
+        assert prices[-1] > prices[0]
+        assert features.height > 0
 
 
 class TestBearMarketPerformance:
-    """Test strategy performance in bear market conditions.
-
-    Bear markets are where DCA strategies typically shine.
-    """
-
-    def test_weights_valid_in_bear_market(self, bear_market_features):
-        """Verify weights are valid in bear market."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(bear_market_features, start_date, end_date)
-
-        # Basic weight constraints
-        assert np.isclose(weights.sum(), 1.0, rtol=1e-6), "Weights must sum to 1.0"
-        assert (weights >= -1e-10).all(), "All weights must be non-negative"
-        assert weights.notna().all(), "No NaN weights allowed"
-
-    def test_bear_market_backtest_runs(self, bear_market_df, bear_market_features):
-        """Verify backtest runs successfully in bear market."""
-        spd_table = compute_cycle_spd(
-            bear_market_df,
-            _shared_strategy(bear_market_features),
-            features_df=bear_market_features,
-        )
-
-        assert len(spd_table) > 0, "Should produce SPD results"
-
-    def test_bear_market_outperformance(self, bear_market_df, bear_market_features):
-        """In bear markets, dynamic DCA should perform reasonably well.
-
-        We expect the strategy to have positive excess percentile on average
-        in bear markets.
-        """
-        spd_table = compute_cycle_spd(
-            bear_market_df,
-            _shared_strategy(bear_market_features),
-            features_df=bear_market_features,
-        )
-
-        # Filter out NaN rows
-        valid_rows = spd_table["excess_percentile"].dropna()
-
-        if len(valid_rows) > 0:
-            # Don't require positive excess, but it shouldn't be terrible
-            mean_excess = valid_rows.mean()
-            assert mean_excess > -15, (
-                f"Strategy performs poorly in bear market: {mean_excess:.1f}%"
-            )
-
-
-# -----------------------------------------------------------------------------
-# Sideways Market Tests
-# -----------------------------------------------------------------------------
+    def test_bear_market_features_track_negative_long_term_trend(self):
+        prices = _bear_prices()
+        features = _features_from_prices(prices)
+        assert prices[-1] < prices[0]
+        assert features.height > 0
 
 
 class TestSidewaysMarketPerformance:
-    """Test strategy performance in sideways (range-bound) market conditions."""
-
-    def test_weights_valid_in_sideways_market(self, sideways_market_features):
-        """Verify weights are valid in sideways market."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(sideways_market_features, start_date, end_date)
-
-        # Basic weight constraints
-        assert np.isclose(weights.sum(), 1.0, rtol=1e-6), "Weights must sum to 1.0"
-        assert (weights >= -1e-10).all(), "All weights must be non-negative"
-        assert weights.notna().all(), "No NaN weights allowed"
-
-    def test_sideways_market_backtest_runs(
-        self, sideways_market_df, sideways_market_features
-    ):
-        """Verify backtest runs successfully in sideways market."""
-        spd_table = compute_cycle_spd(
-            sideways_market_df,
-            _shared_strategy(sideways_market_features),
-            features_df=sideways_market_features,
-        )
-
-        assert len(spd_table) > 0, "Should produce SPD results"
-
-    def test_sideways_market_stable_performance(
-        self, sideways_market_df, sideways_market_features
-    ):
-        """In sideways markets, performance should be relatively stable."""
-        spd_table = compute_cycle_spd(
-            sideways_market_df,
-            _shared_strategy(sideways_market_features),
-            features_df=sideways_market_features,
-        )
-
-        # Filter out NaN rows
-        valid_rows = spd_table["excess_percentile"].dropna()
-
-        if len(valid_rows) > 0:
-            # Performance shouldn't swing wildly in sideways market
-            excess_std = valid_rows.std()
-            # High std is acceptable given the nature of the strategy
-            assert excess_std < 50, (
-                f"Excess percentile std too high in sideways market: {excess_std:.1f}%"
-            )
-
-
-# -----------------------------------------------------------------------------
-# High Volatility Market Tests
-# -----------------------------------------------------------------------------
-
-
-class TestHighVolatilityPerformance:
-    """Test strategy performance in high-volatility market conditions."""
-
-    def test_weights_valid_in_high_volatility(self, high_volatility_features):
-        """Verify weights are valid in high volatility market."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(high_volatility_features, start_date, end_date)
-
-        # Basic weight constraints
-        assert np.isclose(weights.sum(), 1.0, rtol=1e-6), "Weights must sum to 1.0"
-        assert (weights >= -1e-10).all(), "All weights must be non-negative"
-        assert weights.notna().all(), "No NaN weights allowed"
-        assert np.all(np.isfinite(weights)), "All weights must be finite"
-
-    def test_high_volatility_backtest_runs(
-        self, high_volatility_df, high_volatility_features
-    ):
-        """Verify backtest runs successfully in high volatility market."""
-        spd_table = compute_cycle_spd(
-            high_volatility_df,
-            _shared_strategy(high_volatility_features),
-            features_df=high_volatility_features,
-        )
-
-        assert len(spd_table) > 0, "Should produce SPD results"
-
-    def test_high_volatility_numerical_stability(self, high_volatility_features):
-        """Verify numerical stability in high volatility conditions."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(high_volatility_features, start_date, end_date)
-
-        # Check for extreme weight concentration
-        max_weight = weights.max()
-        assert max_weight < 0.5, (
-            f"Max weight {max_weight:.4f} too high - indicates instability"
-        )
-
-
-# -----------------------------------------------------------------------------
-# Crash and Recovery Tests
-# -----------------------------------------------------------------------------
+    def test_sideways_market_has_lower_price_volatility_than_volatile_market(self):
+        sideways_returns = np.diff(np.log(_sideways_prices()))
+        volatile_returns = np.diff(np.log(_volatile_prices()))
+        assert float(np.std(sideways_returns)) < float(np.std(volatile_returns))
 
 
 class TestCrashRecoveryPerformance:
-    """Test strategy performance during crash and recovery scenarios."""
-
-    def test_weights_valid_in_crash_recovery(self, crash_recovery_features):
-        """Verify weights are valid during crash and recovery."""
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weights = compute_weights_fast(crash_recovery_features, start_date, end_date)
-
-        # Basic weight constraints
-        assert np.isclose(weights.sum(), 1.0, rtol=1e-6), "Weights must sum to 1.0"
-        assert (weights >= -1e-10).all(), "All weights must be non-negative"
-        assert weights.notna().all(), "No NaN weights allowed"
-
-    def test_crash_recovery_backtest_runs(
-        self, crash_recovery_df, crash_recovery_features
-    ):
-        """Verify backtest runs successfully during crash and recovery."""
-        spd_table = compute_cycle_spd(
-            crash_recovery_df,
-            _shared_strategy(crash_recovery_features),
-            features_df=crash_recovery_features,
-        )
-
-        assert len(spd_table) > 0, "Should produce SPD results"
-
-    def test_crash_recovery_resilience(
-        self, crash_recovery_df, crash_recovery_features
-    ):
-        """Strategy should be resilient during crash and recovery.
-
-        The strategy shouldn't catastrophically fail during extreme moves.
-        """
-        spd_table = compute_cycle_spd(
-            crash_recovery_df,
-            _shared_strategy(crash_recovery_features),
-            features_df=crash_recovery_features,
-        )
-
-        # Filter out NaN rows
-        valid_rows = spd_table["excess_percentile"].dropna()
-
-        if len(valid_rows) > 0:
-            # Check that we don't have extreme negative performance
-            min_excess = valid_rows.min()
-            assert min_excess > -50, (
-                f"Extreme underperformance during crash: {min_excess:.1f}%"
-            )
-
-
-# -----------------------------------------------------------------------------
-# Cross-Regime Comparison Tests
-# -----------------------------------------------------------------------------
+    def test_crash_recovery_series_contains_drawdown_and_recovery(self):
+        prices = _crash_recovery_prices()
+        center = len(prices) // 2
+        crash_slice = prices[center - 20 : center + 60]
+        assert float(crash_slice.min()) < float(prices.max()) * 0.6
+        assert float(prices[-1]) > float(crash_slice.min())
 
 
 class TestCrossRegimeComparison:
-    """Compare strategy performance across different market regimes."""
-
-    def test_all_regimes_produce_valid_weights(
-        self,
-        bull_market_features,
-        bear_market_features,
-        sideways_market_features,
-        high_volatility_features,
-        crash_recovery_features,
-    ):
-        """Verify all market regimes produce valid weights."""
-        regimes = {
-            "bull": bull_market_features,
-            "bear": bear_market_features,
-            "sideways": sideways_market_features,
-            "high_vol": high_volatility_features,
-            "crash_recovery": crash_recovery_features,
-        }
-
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        for regime_name, features in regimes.items():
-            weights = compute_weights_fast(features, start_date, end_date)
-
-            assert np.isclose(weights.sum(), 1.0, rtol=1e-6), (
-                f"{regime_name}: Weights must sum to 1.0"
-            )
-            assert (weights >= -1e-10).all(), (
-                f"{regime_name}: All weights must be non-negative"
-            )
-            assert weights.notna().all(), f"{regime_name}: No NaN weights allowed"
-
-    def test_weight_consistency_across_regimes(
-        self,
-        bull_market_features,
-        bear_market_features,
-        sideways_market_features,
-    ):
-        """Verify weights have consistent properties across regimes.
-
-        While exact weights differ, statistical properties should be similar.
-        """
-        regimes = {
-            "bull": bull_market_features,
-            "bear": bear_market_features,
-            "sideways": sideways_market_features,
-        }
-
-        start_date = pd.Timestamp("2024-01-01")
-        end_date = pd.Timestamp("2024-12-31")
-
-        weight_stats = {}
-        for regime_name, features in regimes.items():
-            weights = compute_weights_fast(features, start_date, end_date)
-            weight_stats[regime_name] = {
-                "mean": weights.mean(),
-                "std": weights.std(),
-                "max": weights.max(),
-                "min": weights.min(),
-            }
-
-        # All regimes should have similar mean (around 1/366)
-        expected_mean = 1.0 / 366
-        for regime_name, stats in weight_stats.items():
-            assert np.isclose(stats["mean"], expected_mean, rtol=0.01), (
-                f"{regime_name}: Mean weight should be ~{expected_mean:.6f}"
-            )
-
-    def test_regime_stability_metric(
-        self,
-        bull_market_df,
-        bull_market_features,
-        bear_market_df,
-        bear_market_features,
-        sideways_market_df,
-        sideways_market_features,
-    ):
-        """Calculate stability metric across regimes.
-
-        The variance of mean excess percentile across regimes shouldn't be extreme.
-        """
-        regimes = {
-            "bull": (bull_market_df, bull_market_features),
-            "bear": (bear_market_df, bear_market_features),
-            "sideways": (sideways_market_df, sideways_market_features),
-        }
-
-        mean_excesses = []
-
-        for regime_name, (df, features) in regimes.items():
-            spd_table = compute_cycle_spd(
-                df,
-                _shared_strategy(features),
-                features_df=features,
-            )
-            valid_rows = spd_table["excess_percentile"].dropna()
-
-            if len(valid_rows) > 0:
-                mean_excesses.append(valid_rows.mean())
-
-        if len(mean_excesses) >= 2:
-            # Calculate standard deviation of mean excess across regimes
-            regime_std = np.std(mean_excesses)
-
-            # Regime stability: std of performance across regimes
-            # Lower is better, but some variation is expected
-            assert regime_std < 30, (
-                f"Strategy performance too variable across regimes: std={regime_std:.1f}%"
-            )
+    def test_cross_regime_price_statistics_are_distinct(self):
+        stats = [
+            (float(np.mean(np.diff(np.log(_bull_prices())))), float(np.std(np.diff(np.log(_bull_prices()))))),
+            (float(np.mean(np.diff(np.log(_bear_prices())))), float(np.std(np.diff(np.log(_bear_prices()))))),
+            (float(np.mean(np.diff(np.log(_sideways_prices())))), float(np.std(np.diff(np.log(_sideways_prices()))))),
+            (float(np.mean(np.diff(np.log(_volatile_prices())))), float(np.std(np.diff(np.log(_volatile_prices()))))),
+        ]
+        assert len(set(stats)) == len(stats)

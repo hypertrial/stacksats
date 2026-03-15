@@ -68,7 +68,7 @@ class _StrategyLintVisitor(ast.NodeVisitor):
                     "Negative shift detected in strategy code.",
                 )
 
-        if attr_name == "rolling":
+        if attr_name == "rolling" or (attr_name and "rolling" in attr_name):
             center_arg = _call_keyword(node, "center")
             if _is_true_literal(center_arg):
                 self._error(
@@ -81,8 +81,10 @@ class _StrategyLintVisitor(ast.NodeVisitor):
             "open",
             "pd.read_csv",
             "pd.read_parquet",
-            "pandas.read_csv",
-            "pandas.read_parquet",
+            "pl.read_csv",
+            "pl.read_parquet",
+            "polars.read_csv",
+            "polars.read_parquet",
             "sqlite3.connect",
             "requests.get",
             "requests.post",
@@ -196,4 +198,3 @@ def _is_rolling_aggregation(node: ast.Call) -> bool:
         and isinstance(value.func, ast.Attribute)
         and value.func.attr == "rolling"
     )
-

@@ -99,6 +99,7 @@ python -m ruff check .
 
 log "Checking hard-break source guardrails"
 python scripts/check_no_coinmetrics_refs.py
+python scripts/check_polars_only_refs.py
 
 log "Checking docs and release metadata"
 bash scripts/check_markdown_scope.sh >/dev/null

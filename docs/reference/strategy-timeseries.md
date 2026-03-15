@@ -52,7 +52,7 @@ Single-window object:
 - `validate()`
 - `to_dataframe()` — returns a Polars DataFrame
 - `to_csv(path)`
-- `from_dataframe(...)` — accepts Polars or pandas DataFrame
+- `from_dataframe(...)` — accepts Polars DataFrame
 - `from_csv(...)`
 - `columns`
 - `row_count`
@@ -63,7 +63,7 @@ Batch object:
 
 - `to_dataframe()` — returns a Polars DataFrame
 - `to_csv(path)`
-- `from_flat_dataframe(...)` — accepts Polars or pandas DataFrame
+- `from_flat_dataframe(...)` — accepts Polars DataFrame
 - `from_csv(...)`
 - `from_artifact_dir(...)`
 - `schema_markdown()`

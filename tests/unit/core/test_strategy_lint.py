@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pandas as pd
+import polars as pl
 
 from stacksats.strategy_lint import lint_strategy_class, summarize_lint_findings
 from stacksats.strategy_types import BaseStrategy
@@ -10,8 +10,10 @@ class _NegativeShiftStrategy(BaseStrategy):
     strategy_id = "lint-negative-shift"
 
     def transform_features(self, ctx):
-        features = ctx.features.to_pandas().copy()
-        features["bad"] = features["price_usd"].shift(-1)
+        features = ctx.features.data.clone()
+        features = features.with_columns(
+            pl.col("price_usd").shift(-1).alias("bad")
+        )
         return features
 
     def propose_weight(self, state):
@@ -22,8 +24,10 @@ class _CenteredRollingStrategy(BaseStrategy):
     strategy_id = "lint-centered"
 
     def transform_features(self, ctx):
-        features = ctx.features.to_pandas().copy()
-        features["bad"] = features["price_usd"].rolling(3, center=True).mean()
+        features = ctx.features.data.clone()
+        features = features.with_columns(
+            pl.col("price_usd").rolling_mean(window_size=3, center=True).alias("bad")
+        )
         return features
 
     def propose_weight(self, state):
@@ -34,8 +38,8 @@ class _ExternalIOStrategy(BaseStrategy):
     strategy_id = "lint-io"
 
     def transform_features(self, ctx):
-        pd.read_csv("demo.csv")
-        return ctx.features.to_pandas().copy()
+        pl.read_csv("demo.csv")
+        return ctx.features.data.clone()
 
     def propose_weight(self, state):
         return state.uniform_weight
@@ -45,7 +49,7 @@ class _WarningStrategy(BaseStrategy):
     strategy_id = "lint-warning"
 
     def transform_features(self, ctx):
-        features = ctx.features.to_pandas().copy()
+        features = ctx.features.data.clone()
         _ = features.tail(1)
         _ = features["price_usd"].quantile(0.5)
         return features

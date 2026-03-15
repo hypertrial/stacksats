@@ -1,7 +1,9 @@
 """Property-based tests using Hypothesis."""
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 try:
@@ -40,21 +42,38 @@ pytestmark = [
 
 def _create_sample_data():
     """Create sample BTC and features data for property-based tests."""
-    # Create date range from 2020 to 2025
-    dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+    dates = pl.datetime_range(
+        dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
+        interval="1d", eager=True
+    ).to_list()
 
-    # Generate realistic-looking price data with trend and volatility
     np.random.seed(42)
     base_price = 10000
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    btc_df = pd.DataFrame({"price_usd": prices}, index=dates)
-    btc_df["PriceUSD"] = btc_df["price_usd"]
-    btc_df.index.name = "time"
-
+    btc_df = pl.DataFrame({
+        "date": dates,
+        "price_usd": prices,
+        "PriceUSD": prices,
+    })
     features_df = precompute_features(btc_df)
     return features_df, btc_df
+
+
+def _feature_bounds() -> tuple[dt.datetime, dt.datetime]:
+    return (
+        _SAMPLE_FEATURES_DF["date"].min(),
+        _SAMPLE_FEATURES_DF["date"].max(),
+    )
+
+
+def _past_weights(df: pl.DataFrame, cutoff: dt.datetime) -> np.ndarray:
+    return (
+        df.filter(pl.col("date") <= cutoff)
+        .sort("date")["weight"]
+        .to_numpy()
+    )
 
 
 # Pre-create sample data at module level (only if hypothesis is available)
@@ -64,17 +83,14 @@ if HYPOTHESIS_AVAILABLE:
     @st.composite
     def date_range_strategy(draw):
         """Generate random date ranges for testing."""
-        # Start date between 2024-01-01 and 2025-06-01
         start_days = draw(st.integers(0, 550))
-        start_date = pd.Timestamp("2024-01-01") + pd.Timedelta(days=start_days)
+        start_date = dt.datetime(2024, 1, 1) + dt.timedelta(days=start_days)
 
-        # Range length between 1 and 60 days
         range_length = draw(st.integers(1, 60))
-        end_date = start_date + pd.Timedelta(days=range_length - 1)
+        end_date = start_date + dt.timedelta(days=range_length - 1)
 
-        # Current date relative to range
         current_offset = draw(st.integers(-30, range_length + 30))
-        current_date = start_date + pd.Timedelta(days=current_offset)
+        current_date = start_date + dt.timedelta(days=current_offset)
 
         return start_date, end_date, current_date
 
@@ -101,9 +117,10 @@ class TestPropertyBasedInvariants:
             return
 
         # Skip if dates are outside sample data range
+        min_date, max_date = _feature_bounds()
         if (
-            start_date < _SAMPLE_FEATURES_DF.index.min()
-            or end_date > _SAMPLE_FEATURES_DF.index.max()
+            start_date < min_date
+            or end_date > max_date
         ):
             return
 
@@ -117,7 +134,7 @@ class TestPropertyBasedInvariants:
                 PRICE_COL,
             )
 
-            if len(result) > 0:
+            if result.height > 0:
                 weight_sum = result["weight"].sum()
                 assert np.isclose(weight_sum, 1.0, rtol=1e-10, atol=1e-10), (
                     f"Weights sum to {weight_sum:.15f}, expected 1.0"
@@ -135,9 +152,10 @@ class TestPropertyBasedInvariants:
         if start_date > end_date:
             return
 
+        min_date, max_date = _feature_bounds()
         if (
-            start_date < _SAMPLE_FEATURES_DF.index.min()
-            or end_date > _SAMPLE_FEATURES_DF.index.max()
+            start_date < min_date
+            or end_date > max_date
         ):
             return
 
@@ -151,9 +169,9 @@ class TestPropertyBasedInvariants:
                 PRICE_COL,
             )
 
-            if len(result) > 0:
-                assert result["weight"].notna().all(), "Found NaN weights"
-                assert np.isfinite(result["weight"]).all(), "Found non-finite weights"
+            if result.height > 0:
+                assert result["weight"].is_not_null().all(), "Found NaN weights"
+                assert np.isfinite(result["weight"].to_numpy()).all(), "Found non-finite weights"
         except (ValueError, KeyError, IndexError):
             pass
 
@@ -166,9 +184,10 @@ class TestPropertyBasedInvariants:
         if start_date > end_date:
             return
 
+        min_date, max_date = _feature_bounds()
         if (
-            start_date < _SAMPLE_FEATURES_DF.index.min()
-            or end_date > _SAMPLE_FEATURES_DF.index.max()
+            start_date < min_date
+            or end_date > max_date
         ):
             return
 
@@ -182,10 +201,10 @@ class TestPropertyBasedInvariants:
                 PRICE_COL,
             )
 
-            if len(result) > 0:
-                negative = result[result["weight"] < -1e-15]
-                assert negative.empty, (
-                    f"Found {len(negative)} negative weights: "
+            if result.height > 0:
+                negative = result.filter(pl.col("weight") < -1e-15)
+                assert negative.is_empty(), (
+                    f"Found {negative.height} negative weights: "
                     f"min={result['weight'].min():.2e}"
                 )
         except (ValueError, KeyError, IndexError):
@@ -200,9 +219,10 @@ class TestPropertyBasedInvariants:
         if start_date > end_date:
             return
 
+        min_date, max_date = _feature_bounds()
         if (
-            start_date < _SAMPLE_FEATURES_DF.index.min()
-            or end_date > _SAMPLE_FEATURES_DF.index.max()
+            start_date < min_date
+            or end_date > max_date
         ):
             return
 
@@ -216,9 +236,12 @@ class TestPropertyBasedInvariants:
                 PRICE_COL,
             )
 
-            if len(result) > 0:
-                expected_dates = pd.date_range(start=start_date, end=end_date, freq="D")
-                actual_dates = set(pd.to_datetime(result["date"]))
+            if result.height > 0:
+                expected_dates = {
+                    start_date + dt.timedelta(days=offset)
+                    for offset in range((end_date - start_date).days + 1)
+                }
+                actual_dates = set(result["date"].to_list())
 
                 # Should cover all expected dates
                 assert len(actual_dates) == len(expected_dates), (
@@ -236,15 +259,16 @@ class TestPropertyBasedInvariants:
         if start_date > end_date:
             return
 
+        min_date, max_date = _feature_bounds()
         if (
-            start_date < _SAMPLE_FEATURES_DF.index.min()
-            or end_date > _SAMPLE_FEATURES_DF.index.max()
+            start_date < min_date
+            or end_date > max_date
         ):
             return
 
         # Generate second current_date after first
         if current_date1 < end_date:
-            current_date2 = current_date1 + pd.Timedelta(days=5)
+            current_date2 = current_date1 + dt.timedelta(days=5)
         else:
             return
 
@@ -267,28 +291,18 @@ class TestPropertyBasedInvariants:
                 PRICE_COL,
             )
 
-            if len(result1) > 0 and len(result2) > 0:
+            if result1.height > 0 and result2.height > 0:
                 # Past weights (<= current_date1) should be identical
-                past1 = result1[
-                    pd.to_datetime(result1["date"]) <= current_date1
-                ].sort_values("date")
-                past2 = result2[
-                    pd.to_datetime(result2["date"]) <= current_date1
-                ].sort_values("date")
+                past1 = _past_weights(result1, current_date1)
+                past2 = _past_weights(result2, current_date1)
 
                 if len(past1) > 1 and len(past2) > 1:
                     # With budget scaling, absolute values may change but
                     # relative proportions should be preserved
-                    w1 = past1["weight"].reset_index(drop=True)
-                    w2 = past2["weight"].reset_index(drop=True)
-                    if w1.sum() > 0 and w2.sum() > 0:
-                        w1_norm = w1 / w1.sum()
-                        w2_norm = w2 / w2.sum()
-                        pd.testing.assert_series_equal(
-                            w1_norm,
-                            w2_norm,
-                            rtol=1e-6,
-                        )
+                    if past1.sum() > 0 and past2.sum() > 0:
+                        w1_norm = past1 / past1.sum()
+                        w2_norm = past2 / past2.sum()
+                        np.testing.assert_allclose(w1_norm, w2_norm, rtol=1e-6)
         except (ValueError, KeyError, IndexError):
             pass
 
@@ -298,26 +312,26 @@ class TestImpossibleFloor:
 
     def test_impossible_floor_scenario(self, sample_features_df, sample_btc_df):
         """Test floor behavior under a contract-valid 365-day window."""
-        start_date = pd.Timestamp("2025-01-01")
-        end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+        start_date = dt.datetime(2025, 1, 1)
+        end_date = start_date + dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
         result = process_start_date_batch(
             start_date,
             [end_date],
             sample_features_df,
             sample_btc_df,
-            pd.Timestamp("2025-12-31"),
+            dt.datetime(2025, 12, 31),
             PRICE_COL,
         )
 
-        assert len(result) == ALLOCATION_SPAN_DAYS
+        assert result.height == ALLOCATION_SPAN_DAYS
         assert np.isclose(result["weight"].sum(), 1.0, rtol=1e-12)
         assert (result["weight"] >= 0).all()
 
     def test_tiny_range_with_floor(self, sample_features_df, sample_btc_df):
         """Invalid short windows should be rejected by span contract."""
-        start_date = pd.Timestamp("2025-01-01")
-        end_date = pd.Timestamp("2025-01-02")
+        start_date = dt.datetime(2025, 1, 1)
+        end_date = dt.datetime(2025, 1, 2)
 
         with pytest.raises(ValueError, match="configured fixed span"):
             process_start_date_batch(
@@ -325,6 +339,6 @@ class TestImpossibleFloor:
                 [end_date],
                 sample_features_df,
                 sample_btc_df,
-                pd.Timestamp("2025-12-31"),
+                dt.datetime(2025, 12, 31),
                 PRICE_COL,
             )

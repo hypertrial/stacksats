@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
+from datetime import datetime, timedelta
 from io import StringIO
 
-import pandas as pd
+import polars as pl
 
 
 def get_current_btc_price(previous_price=None, *, fetch_btc_price_fn):
@@ -24,7 +26,7 @@ def get_current_btc_price(previous_price=None, *, fetch_btc_price_fn):
 
 def insert_all_data(
     conn,
-    df,
+    df: pl.DataFrame,
     *,
     execute_values,
     prepare_copy_dataframe_fn,
@@ -37,7 +39,7 @@ def insert_all_data(
             "Install deploy extras with: pip install stacksats[deploy]"
         )
 
-    total_rows = len(df)
+    total_rows = df.height
     logging.info(f"Starting bulk insertion of {total_rows} rows into bitcoin_dca table")
 
     with conn.cursor() as cur:
@@ -51,7 +53,7 @@ def insert_all_data(
 
         buffer = StringIO()
         copy_df = prepare_copy_dataframe_fn(df)
-        copy_df.to_csv(buffer, sep="\t", header=False, index=False, na_rep="")
+        copy_df.write_csv(buffer, separator="\t", include_header=False, include_bom=False)
         buffer.seek(0)
 
         with conn.cursor() as cur:
@@ -184,10 +186,18 @@ def insert_all_data(
         return actual_inserted
 
 
+def _date_to_str(val) -> str:
+    """Convert date/datetime to YYYY-MM-DD string."""
+    if isinstance(val, datetime):
+        return val.strftime("%Y-%m-%d")
+    s = str(val)
+    return s[:10] if len(s) >= 10 else s
+
+
 def update_today_weights(
     conn,
-    df,
-    today_str,
+    df: pl.DataFrame,
+    today_str: str,
     *,
     get_current_btc_price_fn,
     build_update_rows_fn,
@@ -212,19 +222,20 @@ def update_today_weights(
         )
 
     logging.info(f"Filtering data for date = {today_str}")
-    day_mask = (
-        pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d") == today_str
-    )
-    today_df = df[day_mask].copy()
+    date_col = df["date"]
+    if date_col.dtype == pl.Datetime:
+        today_df = df.filter(pl.col("date").dt.strftime("%Y-%m-%d") == today_str)
+    else:
+        today_df = df.filter(pl.col("date").cast(pl.Utf8).str.slice(0, 10) == today_str)
 
-    if today_df.empty:
+    if today_df.height == 0:
         logging.warning(f"No data found for today ({today_str})")
         return 0
 
     previous_price = None
     try:
-        today_date = pd.to_datetime(today_str)
-        previous_day_str = (today_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        today_date = datetime.strptime(today_str, "%Y-%m-%d")
+        previous_day_str = (today_date - timedelta(days=1)).strftime("%Y-%m-%d")
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -248,8 +259,9 @@ def update_today_weights(
         logging.warning(
             "Failed to fetch BTC price from all API sources. Will use price from dataframe if available."
         )
-        current_btc_price = today_df["price_usd"].iloc[0]
-        if pd.notna(current_btc_price):
+        first_price = today_df["price_usd"][0]
+        if first_price is not None and isinstance(first_price, (int, float)) and math.isfinite(first_price):
+            current_btc_price = float(first_price)
             logging.info(f"Using BTC price from dataframe: ${current_btc_price:,.2f}")
         else:
             logging.error(
@@ -258,7 +270,7 @@ def update_today_weights(
             current_btc_price = None
 
     if current_btc_price is None:
-        if today_df["price_usd"].notna().any():
+        if today_df["price_usd"].null_count() < today_df.height:
             logging.info("Using existing BTC prices from dataframe for update.")
         else:
             logging.warning(
@@ -267,10 +279,10 @@ def update_today_weights(
             )
             return 0
 
-    total_rows = len(today_df)
+    total_rows = today_df.height
     logging.info(f"Found {total_rows} rows to update where date = {today_str}")
 
-    sample_row = today_df.iloc[0]
+    sample_row = today_df.row(0, named=True)
     logging.info(
         f"Sample row - day_index: {sample_row['day_index']}, start_date: {sample_row['start_date']}, end_date: {sample_row['end_date']}, weight: {sample_row['weight']:.6f}"
     )

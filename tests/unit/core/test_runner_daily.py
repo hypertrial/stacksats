@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.api import ValidationResult
@@ -24,22 +26,26 @@ class _ObservingUniformDailyStrategy(_UniformDailyStrategy):
     def __init__(self) -> None:
         self.locked_prefix_len: int | None = None
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
         self.locked_prefix_len = (
             len(ctx.locked_weights) if ctx.locked_weights is not None else None
         )
         return super().transform_features(ctx)
 
 
-def _btc_df() -> pd.DataFrame:
-    idx = pd.date_range("2023-01-01", periods=900, freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(20000.0, 90000.0, len(idx)),
-            "mvrv": np.linspace(0.8, 2.2, len(idx)),
-        },
-        index=idx,
+def _btc_df() -> pl.DataFrame:
+    dates = pl.datetime_range(
+        dt.datetime(2023, 1, 1),
+        dt.datetime(2023, 1, 1) + dt.timedelta(days=899),
+        interval="1d",
+        eager=True,
     )
+    n = dates.len()
+    return pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(20000.0, 90000.0, n),
+        "mvrv": np.linspace(0.8, 2.2, n),
+    })
 
 
 def _config(tmp_path, **overrides) -> RunDailyConfig:
@@ -138,7 +144,13 @@ def test_run_daily_missing_price_data_returns_failed_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     df = _btc_df()
-    df.loc[pd.Timestamp("2024-12-31"), "price_usd"] = np.nan
+    run_date_str = "2024-12-31"
+    df = df.with_columns(
+        pl.when(pl.col("date").dt.strftime("%Y-%m-%d") == run_date_str)
+        .then(pl.lit(None).cast(pl.Float64))
+        .otherwise(pl.col("price_usd"))
+        .alias("price_usd")
+    )
     runner = StrategyRunner()
     _allow_validation(runner, monkeypatch)
     result = runner.run_daily(

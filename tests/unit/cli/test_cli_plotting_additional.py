@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sys
 import os
+import datetime as dt
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
 from stacksats import cli
@@ -50,20 +50,30 @@ def test_cli_validate_exits_nonzero_on_failed_validation(
 
 
 def test_plot_mvrv_metrics_raises_when_required_column_missing() -> None:
-    df = pd.DataFrame({"Other": [1, 2, 3]}, index=pd.date_range("2024-01-01", periods=3))
+    import polars as pl
+
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3),
+        interval="1d", eager=True
+    ).to_list()
+    df = pl.DataFrame({"date": dates, "Other": [1, 2, 3]})
 
     with pytest.raises(ValueError, match="Missing required column: mvrv"):
         plot_mvrv_metrics(df)
 
 
 def test_plot_mvrv_metrics_raises_when_filtered_data_is_empty(tmp_path: Path) -> None:
-    df = pd.DataFrame(
-        {
-            "mvrv": [1.0, 1.1, 1.2],
-            "CapMVRVZ": [0.0, 0.1, 0.2],
-        },
-        index=pd.date_range("2024-01-01", periods=3),
-    )
+    import polars as pl
+
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3),
+        interval="1d", eager=True
+    ).to_list()
+    df = pl.DataFrame({
+        "date": dates,
+        "mvrv": [1.0, 1.1, 1.2],
+        "CapMVRVZ": [0.0, 0.1, 0.2],
+    })
 
     with pytest.raises(ValueError, match="No data available for the specified date range"):
         plot_mvrv_metrics(
@@ -79,12 +89,15 @@ def test_plot_weights_list_option_prints_ranges_and_exits_cleanly(
 ) -> None:
     mock_conn = MagicMock()
     monkeypatch.setattr("stacksats.plot_weights.get_db_connection", lambda: mock_conn)
+
+    import polars as pl
+
     monkeypatch.setattr(
         "stacksats.plot_weights.get_date_range_options",
-        lambda conn: pd.DataFrame(
+        lambda conn: pl.DataFrame(
             {
-                "start_date": pd.to_datetime(["2024-01-01"]),
-                "end_date": pd.to_datetime(["2024-12-31"]),
+                "start_date": [dt.datetime(2024, 1, 1)],
+                "end_date": [dt.datetime(2024, 12, 31)],
                 "count": [366],
             }
         ),

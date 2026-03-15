@@ -1,24 +1,19 @@
 """Tests for the installable strategy-first StackSats package API."""
 
+from __future__ import annotations
+
 import numpy as np
-import pandas as pd
 
 import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
 from stacksats import BacktestConfig, MVRVStrategy
 from stacksats.strategies.examples import UniformStrategy
+from tests.test_helpers import btc_frame
 
 
-def _sample_btc_df() -> pd.DataFrame:
-    dates = pd.date_range("2022-01-01", periods=520, freq="D")
-    price = np.linspace(20000.0, 45000.0, len(dates))
-    mvrv = np.linspace(0.8, 2.2, len(dates))
-    return pd.DataFrame(
-        {
-            "price_usd": price,
-            "mvrv": mvrv,
-        },
-        index=dates,
+def _sample_btc_df():
+    return btc_frame(start="2022-01-01", days=520, price_start=20000.0, price_step=50.0).with_columns(
+        mvrv=np.linspace(0.8, 2.2, 520)
     )
 
 
@@ -39,7 +34,7 @@ def test_backtest_uniform_strategy():
         btc_df=btc_df,
     )
 
-    assert len(result.spd_table) > 0
+    assert result.spd_table.height > 0
     assert np.isfinite(result.win_rate)
     assert np.isfinite(result.score)
 
@@ -57,5 +52,5 @@ def test_backtest_default_strategy():
         btc_df=btc_df,
     )
 
-    assert len(result.spd_table) > 0
+    assert result.spd_table.height > 0
     assert np.isfinite(result.exp_decay_percentile)

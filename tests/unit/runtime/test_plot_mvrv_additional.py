@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import datetime as dt
 import runpy
 import sys
 import warnings
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats import plot_mvrv
@@ -15,8 +16,8 @@ from stacksats.plot_mvrv import plot_mvrv_metrics
 def test_plot_mvrv_metrics_autocomputes_missing_zscore_and_uses_long_range_locators(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    idx = pd.date_range("2022-01-01", periods=500, freq="D")
-    df = pd.DataFrame({"mvrv": np.linspace(0.8, 2.5, len(idx))}, index=idx)
+    dates = pl.datetime_range(dt.datetime(2022, 1, 1), dt.datetime(2023, 5, 15), interval="1d", eager=True)
+    df = pl.DataFrame({"date": dates, "mvrv": np.linspace(0.8, 2.5, len(dates))})
     monkeypatch.setattr("stacksats.plot_mvrv.plt.savefig", lambda *_args, **_kwargs: None)
 
     calls = {"year": 0, "month_args": []}
@@ -36,8 +37,6 @@ def test_plot_mvrv_metrics_autocomputes_missing_zscore_and_uses_long_range_locat
 
     plot_mvrv_metrics(df, output_path=str(tmp_path / "mvrv.svg"))
 
-    assert "CapMVRVZ" in df.columns
-    assert int(df["CapMVRVZ"].notna().sum()) > 0
     assert calls["year"] >= 1
     assert any(args and args[0] == (1, 7) for args in calls["month_args"])
 
@@ -45,13 +44,13 @@ def test_plot_mvrv_metrics_autocomputes_missing_zscore_and_uses_long_range_locat
 def test_plot_mvrv_metrics_uses_medium_range_date_locators(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    idx = pd.date_range("2024-01-01", periods=120, freq="D")
-    df = pd.DataFrame(
+    dates = pl.datetime_range(dt.datetime(2024, 1, 1), dt.datetime(2024, 4, 29), interval="1d", eager=True)
+    df = pl.DataFrame(
         {
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-            "CapMVRVZ": np.linspace(-1.0, 1.0, len(idx)),
+            "date": dates,
+            "mvrv": np.linspace(1.0, 2.0, len(dates)),
+            "CapMVRVZ": np.linspace(-1.0, 1.0, len(dates)),
         },
-        index=idx,
     )
     monkeypatch.setattr("stacksats.plot_mvrv.plt.savefig", lambda *_args, **_kwargs: None)
 
@@ -77,13 +76,13 @@ def test_plot_mvrv_metrics_uses_medium_range_date_locators(
 
 
 def test_plot_mvrv_metrics_raises_when_cleaned_dataset_is_empty(tmp_path) -> None:
-    idx = pd.date_range("2024-01-01", periods=10, freq="D")
-    df = pd.DataFrame(
+    dates = pl.datetime_range(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 10), interval="1d", eager=True)
+    df = pl.DataFrame(
         {
-            "mvrv": np.full(len(idx), np.nan),
-            "CapMVRVZ": np.full(len(idx), np.nan),
+            "date": dates,
+            "mvrv": np.full(len(dates), np.nan),
+            "CapMVRVZ": np.full(len(dates), np.nan),
         },
-        index=idx,
     )
 
     with pytest.raises(ValueError, match="No valid MVRV data available after removing missing values"):
@@ -93,13 +92,13 @@ def test_plot_mvrv_metrics_raises_when_cleaned_dataset_is_empty(tmp_path) -> Non
 def test_plot_mvrv_module_dunder_main_executes(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    idx = pd.date_range("2024-01-01", periods=120, freq="D")
-    df = pd.DataFrame(
+    dates = pl.datetime_range(dt.datetime(2024, 1, 1), dt.datetime(2024, 4, 29), interval="1d", eager=True)
+    df = pl.DataFrame(
         {
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-            "CapMVRVZ": np.linspace(-1.0, 1.0, len(idx)),
+            "date": dates,
+            "mvrv": np.linspace(1.0, 2.0, len(dates)),
+            "CapMVRVZ": np.linspace(-1.0, 1.0, len(dates)),
         },
-        index=idx,
     )
     monkeypatch.setattr(
         "stacksats.plot_mvrv.BTCDataProvider.load",

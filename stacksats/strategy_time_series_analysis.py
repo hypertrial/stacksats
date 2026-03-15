@@ -9,12 +9,6 @@ import numpy as np
 import polars as pl
 from scipy.signal import periodogram
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
-
 def _autocorr_pl(series: pl.Series, lag: int) -> float | None:
     """Compute autocorrelation at lag for a Polars Series."""
     arr = series.drop_nulls().to_numpy()
@@ -289,8 +283,6 @@ class StrategyTimeSeriesAnalysisMixin:
     ) -> pl.Series:
         if isinstance(series_like, pl.Series):
             values = series_like.cast(pl.Float64, strict=False)
-        elif pd is not None and isinstance(series_like, pd.Series):
-            values = pl.from_pandas(series_like).cast(pl.Float64, strict=False)
         else:
             if series_like in self._data.columns:
                 return self._data[series_like].cast(pl.Float64, strict=False)
@@ -305,11 +297,7 @@ class StrategyTimeSeriesAnalysisMixin:
     def _pacf_at_lag(values: pl.Series, lag: int) -> float | None:
         if lag <= 0:
             return None
-        if pd is not None and isinstance(values, pd.Series):
-            s = pl.from_pandas(values)
-        else:
-            s = values
-        arr = s.drop_nulls().to_numpy()
+        arr = values.drop_nulls().to_numpy()
         if arr.shape[0] <= lag + 1:
             return None
         y = arr[lag:]
@@ -335,7 +323,7 @@ class StrategyTimeSeriesAnalysisMixin:
     def resample(self, freq: str, agg: str = "mean") -> pl.DataFrame:
         """Resample to a coarser/finer frequency with controlled aggregation."""
         if not isinstance(freq, str) or not freq:
-            raise ValueError("freq must be a non-empty pandas offset alias string.")
+            raise ValueError("freq must be a non-empty Polars interval string.")
         frame = self._data.clone()
         numeric_cols = [c for c in frame.columns if frame[c].dtype in (pl.Float64, pl.Int64)]
         if not numeric_cols:
@@ -578,11 +566,7 @@ class StrategyTimeSeriesAnalysisMixin:
 
     @staticmethod
     def _stationarity_proxy(values: pl.Series, acf_threshold: float) -> bool:
-        if pd is not None and isinstance(values, pd.Series):
-            s = pl.from_pandas(values)
-        else:
-            s = values
-        clean = s.drop_nulls()
+        clean = values.drop_nulls()
         if clean.len() < 3:
             return True
         std = float(clean.std())

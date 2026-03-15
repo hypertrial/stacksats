@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 
 class IdempotencyConflictError(ValueError):
@@ -287,24 +288,24 @@ class SQLiteExecutionStateStore:
         order_summary: dict | None,
         force_flag: bool,
         snapshot_date: str,
-        weights: pd.Series,
+        weights: pl.DataFrame,
         validation_receipt_id: int | None = None,
         data_hash: str = "",
         feature_snapshot_hash: str = "",
     ) -> None:
         normalized_run_date = _normalize_date_str(run_date)
         normalized_snapshot_date = _normalize_date_str(snapshot_date)
-        ordered_weights = weights.sort_index()
+        ordered = weights.sort("date")
         rows = [
             (
                 strategy_id,
                 strategy_version,
                 mode,
                 normalized_snapshot_date,
-                pd.Timestamp(dt).normalize().strftime("%Y-%m-%d"),
-                float(weight),
+                _norm_dt_str(row["date"]),
+                float(row["weight"]),
             )
-            for dt, weight in ordered_weights.items()
+            for row in ordered.iter_rows(named=True)
         ]
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -447,20 +448,20 @@ class SQLiteExecutionStateStore:
         strategy_version: str,
         mode: str,
         snapshot_date: str,
-        weights: pd.Series,
+        weights: pl.DataFrame,
     ) -> None:
         normalized_snapshot_date = _normalize_date_str(snapshot_date)
-        ordered_weights = weights.sort_index()
+        ordered = weights.sort("date")
         rows = [
             (
                 strategy_id,
                 strategy_version,
                 mode,
                 normalized_snapshot_date,
-                pd.Timestamp(dt).normalize().strftime("%Y-%m-%d"),
-                float(weight),
+                _norm_dt_str(row["date"]),
+                float(row["weight"]),
             )
-            for dt, weight in ordered_weights.items()
+            for row in ordered.iter_rows(named=True)
         ]
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -600,12 +601,14 @@ class SQLiteExecutionStateStore:
         strategy_version: str,
         mode: str,
         run_date: str,
-        window_start: pd.Timestamp,
+        window_start: dt.datetime,
     ) -> np.ndarray | None:
-        run_ts = pd.Timestamp(run_date).normalize()
-        previous_snapshot_date = (run_ts - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-        expected_index = pd.date_range(window_start, run_ts - pd.Timedelta(days=1), freq="D")
-        if len(expected_index) == 0:
+        run_ts = _parse_date_like(run_date)
+        previous_snapshot_date = (run_ts - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+        expected_dates = pl.datetime_range(
+            window_start, run_ts - dt.timedelta(days=1), interval="1d", eager=True
+        ).to_list()
+        if len(expected_dates) == 0:
             return np.array([], dtype=float)
 
         with self._connect() as conn:
@@ -626,28 +629,45 @@ class SQLiteExecutionStateStore:
                     strategy_version,
                     mode,
                     previous_snapshot_date,
-                    expected_index.min().strftime("%Y-%m-%d"),
-                    expected_index.max().strftime("%Y-%m-%d"),
+                    min(d.strftime("%Y-%m-%d") for d in expected_dates),
+                    max(d.strftime("%Y-%m-%d") for d in expected_dates),
                 ),
             ).fetchall()
 
         if not rows:
             return None
-        if len(rows) != len(expected_index):
+        if len(rows) != len(expected_dates):
             raise ValueError(
                 "Existing weight snapshot is incomplete for locked-prefix reuse."
             )
 
-        observed_dates = [pd.Timestamp(row["date"]).normalize() for row in rows]
-        if not pd.DatetimeIndex(observed_dates).equals(expected_index):
+        observed_dates = [_parse_date_like(row["date"]) for row in rows]
+        expected_set = {d.strftime("%Y-%m-%d") for d in expected_dates}
+        observed_set = {d.strftime("%Y-%m-%d") for d in observed_dates}
+        if expected_set != observed_set:
             raise ValueError(
                 "Existing weight snapshot dates do not match expected locked-prefix range."
             )
         return np.asarray([float(row["weight"]) for row in rows], dtype=float)
 
 
+def _parse_date_like(date_like: str | dt.datetime) -> dt.datetime:
+    if isinstance(date_like, dt.datetime):
+        out = date_like.replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_like.tzinfo:
+            out = date_like.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        return out
+    return dt.datetime.strptime(str(date_like)[:10], "%Y-%m-%d")
+
+
+def _norm_dt_str(date_val) -> str:
+    if isinstance(date_val, dt.datetime):
+        return date_val.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d")
+    return str(date_val)[:10]
+
+
 def _normalize_date_str(date_like: str) -> str:
-    return pd.Timestamp(date_like).normalize().strftime("%Y-%m-%d")
+    return _parse_date_like(date_like).strftime("%Y-%m-%d")
 
 
 def _row_to_stored_run(row: sqlite3.Row) -> StoredRun:

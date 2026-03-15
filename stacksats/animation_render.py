@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from .matplotlib_setup import configure_matplotlib_env
 
@@ -43,8 +43,8 @@ class AnimationStyle:
 DEFAULT_ANIMATION_STYLE = AnimationStyle()
 
 
-def _validate_animation_frame_data(frame_data: pd.DataFrame) -> None:
-    if frame_data.empty:
+def _validate_animation_frame_data(frame_data: pl.DataFrame) -> None:
+    if frame_data.height == 0:
         raise ValueError("Animation frame data is empty.")
     missing = [col for col in REQUIRED_ANIMATION_COLUMNS if col not in frame_data.columns]
     if missing:
@@ -70,7 +70,7 @@ def _axis_limits(values_a: np.ndarray, values_b: np.ndarray | None = None) -> tu
 
 
 def render_strategy_vs_uniform_gif(
-    frame_data: pd.DataFrame,
+    frame_data: pl.DataFrame,
     output_path: str | Path,
     *,
     fps: int = 20,
@@ -97,15 +97,13 @@ def render_strategy_vs_uniform_gif(
     output_file = Path(output_path).expanduser().resolve()
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    ordered = frame_data.reset_index(drop=True).copy()
-    x = pd.to_datetime(ordered["window_start"]).to_numpy()
-    dynamic = pd.to_numeric(ordered["dynamic_percentile"], errors="coerce").to_numpy()
-    uniform = pd.to_numeric(ordered["uniform_percentile"], errors="coerce").to_numpy()
-    excess = pd.to_numeric(ordered["excess_percentile"], errors="coerce").to_numpy()
-    cumulative_btc_advantage = pd.to_numeric(
-        ordered["cumulative_btc_vs_uniform_pct"], errors="coerce"
-    ).to_numpy()
-    win_rate = pd.to_numeric(ordered["win_rate_to_date"], errors="coerce").to_numpy()
+    ordered = frame_data
+    x = ordered["window_start"].to_numpy()
+    dynamic = ordered["dynamic_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
+    uniform = ordered["uniform_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
+    excess = ordered["excess_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
+    cumulative_btc_advantage = ordered["cumulative_btc_vs_uniform_pct"].cast(pl.Float64).fill_null(np.nan).to_numpy()
+    win_rate = ordered["win_rate_to_date"].cast(pl.Float64).fill_null(np.nan).to_numpy()
 
     dpi = 100
     fig = plt.figure(
@@ -273,13 +271,14 @@ def render_strategy_vs_uniform_gif(
             f"Total BTC vs uniform: {current_cumulative:+.2f}%\n"
             f"Win-rate-to-date: {current_win_rate:.2f}%"
         )
-        date_text.set_text(f"Window: {pd.Timestamp(x[end - 1]).date().isoformat()}")
+        dt = np.datetime64(x[end - 1], "D")
+        date_text.set_text(f"Window: {str(dt)}")
         return dynamic_line, uniform_line, excess_line, vline_top, vline_bottom
 
     animation = FuncAnimation(
         fig,
         _update,
-        frames=len(ordered),
+        frames=ordered.height,
         interval=1000.0 / float(fps),
         blit=False,
         repeat=False,
@@ -290,7 +289,7 @@ def render_strategy_vs_uniform_gif(
 
     return {
         "gif_path": str(output_file),
-        "frames": int(len(ordered)),
+        "frames": int(ordered.height),
         "fps": int(fps),
         "width": int(width),
         "height": int(height),

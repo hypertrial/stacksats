@@ -1,29 +1,29 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.animation_render import render_strategy_vs_uniform_gif
 
 
-def _frame_data(n: int = 6) -> pd.DataFrame:
-    starts = pd.date_range("2024-01-01", periods=n, freq="D")
+def _frame_data(n: int = 6) -> pl.DataFrame:
+    base = datetime(2024, 1, 1)
+    starts = [base + timedelta(days=i) for i in range(n)]
     dynamic = np.linspace(40.0, 65.0, n)
     uniform = np.linspace(42.0, 55.0, n)
     excess = dynamic - uniform
-    return pd.DataFrame(
-        {
-            "window_start": starts,
-            "dynamic_percentile": dynamic,
-            "uniform_percentile": uniform,
-            "excess_percentile": excess,
-            "cumulative_btc_vs_uniform_pct": excess.cumsum(),
-            "win_rate_to_date": np.linspace(50.0, 75.0, n),
-        }
-    )
+    return pl.DataFrame({
+        "window_start": starts,
+        "dynamic_percentile": dynamic,
+        "uniform_percentile": uniform,
+        "excess_percentile": excess,
+        "cumulative_btc_vs_uniform_pct": np.cumsum(excess),
+        "win_rate_to_date": np.linspace(50.0, 75.0, n),
+    })
 
 
 def test_render_strategy_vs_uniform_gif_writes_output(tmp_path: Path) -> None:
@@ -44,7 +44,9 @@ def test_render_strategy_vs_uniform_gif_writes_output(tmp_path: Path) -> None:
 
 
 def test_render_strategy_vs_uniform_gif_rejects_missing_columns(tmp_path: Path) -> None:
-    bad = pd.DataFrame({"window_start": pd.date_range("2024-01-01", periods=2, freq="D")})
+    bad = pl.DataFrame({
+        "window_start": [datetime(2024, 1, 1), datetime(2024, 1, 2)],
+    })
     with pytest.raises(ValueError, match="missing required columns"):
         render_strategy_vs_uniform_gif(bad, tmp_path / "out.gif")
 

@@ -3,12 +3,13 @@
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 # -----------------------------------------------------------------------------
@@ -16,36 +17,40 @@ import pytest
 # -----------------------------------------------------------------------------
 
 
+def _date_range(start: str, end: str):
+    """Generate list of dates from start to end inclusive."""
+    base = datetime.strptime(start[:10], "%Y-%m-%d")
+    end_dt = datetime.strptime(end[:10], "%Y-%m-%d")
+    out = []
+    d = base
+    while d <= end_dt:
+        out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
 @pytest.fixture
 def sample_btc_prices():
-    """Generate realistic BTC price data for testing."""
-    # Create date range from 2020 to 2025
-    dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
-
-    # Generate realistic-looking price data with trend and volatility
+    """Generate realistic BTC price data for testing (Polars DataFrame)."""
+    dates = _date_range("2020-01-01", "2025-12-31")
     np.random.seed(42)
     base_price = 10000
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
-
-    return pd.Series(prices, index=dates, name="PriceUSD")
+    return pl.DataFrame({"date": dates, "PriceUSD": prices})
 
 
 @pytest.fixture
 def sample_btc_df(sample_btc_prices):
     """Create a sample BTC DataFrame similar to BRK data."""
-    df = pd.DataFrame({"PriceUSD": sample_btc_prices})
-    df["price_usd"] = df["PriceUSD"]
+    df = sample_btc_prices.with_columns(pl.col("PriceUSD").alias("price_usd"))
 
-    # Add MVRV data (mvrv) - cycles between 0.5 and 4.0 over ~4 years
-    n = len(df)
+    n = df.height
     np.random.seed(123)
-    mvrv_base = 1.5 + 1.2 * np.sin(np.arange(n) * 2 * np.pi / 1461)  # 4-year cycle
+    mvrv_base = 1.5 + 1.2 * np.sin(np.arange(n) * 2 * np.pi / 1461)
     mvrv_noise = np.random.normal(0, 0.15, n)
-    df["mvrv"] = np.clip(mvrv_base + mvrv_noise, 0.5, 5.0)
-
-    df.index.name = "time"
-    return df
+    mvrv = np.clip(mvrv_base + mvrv_noise, 0.5, 5.0)
+    return df.with_columns(pl.Series("mvrv", mvrv))
 
 
 @pytest.fixture
@@ -59,6 +64,8 @@ def sample_features_df(sample_btc_df):
 @pytest.fixture
 def sample_spd_df():
     """Create sample SPD backtest results DataFrame."""
+    import polars as pl
+
     windows = [
         "2020-01-01 → 2021-01-01",
         "2020-02-01 → 2021-02-01",
@@ -67,7 +74,8 @@ def sample_spd_df():
         "2020-05-01 → 2021-05-01",
     ]
 
-    data = {
+    return pl.DataFrame({
+        "window": windows,
         "min_sats_per_dollar": [1000, 1100, 900, 1050, 950],
         "max_sats_per_dollar": [5000, 5500, 4500, 5200, 4800],
         "uniform_sats_per_dollar": [2500, 2800, 2300, 2600, 2400],
@@ -75,9 +83,7 @@ def sample_spd_df():
         "uniform_percentile": [37.5, 38.6, 38.9, 37.3, 37.7],
         "dynamic_percentile": [45.0, 45.5, 44.4, 44.6, 42.9],
         "excess_percentile": [7.5, 6.9, 5.5, 7.3, 5.2],
-    }
-
-    return pd.DataFrame(data, index=windows)
+    })
 
 
 # -----------------------------------------------------------------------------
@@ -88,16 +94,16 @@ def sample_spd_df():
 @pytest.fixture
 def sample_brk_csv():
     """Generate sample BRK CSV data."""
-    dates = pd.date_range(start="2020-01-01", end="2025-12-31", freq="D")
+    dates = _date_range("2020-01-01", "2025-12-31")
     np.random.seed(42)
     base_price = 10000
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({"time": dates.strftime("%Y-%m-%d"), "PriceUSD": prices})
-
+    date_strs = [d.strftime("%Y-%m-%d") for d in dates]
+    df = pl.DataFrame({"time": date_strs, "PriceUSD": prices})
     csv_buffer = StringIO()
-    df.to_csv(csv_buffer, index=False)
+    df.write_csv(csv_buffer, include_header=True)
     return csv_buffer.getvalue()
 
 
@@ -173,9 +179,12 @@ class SnapshotManager:
         with open(filepath, "r") as f:
             data = json.load(f)
 
-        # Convert to appropriate pandas type
+        # Convert to appropriate Polars type
         if "index" in data and "values" in data:
-            return pd.Series(data["values"], index=pd.to_datetime(data["index"]))
+            return pl.DataFrame({
+                "date": data["index"],
+                "value": data["values"],
+            })
         return data
 
     def save(self, data, filename: str):
@@ -183,13 +192,14 @@ class SnapshotManager:
         filepath = self.snapshot_dir / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        if isinstance(data, pd.Series):
-            save_data = {
-                "index": [str(i) for i in data.index],
-                "values": data.values.tolist(),
-            }
-        elif isinstance(data, pd.DataFrame):
-            save_data = data.to_dict(orient="list")
+        if isinstance(data, pl.DataFrame):
+            if "date" in data.columns and "value" in data.columns:
+                save_data = {
+                    "index": [str(d) for d in data["date"].to_list()],
+                    "values": data["value"].to_list(),
+                }
+            else:
+                save_data = {c: data[c].to_list() for c in data.columns}
         else:
             save_data = data
 
@@ -252,31 +262,28 @@ def simulation_price_generator():
         """Generate synthetic BTC prices.
 
         Args:
-            start_date: Start date (pd.Timestamp or string)
-            end_date: End date (pd.Timestamp or string)
+            start_date: Start date (datetime or string)
+            end_date: End date (datetime or string)
             initial_price: Starting price in USD
             drift: Daily drift (mean return per day)
             volatility: Daily volatility (std dev of returns)
             seed: Random seed for reproducibility
 
         Returns:
-            pd.Series with prices indexed by date
+            pl.DataFrame with date and PriceUSD columns
         """
-        dates = pd.date_range(start=start_date, end=end_date, freq="D")
+        start_s = str(start_date)[:10]
+        end_s = str(end_date)[:10]
+        dates = _date_range(start_s, end_s)
         np.random.seed(seed)
 
-        # Generate log returns using geometric Brownian motion
-        dt = 1.0  # 1 day
-        returns = np.random.normal(drift * dt, volatility * np.sqrt(dt), len(dates))
-
-        # Convert to prices
+        dt_val = 1.0
+        returns = np.random.normal(drift * dt_val, volatility * np.sqrt(dt_val), len(dates))
         log_prices = np.log(initial_price) + np.cumsum(returns)
         prices = np.exp(log_prices)
-
-        # Ensure prices stay within reasonable bounds
         prices = np.clip(prices, 1000.0, 1000000.0)
 
-        return pd.Series(prices, index=dates, name="PriceUSD")
+        return pl.DataFrame({"date": dates, "PriceUSD": prices})
 
     return _generate_prices
 
@@ -289,12 +296,8 @@ def simulation_btc_df(simulation_price_generator):
     """
     start_date = "2020-01-01"
     end_date = "2028-12-31"
-    prices = simulation_price_generator(start_date, end_date, initial_price=50000.0)
-
-    df = pd.DataFrame({"PriceUSD": prices})
-    df["price_usd"] = df["PriceUSD"]
-    df.index.name = "time"
-    return df
+    df = simulation_price_generator(start_date, end_date, initial_price=50000.0)
+    return df.with_columns(pl.col("PriceUSD").alias("price_usd"))
 
 
 @pytest.fixture
@@ -355,16 +358,19 @@ def sample_btc_df_validate():
     """Create sample BTC price data for validation testing."""
     from tests.test_helpers import PRICE_COL, SAMPLE_END, SAMPLE_START
 
-    dates = pd.date_range(SAMPLE_START, SAMPLE_END, freq="D")
+    dates = _date_range(SAMPLE_START, SAMPLE_END)
     np.random.seed(42)
 
-    # Simulate realistic BTC prices with trend and volatility
     base_price = 50000
     trend = np.linspace(0, 50000, len(dates))
     noise = np.random.randn(len(dates)) * 2000
     prices = np.maximum(base_price + trend + noise, 10000)
 
-    return pd.DataFrame({PRICE_COL: prices}, index=dates)
+    n = len(dates)
+    mvrv_base = 1.5 + 1.2 * np.sin(np.arange(n) * 2 * np.pi / 1461)
+    mvrv = np.clip(mvrv_base + np.random.normal(0, 0.15, n), 0.5, 5.0)
+
+    return pl.DataFrame({"date": dates, PRICE_COL: prices, "mvrv": mvrv})
 
 
 @pytest.fixture
@@ -382,8 +388,8 @@ def sample_weights_df(sample_features_df_validate, sample_btc_df_validate):
     from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
     from tests.test_helpers import PRICE_COL
 
-    start_date = pd.Timestamp("2025-01-01")
-    end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+    start_date = datetime(2025, 1, 1)
+    end_date = start_date + timedelta(days=ALLOCATION_SPAN_DAYS - 1)
     end_dates = [end_date]
     current_date = end_date
 
@@ -409,12 +415,12 @@ def sample_weights_df(sample_features_df_validate, sample_btc_df_validate):
 @pytest.fixture
 def all_wins_spd_df():
     """SPD DataFrame where dynamic always beats uniform (100% win rate)."""
-    windows = [
-        "2020-01-01 → 2021-01-01",
-        "2020-02-01 → 2021-02-01",
-        "2020-03-01 → 2021-03-01",
-    ]
-    data = {
+    return pl.DataFrame({
+        "window": [
+            "2020-01-01 → 2021-01-01",
+            "2020-02-01 → 2021-02-01",
+            "2020-03-01 → 2021-03-01",
+        ],
         "min_sats_per_dollar": [1000, 1100, 900],
         "max_sats_per_dollar": [5000, 5500, 4500],
         "uniform_sats_per_dollar": [2500, 2800, 2300],
@@ -422,19 +428,18 @@ def all_wins_spd_df():
         "uniform_percentile": [37.5, 38.6, 38.9],
         "dynamic_percentile": [62.5, 61.4, 66.7],
         "excess_percentile": [25.0, 22.8, 27.8],
-    }
-    return pd.DataFrame(data, index=windows)
+    })
 
 
 @pytest.fixture
 def all_losses_spd_df():
     """SPD DataFrame where dynamic always loses to uniform (0% win rate)."""
-    windows = [
-        "2020-01-01 → 2021-01-01",
-        "2020-02-01 → 2021-02-01",
-        "2020-03-01 → 2021-03-01",
-    ]
-    data = {
+    return pl.DataFrame({
+        "window": [
+            "2020-01-01 → 2021-01-01",
+            "2020-02-01 → 2021-02-01",
+            "2020-03-01 → 2021-03-01",
+        ],
         "min_sats_per_dollar": [1000, 1100, 900],
         "max_sats_per_dollar": [5000, 5500, 4500],
         "uniform_sats_per_dollar": [2500, 2800, 2300],
@@ -442,15 +447,14 @@ def all_losses_spd_df():
         "uniform_percentile": [37.5, 38.6, 38.9],
         "dynamic_percentile": [25.0, 25.0, 25.0],
         "excess_percentile": [-12.5, -13.6, -13.9],
-    }
-    return pd.DataFrame(data, index=windows)
+    })
 
 
 @pytest.fixture
 def single_window_spd_df():
     """SPD DataFrame with only one window for edge case testing."""
-    windows = ["2020-01-01 → 2021-01-01"]
-    data = {
+    return pl.DataFrame({
+        "window": ["2020-01-01 → 2021-01-01"],
         "min_sats_per_dollar": [1000],
         "max_sats_per_dollar": [5000],
         "uniform_sats_per_dollar": [2500],
@@ -458,5 +462,4 @@ def single_window_spd_df():
         "uniform_percentile": [37.5],
         "dynamic_percentile": [45.0],
         "excess_percentile": [7.5],
-    }
-    return pd.DataFrame(data, index=windows)
+    })

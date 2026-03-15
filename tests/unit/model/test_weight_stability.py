@@ -7,8 +7,10 @@ The key invariant tested: weights computed for a past date should be
 identical whether computed today or tomorrow (after new features arrive).
 """
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
@@ -168,29 +170,29 @@ class TestComputeWeightsFastStable:
 
     def test_n_past_none_uses_full_range(self, sample_features):
         """When n_past is None, allocate all days as past (n_past = n_total)."""
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-06-30")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 6, 30)
 
         # With n_past=None, defaults to treating all as past
         weights = compute_weights_fast(
             sample_features, start_date, end_date, n_past=None
         )
 
-        assert np.isclose(weights.sum(), 1.0, atol=FLOAT_TOLERANCE)
+        assert np.isclose(float(weights["weight"].sum()), 1.0, atol=FLOAT_TOLERANCE)
 
     def test_n_past_uses_stable(self, sample_features):
         """When n_past is provided, use stable allocation."""
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-06-30")
-        n_days = len(pd.date_range(start_date, end_date))
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 6, 30)
+        n_days = (end_date - start_date).days + 1
         n_past = n_days // 2
 
         weights = compute_weights_fast(
             sample_features, start_date, end_date, n_past=n_past
         )
 
-        assert np.isclose(weights.sum(), 1.0, atol=FLOAT_TOLERANCE)
-        assert len(weights) == n_days
+        assert np.isclose(float(weights["weight"].sum()), 1.0, atol=FLOAT_TOLERANCE)
+        assert weights.height == n_days
 
 
 class TestWeightStabilityWithEvolvingFeatures:
@@ -201,8 +203,9 @@ class TestWeightStabilityWithEvolvingFeatures:
         """Factory to create features truncated to different dates."""
 
         def _create_features(truncate_date):
-            truncate_date = pd.Timestamp(truncate_date)
-            truncated_df = sample_btc_df.loc[:truncate_date].copy()
+            if isinstance(truncate_date, str):
+                truncate_date = dt.datetime.strptime(truncate_date, "%Y-%m-%d")
+            truncated_df = sample_btc_df.filter(pl.col("date") <= truncate_date)
             return precompute_features(truncated_df)
 
         return _create_features
@@ -215,11 +218,11 @@ class TestWeightStabilityWithEvolvingFeatures:
         In backtest mode (no locked_weights), we prioritize signal-based allocation.
         Weights may change slightly when features evolve, but they must always be valid.
         """
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-12-31")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 12, 31)
 
         # Simulate Day T (2022-06-15)
-        current_date_t = pd.Timestamp("2022-06-15")
+        current_date_t = dt.datetime(2022, 6, 15)
         features_t = evolving_features_factory(current_date_t)
 
         weights_at_t = compute_window_weights(
@@ -227,7 +230,7 @@ class TestWeightStabilityWithEvolvingFeatures:
         )
 
         # Simulate Day T+1 (2022-06-16)
-        current_date_t1 = pd.Timestamp("2022-06-16")
+        current_date_t1 = dt.datetime(2022, 6, 16)
         features_t1 = evolving_features_factory(current_date_t1)
 
         weights_at_t1 = compute_window_weights(
@@ -235,24 +238,24 @@ class TestWeightStabilityWithEvolvingFeatures:
         )
 
         # Both should be valid weight arrays
-        assert np.isclose(weights_at_t.sum(), 1.0, atol=1e-6), (
+        assert np.isclose(float(weights_at_t["weight"].sum()), 1.0, atol=1e-6), (
             "Weights at T don't sum to 1.0"
         )
-        assert np.isclose(weights_at_t1.sum(), 1.0, atol=1e-6), (
+        assert np.isclose(float(weights_at_t1["weight"].sum()), 1.0, atol=1e-6), (
             "Weights at T+1 don't sum to 1.0"
         )
-        assert (weights_at_t >= -1e-10).all(), "Weights at T have negative values"
-        assert (weights_at_t1 >= -1e-10).all(), "Weights at T+1 have negative values"
+        assert bool((weights_at_t["weight"] >= -1e-10).all()), "Weights at T have negative values"
+        assert bool((weights_at_t1["weight"] >= -1e-10).all()), "Weights at T+1 have negative values"
 
     def test_weights_stable_across_multiple_days(
         self, sample_btc_df, evolving_features_factory
     ):
         """Verify weights remain stable as we advance current_date over 30 days."""
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-12-31")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 12, 31)
 
         # Compute initial weights at T=2022-06-01
-        initial_date = pd.Timestamp("2022-06-01")
+        initial_date = dt.datetime(2022, 6, 1)
         initial_features = evolving_features_factory(initial_date)
         initial_weights = compute_window_weights(
             initial_features, start_date, end_date, initial_date
@@ -260,7 +263,7 @@ class TestWeightStabilityWithEvolvingFeatures:
 
         # Advance through 30 days
         for days_ahead in range(1, 31):
-            current_date = initial_date + pd.Timedelta(days=days_ahead)
+            current_date = initial_date + dt.timedelta(days=days_ahead)
             current_features = evolving_features_factory(current_date)
 
             current_weights = compute_window_weights(
@@ -269,11 +272,11 @@ class TestWeightStabilityWithEvolvingFeatures:
 
             # All weights before initial_date should remain stable
             # Note: slight drift is acceptable due to rolling feature recalculation
-            past_dates = initial_weights.index[initial_weights.index < initial_date]
+            past_dates = initial_weights.filter(pl.col("date") < initial_date)["date"].to_list()
 
             np.testing.assert_allclose(
-                initial_weights[past_dates].values,
-                current_weights[past_dates].values,
+                initial_weights.filter(pl.col("date").is_in(past_dates))["weight"].to_numpy(),
+                current_weights.filter(pl.col("date").is_in(past_dates))["weight"].to_numpy(),
                 rtol=WEIGHT_STABILITY_TOLERANCE,
                 atol=WEIGHT_STABILITY_TOLERANCE,
                 err_msg=f"Weights changed after advancing {days_ahead} days",
@@ -290,9 +293,9 @@ class TestWeightStabilityWithEvolvingFeatures:
         2. Modifying only future placeholder values
         3. Verifying past weights are unchanged
         """
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-12-31")
-        current_date = pd.Timestamp("2022-06-15")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 12, 31)
+        current_date = dt.datetime(2022, 6, 15)
 
         # Get features up to current_date
         features = evolving_features_factory(current_date)
@@ -302,7 +305,7 @@ class TestWeightStabilityWithEvolvingFeatures:
 
         # Create a modified features DataFrame with different future placeholders
         # (This simulates what would happen if placeholder generation changed)
-        features_modified = features.copy()
+        features_modified = features.clone()
 
         # The compute_window_weights function extends with zeros for missing dates
         # Since past features are the same, past weights should be the same
@@ -312,8 +315,8 @@ class TestWeightStabilityWithEvolvingFeatures:
 
         # All weights should be identical (same inputs)
         np.testing.assert_allclose(
-            weights1.values,
-            weights2.values,
+            weights1["weight"].to_numpy(),
+            weights2["weight"].to_numpy(),
             atol=FLOAT_TOLERANCE,
             err_msg="Weights differ with identical inputs",
         )
@@ -334,54 +337,54 @@ class TestWeightStabilityIntegration:
         ]
 
         for start, end, current in test_cases:
-            start_date = pd.Timestamp(start)
-            end_date = pd.Timestamp(end)
-            current_date = pd.Timestamp(current)
+            start_date = dt.datetime.strptime(start, "%Y-%m-%d")
+            end_date = dt.datetime.strptime(end, "%Y-%m-%d")
+            current_date = dt.datetime.strptime(current, "%Y-%m-%d")
 
             weights = compute_window_weights(
                 sample_features_df, start_date, end_date, current_date
             )
 
-            assert np.isclose(weights.sum(), 1.0, atol=1e-6), (
+            assert np.isclose(float(weights["weight"].sum()), 1.0, atol=1e-6), (
                 f"Weights don't sum to 1.0 for case: start={start}, end={end}, current={current}"
             )
 
     def test_past_weights_never_negative(self, sample_features_df):
         """Verify no weights are negative."""
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-12-31")
-        current_date = pd.Timestamp("2022-06-15")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 12, 31)
+        current_date = dt.datetime(2022, 6, 15)
 
         weights = compute_window_weights(
             sample_features_df, start_date, end_date, current_date
         )
 
-        assert np.all(weights >= 0), "Some weights are negative"
+        assert bool((weights["weight"] >= 0).all()), "Some weights are negative"
 
     def test_past_weights_locked_invariant(self, sample_features_df):
         """Verify the 'locked weights' invariant with same features_df."""
-        start_date = pd.Timestamp("2022-01-01")
-        end_date = pd.Timestamp("2022-12-31")
+        start_date = dt.datetime(2022, 1, 1)
+        end_date = dt.datetime(2022, 12, 31)
 
         # Compute at current_date_1
-        current_date_1 = pd.Timestamp("2022-06-15")
+        current_date_1 = dt.datetime(2022, 6, 15)
         weights_1 = compute_window_weights(
             sample_features_df, start_date, end_date, current_date_1
         )
 
         # Compute at current_date_2 (later)
-        current_date_2 = pd.Timestamp("2022-09-15")
+        current_date_2 = dt.datetime(2022, 9, 15)
         weights_2 = compute_window_weights(
             sample_features_df, start_date, end_date, current_date_2
         )
 
         # Weights for dates <= current_date_1 should be stable
         # Note: slight drift is acceptable due to rolling feature recalculation
-        past_dates = weights_1.index[weights_1.index <= current_date_1]
+        past_dates = weights_1.filter(pl.col("date") <= current_date_1)["date"].to_list()
 
         np.testing.assert_allclose(
-            weights_1[past_dates].values,
-            weights_2[past_dates].values,
+            weights_1.filter(pl.col("date").is_in(past_dates))["weight"].to_numpy(),
+            weights_2.filter(pl.col("date").is_in(past_dates))["weight"].to_numpy(),
             rtol=WEIGHT_STABILITY_TOLERANCE,
             atol=WEIGHT_STABILITY_TOLERANCE,
             err_msg="Past weights changed when current_date advanced",
@@ -421,13 +424,13 @@ def test_generate_date_ranges_match_configured_span() -> None:
     ranges = generate_date_ranges("2023-01-01", "2027-12-31")
     assert len(ranges) > 0
     for start, end in ranges:
-        days = len(pd.date_range(start=start, end=end, freq="D"))
+        days = (end - start).days + 1
         assert days == ALLOCATION_SPAN_DAYS
 
 
 def test_generate_date_ranges_can_produce_configured_span() -> None:
     ranges = generate_date_ranges("2023-01-01", "2027-12-31")
     assert any(
-        len(pd.date_range(start=s, end=e, freq="D")) == ALLOCATION_SPAN_DAYS
+        ((e - s).days + 1) == ALLOCATION_SPAN_DAYS
         for s, e in ranges
     )

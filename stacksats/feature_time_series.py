@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-import pandas as pd
 import polars as pl
 
 DATE_COL = "date"
@@ -119,78 +118,6 @@ class FeatureTimeSeries:
         if require_finite:
             _validate_finite_numeric(pl_df, tuple(require_finite))
         return cls(_frame=pl_df)
-
-    @classmethod
-    def from_pandas(
-        cls,
-        df: pd.DataFrame,
-        *,
-        required_columns: tuple[str, ...] = (),
-        as_of_date: dt.datetime | None = None,
-        require_finite: tuple[str, ...] | None = None,
-    ) -> FeatureTimeSeries:
-        """
-        Build a FeatureTimeSeries from a pandas DataFrame.
-
-        The DataFrame must have a DatetimeIndex or a 'date' column; it will be
-        converted to Polars with a 'date' column. If the index is a DatetimeIndex,
-        it is reset into a column named 'date'.
-
-        Parameters
-        ----------
-        df : pandas DataFrame
-            Feature matrix (index or column = dates, columns = features).
-        required_columns : tuple of str
-            Column names that must be present (excluding 'date').
-        as_of_date : timestamp or None
-            If set, validates that no row has date after this date (no forward-looking).
-        require_finite : tuple of str or None
-            If set, these numeric columns must contain only finite values.
-        """
-        if not isinstance(df, pd.DataFrame):
-            raise TypeError("FeatureTimeSeries.from_pandas requires a pandas DataFrame.")
-        if df.empty:
-            pl_df = pl.DataFrame(schema={DATE_COL: pl.Datetime("us")})
-        else:
-            pdf = df.copy()
-            if isinstance(pdf.index, pd.DatetimeIndex):
-                pdf = pdf.reset_index()
-                first_col = pdf.columns[0]
-                if first_col != DATE_COL:
-                    if DATE_COL in pdf.columns:
-                        pdf = pdf.drop(columns=[first_col])
-                    else:
-                        pdf = pdf.rename(columns={first_col: DATE_COL})
-            elif DATE_COL not in pdf.columns:
-                raise ValueError(
-                    "FeatureTimeSeries.from_pandas: DataFrame must have "
-                    "DatetimeIndex or a 'date' column."
-                )
-            pl_df = pl.from_pandas(pdf)
-            if DATE_COL not in pl_df.columns and pl_df.width > 0:
-                pl_df = pl_df.rename({pl_df.columns[0]: DATE_COL})
-        for col in required_columns:
-            if col not in pl_df.columns:
-                raise ValueError(
-                    f"FeatureTimeSeries missing required column: {col!r}. "
-                    f"Available: {tuple(pl_df.columns)!r}."
-                )
-        _validate_date_column(pl_df)
-        if as_of_date is not None and not pl_df.is_empty():
-            _validate_no_future_data(pl_df, as_of_date)
-        if require_finite:
-            _validate_finite_numeric(pl_df, tuple(require_finite))
-        return cls(_frame=pl_df)
-
-    def to_pandas(self) -> pd.DataFrame:
-        """Return a pandas DataFrame with datetime index (date column becomes index)."""
-        pdf = self._frame.to_pandas()
-        if DATE_COL in pdf.columns:
-            if pdf.empty:
-                pdf = pd.DataFrame(index=pd.DatetimeIndex([], name="date"))
-            else:
-                pdf = pdf.set_index(pd.to_datetime(pdf[DATE_COL])).drop(columns=[DATE_COL])
-        return pdf
 
     @property
     def data(self) -> pl.DataFrame:

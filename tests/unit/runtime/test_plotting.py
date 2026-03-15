@@ -1,8 +1,9 @@
 """Tests for plotting scripts plot_mvrv.py and plot_weights.py."""
 
+import datetime as dt
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
+import polars as pl
 import pytest
 from stacksats.plot_mvrv import main as main_mvrv
 from stacksats.plot_weights import main as main_weights
@@ -15,11 +16,15 @@ class TestPlottingScripts:
     @patch("stacksats.plot_mvrv.plt.savefig")
     def test_plot_mvrv_main(self, mock_savefig, mock_load):
         """Test plot_mvrv.py main function."""
-        # Mock data
-        df = pd.DataFrame({
+        dates = pl.datetime_range(
+            dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3),
+            interval="1d", eager=True
+        ).to_list()
+        df = pl.DataFrame({
+            "date": dates,
             "mvrv": [1.0, 2.0, 3.0],
-            "CapMVRVZ": [0.5, 1.5, 2.5]
-        }, index=pd.date_range("2024-01-01", periods=3))
+            "CapMVRVZ": [0.5, 1.5, 2.5],
+        })
         mock_load.return_value = df
 
         # Call main with no arguments (uses defaults)

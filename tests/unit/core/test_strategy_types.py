@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from datetime import datetime, timedelta
 
-import pandas as pd
+import polars as pl
 
 from stacksats.strategy_types import (
     BacktestConfig,
@@ -15,13 +16,18 @@ from stacksats.strategy_types import (
 )
 
 
+def _features_df(days: int = 3) -> pl.DataFrame:
+    dates = [datetime(2024, 1, 1) + timedelta(days=offset) for offset in range(days)]
+    return pl.DataFrame({"date": dates, "price_usd": list(range(1, days + 1))})
+
+
 def test_strategy_context_defaults() -> None:
-    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    frame = _features_df()
     ctx = strategy_context_from_features_df(
-        pd.DataFrame({"price_usd": [1, 2, 3]}, index=idx),
-        idx.min(),
-        idx.max(),
-        idx.max(),
+        frame,
+        frame["date"][0],
+        frame["date"][-1],
+        frame["date"][-1],
     )
     assert ctx.btc_price_col == "price_usd"
     assert ctx.mvrv_col == "mvrv"
@@ -32,8 +38,8 @@ def test_config_defaults() -> None:
     assert ValidationConfig().min_win_rate == 50.0
     export_config = ExportConfig()
     assert export_config.output_dir == "output"
-    start = pd.to_datetime(export_config.range_start)
-    end = pd.to_datetime(export_config.range_end)
+    start = datetime.strptime(export_config.range_start, "%Y-%m-%d")
+    end = datetime.strptime(export_config.range_end, "%Y-%m-%d")
     assert end >= start
     assert (end - start).days in {364, 365}
 
@@ -64,12 +70,12 @@ def test_strategy_metadata_and_spec_dataclasses() -> None:
 
 
 def test_strategy_context_is_frozen() -> None:
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
+    frame = _features_df(days=2)
     ctx = strategy_context_from_features_df(
-        pd.DataFrame({"price_usd": [1, 2]}, index=idx),
-        idx.min(),
-        idx.max(),
-        idx.max(),
+        frame,
+        frame["date"][0],
+        frame["date"][-1],
+        frame["date"][-1],
     )
     try:
         ctx.btc_price_col = "other"

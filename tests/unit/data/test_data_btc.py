@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.data_btc import BTCDataProvider, DataLoadError
@@ -18,10 +18,15 @@ def _create_parquet_fixture(
     skip_day: str | None = None,
     null_price_day: str | None = None,
 ) -> None:
-    idx = pd.date_range(start, periods=days, freq="D")
+    idx = pl.datetime_range(
+        dt.datetime.strptime(start, "%Y-%m-%d"),
+        dt.datetime.strptime(start, "%Y-%m-%d") + dt.timedelta(days=days - 1),
+        interval="1d",
+        eager=True,
+    ).to_list()
     rows = []
     for i, ts in enumerate(idx):
-        day = ts.strftime("%Y-%m-%d")
+        day = str(ts)[:10]
         if skip_day is not None and day == skip_day:
             continue
         price_val: float | None = float(40_000 + (i * 100))
@@ -31,10 +36,7 @@ def _create_parquet_fixture(
         if include_mvrv:
             row["mvrv"] = 1.2 + (0.01 * i)
         rows.append(row)
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
-    df = df.set_index("date")
-    df.to_parquet(path)
+    pl.DataFrame(rows).write_parquet(path)
 
 
 def test_load_success_from_parquet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,7 +66,7 @@ def test_load_missing_parquet_file_fails(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_load_empty_parquet_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pq_path = tmp_path / "empty.parquet"
-    pd.DataFrame(columns=["date", "price_usd"]).to_parquet(pq_path)
+    pl.DataFrame(schema={"date": pl.Datetime("us"), "price_usd": pl.Float64}).write_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="Parquet file is empty"):
@@ -73,9 +75,12 @@ def test_load_empty_parquet_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 def test_load_parquet_missing_price_column_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pq_path = tmp_path / "no_price.parquet"
-    df = pd.DataFrame({"date": pd.date_range("2024-01-01", periods=3, freq="D"), "mvrv": [1.0, 1.1, 1.2]})
-    df = df.set_index("date")
-    df.to_parquet(pq_path)
+    pl.DataFrame(
+        {
+            "date": pl.datetime_range(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3), interval="1d", eager=True),
+            "mvrv": [1.0, 1.1, 1.2],
+        }
+    ).write_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 3))
     with pytest.raises(DataLoadError, match="must contain a 'price_usd' column"):
@@ -100,10 +105,7 @@ def test_load_missing_dates_fails_closed(tmp_path: Path, monkeypatch: pytest.Mon
         {"date": "2024-01-04", "price_usd": 40300.0, "mvrv": 1.23},
         {"date": "2024-01-05", "price_usd": 40400.0, "mvrv": 1.24},
     ]
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
-    df = df.set_index("date")
-    df.to_parquet(pq_path)
+    pl.DataFrame(rows).write_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="missing dates"):
@@ -119,10 +121,7 @@ def test_load_missing_price_values_fail(tmp_path: Path, monkeypatch: pytest.Monk
         {"date": "2024-01-04", "price_usd": None, "mvrv": 1.23},
         {"date": "2024-01-05", "price_usd": 40400.0, "mvrv": 1.24},
     ]
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
-    df = df.set_index("date")
-    df.to_parquet(pq_path)
+    pl.DataFrame(rows).write_parquet(pq_path)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
     with pytest.raises(DataLoadError, match="missing price_usd values"):

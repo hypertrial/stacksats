@@ -1,10 +1,11 @@
 """Step definitions for weight computation and validation features."""
 
+import datetime as dt
 import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from pytest_bdd import given, parsers, then, when
 
 # Add parent directory to path for imports
@@ -36,7 +37,11 @@ def given_array_values(values, bdd_context):
 @given("a window of price data")
 def given_price_window(sample_btc_df, bdd_context):
     """Extract a window of price data."""
-    window = sample_btc_df.loc["2024-01-01":"2024-06-30"]
+    start_dt = dt.datetime(2024, 1, 1)
+    end_dt = dt.datetime(2024, 6, 30)
+    window = sample_btc_df.filter(
+        (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
+    )
     bdd_context["price_window"] = window
 
 
@@ -104,8 +109,8 @@ def when_compute_weights_fast(bdd_context):
     """Compute weights using compute_weights_fast function."""
     window = bdd_context["price_window"]
     features_df = precompute_features(window)
-    start_date = features_df.index.min()
-    end_date = features_df.index.max()
+    start_date = features_df["date"].min()
+    end_date = features_df["date"].max()
     bdd_context["weights"] = compute_weights_fast(features_df, start_date, end_date)
 
 
@@ -208,22 +213,24 @@ def then_dynamic_multiplier_no_nan(bdd_context):
 def then_zscore_finite(bdd_context):
     """Assert z-scores are finite."""
     result = bdd_context["zscore_result"]
-    # After fillna(0), there should be no NaN
-    assert result.notna().all(), "Z-scores contain NaN after fillna"
+    # After fill_null(0), there should be no NaN
+    assert result.is_not_nan().all(), "Z-scores contain NaN after fill_null"
 
 
 @then("max weight should not exceed a reasonable threshold")
 def then_max_weight_reasonable(bdd_context):
     """Assert no single weight is too large."""
     weights = bdd_context["weights"]
-    assert weights.max() < 0.5, f"Max weight too large: {weights.max()}"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    assert float(w.max()) < 0.5, f"Max weight too large: {float(w.max())}"
 
 
 @then("weights should have positive variance")
 def then_weights_have_variance(bdd_context):
     """Assert weights are not all identical."""
     weights = bdd_context["weights"]
-    assert weights.std() > 0, "Weights have zero variance"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    assert float(w.std()) > 0, "Weights have zero variance"
 
 
 # -----------------------------------------------------------------------------
@@ -231,18 +238,22 @@ def then_weights_have_variance(bdd_context):
 # -----------------------------------------------------------------------------
 
 
+def _parse_date(s: str) -> dt.datetime:
+    return dt.datetime.strptime(s[:10], "%Y-%m-%d")
+
+
 @given(parsers.parse('a date range from "{start}" to "{end}"'))
 def given_date_range(start, end, bdd_context):
     """Set the date range for weight computation."""
-    bdd_context["start_date"] = pd.Timestamp(start)
-    bdd_context["end_date"] = pd.Timestamp(end)
+    bdd_context["start_date"] = _parse_date(start)
+    bdd_context["end_date"] = _parse_date(end)
 
 
 @given(parsers.parse('features computed up to "{date}"'))
 def given_features_up_to(date, bdd_context, sample_btc_df):
     """Truncate features to a specific date."""
-    truncate_date = pd.Timestamp(date)
-    truncated_df = sample_btc_df.loc[:truncate_date].copy()
+    truncate_date = _parse_date(date)
+    truncated_df = sample_btc_df.filter(pl.col("date") <= truncate_date)
     bdd_context["features_df"] = precompute_features(truncated_df)
     bdd_context["truncate_date"] = truncate_date
 
@@ -250,7 +261,7 @@ def given_features_up_to(date, bdd_context, sample_btc_df):
 @when(parsers.parse('I compute weights with current_date "{date}"'))
 def when_compute_weights_with_current(date, bdd_context, sample_features_df):
     """Compute weights with a specific current_date."""
-    current_date = pd.Timestamp(date)
+    current_date = _parse_date(date)
     start_date = bdd_context["start_date"]
     end_date = bdd_context["end_date"]
 
@@ -265,15 +276,15 @@ def when_compute_weights_with_current(date, bdd_context, sample_features_df):
 @when(parsers.parse('features are extended to "{date}"'))
 def when_features_extended(date, bdd_context, sample_btc_df):
     """Extend features to a new date."""
-    extend_date = pd.Timestamp(date)
-    extended_df = sample_btc_df.loc[:extend_date].copy()
+    extend_date = _parse_date(date)
+    extended_df = sample_btc_df.filter(pl.col("date") <= extend_date)
     bdd_context["features_df"] = precompute_features(extended_df)
 
 
 @when(parsers.parse('I recompute weights with current_date "{date}"'))
 def when_recompute_weights(date, bdd_context):
     """Recompute weights with new current_date (using extended features)."""
-    current_date = pd.Timestamp(date)
+    current_date = _parse_date(date)
     start_date = bdd_context["start_date"]
     end_date = bdd_context["end_date"]
     features_df = bdd_context["features_df"]
@@ -288,23 +299,30 @@ def when_store_past_weights(bdd_context):
     """Store past weights for later comparison."""
     weights = bdd_context["weights"]
     current_date = bdd_context["current_date"]
-    past_weights = weights[weights.index <= current_date]
-    bdd_context["stored_past_weights"] = past_weights.copy()
+    past_weights = weights.filter(pl.col("date") <= current_date)
+    bdd_context["stored_past_weights"] = past_weights.clone()
 
 
 @then(parsers.parse('weights for dates before "{date}" should be identical'))
 def then_past_weights_identical(date, bdd_context):
     """Assert past weights are identical before and after recomputation."""
-    boundary_date = pd.Timestamp(date)
+    boundary_date = _parse_date(date)
     old_weights = bdd_context["weights"]
     new_weights = bdd_context["new_weights"]
 
-    past_dates = old_weights.index[old_weights.index < boundary_date]
+    old_past = old_weights.filter(pl.col("date") < boundary_date)
+    merged = old_past.join(
+        new_weights.select(["date", pl.col("weight").alias("new_weight")]),
+        on="date",
+        how="inner",
+    )
+    old_vals = merged["weight"].to_numpy()
+    new_vals = merged["new_weight"].to_numpy()
 
     # Note: slight drift is acceptable due to rolling feature recalculation
     np.testing.assert_allclose(
-        old_weights[past_dates].values,
-        new_weights[past_dates].values,
+        old_vals,
+        new_vals,
         rtol=5e-3,
         atol=5e-3,
         err_msg="Past weights changed after feature extension",
@@ -315,7 +333,9 @@ def then_past_weights_identical(date, bdd_context):
 def then_weights_sum_to_one(bdd_context):
     """Assert weights sum to 1.0."""
     weights = bdd_context["weights"]
-    assert np.isclose(weights.sum(), 1.0, atol=1e-9), f"Weights sum: {weights.sum()}"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    total = float(w.sum())
+    assert np.isclose(total, 1.0, atol=1e-9), f"Weights sum: {total}"
 
 
 @then("all weights should be at least MIN_W")
@@ -326,17 +346,19 @@ def then_all_weights_above_min_w(bdd_context):
     Weights may be below MIN_W but must be non-negative.
     """
     weights = bdd_context["weights"]
-    below = weights[weights < -1e-12]
-    assert below.empty, f"Found {len(below)} negative weights: min={weights.min()}"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    below = w.filter(w < -1e-12)
+    assert below.len() == 0, f"Found {below.len()} negative weights: min={float(w.min())}"
 
 
 @then("all weights should be non-negative")
 def then_all_weights_non_negative(bdd_context):
     """Assert all weights >= 0 (MIN_W not enforced for stability)."""
     weights = bdd_context["weights"]
-    negative = weights[weights < -1e-12]
-    assert negative.empty, (
-        f"Found {len(negative)} negative weights: min={weights.min()}"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    negative = w.filter(w < -1e-12)
+    assert negative.len() == 0, (
+        f"Found {negative.len()} negative weights: min={float(w.min())}"
     )
 
 
@@ -347,14 +369,15 @@ def then_future_weights_uniform(date, bdd_context):
     Note: The last day of the window absorbs the remainder to ensure sum = 1.0,
     so it may differ from other future weights.
     """
-    boundary_date = pd.Timestamp(date)
+    boundary_date = _parse_date(date)
     weights = bdd_context["weights"]
 
-    future_weights = weights[weights.index > boundary_date]
-    if len(future_weights) > 2:
+    future_df = weights.filter(pl.col("date") > boundary_date)
+    future_vals = future_df["weight"].to_numpy()
+    if len(future_vals) > 2:
         # Exclude last day which absorbs remainder
-        future_except_last = future_weights.iloc[:-1]
-        expected = future_except_last.iloc[0]
+        future_except_last = future_vals[:-1]
+        expected = future_except_last[0]
         assert np.allclose(future_except_last, expected, atol=1e-10), (
             "Future weights (except last) are not uniform"
         )
@@ -371,20 +394,20 @@ def then_stored_past_match(bdd_context):
     stored = bdd_context["stored_past_weights"]
     new_weights = bdd_context["new_weights"]
 
-    # Compare only the dates that were in stored
-    common_dates = stored.index
+    merged = stored.join(
+        new_weights.select(["date", pl.col("weight").alias("new_weight")]),
+        on="date",
+        how="inner",
+    )
+    stored_vals = merged["weight"].to_numpy()
+    new_vals = merged["new_weight"].to_numpy()
 
-    # Check relative proportions are preserved
-    if (
-        len(common_dates) > 1
-        and stored.sum() > 0
-        and new_weights[common_dates].sum() > 0
-    ):
-        stored_normalized = stored / stored.sum()
-        new_normalized = new_weights[common_dates] / new_weights[common_dates].sum()
+    if len(stored_vals) > 1 and stored_vals.sum() > 0 and new_vals.sum() > 0:
+        stored_normalized = stored_vals / stored_vals.sum()
+        new_normalized = new_vals / new_vals.sum()
         np.testing.assert_allclose(
-            stored_normalized.values,
-            new_normalized.values,
+            stored_normalized,
+            new_normalized,
             atol=1e-6,
             err_msg="Stored past weight proportions don't match new computation",
         )
@@ -394,5 +417,7 @@ def then_stored_past_match(bdd_context):
 def then_all_weights_uniform(bdd_context):
     """Assert all weights are uniform."""
     weights = bdd_context["weights"]
-    expected = 1.0 / len(weights)
-    assert np.allclose(weights, expected, atol=1e-10), "Weights are not uniform"
+    w = weights["weight"] if isinstance(weights, pl.DataFrame) else weights
+    n = w.len()
+    expected = 1.0 / n
+    assert np.allclose(w.to_numpy(), expected, atol=1e-10), "Weights are not uniform"

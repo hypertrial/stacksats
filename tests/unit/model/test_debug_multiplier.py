@@ -1,7 +1,9 @@
 """Test dynamic multiplier computation to ensure signals are working correctly."""
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.model_development import (
@@ -33,20 +35,22 @@ class TestDynamicMultiplierComputation:
     @pytest.fixture
     def sample_features(self, features_data):
         """Get sample features for testing."""
-        start_date = pd.to_datetime("2024-12-01")
-        end_date = pd.to_datetime("2025-12-01")
-        range_features = features_data.loc[start_date:end_date]
+        start_date = dt.datetime(2024, 12, 1)
+        end_date = dt.datetime(2025, 12, 1)
+        range_features = features_data.filter(
+            (pl.col("date") >= start_date) & (pl.col("date") <= end_date)
+        )
 
         # Extract features
-        price_vs_ma = _clean_array(range_features["price_vs_ma"].values)
-        mvrv_zscore = _clean_array(range_features["mvrv_zscore"].values)
-        mvrv_gradient = _clean_array(range_features["mvrv_gradient"].values)
-        mvrv_percentile = _clean_array(range_features["mvrv_percentile"].values)
+        price_vs_ma = _clean_array(range_features["price_vs_ma"].to_numpy())
+        mvrv_zscore = _clean_array(range_features["mvrv_zscore"].to_numpy())
+        mvrv_gradient = _clean_array(range_features["mvrv_gradient"].to_numpy())
+        mvrv_percentile = _clean_array(range_features["mvrv_percentile"].to_numpy())
         mvrv_percentile = np.where(mvrv_percentile == 0, 0.5, mvrv_percentile)
-        mvrv_acceleration = _clean_array(range_features["mvrv_acceleration"].values)
-        mvrv_volatility = _clean_array(range_features["mvrv_volatility"].values)
+        mvrv_acceleration = _clean_array(range_features["mvrv_acceleration"].to_numpy())
+        mvrv_volatility = _clean_array(range_features["mvrv_volatility"].to_numpy())
         mvrv_volatility = np.where(mvrv_volatility == 0, 0.5, mvrv_volatility)
-        signal_confidence = _clean_array(range_features["signal_confidence"].values)
+        signal_confidence = _clean_array(range_features["signal_confidence"].to_numpy())
         signal_confidence = np.where(signal_confidence == 0, 0.5, signal_confidence)
 
         return {

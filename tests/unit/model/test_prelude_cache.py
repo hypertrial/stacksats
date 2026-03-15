@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import datetime as dt
+import polars as pl
 
 from stacksats.prelude import load_data
 
 
 def test_load_data_passes_parquet_config_to_provider(mocker, tmp_path) -> None:
-    expected_df = pd.DataFrame(
-        {"price_usd": [40000.0]},
-        index=pd.to_datetime(["2024-01-01"]),
+    expected_df = pl.DataFrame(
+        {"date": [dt.datetime(2024, 1, 1)], "price_usd": [40000.0]}
     )
     provider_instance = mocker.Mock(load=mocker.Mock(return_value=expected_df))
     provider_cls = mocker.Mock(return_value=provider_instance)
@@ -31,9 +31,8 @@ def test_load_data_passes_parquet_config_to_provider(mocker, tmp_path) -> None:
 def test_load_data_passes_end_date_to_provider(mocker) -> None:
     provider_instance = mocker.Mock(
         load=mocker.Mock(
-            return_value=pd.DataFrame(
-                {"price_usd": [50000.0]},
-                index=pd.to_datetime(["2024-01-02"]),
+            return_value=pl.DataFrame(
+                {"date": [dt.datetime(2024, 1, 2)], "price_usd": [50000.0]}
             )
         )
     )

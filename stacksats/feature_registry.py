@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 
-import pandas as pd
+import polars as pl
 
 from .feature_materialization import build_observed_frame, hash_dataframe, normalize_timestamp
 from .feature_providers import (
@@ -13,6 +14,8 @@ from .feature_providers import (
     CoreModelFeatureProvider,
     FeatureProvider,
 )
+
+DATE_COL = "date"
 
 
 class FeatureRegistry:
@@ -35,24 +38,25 @@ class FeatureRegistry:
     def materialize_for_strategy(
         self,
         strategy,
-        btc_df: pd.DataFrame,
+        btc_df: pl.DataFrame,
         *,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        current_date: pd.Timestamp,
-    ) -> pd.DataFrame:
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> pl.DataFrame:
         observed_end = min(normalize_timestamp(current_date), normalize_timestamp(end_date))
-        observed_index = pd.date_range(normalize_timestamp(start_date), observed_end, freq="D")
+        start_ts = normalize_timestamp(start_date)
+        dates = pl.datetime_range(start_ts, observed_end, interval="1d", eager=True)
         provider_ids = tuple(strategy.required_feature_sets())
         if not provider_ids:
-            return pd.DataFrame(index=observed_index)
+            return pl.DataFrame({DATE_COL: dates})
 
-        merged = pd.DataFrame(index=observed_index)
+        merged = pl.DataFrame({DATE_COL: dates})
         for provider_id in provider_ids:
             provider = self.get(provider_id)
             frame = provider.materialize(
                 btc_df,
-                start_date=normalize_timestamp(start_date),
+                start_date=start_ts,
                 end_date=normalize_timestamp(end_date),
                 as_of_date=observed_end,
             )
@@ -61,14 +65,16 @@ class FeatureRegistry:
                 start_date=start_date,
                 current_date=observed_end,
             )
-            duplicate_columns = sorted(set(merged.columns).intersection(observed.columns))
+            duplicate_columns = sorted(
+                set(merged.columns).intersection(observed.columns) - {DATE_COL}
+            )
             if duplicate_columns:
                 raise ValueError(
                     f"Feature providers produced duplicate columns for strategy "
                     f"{strategy.metadata().strategy_id}: {duplicate_columns}."
                 )
-            merged = merged.join(observed, how="left")
-        return merged.sort_index()
+            merged = merged.join(observed, on=DATE_COL, how="left")
+        return merged.sort(DATE_COL)
 
     def provider_fingerprint(self, strategy) -> str:
         payload = {"provider_ids": list(strategy.required_feature_sets())}
@@ -79,12 +85,12 @@ class FeatureRegistry:
     def materialization_fingerprint(
         self,
         strategy,
-        btc_df: pd.DataFrame,
+        btc_df: pl.DataFrame,
         *,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        current_date: pd.Timestamp,
-    ) -> tuple[pd.DataFrame, str]:
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> tuple[pl.DataFrame, str]:
         frame = self.materialize_for_strategy(
             strategy,
             btc_df,

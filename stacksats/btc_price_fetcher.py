@@ -7,9 +7,9 @@ This module provides a reliable way to fetch current BTC-USD prices with:
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
-import pandas as pd
 import requests
 from tenacity import (
     Retrying,
@@ -166,11 +166,11 @@ def fetch_price_binance() -> float:
     return price
 
 
-def fetch_historical_price_coingecko(date: "pd.Timestamp") -> float:
+def fetch_historical_price_coingecko(date: datetime) -> float:
     """Fetch historical BTC price from CoinGecko API for a specific date.
 
     Args:
-        date: pandas Timestamp for the date to fetch
+        date: datetime for the date to fetch
 
     Returns:
         float: BTC price in USD
@@ -192,13 +192,13 @@ def fetch_historical_price_coingecko(date: "pd.Timestamp") -> float:
     return price
 
 
-def fetch_historical_price_binance(date: "pd.Timestamp") -> float:
+def fetch_historical_price_binance(date: datetime) -> float:
     """Fetch historical BTC price from Binance API for a specific date.
 
     Uses the 1d candlestick data.
 
     Args:
-        date: pandas Timestamp for the date to fetch
+        date: datetime for the date to fetch
 
     Returns:
         float: BTC price in USD
@@ -232,7 +232,7 @@ def fetch_historical_price_binance(date: "pd.Timestamp") -> float:
 
 
 def fetch_btc_price_historical(
-    date: "pd.Timestamp",
+    date: datetime,
     previous_price: Optional[float] = None,
 ) -> Optional[float]:
     """Fetch historical BTC price with retry logic and fallback sources.
@@ -240,7 +240,7 @@ def fetch_btc_price_historical(
     Uses public API sources with retry/fallback behavior.
 
     Args:
-        date: pandas Timestamp for the date to fetch
+        date: datetime for the date to fetch
         previous_price: Optional previous price for validation
 
     Returns:

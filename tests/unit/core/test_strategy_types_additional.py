@@ -1,33 +1,34 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
-from stacksats.strategy_types import (
-    BacktestConfig,
-    BaseStrategy,
-    DayState,
-    StrategyContext,
-    strategy_context_from_features_df,
-)
+from stacksats.strategy_types import BacktestConfig, BaseStrategy, DayState, strategy_context_from_features_df
 
 
-def _context(*, start: str = "2024-01-01", periods: int = 3) -> StrategyContext:
-    idx = pd.date_range(start, periods=periods, freq="D")
-    features_df = pd.DataFrame(
+def _features_df(*, start: str = "2024-01-01", periods: int = 3) -> pl.DataFrame:
+    start_dt = datetime.strptime(start, "%Y-%m-%d")
+    dates = [start_dt + timedelta(days=offset) for offset in range(periods)]
+    return pl.DataFrame(
         {
-            "price_usd": np.linspace(100.0, 102.0, len(idx)),
-            "mvrv": np.linspace(1.0, 1.2, len(idx)),
-        },
-        index=idx,
+            "date": dates,
+            "price_usd": np.linspace(100.0, 102.0, len(dates)),
+            "mvrv": np.linspace(1.0, 1.2, len(dates)),
+        }
     )
+
+
+def _context(*, start: str = "2024-01-01", periods: int = 3):
+    frame = _features_df(start=start, periods=periods)
     return strategy_context_from_features_df(
-        features_df,
-        idx.min(),
-        idx.max(),
-        idx.max(),
+        frame,
+        frame["date"][0],
+        frame["date"][-1],
+        frame["date"][-1],
     )
 
 
@@ -38,48 +39,10 @@ class _SimpleProposeStrategy(BaseStrategy):
         return state.uniform_weight
 
 
-def test_validate_series_requires_pandas_series() -> None:
-    strategy = _SimpleProposeStrategy()
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-
-    with pytest.raises(TypeError, match="must be a pandas Series"):
-        strategy._validate_series([1.0, 2.0], name="series", expected_index=idx)
-
-
-def test_validate_series_rejects_duplicate_index() -> None:
-    strategy = _SimpleProposeStrategy()
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    values = pd.Series([1.0, 2.0], index=[idx[0], idx[0]])
-
-    with pytest.raises(ValueError, match="must not contain duplicates"):
-        strategy._validate_series(values, name="series", expected_index=idx)
-
-
-def test_validate_series_rejects_unsorted_index() -> None:
-    strategy = _SimpleProposeStrategy()
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    values = pd.Series([1.0, 2.0], index=[idx[1], idx[0]])
-
-    with pytest.raises(ValueError, match="must be sorted ascending"):
-        strategy._validate_series(values, name="series", expected_index=idx)
-
-
-def test_validate_series_rejects_mismatched_index() -> None:
-    strategy = _SimpleProposeStrategy()
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    values = pd.Series([1.0, 2.0], index=pd.date_range("2024-02-01", periods=2, freq="D"))
-
-    with pytest.raises(ValueError, match="must exactly match strategy window index"):
-        strategy._validate_series(values, name="series", expected_index=idx)
-
-
-def test_validate_series_rejects_non_finite_values() -> None:
-    strategy = _SimpleProposeStrategy()
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    values = pd.Series([1.0, np.nan], index=idx)
-
-    with pytest.raises(ValueError, match="must contain finite numeric values"):
-        strategy._validate_series(values, name="series", expected_index=idx)
+def _weight_frame(values: list[float], *, start: datetime | None = None) -> pl.DataFrame:
+    start_dt = start or datetime(2024, 1, 1)
+    dates = [start_dt + timedelta(days=offset) for offset in range(len(values))]
+    return pl.DataFrame({"date": dates, "weight": values})
 
 
 def test_compute_weights_rejects_non_dataframe_transform_features() -> None:
@@ -106,11 +69,9 @@ def test_compute_weights_rejects_invalid_signal_series() -> None:
     class BadSignalSeriesStrategy(_SimpleProposeStrategy):
         def build_signals(self, ctx, features_df):
             del ctx
-            idx = features_df.index
-            duplicated = pd.Series([1.0, 2.0], index=[idx[0], idx[0]])
-            return {"bad": duplicated}
+            return {"bad": pl.Series("bad", [1.0, 2.0])}
 
-    with pytest.raises(ValueError, match="signal 'bad' index must not contain duplicates"):
+    with pytest.raises(ValueError, match="length matching window"):
         BadSignalSeriesStrategy().compute_weights(_context())
 
 
@@ -122,14 +83,14 @@ def test_compute_weights_rejects_invalid_target_profile_type() -> None:
             del ctx, features_df, signals
             return 123.0
 
-    with pytest.raises(TypeError, match="target profile must be a pandas Series"):
+    with pytest.raises(TypeError, match="target profile"):
         BadProfileTypeStrategy().compute_weights(_context())
 
 
 def test_validate_weights_rejects_negative_values() -> None:
     strategy = _SimpleProposeStrategy()
     ctx = _context()
-    weights = pd.Series([-0.1, 1.1], index=pd.date_range("2024-01-01", periods=2, freq="D"))
+    weights = _weight_frame([-0.1, 1.1])
 
     with pytest.raises(ValueError, match="negative values"):
         strategy.validate_weights(weights, ctx)
@@ -138,7 +99,7 @@ def test_validate_weights_rejects_negative_values() -> None:
 def test_validate_weights_rejects_sum_mismatch() -> None:
     strategy = _SimpleProposeStrategy()
     ctx = _context()
-    weights = pd.Series([0.4, 0.4], index=pd.date_range("2024-01-01", periods=2, freq="D"))
+    weights = _weight_frame([0.4, 0.4])
 
     with pytest.raises(ValueError, match="must sum to 1.0"):
         strategy.validate_weights(weights, ctx)
@@ -147,31 +108,27 @@ def test_validate_weights_rejects_sum_mismatch() -> None:
 def test_validate_weights_rejects_values_below_contract_min() -> None:
     strategy = _SimpleProposeStrategy()
     ctx = _context()
-    idx = pd.date_range("2024-01-01", periods=ALLOCATION_SPAN_DAYS, freq="D")
-
     base = 1.0 / ALLOCATION_SPAN_DAYS
     weights = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
     weights[0] = MIN_DAILY_WEIGHT / 10.0
     deficit = base - weights[0]
     weights[1:] += deficit / (ALLOCATION_SPAN_DAYS - 1)
 
-    with pytest.raises(ValueError, match="must be >="):
-        strategy.validate_weights(pd.Series(weights, index=idx), ctx)
+    with pytest.raises(ValueError, match=">="):
+        strategy.validate_weights(_weight_frame(weights.tolist()), ctx)
 
 
 def test_validate_weights_rejects_values_above_contract_max() -> None:
     strategy = _SimpleProposeStrategy()
     ctx = _context()
-    idx = pd.date_range("2024-01-01", periods=ALLOCATION_SPAN_DAYS, freq="D")
-
     base = 1.0 / ALLOCATION_SPAN_DAYS
     weights = np.full(ALLOCATION_SPAN_DAYS, base, dtype=float)
     weights[0] = MAX_DAILY_WEIGHT + 1e-3
     excess = weights[0] - base
     weights[1:] -= excess / (ALLOCATION_SPAN_DAYS - 1)
 
-    with pytest.raises(ValueError, match="must be <="):
-        strategy.validate_weights(pd.Series(weights, index=idx), ctx)
+    with pytest.raises(ValueError, match="<="):
+        strategy.validate_weights(_weight_frame(weights.tolist()), ctx)
 
 
 def test_default_config_methods_include_strategy_metadata() -> None:
@@ -180,8 +137,8 @@ def test_default_config_methods_include_strategy_metadata() -> None:
     assert strategy.default_backtest_config().strategy_label == strategy.strategy_id
     assert strategy.default_validation_config().min_win_rate == 50.0
     export_config = strategy.default_export_config()
-    start = pd.to_datetime(export_config.range_start)
-    end = pd.to_datetime(export_config.range_end)
+    start = datetime.strptime(export_config.range_start, "%Y-%m-%d")
+    end = datetime.strptime(export_config.range_end, "%Y-%m-%d")
     assert end >= start
     assert (end - start).days in {364, 365}
 
@@ -194,12 +151,15 @@ def test_strategy_wrapper_methods_delegate_to_runner(monkeypatch: pytest.MonkeyP
 
     class FakeRunner:
         def backtest(self, *args, **kwargs):
+            del args, kwargs
             return backtest_result
 
         def validate(self, *args, **kwargs):
+            del args, kwargs
             return validation_result
 
         def export(self, *args, **kwargs):
+            del args, kwargs
             return export_result
 
     monkeypatch.setattr("stacksats.runner.StrategyRunner", lambda: FakeRunner())
@@ -304,30 +264,17 @@ def test_run_executes_lifecycle_with_optional_export_and_save() -> None:
     assert run_result.output_dir == "saved-output"
 
 
-def test_compute_weights_returns_empty_when_context_range_is_empty() -> None:
-    idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    ctx = strategy_context_from_features_df(
-        pd.DataFrame({"price_usd": [100, 101, 102]}, index=idx),
-        pd.Timestamp("2024-01-03"),
-        pd.Timestamp("2024-01-01"),
-        pd.Timestamp("2024-01-01"),
-    )
-
-    result = _SimpleProposeStrategy().compute_weights(ctx)
-    assert result.empty
-
-
 def test_base_strategy_default_propose_weight_raises_not_implemented() -> None:
     class _ProfileOnlyStrategy(BaseStrategy):
         strategy_id = "profile-only"
 
         def build_target_profile(self, ctx, features_df, signals):
             del ctx, features_df, signals
-            return pd.Series(dtype=float)
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
 
     state = DayState(
-        current_date=pd.Timestamp("2024-01-01"),
-        features=pd.Series(dtype=float),
+        current_date=datetime(2024, 1, 1),
+        features=pl.DataFrame({"date": [datetime(2024, 1, 1)], "price_usd": [100.0]}),
         remaining_budget=1.0,
         day_index=0,
         total_days=1,

@@ -1,13 +1,16 @@
 from __future__ import annotations
+
+import datetime as dt
 from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, StrategyContext, ValidationConfig
+from tests.test_helpers import btc_frame
 
 pytestmark = pytest.mark.slow
 
@@ -19,154 +22,128 @@ class _UniformStrategy(BaseStrategy):
         return state.uniform_weight
 
 
-def _btc_df(days: int = 60) -> pd.DataFrame:
-    idx = pd.date_range("2024-01-01", periods=days, freq="D")
-    return pd.DataFrame(
+def _btc_df(days: int = 60) -> pl.DataFrame:
+    return btc_frame(start="2024-01-01", days=days)
+
+
+def _window_dates(ctx: StrategyContext) -> list[dt.datetime]:
+    return pl.datetime_range(ctx.start_date, ctx.end_date, interval="1d", eager=True).to_list()
+
+
+def _uniform_weights(ctx: StrategyContext) -> pl.DataFrame:
+    dates = _window_dates(ctx)
+    if len(dates) == 0:
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+    return pl.DataFrame({"date": dates, "weight": np.full(len(dates), 1.0 / len(dates), dtype=float)})
+
+
+def test_weights_match_returns_false_when_dates_differ() -> None:
+    lhs = pl.DataFrame(
         {
-            "price_usd": np.linspace(10000.0, 50000.0, len(idx)),
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "weight": [0.5, 0.5],
+        }
     )
-
-
-def _uniform_weights(ctx: StrategyContext) -> pd.Series:
-    idx = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-    if len(idx) == 0:
-        return pd.Series(dtype=float)
-    return pd.Series(np.full(len(idx), 1.0 / len(idx), dtype=float), index=idx)
-
-
-def test_weights_match_returns_false_when_index_differs() -> None:
-    lhs = pd.Series([0.5, 0.5], index=pd.date_range("2024-01-01", periods=2, freq="D"))
-    rhs = pd.Series([0.5, 0.5], index=pd.date_range("2024-01-02", periods=2, freq="D"))
+    rhs = pl.DataFrame(
+        {
+            "date": [dt.datetime(2024, 1, 2), dt.datetime(2024, 1, 3)],
+            "weight": [0.5, 0.5],
+        }
+    )
     assert StrategyRunner._weights_match(lhs, rhs) is False
 
 
-def test_perturb_future_features_returns_copy_when_no_future_rows() -> None:
-    idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    features = pd.DataFrame({"x": [1.0, 2.0, 3.0]}, index=idx)
+def test_perturb_future_helpers_return_copy_when_no_future_rows() -> None:
+    probe = dt.datetime(2024, 1, 3)
+    features = pl.DataFrame(
+        {
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2), probe],
+            "x": [1.0, 2.0, 3.0],
+        }
+    )
+    source = pl.DataFrame(
+        {
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2), probe],
+            "price_usd": [100.0, 101.0, 102.0],
+        }
+    )
 
-    perturbed = StrategyRunner._perturb_future_features(features, probe=idx.max())
+    perturbed_features = StrategyRunner._perturb_future_features(features, probe=probe)
+    perturbed_source = StrategyRunner._perturb_future_source_data(source, probe=probe)
 
-    assert perturbed.equals(features)
-    assert perturbed is not features
-
-
-def test_perturb_future_source_data_returns_copy_when_no_future_rows() -> None:
-    idx = pd.date_range("2024-01-01", periods=3, freq="D")
-    source = pd.DataFrame({"price_usd": [100.0, 101.0, 102.0]}, index=idx)
-
-    perturbed = StrategyRunner._perturb_future_source_data(source, probe=idx.max())
-
-    assert perturbed.equals(source)
-    assert perturbed is not source
+    assert perturbed_features.equals(features)
+    assert perturbed_source.equals(source)
+    assert perturbed_features is not features
+    assert perturbed_source is not source
 
 
 def test_perturb_future_features_reverses_non_numeric_columns() -> None:
-    idx = pd.date_range("2024-01-01", periods=4, freq="D")
-    features = pd.DataFrame(
+    features = pl.DataFrame(
         {
+            "date": [
+                dt.datetime(2024, 1, 1),
+                dt.datetime(2024, 1, 2),
+                dt.datetime(2024, 1, 3),
+                dt.datetime(2024, 1, 4),
+            ],
             "price_usd": [100.0, 110.0, 120.0, 130.0],
             "label": ["a", "b", "c", "d"],
-        },
-        index=idx,
+        }
     )
 
-    perturbed = StrategyRunner._perturb_future_features(features, probe=idx[1])
+    perturbed = StrategyRunner._perturb_future_features(features, probe=dt.datetime(2024, 1, 2))
+    assert perturbed.filter(pl.col("date") > dt.datetime(2024, 1, 2))["label"].to_list() == ["d", "c"]
 
-    assert list(perturbed.loc[idx[2]:, "label"]) == ["d", "c"]
 
-
-def test_build_fold_ranges_returns_empty_when_history_is_too_short() -> None:
+def test_build_fold_ranges_handles_short_and_valid_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     folds = StrategyRunner._build_fold_ranges(
-        start_ts=pd.Timestamp("2024-01-01"),
-        end_ts=pd.Timestamp("2024-12-31"),
+        start_ts=dt.datetime(2024, 1, 1),
+        end_ts=dt.datetime(2024, 12, 31),
     )
     assert folds == []
 
-
-def test_build_fold_ranges_skips_non_increasing_boundaries(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
     monkeypatch.setattr(
         "stacksats.runner_helpers.np.linspace",
         lambda *args, **kwargs: np.array([0, 0, 10, 20, 30], dtype=int),
     )
-
-    folds = StrategyRunner._build_fold_ranges(
-        start_ts=pd.Timestamp("2022-01-01"),
-        end_ts=pd.Timestamp("2025-01-01"),
+    skipped = StrategyRunner._build_fold_ranges(
+        start_ts=dt.datetime(2022, 1, 1),
+        end_ts=dt.datetime(2025, 1, 1),
     )
+    assert skipped == []
 
-    assert folds == []
-
-
-def test_build_fold_ranges_appends_valid_folds() -> None:
-    folds = StrategyRunner._build_fold_ranges(
-        start_ts=pd.Timestamp("2020-01-01"),
-        end_ts=pd.Timestamp("2025-12-31"),
+    valid = StrategyRunner._build_fold_ranges(
+        start_ts=dt.datetime(2020, 1, 1),
+        end_ts=dt.datetime(2025, 12, 31),
     )
+    assert len(valid) >= 1
+    assert all((end - start).days + 1 >= ALLOCATION_SPAN_DAYS for start, end in valid)
 
-    assert len(folds) >= 1
-    assert all((end - start).days + 1 >= ALLOCATION_SPAN_DAYS for start, end in folds)
 
-
-def test_strict_fold_checks_skips_when_less_than_two_fold_results(
+def test_strict_shuffled_check_skips_empty_window_and_empty_trials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runner = StrategyRunner()
-
-    class _TwoLenOneIter:
-        def __len__(self):
-            return 2
-
-        def __iter__(self):
-            yield (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"))
-
-    monkeypatch.setattr(runner, "_build_fold_ranges", lambda *args, **kwargs: _TwoLenOneIter())
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=55.0))
-
-    ok, messages = runner._strict_fold_checks(
-        strategy=_UniformStrategy(),
-        btc_df=_btc_df(days=1000),
-        start_ts=pd.Timestamp("2024-01-01"),
-        end_ts=pd.Timestamp("2025-12-31"),
-        config=ValidationConfig(strict=True),
-    )
-
-    assert ok is True
-    assert any("not enough valid fold results" in message for message in messages)
-
-
-def test_strict_shuffled_check_skips_empty_validation_window() -> None:
     runner = StrategyRunner()
     ok, messages = runner._strict_shuffled_check(
         strategy=_UniformStrategy(),
         btc_df=_btc_df(days=30),
-        start_ts=pd.Timestamp("2035-01-01"),
-        end_ts=pd.Timestamp("2035-01-05"),
+        start_ts=dt.datetime(2035, 1, 1),
+        end_ts=dt.datetime(2035, 1, 5),
         config=ValidationConfig(strict=True, shuffled_trials=1),
     )
-
     assert ok is True
     assert any("empty validation window" in message for message in messages)
 
-
-def test_strict_shuffled_check_skips_when_no_runs_complete(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
     monkeypatch.setattr(StrategyRunner, "ITER_RANGE", lambda *args: [])
-
     ok, messages = runner._strict_shuffled_check(
         strategy=_UniformStrategy(),
         btc_df=_btc_df(days=30),
-        start_ts=pd.Timestamp("2024-01-01"),
-        end_ts=pd.Timestamp("2024-01-05"),
+        start_ts=dt.datetime(2024, 1, 1),
+        end_ts=dt.datetime(2024, 1, 5),
         config=ValidationConfig(strict=True, shuffled_trials=1),
     )
-
     assert ok is True
     assert any("no shuffled runs completed" in message for message in messages)
 
@@ -185,9 +162,9 @@ def test_backtest_strategy_fn_handles_empty_window(monkeypatch: pytest.MonkeyPat
         end_date,
     ):
         del btc_df, features_df, strategy_label, start_date, end_date
-        empty_weights = strategy_fn(pd.DataFrame())
-        assert empty_weights.empty
-        spd_table = pd.DataFrame(
+        empty_weights = strategy_fn(pl.DataFrame(schema={"date": pl.Datetime("us"), "price_usd": pl.Float64}))
+        assert empty_weights.is_empty()
+        spd_table = pl.DataFrame(
             {
                 "dynamic_percentile": [60.0],
                 "uniform_percentile": [40.0],
@@ -211,7 +188,7 @@ def test_validate_continues_when_window_start_exceeds_probe(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", -pd.Timedelta(days=1))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", -dt.timedelta(days=1))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
     result = runner.validate(
@@ -223,20 +200,24 @@ def test_validate_continues_when_window_start_exceeds_probe(
     assert bool(result.passed) is True
 
 
-def test_validate_strict_repeat_pass_mutation_branch(
+@pytest.mark.parametrize("mutation_call", [2, 3, 4, 24, 25])
+def test_validate_strict_detects_mutation_across_repeat_masked_perturbed_and_lock_paths(
     monkeypatch: pytest.MonkeyPatch,
+    mutation_call: int,
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", dt.timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-
     counter = {"n": 0}
 
-    def _compute(ctx: StrategyContext) -> pd.Series:
+    def _compute(ctx: StrategyContext) -> pl.DataFrame:
         counter["n"] += 1
-        if counter["n"] == 2:
-            ctx.features_df["__mutated__"] = 1.0
+        if counter["n"] == mutation_call:
+            ctx.features_df.insert_column(
+                ctx.features_df.width,
+                pl.Series(f"__mutation_{mutation_call}__", [1.0] * ctx.features_df.height),
+            )
         return _uniform_weights(ctx)
 
     monkeypatch.setattr(strategy, "compute_weights", _compute)
@@ -247,72 +228,24 @@ def test_validate_strict_repeat_pass_mutation_branch(
     )
 
     assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
+    assert any("mutated ctx.features" in message for message in result.messages)
 
 
-def test_validate_strict_masked_pass_mutation_branch(
+def test_validate_leakage_and_weight_loops_handle_empty_and_invalid_outputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-    counter = {"n": 0}
-
-    def _compute(ctx: StrategyContext) -> pd.Series:
-        counter["n"] += 1
-        if counter["n"] == 3:
-            ctx.features_df["__masked_mutation__"] = 1.0
-        return _uniform_weights(ctx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _compute)
-    result = runner.validate(
-        strategy,
-        ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", strict=True, min_win_rate=0.0),
-        btc_df=_btc_df(days=20),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
-
-
-def test_validate_strict_perturbed_pass_mutation_branch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-    counter = {"n": 0}
-
-    def _compute(ctx: StrategyContext) -> pd.Series:
-        counter["n"] += 1
-        if counter["n"] == 4:
-            ctx.features_df["__perturbed_mutation__"] = 1.0
-        return _uniform_weights(ctx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _compute)
-    result = runner.validate(
-        strategy,
-        ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", strict=True, min_win_rate=0.0),
-        btc_df=_btc_df(days=20),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
-
-
-def test_validate_leakage_loop_skips_when_prefix_is_empty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
+    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", dt.timedelta(days=2))
     monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
 
-    def _future_only_weights(ctx: StrategyContext) -> pd.Series:
-        future_day = pd.Timestamp(ctx.end_date) + pd.Timedelta(days=1)
-        return pd.Series([1.0], index=[future_day], dtype=float)
+    def _future_only_weights(ctx: StrategyContext) -> pl.DataFrame:
+        return pl.DataFrame(
+            {
+                "date": [ctx.end_date + dt.timedelta(days=1)],
+                "weight": [1.0],
+            }
+        )
 
     monkeypatch.setattr(strategy, "compute_weights", _future_only_weights)
     result = runner.validate(
@@ -320,43 +253,23 @@ def test_validate_leakage_loop_skips_when_prefix_is_empty(
         ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", min_win_rate=0.0),
         btc_df=_btc_df(days=20),
     )
-
     assert bool(result.passed) is True
 
-
-def test_validate_weight_loop_skips_empty_weight_vectors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
     monkeypatch.setattr(
         strategy,
         "compute_weights",
-        lambda ctx: pd.Series(dtype=float, index=pd.DatetimeIndex([])),
+        lambda ctx: pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
     )
-
     result = runner.validate(
         strategy,
         ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", min_win_rate=0.0),
         btc_df=_btc_df(days=20),
     )
-
     assert bool(result.passed) is True
 
-
-def test_validate_weight_loop_records_weight_validation_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-
-    def _invalid_weights(ctx: StrategyContext) -> pd.Series:
-        idx = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        return pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+    def _invalid_weights(ctx: StrategyContext) -> pl.DataFrame:
+        dates = _window_dates(ctx)
+        return pl.DataFrame({"date": dates, "weight": np.zeros(len(dates), dtype=float)})
 
     monkeypatch.setattr(strategy, "compute_weights", _invalid_weights)
     result = runner.validate(
@@ -364,60 +277,5 @@ def test_validate_weight_loop_records_weight_validation_errors(
         ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", min_win_rate=0.0),
         btc_df=_btc_df(days=20),
     )
-
     assert bool(result.weight_constraints_ok) is False
     assert any("expected 1.0" in message for message in result.messages)
-
-
-def test_validate_strict_lock_base_mutation_branch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-
-    counter = {"n": 0}
-
-    def _compute(ctx: StrategyContext) -> pd.Series:
-        counter["n"] += 1
-        if counter["n"] == 24:
-            ctx.features_df["__lock_base_mutation__"] = 1.0
-        return _uniform_weights(ctx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _compute)
-    result = runner.validate(
-        strategy,
-        ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", strict=True, min_win_rate=0.0),
-        btc_df=_btc_df(days=20),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)
-
-
-def test_validate_strict_lock_perturbed_mutation_branch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = StrategyRunner()
-    strategy = _UniformStrategy()
-    monkeypatch.setattr(StrategyRunner, "WINDOW_OFFSET", pd.Timedelta(days=2))
-    monkeypatch.setattr(runner, "backtest", lambda *args, **kwargs: SimpleNamespace(win_rate=100.0))
-
-    counter = {"n": 0}
-
-    def _compute(ctx: StrategyContext) -> pd.Series:
-        counter["n"] += 1
-        if counter["n"] == 25:
-            ctx.features_df["__lock_perturbed_mutation__"] = 1.0
-        return _uniform_weights(ctx)
-
-    monkeypatch.setattr(strategy, "compute_weights", _compute)
-    result = runner.validate(
-        strategy,
-        ValidationConfig(start_date="2024-01-01", end_date="2024-01-05", strict=True, min_win_rate=0.0),
-        btc_df=_btc_df(days=20),
-    )
-
-    assert bool(result.passed) is False
-    assert any("mutated ctx.features_df" in message for message in result.messages)

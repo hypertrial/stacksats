@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
 
 from stacksats.statistical_validation import (
     anchored_window_excess,
@@ -16,8 +17,8 @@ from stacksats.statistical_validation import (
 
 def test_build_purged_walk_forward_folds_returns_empty_for_short_history() -> None:
     folds = build_purged_walk_forward_folds(
-        pd.Timestamp("2024-01-01"),
-        pd.Timestamp("2024-06-01"),
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 6, 1),
         n_folds=4,
         min_train_days=365,
         test_days=90,
@@ -29,8 +30,8 @@ def test_build_purged_walk_forward_folds_returns_empty_for_short_history() -> No
 
 def test_build_purged_walk_forward_folds_returns_ranges() -> None:
     folds = build_purged_walk_forward_folds(
-        pd.Timestamp("2020-01-01"),
-        pd.Timestamp("2025-12-31"),
+        dt.datetime(2020, 1, 1),
+        dt.datetime(2025, 12, 31),
         n_folds=2,
         min_train_days=365,
         test_days=180,
@@ -43,7 +44,8 @@ def test_build_purged_walk_forward_folds_returns_ranges() -> None:
 
 
 def test_anchored_window_excess_samples_non_overlapping_points() -> None:
-    spd = pd.DataFrame({"excess_percentile": [1.0, 2.0, 3.0, 4.0]})
+    import polars as pl
+    spd = pl.DataFrame({"excess_percentile": [1.0, 2.0, 3.0, 4.0]})
     sampled = anchored_window_excess(spd, step=2)
     assert np.array_equal(sampled, np.array([1.0, 3.0]))
 
@@ -91,4 +93,3 @@ def test_whites_reality_check_returns_probability() -> None:
         seed=3,
     )
     assert 0.0 <= pvalue <= 1.0
-

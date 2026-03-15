@@ -10,11 +10,6 @@ from typing import TYPE_CHECKING, Iterable
 
 import polars as pl
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None  # type: ignore[assignment]
-
 from .strategy_time_series_metadata import (
     StrategySeriesMetadata,
     _normalize_generated_at,
@@ -86,7 +81,7 @@ class WeightTimeSeriesBatch:
     @classmethod
     def from_flat_dataframe(
         cls,
-        data: pl.DataFrame | "pd.DataFrame",
+        data: pl.DataFrame,
         *,
         strategy_id: str,
         strategy_version: str,
@@ -99,12 +94,8 @@ class WeightTimeSeriesBatch:
         """Build a batch object from a flattened export dataframe."""
         from .strategy_time_series import WeightTimeSeries
 
-        if isinstance(data, pl.DataFrame):
-            pass
-        elif pd is not None and isinstance(data, pd.DataFrame):
-            data = pl.from_pandas(data)
-        else:
-            raise TypeError("data must be a Polars or pandas DataFrame.")
+        if not isinstance(data, pl.DataFrame):
+            raise TypeError("data must be a Polars DataFrame.")
 
         required = {"start_date", "end_date", "date", "weight", "price_usd"}
         missing = [col for col in required if col not in data.columns]

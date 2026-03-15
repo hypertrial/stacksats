@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 WIN_RATE_TOLERANCE = 1e-10
 
@@ -16,7 +16,7 @@ WIN_RATE_TOLERANCE = 1e-10
 class BacktestResult:
     """Structured backtest result."""
 
-    spd_table: pd.DataFrame
+    spd_table: pl.DataFrame
     exp_decay_percentile: float
     win_rate: float
     score: float
@@ -49,12 +49,12 @@ class BacktestResult:
             f"Exp-Decay Percentile: {self.exp_decay_percentile:.2f}% | "
             f"Uniform Exp-Decay: {self.uniform_exp_decay_percentile:.2f}% | "
             f"Exp-Decay Multiple: {exp_decay_multiple_str} | "
-            f"Windows: {len(self.spd_table)}"
+            f"Windows: {self.spd_table.height}"
         )
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pl.DataFrame:
         """Return the SPD table."""
-        return self.spd_table.copy()
+        return self.spd_table.clone()
 
     def to_json(self, path: str | Path | None = None) -> dict:
         """Serialize result to a JSON-compatible dictionary."""
@@ -71,9 +71,9 @@ class BacktestResult:
                 "exp_decay_percentile": float(self.exp_decay_percentile),
                 "uniform_exp_decay_percentile": float(self.uniform_exp_decay_percentile),
                 "exp_decay_multiple_vs_uniform": self.exp_decay_multiple_vs_uniform,
-                "windows": int(len(self.spd_table)),
+                "windows": self.spd_table.height,
             },
-            "window_level_data": self.spd_table.reset_index().to_dict(orient="records"),
+            "window_level_data": self.spd_table.to_dicts(),
         }
         if path is not None:
             output_path = Path(path)
@@ -82,23 +82,19 @@ class BacktestResult:
         return payload
 
     def plot(self, output_dir: str = "output") -> dict[str, str]:
-        """Generate standard backtest plots and return output paths."""
-        from .backtest import (
-            create_cumulative_performance,
-            create_excess_percentile_distribution,
-            create_performance_comparison_chart,
-            create_performance_metrics_summary,
-            create_win_loss_comparison,
-            export_metrics_json,
-        )
+        """Export backtest metrics to JSON. Returns path to metrics file."""
+        from .backtest import export_metrics_json
 
-        excess_percentile = (
-            self.spd_table["dynamic_percentile"] - self.spd_table["uniform_percentile"]
-        )
-        uniform_pct_safe = self.spd_table["uniform_percentile"].replace(0, 0.01)
+        dyn = self.spd_table["dynamic_percentile"]
+        uni = self.spd_table["uniform_percentile"]
+        excess_percentile = dyn - uni
+        uniform_pct_safe = uni.replace(0, 0.01)
         relative_improvements = excess_percentile / uniform_pct_safe * 100
         wins = int((excess_percentile > WIN_RATE_TOLERANCE).sum())
-        losses = len(self.spd_table) - wins
+        losses = self.spd_table.height - wins
+
+        ratio = dyn / uni.replace(0, np.nan)
+        ratio = ratio.replace([np.inf, -np.inf], np.nan).fill_null(0.0)
 
         metrics = {
             "score": float(self.score),
@@ -110,44 +106,15 @@ class BacktestResult:
             "median_excess": float(excess_percentile.median()),
             "relative_improvement_pct_mean": float(relative_improvements.mean()),
             "relative_improvement_pct_median": float(relative_improvements.median()),
-            "mean_ratio": float(
-                (
-                    self.spd_table["dynamic_percentile"]
-                    / self.spd_table["uniform_percentile"].replace(0, np.nan)
-                )
-                .replace([np.inf, -np.inf], np.nan)
-                .fillna(0.0)
-                .mean()
-            ),
-            "median_ratio": float(
-                (
-                    self.spd_table["dynamic_percentile"]
-                    / self.spd_table["uniform_percentile"].replace(0, np.nan)
-                )
-                .replace([np.inf, -np.inf], np.nan)
-                .fillna(0.0)
-                .median()
-            ),
-            "total_windows": int(len(self.spd_table)),
+            "mean_ratio": float(ratio.mean()),
+            "median_ratio": float(ratio.median()),
+            "total_windows": self.spd_table.height,
             "wins": int(wins),
             "losses": int(losses),
         }
 
-        create_performance_comparison_chart(self.spd_table, output_dir=output_dir)
-        create_excess_percentile_distribution(self.spd_table, output_dir=output_dir)
-        create_win_loss_comparison(self.spd_table, output_dir=output_dir)
-        create_cumulative_performance(self.spd_table, output_dir=output_dir)
-        create_performance_metrics_summary(self.spd_table, metrics, output_dir=output_dir)
-        export_metrics_json(self.spd_table, metrics, output_dir=output_dir)
-
-        return {
-            "performance_comparison": str(Path(output_dir) / "performance_comparison.svg"),
-            "excess_distribution": str(Path(output_dir) / "excess_percentile_distribution.svg"),
-            "win_loss": str(Path(output_dir) / "win_loss_comparison.svg"),
-            "cumulative_performance": str(Path(output_dir) / "cumulative_performance.svg"),
-            "metrics_summary": str(Path(output_dir) / "metrics_summary.svg"),
-            "metrics_json": str(Path(output_dir) / "metrics.json"),
-        }
+        path = export_metrics_json(self.spd_table, metrics, output_dir=output_dir)
+        return {"metrics_json": path}
 
     def animate(
         self,

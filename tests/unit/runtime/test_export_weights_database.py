@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
+import polars as pl
 import pytest
 from stacksats.export_weights import (
     create_table_if_not_exists,
@@ -72,7 +72,7 @@ class TestDatabaseOperations:
     @patch("time.time", side_effect=[100, 101, 102, 103])
     def test_insert_all_data_copy_success(self, mock_time, mock_conn):
         """Test insert_all_data uses COPY FROM successfully."""
-        df = pd.DataFrame({
+        df = pl.DataFrame({
             "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2025-01-01"],
@@ -96,7 +96,7 @@ class TestDatabaseOperations:
     @patch("time.time", side_effect=[100, 101, 102, 103])
     def test_insert_all_data_fallback_to_execute_values(self, mock_time, mock_execute_values, mock_conn):
         """Test insert_all_data falls back to execute_values if COPY fails."""
-        df = pd.DataFrame({
+        df = pl.DataFrame({
             "day_index": [0],
             "start_date": ["2024-01-01"],
             "end_date": ["2025-01-01"],
@@ -122,7 +122,7 @@ class TestDatabaseOperations:
         """Test update_today_weights executes bulk update SQL."""
         mock_get_price.return_value = 60000.0
 
-        df = pd.DataFrame({
+        df = pl.DataFrame({
             "day_index": [0, 1],
             "start_date": ["2024-01-01", "2024-01-01"],
             "end_date": ["2025-01-01", "2025-01-01"],

@@ -10,11 +10,6 @@ from typing import ClassVar, Iterable
 import numpy as np
 import polars as pl
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None  # type: ignore[assignment]
-
 from .strategy_time_series_analysis import StrategyTimeSeriesAnalysisMixin
 from .strategy_time_series_batch import WeightTimeSeriesBatch
 from .strategy_time_series_diagnostics import StrategyTimeSeriesDiagnosticsMixin
@@ -62,12 +57,8 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         data: pl.DataFrame,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> None:
-        if isinstance(data, pl.DataFrame):
-            pass
-        elif pd is not None and isinstance(data, pd.DataFrame):
-            data = pl.from_pandas(data)
-        else:
-            raise TypeError("WeightTimeSeries.data must be a Polars or pandas DataFrame.")
+        if not isinstance(data, pl.DataFrame):
+            raise TypeError("WeightTimeSeries.data must be a Polars DataFrame.")
 
         normalized_extra_schema = validate_schema_specs(extra_schema, forbid_core_name_collisions=True)
         normalized_data = self._normalize_core_columns(data)
@@ -81,7 +72,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
     @classmethod
     def from_dataframe(
         cls,
-        data: pl.DataFrame | "pd.DataFrame",
+        data: pl.DataFrame,
         *,
         metadata: StrategySeriesMetadata,
         extra_schema: tuple[ColumnSpec, ...] = (),
@@ -155,7 +146,12 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         if "weight" in out.columns:
             out = out.with_columns(pl.col("weight").cast(pl.Float64, strict=False))
         if "price_usd" in out.columns:
-            out = out.with_columns(pl.col("price_usd").cast(pl.Float64, strict=False))
+            out = out.with_columns(
+                pl.when(pl.col("price_usd").cast(pl.Float64, strict=False).is_nan())
+                .then(None)
+                .otherwise(pl.col("price_usd").cast(pl.Float64, strict=False))
+                .alias("price_usd")
+            )
         if "day_index" in out.columns:
             out = out.with_columns(pl.col("day_index").cast(pl.Float64, strict=False))
         return out
@@ -292,17 +288,17 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
                 raise ValueError("Column 'weight' must sum to 1.0 " f"(got {weight_sum:.10f}).")
 
         raw_price = self._data["price_usd"]
-        prices = raw_price.cast(pl.Float64, strict=False)
-        invalid_non_null = raw_price.is_not_null() & prices.is_null()
+        cast_prices = raw_price.cast(pl.Float64, strict=False)
+        invalid_non_null = raw_price.is_not_null() & cast_prices.is_null()
         if invalid_non_null.any():
             raise ValueError("Column 'price_usd' must be numeric when present.")
+        prices = cast_prices.fill_nan(None)
         if prices.is_finite().any() and (~prices.is_finite()).any():
             raise ValueError("Column 'price_usd' must be finite when present.")
 
         if "locked" in self._data.columns:
-            locked = self._data["locked"]
-            valid_locked = locked.is_in([True, False])
-            if not valid_locked.all():
+            raw_locked = self._data["locked"]
+            if raw_locked.dtype != pl.Boolean:
                 raise ValueError("Column 'locked' must contain only boolean values.")
 
         if "day_index" in self._data.columns:
@@ -327,10 +323,11 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
     def _validate_optional_numeric_column(self, column: str) -> None:
         """Validate optional numeric columns."""
         raw = self._data[column]
-        values = raw.cast(pl.Float64, strict=False)
-        invalid_non_null = raw.is_not_null() & values.is_null()
+        cast_values = raw.cast(pl.Float64, strict=False)
+        invalid_non_null = raw.is_not_null() & cast_values.is_null()
         if invalid_non_null.any():
             raise ValueError(f"Column '{column}' must be numeric when present.")
+        values = cast_values.fill_nan(None)
         if values.is_finite().any() and (~values.is_finite()).any():
             raise ValueError(f"Column '{column}' must be finite when present.")
 
@@ -366,7 +363,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
     def _native_timestamp(value: dt.datetime | object | None) -> str | None:
         if value is None:
             return None
-        if pd is not None and hasattr(pd, "NaT") and value is pd.NaT:
+        if str(value) == "NaT":
             return None
         if hasattr(value, "is_null") and value.is_null():
             return None
@@ -377,9 +374,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
             return None
 
     @staticmethod
-    def _series_numeric_summary(values: pl.Series | "pd.Series") -> dict[str, float | int | None]:
-        if pd is not None and isinstance(values, pd.Series):
-            values = pl.from_pandas(values)
+    def _series_numeric_summary(values: pl.Series) -> dict[str, float | int | None]:
         non_null = values.drop_nulls()
         if non_null.len() == 0:
             return {

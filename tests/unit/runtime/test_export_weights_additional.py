@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import datetime as dt
 import builtins
 import importlib
 from unittest.mock import MagicMock
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.export_weights import (
@@ -25,17 +26,17 @@ def _mock_conn_with_rows(rows):
     return conn, cursor
 
 
-def _sample_frames() -> tuple[pd.DataFrame, pd.DataFrame, pd.Timestamp, pd.Timestamp]:
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    features_df = pd.DataFrame(
+def _sample_frames() -> tuple[pl.DataFrame, pl.DataFrame, dt.datetime, dt.datetime]:
+    dates = [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)]
+    features_df = pl.DataFrame(
         {
+            "date": dates,
             "price_usd": [100.0, 101.0],
             "mvrv_zscore": [0.0, 0.1],
-        },
-        index=idx,
+        }
     )
-    btc_df = pd.DataFrame({"price_usd": [100.0, 101.0]}, index=idx)
-    return features_df, btc_df, idx.min(), idx.max()
+    btc_df = pl.DataFrame({"date": dates, "price_usd": [100.0, 101.0]})
+    return features_df, btc_df, dates[0], dates[-1]
 
 
 def test_load_locked_weights_for_window_returns_none_when_lock_end_before_start() -> None:
@@ -157,9 +158,16 @@ class _StrategyWithHook(BaseStrategy):
 def test_process_start_date_batch_falls_back_when_strategy_returns_empty(mocker) -> None:
     features_df, btc_df, start_date, end_date = _sample_frames()
     strategy = _StrategyWithHook()
-    strategy.compute_weights = MagicMock(return_value=pd.Series(dtype=float))
+    strategy.compute_weights = MagicMock(
+        return_value=pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+    )
 
-    fallback = pd.Series([0.4, 0.6], index=pd.date_range(start_date, end_date, freq="D"))
+    fallback = pl.DataFrame(
+        {
+            "date": [start_date, end_date],
+            "weight": [0.4, 0.6],
+        }
+    )
     mocked_fallback = mocker.patch(
         "stacksats.export_weights.compute_window_weights",
         return_value=fallback,
@@ -177,14 +185,14 @@ def test_process_start_date_batch_falls_back_when_strategy_returns_empty(mocker)
     )
 
     assert mocked_fallback.called
-    assert result["weight"].tolist() == [0.4, 0.6]
+    assert result["weight"].to_list() == [0.4, 0.6]
 
 
 def test_process_start_date_batch_reindexes_partial_strategy_output() -> None:
     features_df, btc_df, start_date, end_date = _sample_frames()
     strategy = _StrategyWithHook()
     strategy.compute_weights = MagicMock(
-        return_value=pd.Series([0.7], index=[start_date], dtype=float)
+        return_value=pl.DataFrame({"date": [start_date], "weight": [0.7]})
     )
 
     result = process_start_date_batch(
@@ -198,40 +206,40 @@ def test_process_start_date_batch_reindexes_partial_strategy_output() -> None:
         enforce_span_contract=False,
     )
 
-    assert result["weight"].tolist() == [0.7, 0.0]
+    assert result["weight"].to_list() == [0.7, 0.0]
 
 
 def test_process_start_date_batch_does_not_expose_rows_after_end_date() -> None:
-    idx = pd.date_range("2024-01-01", periods=4, freq="D")
-    features_df = pd.DataFrame(
+    dates = [dt.datetime(2024, 1, 1) + dt.timedelta(days=offset) for offset in range(4)]
+    features_df = pl.DataFrame(
         {
+            "date": dates,
             "price_usd": [100.0, 101.0, 102.0, 103.0],
             "mvrv_zscore": [0.0, 0.1, 0.2, 0.3],
-        },
-        index=idx,
+        }
     )
-    btc_df = pd.DataFrame({"price_usd": [100.0, 101.0]}, index=idx[:2])
+    btc_df = pl.DataFrame({"date": dates[:2], "price_usd": [100.0, 101.0]})
     strategy = _StrategyWithHook()
-    captured_max: list[pd.Timestamp] = []
+    captured_max: list[dt.datetime] = []
 
     def _compute_weights(ctx):
-        captured_max.append(ctx.features.to_pandas().index.max())
-        return pd.Series([0.5, 0.5], index=pd.date_range(idx[0], idx[1], freq="D"))
+        captured_max.append(ctx.features_df["date"].max())
+        return pl.DataFrame({"date": dates[:2], "weight": [0.5, 0.5]})
 
     strategy.compute_weights = MagicMock(side_effect=_compute_weights)
 
     process_start_date_batch(
-        idx[0],
-        [idx[1]],
+        dates[0],
+        [dates[1]],
         features_df,
         btc_df,
-        current_date=idx[-1],
+        current_date=dates[-1],
         btc_price_col="price_usd",
         strategy=strategy,
         enforce_span_contract=False,
     )
 
-    assert captured_max == [idx[1]]
+    assert captured_max == [dates[1]]
 
 
 def test_update_today_weights_returns_zero_when_today_absent(
@@ -249,7 +257,7 @@ def test_update_today_weights_returns_zero_when_today_absent(
 
     monkeypatch.setattr("stacksats.export_weights.get_current_btc_price", _fake_get_current_btc_price)
 
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
             "day_index": [0],
             "start_date": ["2024-01-01"],
@@ -278,7 +286,7 @@ def test_update_today_weights_uses_weight_only_sql_when_price_stays_none(
 
     monkeypatch.setattr("stacksats.export_weights.get_current_btc_price", lambda previous_price=None: None)
 
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
             "day_index": [0, 1],
             "start_date": ["2024-01-01", "2024-01-01"],
@@ -312,7 +320,7 @@ def test_get_current_btc_price_returns_none_when_all_sources_fail(
 
 def test_update_today_weights_raises_when_required_columns_missing() -> None:
     conn = MagicMock()
-    df_missing_price = pd.DataFrame(
+    df_missing_price = pl.DataFrame(
         {
             "day_index": [0],
             "start_date": ["2024-01-01"],
@@ -338,7 +346,7 @@ def test_update_today_weights_returns_zero_when_no_api_price_and_today_missing(
         lambda previous_price=None: None,
     )
 
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
             "day_index": [0],
             "start_date": ["2024-01-01"],

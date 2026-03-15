@@ -1,12 +1,19 @@
 """Step definitions for backtest-related features."""
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 from pytest_bdd import given, parsers, then, when
 
 from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.prelude import backtest_dynamic_dca, compute_cycle_spd, get_backtest_end
+
+
+def _parse_date(s: str) -> dt.datetime:
+    return dt.datetime.strptime(s[:10], "%Y-%m-%d")
+
 
 # -----------------------------------------------------------------------------
 # Given Steps - Backtest Setup
@@ -25,7 +32,7 @@ def given_tracking_strategy(bdd_context):
     received_dates = []
 
     def tracking_strategy(window_feat):
-        received_dates.append(window_feat.index.max())
+        received_dates.append(window_feat["date"].max())
         return compute_weights_with_features(
             window_feat,
             features_df=bdd_context["features_df"],
@@ -38,23 +45,24 @@ def given_tracking_strategy(bdd_context):
 @given(parsers.parse('a backtest window from "{start}" to "{end}"'))
 def given_backtest_window(start, end, bdd_context):
     """Set up a backtest window."""
-    bdd_context["window_start"] = pd.to_datetime(start)
-    bdd_context["window_end"] = pd.to_datetime(end)
+    bdd_context["window_start"] = _parse_date(start)
+    bdd_context["window_end"] = _parse_date(end)
 
 
 @given("empty feature window")
 def given_empty_window(bdd_context):
     """Create an empty feature window."""
-    bdd_context["window_feat"] = pd.DataFrame(index=pd.DatetimeIndex([]))
+    bdd_context["window_feat"] = pl.DataFrame(schema={"date": pl.Datetime("us")})
 
 
 @given("single-day feature window")
 def given_single_day_window(sample_features_df, bdd_context):
     """Create a contract-valid one-year feature window."""
-    single_date = pd.to_datetime("2020-06-01")
-    bdd_context["window_feat"] = sample_features_df.loc[
-        single_date : single_date + pd.Timedelta(days=364)
-    ]
+    single_date = _parse_date("2020-06-01")
+    end_date = single_date + dt.timedelta(days=364)
+    bdd_context["window_feat"] = sample_features_df.filter(
+        (pl.col("date") >= single_date) & (pl.col("date") <= end_date)
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -68,7 +76,9 @@ def when_extract_window(bdd_context):
     features_df = bdd_context["features_df"]
     start = bdd_context["window_start"]
     end = bdd_context["window_end"]
-    bdd_context["window_feat"] = features_df.loc[start:end]
+    bdd_context["window_feat"] = features_df.filter(
+        (pl.col("date") >= start) & (pl.col("date") <= end)
+    )
 
 
 @when("I compute weights for the window using explicit feature weights")
@@ -149,7 +159,7 @@ def then_weights_match_window(bdd_context):
     """Assert weights match window dates."""
     weights = bdd_context["weights"]
     window_feat = bdd_context["window_feat"]
-    assert len(weights) == len(window_feat), "Weight count != window size"
+    assert weights.height == window_feat.height, "Weight count != window size"
 
 
 @then("weight index should match window dates")
@@ -158,8 +168,8 @@ def then_weight_index_matches(bdd_context):
     weights = bdd_context["weights"]
     start = bdd_context["window_start"]
     end = bdd_context["window_end"]
-    assert weights.index.min() == start, "Weight index start mismatch"
-    assert weights.index.max() == end, "Weight index end mismatch"
+    assert weights["date"].min() == start, "Weight index start mismatch"
+    assert weights["date"].max() == end, "Weight index end mismatch"
 
 
 @then("no received dates should exceed configured backtest end")
@@ -167,7 +177,7 @@ def then_no_future_dates(bdd_context):
     """Assert no dates exceed backtest end."""
     received_dates = bdd_context["received_dates"]
     max_received = max(received_dates)
-    backtest_end = pd.to_datetime(get_backtest_end())
+    backtest_end = _parse_date(get_backtest_end())
     assert max_received <= backtest_end, (
         f"Received date {max_received} > configured backtest end {backtest_end}"
     )
@@ -177,7 +187,7 @@ def then_no_future_dates(bdd_context):
 def then_spd_not_empty(bdd_context):
     """Assert SPD table has results."""
     spd_table = bdd_context["spd_table"]
-    assert len(spd_table) > 0, "SPD table is empty"
+    assert spd_table.height > 0, "SPD table is empty"
 
 
 @then("SPD table should have required columns")
@@ -201,21 +211,24 @@ def then_spd_has_columns(bdd_context):
 def then_percentiles_valid(bdd_context):
     """Assert percentiles are in [0, 100]."""
     spd_table = bdd_context["spd_table"]
-    valid_rows = spd_table.dropna(subset=["dynamic_percentile", "uniform_percentile"])
-    assert (valid_rows["dynamic_percentile"] >= 0).all()
-    assert (valid_rows["dynamic_percentile"] <= 100).all()
-    assert (valid_rows["uniform_percentile"] >= 0).all()
-    assert (valid_rows["uniform_percentile"] <= 100).all()
+    valid_rows = spd_table.drop_nulls(subset=["dynamic_percentile", "uniform_percentile"])
+    assert valid_rows["dynamic_percentile"].ge(0).all()
+    assert valid_rows["dynamic_percentile"].le(100).all()
+    assert valid_rows["uniform_percentile"].ge(0).all()
+    assert valid_rows["uniform_percentile"].le(100).all()
 
 
 @then("excess percentile should equal dynamic minus uniform")
 def then_excess_calculation(bdd_context):
     """Assert excess percentile is correctly calculated."""
     spd_table = bdd_context["spd_table"]
-    valid_rows = spd_table.dropna(subset=["dynamic_percentile", "uniform_percentile"])
+    valid_rows = spd_table.drop_nulls(subset=["dynamic_percentile", "uniform_percentile"])
     excess = valid_rows["dynamic_percentile"] - valid_rows["uniform_percentile"]
-    pd.testing.assert_series_equal(
-        excess, valid_rows["excess_percentile"], check_names=False
+    np.testing.assert_allclose(
+        excess.to_numpy(),
+        valid_rows["excess_percentile"].to_numpy(),
+        rtol=1e-12,
+        atol=1e-12,
     )
 
 
@@ -231,15 +244,15 @@ def then_weights_identical(bdd_context):
 def then_empty_weights(bdd_context):
     """Assert empty window produces empty weights."""
     weights = bdd_context["weights"]
-    assert len(weights) == 0, "Expected empty weights"
+    assert weights.height == 0, "Expected empty weights"
 
 
 @then("single-day weight should equal 1.0")
 def then_single_day_weight(bdd_context):
     """Assert one-year window weights are valid and normalized."""
     weights = bdd_context["weights"]
-    assert len(weights) == ALLOCATION_SPAN_DAYS, "Expected configured fixed-span length"
-    assert np.isclose(weights.sum(), 1.0), "Weights must sum to 1.0"
+    assert weights.height == ALLOCATION_SPAN_DAYS, "Expected configured fixed-span length"
+    assert np.isclose(float(weights["weight"].sum()), 1.0), "Weights must sum to 1.0"
 
 
 @then("exp_decay_percentile should be a number")

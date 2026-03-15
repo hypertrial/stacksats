@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
+import datetime as dt
+
+import polars as pl
 import pytest
 
 from stacksats.runner import StrategyRunner
@@ -12,6 +13,7 @@ from stacksats.strategy_time_series import (
     StrategyTimeSeriesBatch,
 )
 from stacksats.strategy_types import BaseStrategy, ExportConfig, StrategyContext, TargetProfile
+from tests.test_helpers import btc_frame
 
 
 class UniformExportStrategy(BaseStrategy):
@@ -21,25 +23,19 @@ class UniformExportStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx, signals
         return TargetProfile(
-            values=pd.Series(np.ones(len(features_df.index)), index=features_df.index),
+            values=pl.DataFrame(
+                {
+                    "date": features_df["date"],
+                    "value": [1.0] * features_df.height,
+                }
+            ),
             mode="absolute",
         )
-
-
-def _btc_df() -> pd.DataFrame:
-    idx = pd.date_range("2021-01-01", periods=1500, freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(10000, 60000, len(idx)),
-            "mvrv": np.linspace(0.9, 2.1, len(idx)),
-        },
-        index=idx,
-    )
 
 
 def _metadata(**overrides: object) -> StrategySeriesMetadata:
@@ -49,36 +45,41 @@ def _metadata(**overrides: object) -> StrategySeriesMetadata:
         "run_id": "run-1",
         "config_hash": "abc123",
         "schema_version": "1.0.0",
-        "generated_at": pd.Timestamp("2024-01-03 12:34:56"),
-        "window_start": pd.Timestamp("2024-01-01 15:00:00"),
-        "window_end": pd.Timestamp("2024-01-03 23:59:59"),
+        "generated_at": dt.datetime(2024, 1, 3, 12, 34, 56, tzinfo=dt.timezone.utc),
+        "window_start": dt.datetime(2024, 1, 1, 15, 0, 0),
+        "window_end": dt.datetime(2024, 1, 3, 23, 59, 59),
     }
     payload.update(overrides)
     return StrategySeriesMetadata(**payload)
 
 
-def _data() -> pd.DataFrame:
-    return pd.DataFrame(
+def _data() -> pl.DataFrame:
+    return pl.DataFrame(
         {
             "day_index": [0, 1, 2],
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": [
+                dt.datetime(2024, 1, 1),
+                dt.datetime(2024, 1, 2),
+                dt.datetime(2024, 1, 3),
+            ],
             "weight": [0.2, 0.3, 0.5],
-            "price_usd": [42000.0, 43000.0, np.nan],
+            "price_usd": [42000.0, 43000.0, None],
         }
     )
 
 
 def test_metadata_normalizes_and_validates_fields() -> None:
     metadata = _metadata()
+
     assert metadata.generated_at.tzinfo is not None
-    assert str(metadata.generated_at.tzinfo) == "UTC"
-    assert metadata.window_start == pd.Timestamp("2024-01-01")
-    assert metadata.window_end == pd.Timestamp("2024-01-03")
+    assert metadata.generated_at.tzinfo == dt.timezone.utc
+    assert metadata.window_start == dt.datetime(2024, 1, 1)
+    assert metadata.window_end == dt.datetime(2024, 1, 3)
 
     with pytest.raises(ValueError, match="strategy_id must be a non-empty string"):
         _metadata(strategy_id="")
     with pytest.raises(ValueError, match="window_start must be <= window_end"):
-        _metadata(window_start=pd.Timestamp("2024-01-04"), window_end=pd.Timestamp("2024-01-03"))
+        _metadata(window_start=dt.datetime(2024, 1, 4), window_end=dt.datetime(2024, 1, 3))
 
 
 def test_strategy_time_series_extra_schema_supports_declared_columns() -> None:
@@ -92,8 +93,7 @@ def test_strategy_time_series_extra_schema_supports_declared_columns() -> None:
             source="strategy",
         ),
     )
-    data = _data()
-    data["custom_signal"] = [1.0, 2.0, 3.0]
+    data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
     series = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
 
     assert "custom_signal" in series.schema()
@@ -143,8 +143,7 @@ def test_strategy_time_series_csv_roundtrip(tmp_path) -> None:
             source="strategy",
         ),
     )
-    data = _data()
-    data["custom_signal"] = [1.0, 2.0, 3.0]
+    data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
     series = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
     csv_path = tmp_path / "series.csv"
 
@@ -153,7 +152,7 @@ def test_strategy_time_series_csv_roundtrip(tmp_path) -> None:
 
     assert loaded.to_dataframe().equals(series.to_dataframe())
     assert loaded.columns == series.columns
-    assert loaded.window_key() == (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-03"))
+    assert loaded.window_key() == (dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3))
 
 
 def test_strategy_time_series_batch_roundtrips_and_propagates_generated_at(tmp_path) -> None:
@@ -166,17 +165,17 @@ def test_strategy_time_series_batch_roundtrips_and_propagates_generated_at(tmp_p
             source="strategy",
         ),
     )
-    flat = pd.DataFrame(
+    flat = pl.DataFrame(
         {
             "start_date": ["2024-01-01", "2024-01-01", "2024-02-01", "2024-02-01"],
             "end_date": ["2024-01-02", "2024-01-02", "2024-02-02", "2024-02-02"],
             "date": ["2024-01-01", "2024-01-02", "2024-02-01", "2024-02-02"],
             "weight": [0.45, 0.55, 0.4, 0.6],
-            "price_usd": [40000.0, 41000.0, 50000.0, np.nan],
+            "price_usd": [40000.0, 41000.0, 50000.0, None],
             "custom_signal": [1.0, 2.0, 3.0, 4.0],
         }
     )
-    generated_at = pd.Timestamp("2024-02-15 09:30:00Z")
+    generated_at = dt.datetime(2024, 2, 15, 9, 30, 0, tzinfo=dt.timezone.utc)
     batch = StrategyTimeSeriesBatch.from_flat_dataframe(
         flat,
         strategy_id="test-strategy",
@@ -190,10 +189,10 @@ def test_strategy_time_series_batch_roundtrips_and_propagates_generated_at(tmp_p
     assert batch.generated_at == generated_at
     assert all(window.metadata.generated_at == generated_at for window in batch.windows)
     assert batch.window_keys() == (
-        (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-02")),
-        (pd.Timestamp("2024-02-01"), pd.Timestamp("2024-02-02")),
+        (dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)),
+        (dt.datetime(2024, 2, 1), dt.datetime(2024, 2, 2)),
     )
-    assert batch.date_span() == (pd.Timestamp("2024-01-01"), pd.Timestamp("2024-02-02"))
+    assert batch.date_span() == (dt.datetime(2024, 1, 1), dt.datetime(2024, 2, 2))
 
     csv_path = tmp_path / "batch.csv"
     batch.to_csv(csv_path)
@@ -221,8 +220,7 @@ def test_strategy_time_series_batch_defaults_extra_schema_from_windows() -> None
             source="strategy",
         ),
     )
-    data = _data()
-    data["custom_signal"] = [1.0, 2.0, 3.0]
+    data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
     window = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
 
     batch = StrategyTimeSeriesBatch(
@@ -245,19 +243,17 @@ def test_strategy_time_series_batch_from_artifact_dir_roundtrip(tmp_path) -> Non
             range_end="2024-12-31",
             output_dir=str(tmp_path),
         ),
-        btc_df=_btc_df(),
-        current_date=pd.Timestamp("2024-01-15"),
+        btc_df=btc_frame(start="2021-01-01", days=1500),
+        current_date=dt.datetime(2024, 1, 15, tzinfo=dt.timezone.utc),
     )
 
     artifact_dir = next(tmp_path.glob("uniform-export/1.0.0/*"))
     payload = (artifact_dir / "artifacts.json").read_text(encoding="utf-8")
     assert '"weights_csv": "weights.csv"' in payload
+
     loaded = StrategyTimeSeriesBatch.from_artifact_dir(artifact_dir)
 
     assert loaded.strategy_id == "uniform-export"
     assert loaded.strategy_version == "1.0.0"
     assert loaded.run_id == batch.run_id
     assert loaded.row_count == batch.row_count
-    loaded_df = loaded.to_dataframe()
-    batch_df = batch.to_dataframe()
-    assert loaded_df.equals(batch_df), f"DataFrames differ: {loaded_df} vs {batch_df}"

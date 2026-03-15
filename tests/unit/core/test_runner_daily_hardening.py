@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import datetime as dt
 from types import MethodType
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from stacksats.api import DailyOrderReceipt, ValidationResult
 from stacksats.execution_state import StoredRun
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext
+from tests.test_helpers import btc_frame
 
 
 class _UniformStrategy(BaseStrategy):
@@ -25,21 +27,17 @@ class _TiltedStrategy(BaseStrategy):
 
     def build_target_profile(self, ctx, features_df, signals):
         del ctx, signals
-        return pd.Series(
-            np.linspace(0.0, 1.0, len(features_df.index), dtype=float),
-            index=features_df.index,
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": np.linspace(0.0, 1.0, features_df.height, dtype=float),
+            }
         )
 
 
-def _btc_df(days: int = 500) -> pd.DataFrame:
-    idx = pd.date_range("2023-01-01", periods=days, freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(10000.0, 50000.0, len(idx)),
-            "PriceUSD": np.linspace(10000.0, 50000.0, len(idx)),
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
+def _btc_df(days: int = 500) -> pl.DataFrame:
+    return btc_frame(start="2023-01-01", days=days).with_columns(
+        pl.col("price_usd").alias("PriceUSD")
     )
 
 
@@ -119,9 +117,16 @@ def test_reconcile_daily_run_detects_decision_change(tmp_path, monkeypatch) -> N
         btc_df=base_df,
     )
 
-    revised_df = base_df.copy()
-    revised_df.loc["2024-04-15":"2024-05-01", "price_usd"] *= 0.8
-    revised_df.loc["2024-04-15":"2024-05-01", "PriceUSD"] *= 0.8
+    revised_df = base_df.with_columns(
+        pl.when(pl.col("date").is_between(dt.datetime(2024, 4, 15), dt.datetime(2024, 5, 1)))
+        .then(pl.col("price_usd") * 0.8)
+        .otherwise(pl.col("price_usd"))
+        .alias("price_usd"),
+        pl.when(pl.col("date").is_between(dt.datetime(2024, 4, 15), dt.datetime(2024, 5, 1)))
+        .then(pl.col("PriceUSD") * 0.8)
+        .otherwise(pl.col("PriceUSD"))
+        .alias("PriceUSD"),
+    )
     result = runner.reconcile_daily_run(
         strategy,
         run_date="2024-05-01",
@@ -171,9 +176,20 @@ def test_reconcile_daily_run_reuses_locked_prefix(monkeypatch) -> None:
         runner._feature_registry,
         "materialization_fingerprint",
         lambda *args, **kwargs: (
-            pd.DataFrame(
-                {"price_usd": np.linspace(10000.0, 20000.0, 366)},
-                index=pd.date_range("2023-05-02", periods=366, freq="D"),
+            (lambda dates: (
+                pl.DataFrame(
+                    {
+                        "date": dates,
+                        "price_usd": np.linspace(10000.0, 20000.0, len(dates)),
+                    }
+                )
+            ))(
+                pl.datetime_range(
+                    kwargs["start_date"],
+                    kwargs["end_date"],
+                    interval="1d",
+                    eager=True,
+                ).to_list()
             ),
             "new-hash",
         ),

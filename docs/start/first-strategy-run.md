@@ -12,7 +12,7 @@ This walkthrough gets a custom strategy running with minimal code.
 Create `my_strategy.py`:
 
 ```python
-import pandas as pd
+import polars as pl
 
 from stacksats import BaseStrategy, StrategyContext, TargetProfile
 
@@ -25,26 +25,29 @@ class MyStrategy(BaseStrategy):
     def required_feature_sets(self) -> tuple[str, ...]:
         return ("core_model_features_v1",)
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
         return ctx.features_df.copy()
 
     def build_signals(
-        self, ctx: StrategyContext, features_df: pd.DataFrame
-    ) -> dict[str, pd.Series]:
+        self, ctx: StrategyContext, features_df: pl.DataFrame
+    ) -> dict[str, pl.Series]:
         del ctx
-        value_signal = -features_df["mvrv_zscore"].clip(-4, 4)
-        trend_signal = -features_df["price_vs_ma"].clip(-1, 1)
+        value_signal = (-features_df["mvrv_zscore"]).clip(-4, 4)
+        trend_signal = (-features_df["price_vs_ma"]).clip(-1, 1)
         return {"value": value_signal, "trend": trend_signal}
 
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
-        del ctx, features_df
+        del ctx
         preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
-        return TargetProfile(values=preference, mode="preference")
+        return TargetProfile(
+            values=pl.DataFrame({"date": features_df["date"], "value": preference}),
+            mode="preference",
+        )
 ```
 
 ## 2) Make BRK data available

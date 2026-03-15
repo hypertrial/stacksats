@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
+from stacksats.prelude import date_range_list
 from stacksats.strategy_types import (
     BaseStrategy,
     StrategyContext,
@@ -17,22 +19,24 @@ from stacksats.strategy_types import (
 
 
 def _context(*, start: str = "2024-01-01", periods: int = 4) -> StrategyContext:
-    idx = pd.date_range(start, periods=periods, freq="D")
-    features_df = pd.DataFrame(
+    start_dt = dt.datetime.strptime(start[:10], "%Y-%m-%d")
+    end_dt = start_dt + dt.timedelta(days=periods - 1)
+    dates = date_range_list(start_dt, end_dt)
+    features_df = pl.DataFrame(
         {
-            "price_usd": np.linspace(100.0, 103.0, len(idx)),
-            "mvrv": np.linspace(1.0, 1.3, len(idx)),
-            "price_vs_ma": np.linspace(-0.2, 0.1, len(idx)),
-            "mvrv_zscore": np.linspace(-1.0, 1.0, len(idx)),
-            "mvrv_gradient": np.linspace(-0.5, 0.5, len(idx)),
-        },
-        index=idx,
+            "date": dates,
+            "price_usd": np.linspace(100.0, 103.0, len(dates)),
+            "mvrv": np.linspace(1.0, 1.3, len(dates)),
+            "price_vs_ma": np.linspace(-0.2, 0.1, len(dates)),
+            "mvrv_zscore": np.linspace(-1.0, 1.0, len(dates)),
+            "mvrv_gradient": np.linspace(-0.5, 0.5, len(dates)),
+        }
     )
     return strategy_context_from_features_df(
         features_df,
-        idx.min(),
-        idx.max(),
-        idx.max(),
+        dates[0],
+        dates[-1],
+        dates[-1],
     )
 
 
@@ -43,7 +47,7 @@ class _ParamStrategy(BaseStrategy):
     alpha = 0.5
     weights_path = Path("~/weights.csv")
     sequence = (1, np.int64(2))
-    when = pd.Timestamp("2024-01-02")
+    when = dt.datetime(2024, 1, 2)
     mapping = {"a": 1, "b": np.float64(2.5)}
     _private_class_value = "skip"
 
@@ -126,7 +130,7 @@ def test_intent_mode_warns_and_defaults_to_propose_for_dual_hook_strategy() -> N
 
         def build_target_profile(self, ctx, features_df, signals):
             del ctx, signals
-            return pd.Series(1.0, index=features_df.index)
+            return pl.DataFrame({"date": features_df["date"], "value": pl.lit(1.0)})
 
     with pytest.warns(StrategyContractWarning, match="Current fallback uses propose_weight"):
         assert _DualHookStrategy().intent_mode() == "propose"
@@ -143,7 +147,7 @@ def test_intent_mode_uses_explicit_profile_preference() -> None:
 
         def build_target_profile(self, ctx, features_df, signals):
             del ctx, signals
-            return pd.Series(1.0, index=features_df.index)
+            return pl.DataFrame({"date": features_df["date"], "value": pl.lit(1.0)})
 
     assert _ExplicitProfileStrategy().intent_mode() == "profile"
 
@@ -163,7 +167,11 @@ def test_compute_weights_respects_explicit_profile_intent() -> None:
         def build_target_profile(self, ctx, features_df, signals):
             del ctx, signals
             self.profile_called = True
-            return pd.Series(np.linspace(0.0, 1.0, len(features_df.index)), index=features_df.index)
+            n = features_df.height
+            return pl.DataFrame({
+                "date": features_df["date"],
+                "value": np.linspace(0.0, 1.0, n),
+            })
 
     strategy = _TrackingDualHookStrategy()
     strategy.compute_weights(_context())

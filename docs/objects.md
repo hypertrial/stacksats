@@ -44,16 +44,16 @@ All public types and functions below are exported from the top-level `stacksats`
 
 | Object | Description |
 |--------|-------------|
-| `FeatureTimeSeries` | Validated input to strategy: Polars DataFrame with `date` column; feature columns; schema and time-series validation. Build via `from_pandas()` or `from_dataframe(pl.DataFrame)`. |
+| `FeatureTimeSeries` | Validated input to strategy: Polars DataFrame with `date` column; feature columns; schema and time-series validation. Build via `from_dataframe(pl.DataFrame)`. |
 | `BaseStrategy` | Abstract base class for defining strategy logic (hooks, identity, intent). |
-| `WeightTimeSeries` | Single-window validated strategy output (weights, prices, metadata). Uses Polars internally; `to_dataframe()` returns `pl.DataFrame`; `from_dataframe` accepts Polars or pandas. |
-| `WeightTimeSeriesBatch` | Multi-window container of `WeightTimeSeries` (e.g. from export or backtest). `to_dataframe()` returns `pl.DataFrame`; `from_flat_dataframe` accepts Polars or pandas. |
+| `WeightTimeSeries` | Single-window validated strategy output (weights, prices, metadata). Uses Polars internally; `to_dataframe()` returns `pl.DataFrame`; `from_dataframe` accepts Polars only. |
+| `WeightTimeSeriesBatch` | Multi-window container of `WeightTimeSeries` (e.g. from export or backtest). `to_dataframe()` returns `pl.DataFrame`; `from_flat_dataframe` accepts Polars only. |
 
 ### Strategy input and context
 
 | Object | Description |
 |--------|-------------|
-| `StrategyContext` | Input passed into strategy computation: `features` (`FeatureTimeSeries`), date range, `current_date`, optional `locked_weights`, column names. Build from a Polars or pandas DataFrame with **`StrategyContext.from_features_df(...)`**. |
+| `StrategyContext` | Input passed into strategy computation: `features` (`FeatureTimeSeries`), date range, `current_date`, optional `locked_weights`, column names. Build from a Polars DataFrame with **`StrategyContext.from_features_df(...)`**. |
 
 ### Results
 

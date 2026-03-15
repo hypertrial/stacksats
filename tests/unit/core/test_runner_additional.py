@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
@@ -19,14 +20,19 @@ from tests.unit.core.runner_validation_testkit import (
 pytestmark = pytest.mark.slow
 
 
+def _weight_df(values: np.ndarray | list[float], start: dt.datetime) -> pl.DataFrame:
+    dates = pl.datetime_range(start, start + dt.timedelta(days=len(values) - 1), interval="1d", eager=True)
+    return pl.DataFrame({"date": dates, "weight": values})
+
+
 def test_validate_weights_rejects_sum_mismatch() -> None:
     runner = StrategyRunner()
 
     with pytest.raises(WeightValidationError, match="expected 1.0"):
         runner._validate_weights(
-            pd.Series([0.4, 0.4]),
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-02"),
+            _weight_df([0.4, 0.4], dt.datetime(2024, 1, 1)),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 2),
         )
 
 
@@ -35,9 +41,9 @@ def test_validate_weights_rejects_negative_values() -> None:
 
     with pytest.raises(WeightValidationError, match="contain negative values"):
         runner._validate_weights(
-            pd.Series([1.1, -0.1]),
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-02"),
+            _weight_df([1.1, -0.1], dt.datetime(2024, 1, 1)),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 2),
         )
 
 
@@ -51,9 +57,9 @@ def test_validate_weights_rejects_below_min_for_full_contract_span() -> None:
 
     with pytest.raises(WeightValidationError, match="below minimum"):
         runner._validate_weights(
-            pd.Series(weights),
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-12-30"),
+            _weight_df(weights, dt.datetime(2024, 1, 1)),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 12, 30),
         )
 
 
@@ -67,9 +73,9 @@ def test_validate_weights_rejects_above_max_for_full_contract_span() -> None:
 
     with pytest.raises(WeightValidationError, match="above maximum"):
         runner._validate_weights(
-            pd.Series(weights),
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-12-30"),
+            _weight_df(weights, dt.datetime(2024, 1, 1)),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 12, 30),
         )
 
 
@@ -78,7 +84,11 @@ def test_backtest_raises_when_no_windows_generated(monkeypatch: pytest.MonkeyPat
     strategy = UniformProposeStrategy()
     monkeypatch.setattr(
         "stacksats.runner.backtest_dynamic_dca",
-        lambda *args, **kwargs: (pd.DataFrame(), 50.0, 40.0),
+        lambda *args, **kwargs: (
+            pl.DataFrame(schema={"dynamic_percentile": pl.Float64, "uniform_percentile": pl.Float64}),
+            50.0,
+            40.0,
+        ),
     )
 
     with pytest.raises(ValueError, match="No backtest windows were generated"):
@@ -94,7 +104,7 @@ def test_backtest_win_rate_ignores_tiny_float_noise(
 ) -> None:
     runner = StrategyRunner()
     strategy = UniformProposeStrategy()
-    spd_table = pd.DataFrame(
+    spd_table = pl.DataFrame(
         {
             "dynamic_percentile": [40.0 + 1e-12, 50.0 - 1e-12, 60.0 + 5e-11],
             "uniform_percentile": [40.0, 50.0, 60.0],
@@ -119,7 +129,7 @@ def test_backtest_win_rate_counts_only_deltas_above_tolerance(
 ) -> None:
     runner = StrategyRunner()
     strategy = UniformProposeStrategy()
-    spd_table = pd.DataFrame(
+    spd_table = pl.DataFrame(
         {
             "dynamic_percentile": [40.0 + 1e-8, 50.0 - 1e-8, 60.0 + 2e-10],
             "uniform_percentile": [40.0, 50.0, 60.0],
@@ -177,7 +187,7 @@ def test_export_raises_when_no_ranges_generated(monkeypatch: pytest.MonkeyPatch)
             strategy,
             ExportConfig(range_start="2025-01-01", range_end="2025-01-02"),
             btc_df=btc_df(days=1200),
-            current_date=pd.Timestamp("2025-01-02"),
+            current_date=dt.datetime(2025, 1, 2),
         )
 
 
@@ -186,8 +196,8 @@ def test_strict_fold_checks_skip_on_short_range() -> None:
     ok, messages = runner._strict_fold_checks(
         strategy=UniformProposeStrategy(),
         btc_df=btc_df(days=120),
-        start_ts=pd.Timestamp("2024-01-01"),
-        end_ts=pd.Timestamp("2024-03-31"),
+        start_ts=dt.datetime(2024, 1, 1),
+        end_ts=dt.datetime(2024, 3, 31),
         config=ValidationConfig(strict=True),
     )
 
@@ -207,8 +217,8 @@ def test_strict_fold_checks_reports_min_fold_failure(monkeypatch: pytest.MonkeyP
     ok, messages = runner._strict_fold_checks(
         strategy=UniformProposeStrategy(),
         btc_df=btc_df(days=2000),
-        start_ts=pd.Timestamp("2021-01-01"),
-        end_ts=pd.Timestamp("2025-12-31"),
+        start_ts=dt.datetime(2021, 1, 1),
+        end_ts=dt.datetime(2025, 12, 31),
         config=ValidationConfig(strict=True, min_fold_win_rate=60.0, max_fold_win_rate_std=1000.0),
     )
 
@@ -229,8 +239,8 @@ def test_strict_fold_checks_reports_std_failure(monkeypatch: pytest.MonkeyPatch)
     ok, messages = runner._strict_fold_checks(
         strategy=UniformProposeStrategy(),
         btc_df=btc_df(days=2000),
-        start_ts=pd.Timestamp("2021-01-01"),
-        end_ts=pd.Timestamp("2025-12-31"),
+        start_ts=dt.datetime(2021, 1, 1),
+        end_ts=dt.datetime(2025, 12, 31),
         config=ValidationConfig(strict=True, min_fold_win_rate=0.0, max_fold_win_rate_std=5.0),
     )
 
@@ -251,8 +261,8 @@ def test_strict_shuffled_check_reports_threshold_failure(monkeypatch: pytest.Mon
     ok, messages = runner._strict_shuffled_check(
         strategy=UniformProposeStrategy(),
         btc_df=btc_df(days=2000),
-        start_ts=pd.Timestamp("2022-01-01"),
-        end_ts=pd.Timestamp("2023-12-31"),
+        start_ts=dt.datetime(2022, 1, 1),
+        end_ts=dt.datetime(2023, 12, 31),
         config=ValidationConfig(strict=True, shuffled_trials=3, max_shuffled_win_rate=80.0),
     )
 
@@ -263,13 +273,18 @@ def test_strict_shuffled_check_reports_threshold_failure(monkeypatch: pytest.Mon
 
 def test_strict_shuffled_check_skips_without_price_column() -> None:
     runner = StrategyRunner()
-    df = pd.DataFrame({"Other": [1.0, 2.0]}, index=pd.date_range("2024-01-01", periods=2))
+    df = pl.DataFrame(
+        {
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "Other": [1.0, 2.0],
+        }
+    )
 
     ok, messages = runner._strict_shuffled_check(
         strategy=UniformProposeStrategy(),
         btc_df=df,
-        start_ts=pd.Timestamp("2024-01-01"),
-        end_ts=pd.Timestamp("2024-01-02"),
+        start_ts=dt.datetime(2024, 1, 1),
+        end_ts=dt.datetime(2024, 1, 2),
         config=ValidationConfig(strict=True, shuffled_trials=3),
     )
 
@@ -283,8 +298,8 @@ def test_strict_shuffled_check_skips_when_trials_non_positive() -> None:
     ok, messages = runner._strict_shuffled_check(
         strategy=UniformProposeStrategy(),
         btc_df=btc_df(days=500),
-        start_ts=pd.Timestamp("2023-01-01"),
-        end_ts=pd.Timestamp("2023-12-31"),
+        start_ts=dt.datetime(2023, 1, 1),
+        end_ts=dt.datetime(2023, 12, 31),
         config=ValidationConfig(strict=True, shuffled_trials=0),
     )
 
@@ -292,18 +307,12 @@ def test_strict_shuffled_check_skips_when_trials_non_positive() -> None:
     assert any("shuffled_trials <= 0" in msg for msg in messages)
 
 
-def test_frame_signature_falls_back_for_unhashable_cells(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    df = pd.DataFrame({"obj": [{"a": 1}, {"b": 2}]})
-    monkeypatch.setattr(
-        "stacksats.runner.pd.util.hash_pandas_object",
-        lambda *args, **kwargs: (_ for _ in ()).throw(TypeError("unhashable")),
-    )
+def test_frame_signature_handles_nested_payloads() -> None:
+    df = pl.DataFrame({"obj": ['{"a": 1}', '{"b": 2}']})
 
     sig = StrategyRunner._frame_signature(df)
     assert isinstance(sig[0], int)
-    assert sig[3] == tuple(df.shape)
+    assert sig[3] == (2, 1)
 
 
 def test_strict_validation_failure_message_includes_details() -> None:

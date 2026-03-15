@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-import pandas as pd
 import polars as pl
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .feature_time_series import FeatureTimeSeries
@@ -35,7 +34,6 @@ def _to_datetime(value: dt.datetime | str) -> dt.datetime:
         except ValueError:
             out = dt.datetime.strptime(value[:10], "%Y-%m-%d")
     else:
-        # pandas Timestamp during migration
         if hasattr(value, "to_pydatetime"):
             out = value.to_pydatetime()
         else:
@@ -46,7 +44,7 @@ def _to_datetime(value: dt.datetime | str) -> dt.datetime:
 
 
 def strategy_context_from_features_df(
-    features_df: pl.DataFrame | pd.DataFrame,
+    features_df: pl.DataFrame,
     start_date: dt.datetime | str,
     end_date: dt.datetime | str,
     current_date: dt.datetime | str,
@@ -57,7 +55,7 @@ def strategy_context_from_features_df(
     btc_price_col: str = "price_usd",
     mvrv_col: str = "mvrv",
 ) -> StrategyContext:
-    """Build a StrategyContext from a feature DataFrame (Polars or pandas). Prefer StrategyContext.from_features_df()."""
+    """Build a StrategyContext from a Polars feature DataFrame."""
     return StrategyContext.from_features_df(
         features_df,
         start_date,
@@ -86,7 +84,7 @@ class StrategyContext:
     @classmethod
     def from_features_df(
         cls,
-        features_df: pl.DataFrame | pd.DataFrame,
+        features_df: pl.DataFrame,
         start_date: dt.datetime | str,
         end_date: dt.datetime | str,
         current_date: dt.datetime | str,
@@ -97,24 +95,17 @@ class StrategyContext:
         btc_price_col: str = "price_usd",
         mvrv_col: str = "mvrv",
     ) -> StrategyContext:
-        """Build a StrategyContext from a feature DataFrame (Polars or pandas, wraps in FeatureTimeSeries).
+        """Build a StrategyContext from a Polars feature DataFrame.
 
         When as_of_date is provided, validates no forward-looking data
         (max date in features <= as_of_date).
         """
         as_of = _to_datetime(as_of_date) if as_of_date is not None else None
-        if isinstance(features_df, pl.DataFrame):
-            features = FeatureTimeSeries.from_dataframe(
-                features_df,
-                required_columns=required_columns,
-                as_of_date=as_of,
-            )
-        else:
-            features = FeatureTimeSeries.from_pandas(
-                features_df,
-                required_columns=required_columns,
-                as_of_date=as_of,
-            )
+        features = FeatureTimeSeries.from_dataframe(
+            features_df,
+            required_columns=required_columns,
+            as_of_date=as_of,
+        )
         return cls(
             features=features,
             start_date=_to_datetime(start_date),
@@ -126,14 +117,9 @@ class StrategyContext:
         )
 
     @property
-    def features_df(self) -> pd.DataFrame:
-        """Pandas view of features. Deprecated: use ctx.features or ctx.features.to_pandas()."""
-        warnings.warn(
-            "StrategyContext.features_df is deprecated; use ctx.features or ctx.features.to_pandas().",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.features.to_pandas()
+    def features_df(self) -> pl.DataFrame:
+        """Polars DataFrame of features. Alias for ctx.features.data."""
+        return self.features.data
 
 
 @dataclass(frozen=True)
@@ -237,9 +223,12 @@ class StrategyArtifactSet:
 
 @dataclass(frozen=True)
 class TargetProfile:
-    """User-provided target profile or daily preference score."""
+    """User-provided target profile or daily preference score.
 
-    values: pd.Series
+    values: pl.DataFrame with columns 'date' and 'value'.
+    """
+
+    values: pl.DataFrame
     mode: Literal["preference", "absolute"] = "preference"
 
 
@@ -255,10 +244,13 @@ class StrategyRunResult:
 
 @dataclass(frozen=True)
 class DayState:
-    """Per-day user hook input for proposing today's weight."""
+    """Per-day user hook input for proposing today's weight.
+
+    features: pl.DataFrame with one row (that day's feature values).
+    """
 
     current_date: dt.datetime
-    features: pd.Series
+    features: pl.DataFrame
     remaining_budget: float
     day_index: int
     total_days: int
@@ -327,7 +319,7 @@ def _validate_metadata(metadata: StrategyMetadata) -> StrategyMetadata:
 
 def _validate_required_feature_columns(
     strategy: "BaseStrategy",
-    features_df: pd.DataFrame,
+    features_df: pl.DataFrame,
 ) -> None:
     required_columns = tuple(strategy.required_feature_columns())
     if not required_columns:
@@ -430,15 +422,15 @@ class BaseStrategy(ABC):
         """Return framework-owned feature provider IDs required by this strategy."""
         return ("core_model_features_v1",)
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
         """Hook for user-defined feature transforms on the active window."""
-        return ctx.features.to_pandas().copy()
+        return ctx.features.data.clone()
 
     def build_signals(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-    ) -> dict[str, pd.Series]:
+        features_df: pl.DataFrame,
+    ) -> dict[str, pl.Series]:
         """Hook for user-defined signal formulas."""
         del ctx, features_df
         return {}
@@ -453,53 +445,55 @@ class BaseStrategy(ABC):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> TargetProfile | pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> TargetProfile | pl.DataFrame:
         """Return daily preference scores or absolute target profile.
 
         Default behavior vectorizes `propose_weight` over the active window.
+        Return TargetProfile with values as pl.DataFrame (date, value) or pl.DataFrame directly.
         """
         del signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
-        return TargetProfile(
-            values=self._collect_proposals(features_df),
-            mode="absolute",
-        )
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="absolute",
+            )
+        return TargetProfile(values=self._collect_proposals(features_df), mode="absolute")
 
-    def _validate_series(
+    def _validate_target_df(
         self,
-        values: pd.Series,
+        df: pl.DataFrame,
         *,
         name: str,
-        expected_index: pd.Index,
-    ) -> pd.Series:
-        if not isinstance(values, pd.Series):
-            raise TypeError(f"{name} must be a pandas Series.")
-        if values.index.has_duplicates:
-            raise ValueError(f"{name} index must not contain duplicates.")
-        if not values.index.is_monotonic_increasing:
-            raise ValueError(f"{name} index must be sorted ascending.")
-        if not values.index.equals(expected_index):
-            raise ValueError(f"{name} index must exactly match strategy window index.")
-        numeric = pd.to_numeric(values, errors="coerce")
-        if numeric.isna().any() or not np.isfinite(numeric.to_numpy(dtype=float)).all():
+        date_col: pl.Series,
+    ) -> pl.DataFrame:
+        """Validate target/profile DataFrame has date and value, finite numeric."""
+        if "date" not in df.columns or "value" not in df.columns:
+            raise ValueError(f"{name} must have 'date' and 'value' columns.")
+        if df.height != date_col.len():
+            raise ValueError(f"{name} length must match observed window.")
+        vals = df["value"].cast(pl.Float64, strict=False)
+        if vals.is_null().any() or not vals.is_finite().all():
             raise ValueError(f"{name} must contain finite numeric values.")
-        return numeric.astype(float)
+        return df.select(["date", pl.col("value").cast(pl.Float64)])
 
-    def _collect_proposals(self, features_df: pd.DataFrame) -> pd.Series:
+    def _collect_proposals(self, features_df: pl.DataFrame) -> pl.DataFrame:
         """Collect per-day proposals with shared framework safeguards."""
-        if features_df.empty:
-            return pd.Series(dtype=float)
-        total_days = len(features_df.index)
+        if features_df.is_empty():
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
+        date_col = features_df["date"]
+        total_days = features_df.height
         uniform_weight = 1.0 / total_days
         remaining_budget = 1.0
         proposed: list[float] = []
-        for day_index, current_date in enumerate(features_df.index):
+        for day_index in range(total_days):
+            row = features_df.row(day_index, named=True)
+            current_date = _to_datetime(row["date"])
+            row_df = features_df.slice(day_index, 1)
             state = DayState(
-                current_date=_to_datetime(current_date),
-                features=features_df.loc[current_date],
+                current_date=current_date,
+                features=row_df,
                 remaining_budget=remaining_budget,
                 day_index=day_index,
                 total_days=total_days,
@@ -510,57 +504,75 @@ class BaseStrategy(ABC):
                 raise ValueError("propose_weight must return a finite numeric value.")
             proposed.append(proposal)
             remaining_budget -= float(np.clip(proposal, 0.0, remaining_budget))
-        return pd.Series(proposed, index=features_df.index, dtype=float)
+        return pl.DataFrame({"date": date_col, "value": proposed})
 
-    def compute_weights(self, ctx: StrategyContext) -> pd.Series:
-        """Framework-owned orchestration from hooks -> final weights."""
+    def compute_weights(self, ctx: StrategyContext) -> pl.DataFrame:
+        """Framework-owned orchestration from hooks -> final weights.
+
+        Returns pl.DataFrame with columns 'date' and 'weight'.
+        """
         from .framework_contract import compute_n_past
 
-        expected_index = pd.date_range(ctx.start_date, ctx.end_date, freq="D")
-        observed_end = min(ctx.current_date, ctx.end_date)
-        observed_index = pd.date_range(ctx.start_date, observed_end, freq="D")
+        observed_end = (
+            ctx.current_date
+            if ctx.current_date <= ctx.end_date
+            else ctx.end_date
+        )
+        date_range = pl.datetime_range(
+            ctx.start_date, observed_end, interval="1d", eager=True
+        )
         features_df = self.transform_features(ctx)
-        if not isinstance(features_df, pd.DataFrame):
-            raise TypeError("transform_features must return a pandas DataFrame.")
-        if len(expected_index) == 0:
-            return pd.Series(dtype=float)
-        features_df = features_df.reindex(observed_index).ffill().fillna(0.0)
+        if not isinstance(features_df, pl.DataFrame):
+            raise TypeError("transform_features must return a polars DataFrame.")
+        if date_range.len() == 0:
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+
+        full_dates = pl.DataFrame({"date": date_range})
+        features_df = full_dates.join(features_df, on="date", how="left")
+        features_df = features_df.sort("date").fill_null(0.0)
         _validate_required_feature_columns(self, features_df)
 
         signals = self.build_signals(ctx, features_df)
         if not isinstance(signals, dict):
-            raise TypeError("build_signals must return a dict[str, pandas.Series].")
-        validated_signals: dict[str, pd.Series] = {}
+            raise TypeError("build_signals must return a dict[str, pl.Series].")
         for key, series in signals.items():
-            validated_signals[key] = self._validate_series(
-                series, name=f"signal '{key}'", expected_index=observed_index
-            )
+            if not isinstance(series, pl.Series) or series.len() != date_range.len():
+                raise ValueError(
+                    f"signal '{key}' must be pl.Series with length matching window."
+                )
+            arr = series.cast(pl.Float64, strict=False)
+            if arr.is_null().any() or not arr.is_finite().all():
+                raise ValueError(f"signal '{key}' must contain finite numeric values.")
 
-        n_past = compute_n_past(expected_index, ctx.current_date)
+        n_past = compute_n_past(date_range.to_list(), ctx.current_date)
         intent_mode = self.intent_mode()
 
         if intent_mode == "propose":
             from .model_development import compute_weights_from_proposals
 
+            proposals_df = self._collect_proposals(features_df)
             return compute_weights_from_proposals(
-                proposals=self._collect_proposals(features_df),
+                proposals=proposals_df,
                 start_date=ctx.start_date,
                 end_date=ctx.end_date,
                 n_past=n_past,
                 locked_weights=ctx.locked_weights,
             )
 
-        profile = self.build_target_profile(ctx, features_df, validated_signals)
+        profile = self.build_target_profile(ctx, features_df, signals)
         if isinstance(profile, TargetProfile):
             mode = profile.mode
-            values = profile.values
+            target_df = profile.values
         else:
             mode = "preference"
-            values = profile
+            target_df = profile
 
-        target_series = self._validate_series(
-            values, name="target profile", expected_index=observed_index
-        )
+        if not isinstance(target_df, pl.DataFrame):
+            raise TypeError("target profile must be a Polars DataFrame or TargetProfile.")
+        if target_df.is_empty():
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+        self._validate_target_df(target_df, name="target profile", date_col=date_range)
+
         from .model_development import compute_weights_from_target_profile
 
         return compute_weights_from_target_profile(
@@ -568,7 +580,7 @@ class BaseStrategy(ABC):
             start_date=ctx.start_date,
             end_date=ctx.end_date,
             current_date=ctx.current_date,
-            target_profile=target_series,
+            target_profile=target_df,
             mode=mode,
             n_past=n_past,
             locked_weights=ctx.locked_weights,
@@ -591,19 +603,23 @@ class BaseStrategy(ABC):
         """Validate framework contract compliance for this strategy instance."""
         return validate_strategy_contract(self)
 
-    def validate_weights(self, weights: pd.Series, ctx: StrategyContext) -> None:
-        """Optional strategy-specific weight checks."""
+    def validate_weights(self, weights: pl.DataFrame, ctx: StrategyContext) -> None:
+        """Optional strategy-specific weight checks.
+
+        weights: pl.DataFrame with 'weight' column.
+        """
         del ctx
-        if weights.empty:
+        if weights.is_empty():
             return
-        if bool((weights < 0).any()):
+        w = weights["weight"]
+        if (w < 0).any():
             raise ValueError("Weights contain negative values.")
-        if len(weights) == ALLOCATION_SPAN_DAYS:
-            if bool((weights < (MIN_DAILY_WEIGHT - 1e-12)).any()):
+        if weights.height == ALLOCATION_SPAN_DAYS:
+            if (w < (MIN_DAILY_WEIGHT - 1e-12)).any():
                 raise ValueError(f"Weights must be >= {MIN_DAILY_WEIGHT}.")
-            if bool((weights > (MAX_DAILY_WEIGHT + 1e-12)).any()):
+            if (w > (MAX_DAILY_WEIGHT + 1e-12)).any():
                 raise ValueError(f"Weights must be <= {MAX_DAILY_WEIGHT}.")
-        weight_sum = float(weights.sum())
+        weight_sum = float(w.sum())
         if abs(weight_sum - 1.0) > 1e-5:
             raise ValueError(f"Weights must sum to 1.0 (got {weight_sum:.10f}).")
 
@@ -670,8 +686,8 @@ class BaseStrategy(ABC):
         include_export: bool = False,
         save_backtest_artifacts: bool = False,
         output_dir: str | None = None,
-        btc_df: pd.DataFrame | None = None,
-        current_date: pd.Timestamp | None = None,
+        btc_df: pl.DataFrame | None = None,
+        current_date: dt.datetime | None = None,
     ) -> StrategyRunResult:
         """Run validate + backtest, with optional export and artifact persistence."""
         validation = self.validate(config=validation_config, btc_df=btc_df)

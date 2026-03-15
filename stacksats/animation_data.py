@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import json
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 REQUIRED_SPD_COLUMNS = (
     "window",
@@ -43,7 +44,7 @@ def load_backtest_payload(path: str | Path) -> dict[str, object]:
     return payload
 
 
-def spd_table_from_backtest_payload(payload: dict[str, object]) -> pd.DataFrame:
+def spd_table_from_backtest_payload(payload: dict[str, object]) -> pl.DataFrame:
     """Construct raw SPD table DataFrame from backtest payload."""
     raw = payload.get("window_level_data")
     if not isinstance(raw, list):
@@ -53,42 +54,53 @@ def spd_table_from_backtest_payload(payload: dict[str, object]) -> pd.DataFrame:
         )
     if not raw:
         raise ValueError("Backtest JSON has empty 'window_level_data'.")
-    frame = pd.DataFrame(raw)
-    if frame.empty:
+    frame = pl.DataFrame(raw)
+    if frame.height == 0:
         raise ValueError("Backtest JSON window_level_data could not be parsed.")
     return frame
 
 
-def load_spd_table_from_backtest_json(path: str | Path) -> pd.DataFrame:
+def load_spd_table_from_backtest_json(path: str | Path) -> pl.DataFrame:
     """Load raw SPD table from backtest_result.json."""
     payload = load_backtest_payload(path)
     return spd_table_from_backtest_payload(payload)
 
 
-def _extract_window_bounds(window_label: str) -> tuple[pd.Timestamp, pd.Timestamp]:
+def _parse_window_date(s: str) -> datetime:
+    """Parse ISO date string to datetime."""
+    from datetime import date
+    try:
+        return datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    # Fallback for date-only
+    try:
+        d = date.fromisoformat(s.strip())
+        return datetime.combine(d, datetime.min.time())
+    except ValueError as exc:
+        raise ValueError(f"Invalid date: {s!r}") from exc
+
+
+def _extract_window_bounds(window_label: str) -> tuple[datetime, datetime]:
     if not isinstance(window_label, str) or "→" not in window_label:
         raise ValueError(f"Invalid window label: {window_label!r}")
     parts = [part.strip() for part in window_label.split("→", maxsplit=1)]
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ValueError(f"Invalid window label: {window_label!r}")
-    try:
-        start = pd.to_datetime(parts[0])
-    except Exception as exc:  # pragma: no cover - defensive
-        raise ValueError(f"Invalid window label: {window_label!r}") from exc
-    try:
-        end = pd.to_datetime(parts[1])
-    except Exception as exc:  # pragma: no cover - defensive
-        raise ValueError(f"Invalid window label: {window_label!r}") from exc
+    start = _parse_window_date(parts[0])
+    end = _parse_window_date(parts[1])
     return start, end
 
 
-def _normalize_spd_frame(spd_table: pd.DataFrame) -> pd.DataFrame:
-    frame = spd_table.copy()
+def _normalize_spd_frame(spd_table: pl.DataFrame) -> pl.DataFrame:
+    frame = spd_table.clone()
     if "window" not in frame.columns:
         if "index" in frame.columns:
-            frame = frame.rename(columns={"index": "window"})
+            frame = frame.rename({"index": "window"})
         else:
-            frame = frame.reset_index().rename(columns={"index": "window"})
+            raise ValueError(
+                "SPD table must have 'window' or 'index' column with window labels."
+            )
 
     missing = [col for col in REQUIRED_SPD_COLUMNS if col not in frame.columns]
     if missing:
@@ -96,70 +108,82 @@ def _normalize_spd_frame(spd_table: pd.DataFrame) -> pd.DataFrame:
             "SPD table missing required columns for animation: " + ", ".join(missing)
         )
 
-    frame = frame.loc[:, REQUIRED_SPD_COLUMNS].copy()
+    frame = frame.select(REQUIRED_SPD_COLUMNS)
 
-    starts: list[pd.Timestamp] = []
-    ends: list[pd.Timestamp] = []
-    for label in frame["window"]:
+    window_col = frame["window"]
+    starts = []
+    ends = []
+    for label in window_col:
         start, end = _extract_window_bounds(str(label))
         starts.append(start)
         ends.append(end)
 
-    frame["window_start"] = pd.to_datetime(starts)
-    frame["window_end"] = pd.to_datetime(ends)
+    frame = frame.with_columns(
+        pl.Series("window_start", starts),
+        pl.Series("window_end", ends),
+    )
 
     for col in _NUMERIC_SPD_COLUMNS:
-        numeric = pd.to_numeric(frame[col], errors="coerce")
-        numeric = numeric.replace([np.inf, -np.inf], np.nan)
-        frame[col] = numeric
-
-    frame = frame.sort_values(["window_start", "window_end"], kind="mergesort")
-    frame = frame.reset_index(drop=True)
-
-    numeric_cols = list(_NUMERIC_SPD_COLUMNS)
-    if frame[numeric_cols].isna().all().any():
-        bad_cols = [col for col in _NUMERIC_SPD_COLUMNS if frame[col].isna().all()]
-        raise ValueError(
-            "SPD table contains no valid numeric values for: " + ", ".join(bad_cols)
+        frame = frame.with_columns(
+            pl.col(col)
+            .cast(pl.Float64, strict=False)
+            .replace([float("inf"), float("-inf")], None)
+            .alias(col)
         )
 
-    frame[numeric_cols] = frame[numeric_cols].ffill().bfill().fillna(0.0)
+    frame = frame.sort(["window_start", "window_end"])
+
+    for col in _NUMERIC_SPD_COLUMNS:
+        if frame[col].null_count() == frame.height:
+            raise ValueError(
+                f"SPD table contains no valid numeric values for: {col}"
+            )
+
+    frame = frame.with_columns([
+        pl.col(c).fill_null(strategy="forward").fill_null(strategy="backward").fill_null(0.0).alias(c)
+        for c in _NUMERIC_SPD_COLUMNS
+    ])
 
     return frame
 
 
-def _select_non_overlapping_windows(frame: pd.DataFrame) -> pd.DataFrame:
-    selected_idx: list[int] = []
-    last_end: pd.Timestamp | None = None
-    for idx, row in frame.iterrows():
-        if last_end is None or row["window_start"] > last_end:
-            selected_idx.append(int(idx))
-            last_end = row["window_end"]
-    return frame.iloc[selected_idx].reset_index(drop=True)
+def _select_non_overlapping_windows(frame: pl.DataFrame) -> pl.DataFrame:
+    selected_rows: list[pl.DataFrame] = []
+    last_end: datetime | None = None
+    for row in frame.iter_rows(named=True):
+        ws = row["window_start"]
+        we = row["window_end"]
+        if last_end is None or ws > last_end:
+            selected_rows.append(pl.DataFrame([row]))
+            last_end = we
+    if not selected_rows:
+        return frame.clear()
+    return pl.concat(selected_rows)
 
 
-def _downsample_frame(frame: pd.DataFrame, max_frames: int) -> pd.DataFrame:
+def _downsample_frame(frame: pl.DataFrame, max_frames: int) -> pl.DataFrame:
     if max_frames <= 0:
         raise ValueError("max_frames must be > 0.")
-    if len(frame) <= max_frames:
-        return frame.reset_index(drop=True)
+    n = frame.height
+    if n <= max_frames:
+        return frame
 
-    idx = np.linspace(0, len(frame) - 1, max_frames, dtype=int)
+    idx = np.linspace(0, n - 1, max_frames, dtype=int)
     idx = np.unique(idx)
-    if idx[-1] != len(frame) - 1:
-        idx = np.append(idx, len(frame) - 1)
-    return frame.iloc[idx].reset_index(drop=True)
+    if idx[-1] != n - 1:
+        idx = np.append(idx, n - 1)
+    return frame.filter(pl.int_range(0, n).is_in(pl.lit(idx.tolist())))
 
 
 def prepare_animation_frame_data(
-    spd_table: pd.DataFrame,
+    spd_table: pl.DataFrame,
     *,
     window_mode: str = "rolling",
     max_frames: int = 240,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Prepare deterministic animation frame data from SPD windows."""
     frame = _normalize_spd_frame(spd_table)
-    if frame.empty:
+    if frame.height == 0:
         raise ValueError("SPD table is empty.")
 
     if window_mode == "rolling":
@@ -172,17 +196,21 @@ def prepare_animation_frame_data(
     selected = _downsample_frame(selected, max_frames=max_frames)
 
     wins = selected["dynamic_percentile"] > (selected["uniform_percentile"] + _WIN_EPS)
-    selected["win_rate_to_date"] = wins.expanding().mean() * 100.0
-    selected["cumulative_excess"] = selected["excess_percentile"].cumsum()
-
-    cumulative_dynamic = selected["dynamic_sats_per_dollar"].cumsum()
-    cumulative_uniform = selected["uniform_sats_per_dollar"].cumsum()
-    selected["cumulative_dynamic_sats_per_dollar"] = cumulative_dynamic
-    selected["cumulative_uniform_sats_per_dollar"] = cumulative_uniform
-    selected["cumulative_btc_vs_uniform_pct"] = np.where(
-        cumulative_uniform.abs() > _WIN_EPS,
-        (cumulative_dynamic / cumulative_uniform - 1.0) * 100.0,
-        0.0,
+    selected = selected.with_columns(
+        (wins.cum_sum() / (pl.int_range(1, pl.len() + 1)) * 100.0).alias("win_rate_to_date"),
+        pl.col("excess_percentile").cum_sum().alias("cumulative_excess"),
     )
 
-    return selected.reset_index(drop=True)
+    cumulative_dynamic = selected["dynamic_sats_per_dollar"].cum_sum()
+    cumulative_uniform = selected["uniform_sats_per_dollar"].cum_sum()
+    cumulative_btc_pct = pl.when(cumulative_uniform.abs() > _WIN_EPS).then(
+        (cumulative_dynamic / cumulative_uniform - 1.0) * 100.0
+    ).otherwise(0.0)
+
+    selected = selected.with_columns(
+        cumulative_dynamic.alias("cumulative_dynamic_sats_per_dollar"),
+        cumulative_uniform.alias("cumulative_uniform_sats_per_dollar"),
+        cumulative_btc_pct.alias("cumulative_btc_vs_uniform_pct"),
+    )
+
+    return selected

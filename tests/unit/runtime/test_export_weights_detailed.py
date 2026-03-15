@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -20,7 +20,7 @@ def mock_db_connection():
 @pytest.fixture
 def sample_df():
     """Create a sample DataFrame for testing."""
-    return pd.DataFrame({
+    return pl.DataFrame({
         "day_index": [0, 1],
         "start_date": ["2024-01-01", "2024-01-01"],
         "end_date": ["2024-12-31", "2024-12-31"],
@@ -100,7 +100,7 @@ def test_insert_all_data_fallback_rolls_back_and_raises_on_batch_failure(
     conn, cursor = mock_db_connection
 
     n_rows = 50001  # Forces 2 fallback batches at batch_size=50000
-    large_df = pd.DataFrame(
+    large_df = pl.DataFrame(
         {
             "day_index": range(n_rows),
             "start_date": ["2024-01-01"] * n_rows,
@@ -139,7 +139,7 @@ def test_insert_all_data_fallback_logs_batch_context_on_failure(
     conn, cursor = mock_db_connection
 
     n_rows = 50001
-    large_df = pd.DataFrame(
+    large_df = pl.DataFrame(
         {
             "day_index": range(n_rows),
             "start_date": ["2024-01-01"] * n_rows,
@@ -177,7 +177,7 @@ def test_insert_all_data_fallback_rollback_failure_keeps_original_exception(
     conn, cursor = mock_db_connection
 
     n_rows = 50001
-    large_df = pd.DataFrame(
+    large_df = pl.DataFrame(
         {
             "day_index": range(n_rows),
             "start_date": ["2024-01-01"] * n_rows,
@@ -275,7 +275,7 @@ def test_update_today_weights_no_price(mock_get_price, mock_db_connection):
     today_str = "2024-06-01"
 
     # Create DF with NO price info for today
-    df_no_price = pd.DataFrame({
+    df_no_price = pl.DataFrame({
         "day_index": [0],
         "start_date": ["2024-01-01"],
         "end_date": ["2024-12-31"],
@@ -330,7 +330,7 @@ def test_update_today_weights_rolls_back_on_weight_only_failure(
     today_str = "2024-06-01"
     mock_get_price.return_value = None
 
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
             "day_index": [0, 1],
             "start_date": ["2024-01-01", "2024-01-01"],

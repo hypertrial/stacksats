@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import datetime as dt
 import importlib
 import sqlite3
 import sys
@@ -8,11 +9,10 @@ from pathlib import Path
 from types import ModuleType
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.api import BacktestResult, DailyRunResult, ValidationResult
-from stacksats.backtest import create_performance_metrics_summary
 from stacksats.execution_adapters import load_execution_adapter
 from stacksats.export_weights_runtime import insert_all_data
 from stacksats.execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
@@ -30,14 +30,19 @@ class _UniformStrategy(BaseStrategy):
         return state.uniform_weight
 
 
-def _btc_df(days: int = 900) -> pd.DataFrame:
-    idx = pd.date_range("2023-01-01", periods=days, freq="D")
-    return pd.DataFrame(
+def _btc_df(days: int = 900) -> pl.DataFrame:
+    dates = pl.datetime_range(
+        dt.datetime(2023, 1, 1),
+        dt.datetime(2023, 1, 1) + dt.timedelta(days=days - 1),
+        interval="1d",
+        eager=True,
+    ).to_list()
+    return pl.DataFrame(
         {
-            "price_usd": np.linspace(20000.0, 80000.0, len(idx)),
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
+            "date": dates,
+            "price_usd": np.linspace(20000.0, 80000.0, len(dates)),
+            "mvrv": np.linspace(1.0, 2.0, len(dates)),
+        }
     )
 
 
@@ -59,7 +64,7 @@ def _allow_validation(runner: StrategyRunner, monkeypatch: pytest.MonkeyPatch) -
 
 def test_api_and_backtest_uncovered_branches(tmp_path: Path, monkeypatch) -> None:
     result = BacktestResult(
-        spd_table=pd.DataFrame({"dynamic_percentile": [1.0], "uniform_percentile": [1.0]}),
+        spd_table=pl.DataFrame({"dynamic_percentile": [1.0], "uniform_percentile": [1.0]}),
         exp_decay_percentile=float("inf"),
         uniform_exp_decay_percentile=1.0,
         win_rate=0.0,
@@ -87,10 +92,10 @@ def test_api_and_backtest_uncovered_branches(tmp_path: Path, monkeypatch) -> Non
     )
     assert "Daily Run EXECUTED" in daily.summary()
 
-    monkeypatch.setattr("stacksats.backtest.plt.savefig", lambda *a, **k: None)
-    monkeypatch.setattr("stacksats.backtest.plt.close", lambda *a, **k: None)
-    create_performance_metrics_summary(
-        pd.DataFrame({"x": [1]}),
+    from stacksats.backtest import export_metrics_json
+
+    export_metrics_json(
+        pl.DataFrame({"window": ["2024-01-01 → 2024-12-31"], "dynamic_percentile": [1.0], "uniform_percentile": [1.0], "excess_percentile": [0.0], "dynamic_sats_per_dollar": [1e6], "uniform_sats_per_dollar": [1e6], "min_sats_per_dollar": [1e6], "max_sats_per_dollar": [1e6]}),
         {
             "score": 1.0,
             "win_rate": 1.0,
@@ -147,7 +152,7 @@ def test_insert_all_data_missing_execute_values_raises_import_error() -> None:
     with pytest.raises(ImportError, match="psycopg2-binary"):
         insert_all_data(
             conn=None,
-            df=pd.DataFrame(),
+            df=pl.DataFrame(),
             execute_values=None,
             prepare_copy_dataframe_fn=lambda df: df,
             build_insert_rows_fn=lambda df: [],
@@ -167,7 +172,7 @@ def test_execution_state_error_branches(tmp_path: Path) -> None:
             order_summary=None,
             force_flag=False,
             snapshot_date="2024-01-03",
-            weights=pd.Series([1.0], index=pd.DatetimeIndex(["2024-01-03"])),
+            weights=pl.DataFrame({"date": [dt.datetime(2024, 1, 3)], "weight": [1.0]}),
         )
     with pytest.raises(RuntimeError, match="before claiming run"):
         store.mark_run_failure(
@@ -185,7 +190,7 @@ def test_execution_state_error_branches(tmp_path: Path) -> None:
         strategy_version="1.0.0",
         mode="paper",
         run_date="2024-01-03",
-        window_start=pd.Timestamp("2024-01-03"),
+        window_start=dt.datetime(2024, 1, 3),
     )
     assert isinstance(locked, np.ndarray)
     assert locked.size == 0
@@ -196,7 +201,7 @@ def test_execution_state_error_branches(tmp_path: Path) -> None:
         strategy_version="1.0.0",
         mode="paper",
         snapshot_date="2024-01-03",
-        weights=pd.Series([0.5], index=pd.DatetimeIndex(["2024-01-02"])),
+        weights=pl.DataFrame({"date": [dt.datetime(2024, 1, 2)], "weight": [0.5]}),
     )
     with pytest.raises(ValueError, match="incomplete"):
         store.load_locked_prefix(
@@ -204,7 +209,7 @@ def test_execution_state_error_branches(tmp_path: Path) -> None:
             strategy_version="1.0.0",
             mode="paper",
             run_date="2024-01-04",
-            window_start=pd.Timestamp("2024-01-02"),
+            window_start=dt.datetime(2024, 1, 2),
         )
 
     # date mismatch branch with same row count
@@ -224,7 +229,7 @@ def test_execution_state_error_branches(tmp_path: Path) -> None:
             strategy_version="1.0.0",
             mode="paper",
             run_date="2024-01-04",
-            window_start=pd.Timestamp("2024-01-02"),
+            window_start=dt.datetime(2024, 1, 2),
         )
 
 
@@ -274,7 +279,9 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
 
     # missing run-date weight allocation branch
     strategy_missing_weight = _UniformStrategy()
-    strategy_missing_weight.compute_weights = lambda ctx: pd.Series([1.0], index=[ctx.start_date])
+    strategy_missing_weight.compute_weights = lambda ctx: pl.DataFrame(
+        {"date": [ctx.start_date], "weight": [1.0]}
+    )
     missing_weight = runner.run_daily(
         strategy_missing_weight,
         RunDailyConfig(
@@ -288,8 +295,13 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
     assert missing_weight.status == "failed"
     assert "missing run_date allocation" in missing_weight.message
 
-    btc_zero = btc.copy()
-    btc_zero.loc[pd.Timestamp("2024-12-31"), "price_usd"] = 0.0
+    run_date_str = "2024-12-31"
+    btc_zero = btc.with_columns(
+        pl.when(pl.col("date").dt.strftime("%Y-%m-%d") == run_date_str)
+        .then(0.0)
+        .otherwise(pl.col("price_usd"))
+        .alias("price_usd")
+    )
     zero_price = runner.run_daily(
         _UniformStrategy(),
         RunDailyConfig(
@@ -383,27 +395,37 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_compute_cycle_spd_source_mask_branches() -> None:
-    idx = pd.date_range("2020-01-01", periods=370, freq="D")
-    prices = pd.Series(np.linspace(10000.0, 20000.0, len(idx)), index=idx)
-    source_exists = pd.Series(True, index=idx)
-    source_exists.iloc[100] = False
-    df = pd.DataFrame(
+    dates = pl.datetime_range(
+        dt.datetime(2020, 1, 1),
+        dt.datetime(2020, 1, 1) + dt.timedelta(days=369),
+        interval="1d",
+        eager=True,
+    ).to_list()
+    n = len(dates)
+    prices = np.linspace(10000.0, 20000.0, n)
+    # Set source_exists False for all rows after index 100 so end truncates
+    # and no full 365-day windows fit in the truncated range
+    source_exists = [True] * 101 + [False] * (n - 101)
+    df = pl.DataFrame(
         {
+            "date": dates,
             "price_usd": prices,
             "price_usd_source_exists": source_exists,
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
+            "mvrv": np.linspace(1.0, 2.0, n),
+        }
     )
-    feats = df[["price_usd", "mvrv"]].copy()
+    feats = df.select(["date", "price_usd", "mvrv"])
     out = compute_cycle_spd(
         df,
-        lambda window: pd.Series(np.full(len(window.index), 1.0 / len(window.index)), index=window.index),
+        lambda window: pl.DataFrame({
+            "date": window["date"],
+            "weight": [1.0 / window.height] * window.height,
+        }),
         features_df=feats,
         start_date="2020-01-01",
         end_date="2021-01-10",
     )
-    assert out.empty
+    assert out.is_empty()
 
 
 def test_strategy_types_helpers_and_runner_validation_edge(monkeypatch) -> None:
@@ -440,24 +462,28 @@ def test_strategy_types_helpers_and_runner_validation_edge(monkeypatch) -> None:
     assert strategy.run_daily() == "daily-ok"
 
     runner = StrategyRunner()
-    assert runner._compute_win_rate(pd.DataFrame()) == 0.0
+    assert runner._compute_win_rate(pl.DataFrame()) == 0.0
     nan_win_rate = runner._compute_win_rate(
-        pd.DataFrame({"dynamic_percentile": [np.nan], "uniform_percentile": [np.nan]})
+        pl.DataFrame({"dynamic_percentile": [np.nan], "uniform_percentile": [np.nan]})
     )
     assert nan_win_rate == 0.0
 
     state = _ValidationState(messages=[])
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2),
+        interval="1d", eager=True
+    ).to_list()
     runner._run_locked_prefix_check(
         strategy=_UniformStrategy(),
-        features_df=pd.DataFrame(
+        features_df=pl.DataFrame(
             {
+                "date": dates,
                 "price_usd": [100.0, 101.0],
                 "mvrv": [1.0, 1.1],
-            },
-            index=pd.date_range("2024-01-01", periods=2, freq="D"),
+            }
         ),
-        start_ts=pd.Timestamp("2024-01-01"),
-        max_window_start=pd.Timestamp("2024-01-01"),
+        start_ts=dt.datetime(2024, 1, 1),
+        max_window_start=dt.datetime(2024, 1, 1),
         strict_mode=True,
         state=state,
     )
@@ -469,19 +495,23 @@ def test_runner_locked_prefix_check_empty_weights_early_return(monkeypatch) -> N
     monkeypatch.setattr(
         runner,
         "_compute_with_mutation_guard",
-        lambda strategy, ctx, strict_mode: (pd.Series(dtype=float), False),
+        lambda strategy, ctx, strict_mode: (pl.DataFrame(schema={"date": pl.Datetime, "weight": pl.Float64}), False),
     )
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2),
+        interval="1d", eager=True
+    ).to_list()
     runner._run_locked_prefix_check(
         strategy=_UniformStrategy(),
-        features_df=pd.DataFrame(
+        features_df=pl.DataFrame(
             {
+                "date": dates,
                 "price_usd": [100.0, 101.0],
                 "mvrv": [1.0, 1.1],
-            },
-            index=pd.date_range("2024-01-01", periods=2, freq="D"),
+            }
         ),
-        start_ts=pd.Timestamp("2024-01-01"),
-        max_window_start=pd.Timestamp("2024-01-01"),
+        start_ts=dt.datetime(2024, 1, 1),
+        max_window_start=dt.datetime(2024, 1, 1),
         strict_mode=True,
         state=state,
     )

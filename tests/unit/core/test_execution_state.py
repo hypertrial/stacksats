@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.execution_state import (
@@ -118,8 +119,14 @@ def test_claim_conflict_for_mismatched_fingerprint(tmp_path: Path) -> None:
 
 def test_snapshot_round_trip_locked_prefix(tmp_path: Path) -> None:
     store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
-    index = pd.date_range("2024-01-01", periods=365, freq="D")
-    weights = pd.Series(1.0 / 365.0, index=index, dtype=float)
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 1) + dt.timedelta(days=364),
+        interval="1d", eager=True
+    ).to_list()
+    weights = pl.DataFrame({
+        "date": dates,
+        "weight": [1.0 / 365.0] * 365,
+    })
     store.write_weight_snapshot(
         strategy_id="s",
         strategy_version="1.0.0",
@@ -132,7 +139,7 @@ def test_snapshot_round_trip_locked_prefix(tmp_path: Path) -> None:
         strategy_version="1.0.0",
         mode="paper",
         run_date="2024-12-31",
-        window_start=pd.Timestamp("2024-01-02"),
+        window_start=dt.datetime(2024, 1, 2),
     )
     assert locked_prefix is not None
     assert len(locked_prefix) == 364

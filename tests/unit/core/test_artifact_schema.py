@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
-import pandas as pd
+import polars as pl
 
 from stacksats.api import BacktestResult
 from stacksats.strategy_types import StrategyArtifactSet
 
 
 def test_backtest_payload_includes_provenance() -> None:
-    spd = pd.DataFrame(
+    spd = pl.DataFrame(
         {
             "window": ["2024-01-01 → 2025-01-01"],
             "uniform_percentile": [50.0],
@@ -21,7 +21,7 @@ def test_backtest_payload_includes_provenance() -> None:
             "max_sats_per_dollar": [6000.0],
             "excess_percentile": [5.0],
         }
-    ).set_index("window")
+    )
     payload = BacktestResult(
         spd_table=spd,
         exp_decay_percentile=55.0,

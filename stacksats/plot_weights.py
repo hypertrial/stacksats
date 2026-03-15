@@ -153,10 +153,12 @@ Examples:
         if args.list:
             print("\nAvailable date ranges:")
             options = get_date_range_options(conn)
-            for _, row in options.iterrows():
-                print(
-                    f"  {row['start_date'].date()} to {row['end_date'].date()} ({row['count']} weights)"
-                )
+            for row in options.iter_rows(named=True):
+                start_dt = row["start_date"]
+                end_dt = row["end_date"]
+                start_str = start_dt.date().isoformat() if hasattr(start_dt, "date") else str(start_dt)[:10]
+                end_str = end_dt.date().isoformat() if hasattr(end_dt, "date") else str(end_dt)[:10]
+                print(f"  {start_str} to {end_str} ({row['count']} weights)")
             print(f"\nTotal ranges: {len(options)}")
             return
 

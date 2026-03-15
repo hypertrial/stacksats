@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 
 EXAMPLE_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 
@@ -19,20 +19,19 @@ def _write_synthetic_brk_parquet(
     pq_path: Path,
     *,
     end_date: date,
-    lookback_days: int = 2200,
+    lookback_days: int = 3300,
 ) -> None:
     start = end_date - timedelta(days=lookback_days)
     pq_path.parent.mkdir(parents=True, exist_ok=True)
     dates = [start + timedelta(days=offset) for offset in range(lookback_days + 1)]
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
-            "date": pd.to_datetime(dates),
+            "date": dates,
             "price_usd": [10000.0 + (i * 6.5) for i in range(len(dates))],
             "mvrv": [0.8 + (0.00035 * i) for i in range(len(dates))],
         }
     )
-    df = df.set_index("date")
-    df.to_parquet(pq_path)
+    df.write_parquet(pq_path)
 
 
 def run_step(label: str, cmd: list[str], *, cwd: Path, env: dict[str, str]) -> bool:

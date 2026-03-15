@@ -1,16 +1,18 @@
 """Step definitions for data validation and integrity checks."""
 
+import datetime as dt
 import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from pytest_bdd import given, then, when
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from stacksats.model_development import MIN_W
+from stacksats.prelude import date_range_list
 from tests.test_helpers import (
     DATE_COLS,
     FLOAT_TOLERANCE,
@@ -41,7 +43,8 @@ def when_check_duplicates(bdd_context):
     """Check for duplicate rows."""
     df = bdd_context["weights_df"]
     key_cols = ["start_date", "end_date", "date"]
-    duplicates = df.duplicated(subset=key_cols, keep=False)
+    dup_struct = pl.struct([pl.col(c) for c in key_cols])
+    duplicates = df.filter(dup_struct.is_duplicated())
     bdd_context["duplicates"] = duplicates
 
 
@@ -49,7 +52,8 @@ def when_check_duplicates(bdd_context):
 def when_check_pk(bdd_context):
     """Check primary key uniqueness."""
     df = bdd_context["weights_df"]
-    duplicates = df.duplicated(subset=PRIMARY_KEY_COLS, keep=False)
+    dup_struct = pl.struct([pl.col(c) for c in PRIMARY_KEY_COLS])
+    duplicates = df.filter(dup_struct.is_duplicated())
     bdd_context["pk_duplicates"] = duplicates
 
 
@@ -59,8 +63,8 @@ def when_check_sequential_ids(bdd_context):
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        ids = group["day_index"].sort_values().values
-        expected = np.arange(len(group))
+        ids = group["day_index"].sort().to_numpy()
+        expected = np.arange(group.height)
         if not np.array_equal(ids, expected):
             violations.append(f"{start} to {end}")
     bdd_context["id_violations"] = violations
@@ -71,11 +75,14 @@ def when_check_sequential_dates(bdd_context):
     """Check date sequentiality."""
     df = bdd_context["weights_df"]
     violations = []
+    one_day = dt.timedelta(days=1)
     for (start, end), group in iter_date_ranges(df):
-        dates = pd.to_datetime(group["date"]).sort_values()
-        gaps = dates.diff().dropna()
-        invalid = gaps[gaps != pd.Timedelta(days=1)]
-        if not invalid.empty:
+        dates = group["date"].sort()
+        if dates.dtype == pl.Utf8:
+            dates = dates.str.to_datetime()
+        gaps = dates.diff().drop_nulls()
+        invalid = gaps.filter(gaps != one_day)
+        if invalid.len() > 0:
             violations.append(f"{start} to {end}")
     bdd_context["date_violations"] = violations
 
@@ -86,10 +93,10 @@ def when_check_row_counts(bdd_context):
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        expected = get_range_days(start, end)
-        if len(group) != expected:
+        expected = get_range_days(str(start)[:10], str(end)[:10])
+        if group.height != expected:
             violations.append(
-                f"{start} to {end}: got {len(group)}, expected {expected}"
+                f"{start} to {end}: got {group.height}, expected {expected}"
             )
     bdd_context["count_violations"] = violations
 
@@ -100,8 +107,10 @@ def when_check_missing_dates(bdd_context):
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        expected = set(pd.date_range(start=start, end=end, freq="D"))
-        actual = set(pd.to_datetime(group["date"]))
+        start_s = str(start)[:10]
+        end_s = str(end)[:10]
+        expected = {str(d)[:10] for d in date_range_list(start_s, end_s)}
+        actual = {str(d)[:10] for d in group["date"].to_list()}
         missing = expected - actual
         if missing:
             violations.append(f"{start} to {end}: missing {len(missing)} dates")
@@ -112,22 +121,17 @@ def when_check_missing_dates(bdd_context):
 def when_check_date_ordering(bdd_context):
     """Check start < end for all rows."""
     df = bdd_context["weights_df"]
-    starts = pd.to_datetime(df["start_date"])
-    ends = pd.to_datetime(df["end_date"])
-    invalid = df[starts >= ends]
+    invalid = df.filter(pl.col("start_date") >= pl.col("end_date"))
     bdd_context["ordering_violations"] = invalid
 
 
 @when("I check DCA dates are within range")
 def when_check_dca_in_range(bdd_context):
     """Check DCA dates are within [start, end]."""
-    df = bdd_context["weights_df"].copy()
-    for col in DATE_COLS:
-        df[f"_{col}"] = pd.to_datetime(df[col])
-
-    invalid = df[
-        (df["_date"] < df["_start_date"]) | (df["_date"] > df["_end_date"])
-    ]
+    df = bdd_context["weights_df"]
+    invalid = df.filter(
+        (pl.col("date") < pl.col("start_date")) | (pl.col("date") > pl.col("end_date"))
+    )
     bdd_context["dca_range_violations"] = invalid
 
 
@@ -137,7 +141,7 @@ def when_check_weight_sums(bdd_context):
     df = bdd_context["weights_df"]
     violations = []
     for (start, end), group in iter_date_ranges(df):
-        weight_sum = group["weight"].sum()
+        weight_sum = float(group["weight"].sum())
         if not np.isclose(weight_sum, 1.0, atol=WEIGHT_SUM_TOLERANCE):
             violations.append(f"{start} to {end}: sum={weight_sum:.10f}")
     bdd_context["weight_sum_violations"] = violations
@@ -149,15 +153,15 @@ def when_check_dtypes(bdd_context):
     df = bdd_context["weights_df"]
     dtype_issues = []
 
-    if df["day_index"].dtype not in [np.int64, np.int32, int]:
+    if df["day_index"].dtype not in [pl.Int64, pl.Int32]:
         dtype_issues.append(f"day_index: {df['day_index'].dtype}")
 
-    if df["weight"].dtype not in [np.float64, np.float32, float]:
+    if df["weight"].dtype not in [pl.Float64, pl.Float32]:
         dtype_issues.append(f"weight: {df['weight'].dtype}")
 
-    non_null_btc = df["price_usd"].dropna()
-    if len(non_null_btc) > 0:
-        if non_null_btc.dtype not in [np.float64, np.float32, float]:
+    non_null_btc = df["price_usd"].drop_nulls()
+    if non_null_btc.len() > 0:
+        if non_null_btc.dtype not in [pl.Float64, pl.Float32]:
             dtype_issues.append(f"price_usd: {non_null_btc.dtype}")
 
     bdd_context["dtype_issues"] = dtype_issues
@@ -169,15 +173,15 @@ def when_check_nulls(bdd_context):
     df = bdd_context["weights_df"]
     null_issues = []
 
-    if df["day_index"].isna().any():
-        null_issues.append(f"day_index: {df['day_index'].isna().sum()} nulls")
+    if df["day_index"].is_null().any():
+        null_issues.append(f"day_index: {df['day_index'].null_count()} nulls")
 
-    if df["weight"].isna().any():
-        null_issues.append(f"weight: {df['weight'].isna().sum()} nulls")
+    if df["weight"].is_null().any():
+        null_issues.append(f"weight: {df['weight'].null_count()} nulls")
 
     for col in DATE_COLS:
-        if df[col].isna().any():
-            null_issues.append(f"{col}: {df[col].isna().sum()} nulls")
+        if df[col].is_null().any():
+            null_issues.append(f"{col}: {df[col].null_count()} nulls")
 
     bdd_context["null_issues"] = null_issues
 
@@ -191,14 +195,14 @@ def when_check_nulls(bdd_context):
 def then_no_duplicates(bdd_context):
     """Assert no duplicate rows."""
     duplicates = bdd_context["duplicates"]
-    assert not duplicates.any(), f"Found {duplicates.sum() // 2} duplicate rows"
+    assert duplicates.height == 0, f"Found {duplicates.height} duplicate rows"
 
 
 @then("primary keys should be unique")
 def then_pk_unique(bdd_context):
     """Assert primary keys are unique."""
     pk_duplicates = bdd_context["pk_duplicates"]
-    assert not pk_duplicates.any(), f"Found {pk_duplicates.sum()} duplicate PKs"
+    assert pk_duplicates.height == 0, f"Found {pk_duplicates.height} duplicate PKs"
 
 
 @then("IDs should be sequential within each range")
@@ -233,14 +237,14 @@ def then_no_missing_dates(bdd_context):
 def then_start_before_end(bdd_context):
     """Assert start < end."""
     invalid = bdd_context["ordering_violations"]
-    assert invalid.empty, f"Found {len(invalid)} rows with start >= end"
+    assert invalid.height == 0, f"Found {invalid.height} rows with start >= end"
 
 
 @then("date should be within the range")
 def then_dca_in_range(bdd_context):
     """Assert DCA dates are within range."""
     invalid = bdd_context["dca_range_violations"]
-    assert invalid.empty, f"Found {len(invalid)} dates outside range"
+    assert invalid.height == 0, f"Found {invalid.height} dates outside range"
 
 
 @then("weights should sum to 1.0 per range")
@@ -268,24 +272,24 @@ def then_no_nulls(bdd_context):
 def then_weights_above_min_validation(bdd_context):
     """Assert weights above MIN_W."""
     df = bdd_context["weights_df"]
-    below_min = df[df["weight"] < MIN_W - FLOAT_TOLERANCE]
-    assert below_min.empty, f"Found {len(below_min)} weights below MIN_W"
+    below_min = df.filter(pl.col("weight") < MIN_W - FLOAT_TOLERANCE)
+    assert below_min.height == 0, f"Found {below_min.height} weights below MIN_W"
 
 
 @then("all weights should be non-negative")
 def then_weights_non_negative(bdd_context):
     """Assert weights are non-negative."""
     df = bdd_context["weights_df"]
-    negative = df[df["weight"] < 0]
-    assert negative.empty, f"Found {len(negative)} negative weights"
+    negative = df.filter(pl.col("weight") < 0)
+    assert negative.height == 0, f"Found {negative.height} negative weights"
 
 
 @then("all weights should be finite")
 def then_weights_finite_validation(bdd_context):
     """Assert weights are finite."""
     df = bdd_context["weights_df"]
-    assert df["weight"].notna().all(), "Found NaN weights"
-    assert np.isfinite(df["weight"]).all(), "Found non-finite weights"
+    assert df["weight"].is_not_nan().all(), "Found NaN weights"
+    assert np.isfinite(df["weight"].to_numpy()).all(), "Found non-finite weights"
 
 
 @then("weights should have variance")
@@ -293,5 +297,5 @@ def then_weights_have_variance(bdd_context):
     """Assert weights are not all identical."""
     df = bdd_context["weights_df"]
     for (start, end), group in iter_date_ranges(df):
-        if len(group) > 1:
-            assert group["weight"].std() > 0, f"Range {start} to {end}: zero variance"
+        if group.height > 1:
+            assert float(group["weight"].std()) > 0, f"Range {start} to {end}: zero variance"

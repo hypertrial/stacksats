@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
-import pandas as pd
 import pytest
 
 import stacksats.framework_contract as framework_contract
@@ -10,14 +11,14 @@ from stacksats.framework_contract import (
     apply_clipped_weight,
     assert_final_invariants,
     compute_n_past,
-    validate_span_length,
     validate_locked_prefix,
+    validate_span_length,
 )
 
 
 def test_compute_n_past_handles_timezone_aware_current_date() -> None:
-    idx = pd.date_range("2024-01-01", periods=5, freq="D")
-    current_date = pd.Timestamp("2024-01-03 22:00:00", tz="UTC")
+    idx = [datetime(2024, 1, 1) + timedelta(days=offset) for offset in range(5)]
+    current_date = datetime(2024, 1, 3, 22, 0, tzinfo=timezone.utc)
 
     result = compute_n_past(idx, current_date)
 
@@ -25,12 +26,11 @@ def test_compute_n_past_handles_timezone_aware_current_date() -> None:
 
 
 def test_compute_n_past_returns_zero_for_empty_index() -> None:
-    idx = pd.DatetimeIndex([])
-    assert compute_n_past(idx, "2024-01-01") == 0
+    assert compute_n_past([], "2024-01-01") == 0
 
 
 def test_compute_n_past_rejects_non_monotonic_index() -> None:
-    idx = pd.DatetimeIndex([pd.Timestamp("2024-01-02"), pd.Timestamp("2024-01-01")])
+    idx = [datetime(2024, 1, 2), datetime(2024, 1, 1)]
 
     with pytest.raises(ValueError, match="monotonic increasing"):
         compute_n_past(idx, "2024-01-02")

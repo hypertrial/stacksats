@@ -132,7 +132,7 @@ def compute_n_past(
     """Compute deterministic count of days at-or-before current_date.
 
     date_index must be sorted ascending (monotonic). Elements can be
-    datetime, str, or pandas Timestamp; current_date is normalized to naive UTC.
+    datetime or str; current_date is normalized to naive UTC.
     """
     dates = list(date_index)
     if len(dates) == 0:

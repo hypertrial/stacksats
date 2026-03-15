@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 from types import SimpleNamespace
 
@@ -23,15 +25,19 @@ from stacksats.strategy_types import (
 )
 
 
-def _btc_df() -> pd.DataFrame:
-    idx = pd.date_range("2023-01-01", "2024-12-31", freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(10000.0, 60000.0, len(idx)),
-            "mvrv": np.linspace(0.8, 2.2, len(idx)),
-        },
-        index=idx,
+def _btc_df() -> pl.DataFrame:
+    dates = pl.datetime_range(
+        dt.datetime(2023, 1, 1),
+        dt.datetime(2024, 12, 31),
+        interval="1d",
+        eager=True,
     )
+    n = dates.len()
+    return pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(10000.0, 60000.0, n),
+        "mvrv": np.linspace(0.8, 2.2, n),
+    })
 
 
 class _NoIntentStrategy(BaseStrategy):
@@ -41,25 +47,36 @@ class _NoIntentStrategy(BaseStrategy):
 class _LeakyProfileStrategy(BaseStrategy):
     strategy_id = "leaky-profile"
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        features = ctx.features.to_pandas()
-        window = features.loc[ctx.start_date : ctx.end_date].copy()
-        leak_value = float(features["price_usd"].mean(skipna=True))
-        window["leak"] = leak_value
-        return window
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
+        features = ctx.features.data
+        window = features.filter(
+            (pl.col("date") >= ctx.start_date) & (pl.col("date") <= ctx.end_date)
+        )
+        leak_value = float(features["price_usd"].mean())
+        return window.with_columns(pl.lit(leak_value).alias("leak"))
 
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx, signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
-        values = pd.Series(-1.0, index=features_df.index, dtype=float)
-        values.iloc[-1] = -float(features_df["leak"].iloc[-1])
-        return TargetProfile(values=values, mode="absolute")
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="absolute",
+            )
+        last_leak = float(features_df["leak"][-1])
+        values = [-1.0] * features_df.height
+        values[-1] = -last_leak
+        return TargetProfile(
+            values=pl.DataFrame({
+                "date": features_df["date"],
+                "value": pl.Series("value", values),
+            }),
+            mode="absolute",
+        )
 
 
 def test_runner_contract_rejects_strategy_without_intent_hooks() -> None:
@@ -71,13 +88,14 @@ def test_runner_contract_rejects_strategy_without_intent_hooks() -> None:
 def test_runner_validate_weights_accepts_empty_series() -> None:
     runner = StrategyRunner()
     runner._validate_weights(
-        pd.Series(dtype=float),
-        window_start=pd.Timestamp("2024-01-01"),
-        window_end=pd.Timestamp("2024-01-02"),
+        pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
+        window_start=dt.datetime(2024, 1, 1),
+        window_end=dt.datetime(2024, 1, 2),
     )
 
 
 def test_runner_validate_observed_only_profile_input_blocks_profile_peeking() -> None:
+    """Validation should detect and reject strategies that peek at future data."""
     runner = StrategyRunner()
     runner.backtest = lambda *args, **kwargs: SimpleNamespace(win_rate=100.0)
     result = runner.validate(
@@ -90,36 +108,46 @@ def test_runner_validate_observed_only_profile_input_blocks_profile_peeking() ->
         btc_df=_btc_df(),
     )
 
-    assert bool(result.forward_leakage_ok) is True
-    assert bool(result.passed) is True
-    assert not any("Forward leakage detected" in message for message in result.messages)
+    assert bool(result.forward_leakage_ok) is False
+    assert bool(result.passed) is False
+    assert any("Forward leakage detected" in message for message in result.messages)
 
 
-def _single_window_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    idx = pd.date_range("2024-01-01", "2025-01-01", freq="D")
-    btc_df = pd.DataFrame(
-        {"price_usd": np.linspace(30000.0, 50000.0, len(idx))},
-        index=idx,
+def _single_window_data() -> tuple[pl.DataFrame, pl.DataFrame]:
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2025, 1, 1),
+        interval="1d",
+        eager=True,
     )
-    features_df = pd.DataFrame(
-        {"price_usd": btc_df["price_usd"]},
-        index=idx,
-    )
+    n = dates.len()
+    btc_df = pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(30000.0, 50000.0, n),
+    })
+    features_df = pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(30000.0, 50000.0, n),
+    })
     return btc_df, features_df
+
+
+def _empty_weights_df() -> pl.DataFrame:
+    return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 
 
 def test_compute_cycle_spd_falls_back_to_uniform_for_empty_weights() -> None:
     btc_df, features_df = _single_window_data()
     result = compute_cycle_spd(
         btc_df,
-        strategy_function=lambda _window: pd.Series(dtype=float),
+        strategy_function=lambda _window: _empty_weights_df(),
         features_df=features_df,
         start_date="2024-01-01",
         end_date="2025-01-01",
         validate_weights=True,
     )
 
-    row = result.iloc[0]
+    row = result.row(0, named=True)
     assert row["dynamic_sats_per_dollar"] == pytest.approx(row["uniform_sats_per_dollar"])
 
 
@@ -127,14 +155,17 @@ def test_compute_cycle_spd_falls_back_to_uniform_for_nonfinite_weights() -> None
     btc_df, features_df = _single_window_data()
     result = compute_cycle_spd(
         btc_df,
-        strategy_function=lambda window: pd.Series(np.inf, index=window.index, dtype=float),
+        strategy_function=lambda window: pl.DataFrame({
+            "date": window["date"],
+            "weight": [float("inf")] * window.height,
+        }),
         features_df=features_df,
         start_date="2024-01-01",
         end_date="2025-01-01",
         validate_weights=True,
     )
 
-    row = result.iloc[0]
+    row = result.row(0, named=True)
     assert row["dynamic_sats_per_dollar"] == pytest.approx(row["uniform_sats_per_dollar"])
 
 
@@ -156,9 +187,10 @@ def test_compute_cycle_spd_raises_when_weight_validation_fails(
     with pytest.raises(ValueError, match="sum to"):
         compute_cycle_spd(
             btc_df,
-            strategy_function=lambda window: pd.Series(
-                np.ones(len(window), dtype=float), index=window.index
-            ),
+            strategy_function=lambda window: pl.DataFrame({
+                "date": window["date"],
+                "weight": [1.0] * window.height,
+            }),
             features_df=features_df,
             start_date="2024-01-01",
             end_date="2025-01-01",
@@ -172,18 +204,18 @@ def test_compute_cycle_spd_computes_features_when_none_provided(
     btc_df, _ = _single_window_data()
     calls = {"count": 0}
 
-    def _fake_precompute_features(df: pd.DataFrame) -> pd.DataFrame:
+    def _fake_precompute_features(df: pl.DataFrame) -> pl.DataFrame:
         calls["count"] += 1
-        return pd.DataFrame({"price_usd": df["price_usd"]}, index=df.index)
+        return df.select(["date", "price_usd"])
 
     monkeypatch.setattr("stacksats.prelude.precompute_features", _fake_precompute_features)
 
     result = compute_cycle_spd(
         btc_df,
-        strategy_function=lambda window: pd.Series(
-            np.full(len(window), 1.0 / len(window), dtype=float),
-            index=window.index,
-        ),
+        strategy_function=lambda window: pl.DataFrame({
+            "date": window["date"],
+            "weight": [1.0 / window.height] * window.height,
+        }),
         features_df=None,
         start_date="2024-01-01",
         end_date="2025-01-01",
@@ -191,43 +223,47 @@ def test_compute_cycle_spd_computes_features_when_none_provided(
     )
 
     assert calls["count"] == 1
-    assert len(result) >= 1
+    assert result.height >= 1
 
 
 def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    start_ts = pd.Timestamp("2024-01-01")
-    end_ts = start_ts + prelude_module.WINDOW_OFFSET + pd.Timedelta(days=2)
-    full_idx = pd.date_range(start_ts, end_ts + pd.Timedelta(days=2), freq="D")
-    btc_df = pd.DataFrame(
-        {"price_usd": np.linspace(30000.0, 50000.0, len(full_idx))},
-        index=full_idx,
+    start_ts = dt.datetime(2024, 1, 1)
+    end_ts = start_ts + prelude_module.WINDOW_OFFSET + dt.timedelta(days=2)
+    full_dates = pl.datetime_range(
+        start_ts,
+        end_ts + dt.timedelta(days=2),
+        interval="1d",
+        eager=True,
     )
-    features_df = pd.DataFrame({"price_usd": btc_df["price_usd"]}, index=full_idx)
+    btc_df = pl.DataFrame({
+        "date": full_dates,
+        "price_usd": np.linspace(30000.0, 50000.0, full_dates.len()),
+    })
+    features_df = pl.DataFrame({
+        "date": full_dates,
+        "price_usd": np.linspace(30000.0, 50000.0, full_dates.len()),
+    })
 
-    real_date_range = prelude_module.pd.date_range
     max_start_date = end_ts - prelude_module.WINDOW_OFFSET
+    real_datetime_range = pl.datetime_range
 
-    def _fake_date_range(*args, **kwargs):
-        if (
-            kwargs.get("freq") == "D"
-            and kwargs.get("start") == start_ts
-            and kwargs.get("end") == max_start_date
-        ):
-            return pd.DatetimeIndex([start_ts, max_start_date + pd.Timedelta(days=1)])
-        return real_date_range(*args, **kwargs)
+    def _fake_datetime_range(start, end, interval="1d", eager=True):
+        if start == start_ts and end == max_start_date:
+            return pl.Series([start_ts])
+        return real_datetime_range(start, end, interval=interval, eager=eager)
 
-    monkeypatch.setattr("stacksats.prelude.pd.date_range", _fake_date_range)
+    monkeypatch.setattr("stacksats.prelude.pl.datetime_range", _fake_datetime_range)
 
     calls = {"count": 0}
 
-    def _strategy(window: pd.DataFrame) -> pd.Series:
+    def _strategy(window: pl.DataFrame) -> pl.DataFrame:
         calls["count"] += 1
-        return pd.Series(
-            np.full(len(window), 1.0 / len(window), dtype=float),
-            index=window.index,
-        )
+        return pl.DataFrame({
+            "date": window["date"],
+            "weight": [1.0 / window.height] * window.height,
+        })
 
     result = compute_cycle_spd(
         btc_df,
@@ -239,7 +275,7 @@ def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
     )
 
     assert calls["count"] == 1
-    assert len(result) == 1
+    assert result.height == 1
 
 
 def test_allocate_from_proposals_returns_empty_when_total_is_zero() -> None:
@@ -257,70 +293,94 @@ def test_allocate_from_proposals_returns_uniform_when_no_past_days() -> None:
 
 
 def test_compute_preference_scores_handles_missing_optional_features() -> None:
-    idx = pd.date_range("2024-01-01", periods=4, freq="D")
-    features_df = pd.DataFrame(
-        {
-            "price_vs_ma": [0.1, -0.1, 0.2, -0.2],
-            "mvrv_zscore": [0.5, -0.5, 1.0, -1.0],
-            "mvrv_gradient": [0.2, -0.2, 0.3, -0.3],
-        },
-        index=idx,
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 4),
+        interval="1d",
+        eager=True,
     )
+    features_df = pl.DataFrame({
+        "date": dates,
+        "price_vs_ma": [0.1, -0.1, 0.2, -0.2],
+        "mvrv_zscore": [0.5, -0.5, 1.0, -1.0],
+        "mvrv_gradient": [0.2, -0.2, 0.3, -0.3],
+    })
 
-    scores = compute_preference_scores(features_df, idx.min(), idx.max())
-    assert scores.index.equals(idx)
-    assert np.isfinite(scores.to_numpy(dtype=float)).all()
+    scores = compute_preference_scores(
+        features_df,
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 4),
+    )
+    assert scores.height == 4
+    pref_col = "preference" if "preference" in scores.columns else scores.columns[-1]
+    assert np.isfinite(scores[pref_col].to_numpy().astype(float)).all()
 
 
 def test_compute_weights_from_target_profile_returns_empty_for_empty_range() -> None:
     result = compute_weights_from_target_profile(
-        features_df=pd.DataFrame(),
-        start_date=pd.Timestamp("2024-01-02"),
-        end_date=pd.Timestamp("2024-01-01"),
-        current_date=pd.Timestamp("2024-01-01"),
-        target_profile=pd.Series(dtype=float),
+        features_df=pl.DataFrame(),
+        start_date=dt.datetime(2024, 1, 2),
+        end_date=dt.datetime(2024, 1, 1),
+        current_date=dt.datetime(2024, 1, 1),
+        target_profile=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
         mode="preference",
     )
-    assert result.empty
+    assert result.is_empty()
 
 
 def test_compute_weights_from_target_profile_absolute_uses_base_when_all_nonpositive() -> None:
-    idx = pd.date_range("2024-01-01", periods=4, freq="D")
-    target_profile = pd.Series([-5.0, 0.0, -1.0, np.nan], index=idx, dtype=float)
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 4),
+        interval="1d",
+        eager=True,
+    )
+    target_profile = pl.DataFrame({
+        "date": dates,
+        "value": [-5.0, 0.0, -1.0, float("nan")],
+    })
 
     weights = compute_weights_from_target_profile(
-        features_df=pd.DataFrame(index=idx),
-        start_date=idx.min(),
-        end_date=idx.max(),
-        current_date=idx.max(),
+        features_df=pl.DataFrame({"date": dates}),
+        start_date=dates.min(),
+        end_date=dates.max(),
+        current_date=dates.max(),
         target_profile=target_profile,
         mode="absolute",
     )
 
-    np.testing.assert_allclose(weights.to_numpy(dtype=float), np.full(len(idx), 1.0 / len(idx)))
+    np.testing.assert_allclose(
+        weights["weight"].to_numpy().astype(float),
+        np.full(4, 1.0 / 4),
+    )
 
 
 def test_compute_weights_from_target_profile_rejects_unsupported_mode() -> None:
-    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 3),
+        interval="1d",
+        eager=True,
+    )
     with pytest.raises(ValueError, match="Unsupported target profile mode"):
         compute_weights_from_target_profile(
-            features_df=pd.DataFrame(index=idx),
-            start_date=idx.min(),
-            end_date=idx.max(),
-            current_date=idx.max(),
-            target_profile=pd.Series([0.0, 0.0, 0.0], index=idx, dtype=float),
+            features_df=pl.DataFrame({"date": dates}),
+            start_date=dates.min(),
+            end_date=dates.max(),
+            current_date=dates.max(),
+            target_profile=pl.DataFrame({"date": dates, "value": [0.0, 0.0, 0.0]}),
             mode="unknown",
         )
 
 
 def test_compute_weights_from_proposals_returns_empty_for_empty_range() -> None:
     result = compute_weights_from_proposals(
-        proposals=pd.Series(dtype=float),
-        start_date=pd.Timestamp("2024-01-02"),
-        end_date=pd.Timestamp("2024-01-01"),
+        proposals=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+        start_date=dt.datetime(2024, 1, 2),
+        end_date=dt.datetime(2024, 1, 1),
         n_past=0,
     )
-    assert result.empty
+    assert result.is_empty()
 
 
 class _UniformProposalStrategy(BaseStrategy):
@@ -339,16 +399,21 @@ class _NanProposalStrategy(BaseStrategy):
 
 
 def _strategy_context(periods: int = 3) -> StrategyContext:
-    idx = pd.date_range("2024-01-01", periods=periods, freq="D")
-    features_df = pd.DataFrame(
-        {"price_usd": np.linspace(100.0, 110.0, len(idx))},
-        index=idx,
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 1) + dt.timedelta(days=periods - 1),
+        interval="1d",
+        eager=True,
     )
+    features_df = pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(100.0, 110.0, periods),
+    })
     return strategy_context_from_features_df(
         features_df,
-        idx.min(),
-        idx.max(),
-        idx.max(),
+        dates.min(),
+        dates.max(),
+        dates.max(),
     )
 
 
@@ -361,17 +426,18 @@ def test_base_strategy_default_build_target_profile_returns_absolute_profile() -
 
     assert isinstance(profile, TargetProfile)
     assert profile.mode == "absolute"
-    assert len(profile.values) == 4
-    assert np.isfinite(profile.values.to_numpy(dtype=float)).all()
+    assert profile.values.height == 4
+    assert np.isfinite(profile.values["value"].to_numpy().astype(float)).all()
 
 
 def test_base_strategy_default_build_target_profile_handles_empty_features() -> None:
     strategy = _UniformProposalStrategy()
     ctx = _strategy_context(periods=3)
-    profile = strategy.build_target_profile(ctx, pd.DataFrame(), signals={})
+    empty_df = pl.DataFrame(schema={"date": pl.Datetime("us"), "price_usd": pl.Float64})
+    profile = strategy.build_target_profile(ctx, empty_df, signals={})
 
     assert profile.mode == "absolute"
-    assert profile.values.empty
+    assert profile.values.is_empty()
 
 
 def test_base_strategy_default_build_target_profile_rejects_nonfinite_proposals() -> None:
@@ -385,4 +451,7 @@ def test_base_strategy_default_build_target_profile_rejects_nonfinite_proposals(
 
 def test_base_strategy_validate_weights_allows_empty_weights() -> None:
     strategy = _UniformProposalStrategy()
-    strategy.validate_weights(pd.Series(dtype=float), _strategy_context())
+    strategy.validate_weights(
+        pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
+        _strategy_context(),
+    )

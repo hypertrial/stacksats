@@ -1,7 +1,7 @@
 """Tests for helper functions in model_development.py."""
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from stacksats.model_development import (
     _compute_stable_signal,
     classify_mvrv_zone,
@@ -33,27 +33,23 @@ class TestModelDevelopmentHelpers:
 
     def test_zscore(self):
         """Test zscore function."""
-        s = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
+        s = pl.Series("values", [1.0, 2.0, 3.0, 4.0, 5.0])
         # window=3, min_periods=1
         result = zscore(s, window=3)
 
         # Result should be Series
-        assert isinstance(result, pd.Series)
+        assert isinstance(result, pl.Series)
         # Check a middle value: [1, 2, 3] -> mean=2, std=1 -> (3-2)/1 = 1.0
-        # Wait, pandas std is ddof=1 by default.
-        # [1, 2, 3] -> mean=2, std=1.0. (3-2)/1.0 = 1.0.
-        assert np.isclose(result.iloc[2], 1.0)
+        assert np.isclose(result[2], 1.0)
 
     def test_rolling_percentile(self):
         """Test rolling_percentile function."""
-        s = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0])
+        s = pl.Series("values", [10.0, 20.0, 30.0, 40.0, 50.0])
         # window=5, min_periods = window // 4 = 1
         result = rolling_percentile(s, window=5)
 
-        # iloc[0] should be 0.5 because len(x) < 2
-        assert result.iloc[0] == 0.5
-        # iloc[4] should be 1.0 because 50 is greater than [10, 20, 30, 40]
-        assert result.iloc[4] == 1.0
+        assert result[0] == 0.5
+        assert result[4] == 1.0
 
     def test_classify_mvrv_zone(self):
         """Test classify_mvrv_zone function according to its implementation."""

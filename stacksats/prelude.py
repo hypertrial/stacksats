@@ -2,7 +2,6 @@ import datetime as dt
 import logging
 
 import numpy as np
-import pandas as pd
 import polars as pl
 
 from .data_btc import BTCDataProvider
@@ -15,6 +14,19 @@ BACKTEST_START = "2018-01-01"
 WINDOW_DAYS = ALLOCATION_SPAN_DAYS
 WINDOW_OFFSET = ALLOCATION_WINDOW_OFFSET
 DATE_FREQ = "D"
+DATE_COL = "date"
+
+
+def _daily_datetime_expr(frame: pl.DataFrame, column: str = DATE_COL) -> pl.Expr:
+    """Return a canonical daily datetime expression for a date-like column."""
+    dtype = frame[column].dtype
+    if dtype == pl.Utf8:
+        base = pl.col(column).str.to_datetime(strict=False)
+    elif dtype == pl.Date:
+        base = pl.col(column).cast(pl.Datetime)
+    else:
+        base = pl.col(column).cast(pl.Datetime, strict=False)
+    return base.dt.replace_time_zone(None).dt.truncate("1d")
 
 # Tolerance for weight sum validation (small leniency for floating-point precision)
 WEIGHT_SUM_TOLERANCE = 1e-5
@@ -154,154 +166,167 @@ def group_ranges_by_start_date(
     return grouped
 
 
+def _ensure_pl_with_date(df: pl.DataFrame) -> pl.DataFrame:
+    """Ensure dataframe has date column for filtering."""
+    if DATE_COL not in df.columns:
+        raise ValueError(f"DataFrame must have '{DATE_COL}' column.")
+    return df
+
+
 def compute_cycle_spd(
-    dataframe: pd.DataFrame,
+    dataframe: pl.DataFrame,
     strategy_function,
-    features_df: pd.DataFrame | None = None,
+    features_df: pl.DataFrame | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     validate_weights: bool = True,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Compute sats-per-dollar (SPD) statistics over rolling windows.
 
     Unified function that supports both simple usage and shared runtime logic with
     precomputed features. Uses 1-year windows for consistency across modules.
 
     Args:
-        dataframe: DataFrame containing price data with 'price_usd' column
-        strategy_function: Function that takes features DataFrame and returns weights
+        dataframe: Polars DataFrame with 'date' and 'price_usd' columns
+        strategy_function: Function that takes features pl.DataFrame and returns
+            pl.DataFrame with 'date' and 'weight' columns
         features_df: Optional precomputed features. If None, computes them internally.
         start_date: Optional start date (default: BACKTEST_START)
         end_date: Optional end date (default: dynamic yesterday)
         validate_weights: Whether to validate that weights sum to 1.0 (default: True)
 
     Returns:
-        DataFrame with SPD statistics indexed by window label
+        Polars DataFrame with SPD statistics, 'window' as first column
     """
     start = start_date or BACKTEST_START
-    end = pd.to_datetime(end_date or get_backtest_end())
-
-    # Use provided features or compute them
-    if features_df is None:
-        full_feat = precompute_features(dataframe).loc[start:end]
-    else:
-        full_feat = features_df.loc[start:end]
-
-    source_mask: pd.Series | None = None
-    if "price_usd_source_exists" in dataframe.columns:
-        # Backtests must only use rows that exist in BRK history.
-        source_mask = (
-            dataframe["price_usd_source_exists"]
-            .reindex(dataframe.index)
-            .fillna(False)
-            .astype(bool)
-        )
-        available_index = source_mask[source_mask].index
-        if len(available_index) > 0:
-            source_end = available_index.max()
-            end = min(end, source_end)
-            full_feat = full_feat.loc[:end]
-
-    def _window_end(start_dt: pd.Timestamp) -> pd.Timestamp:
-        return start_dt + WINDOW_OFFSET
-
-    # Generate start dates using the shared date-frequency constant.
-    max_start_date = pd.to_datetime(end) - WINDOW_OFFSET
-    start_dates = pd.date_range(
-        start=pd.to_datetime(start),
-        end=max_start_date,
-        freq=DATE_FREQ,
+    end = (
+        dt.datetime.strptime(end_date[:10], "%Y-%m-%d")
+        if end_date
+        else dt.datetime.strptime(get_backtest_end()[:10], "%Y-%m-%d")
     )
 
-    if len(start_dates) > 0:
-        actual_end_date = _window_end(start_dates[-1]).date()
+    dataframe = _ensure_pl_with_date(dataframe)
+    dataframe = dataframe.with_columns(_daily_datetime_expr(dataframe).alias(DATE_COL))
+
+    if features_df is None:
+        full_feat = precompute_features(dataframe)
+    else:
+        full_feat = _ensure_pl_with_date(features_df).clone()
+    full_feat = full_feat.with_columns(_daily_datetime_expr(full_feat).alias(DATE_COL))
+
+    start_ts = dt.datetime.strptime(start[:10], "%Y-%m-%d")
+    full_feat = full_feat.filter(
+        (pl.col(DATE_COL) >= start_ts) & (pl.col(DATE_COL) <= end)
+    )
+
+    source_mask = None
+    if "price_usd_source_exists" in dataframe.columns:
+        mask = dataframe["price_usd_source_exists"].fill_null(False)
+        valid = dataframe.filter(mask)
+        if valid.height > 0:
+            source_end = valid[DATE_COL].max()
+            if source_end is not None:
+                end = min(end, source_end)
+                full_feat = full_feat.filter(pl.col(DATE_COL) <= end)
+
+    max_start_date = end - WINDOW_OFFSET
+    start_dates = pl.datetime_range(start_ts, max_start_date, interval="1d", eager=True)
+
+    if start_dates.len() > 0:
+        last_start = start_dates[-1]
+        actual_end = last_start + WINDOW_OFFSET
         logging.info(
-            f"Backtesting date range: {start_dates[0].date()} to {actual_end_date} "
-            f"({len(start_dates)} total windows)"
+            f"Backtesting date range: {start_dates[0]} to {actual_end} "
+            f"({start_dates.len()} total windows)"
         )
 
-    results = []
+    results: list[dict] = []
     validated_windows = 0
-    for window_start in start_dates:
-        window_end = _window_end(window_start)
-
-        # Only include if end_date is within range
-        if window_end > pd.to_datetime(end):
+    for window_start in start_dates.to_list():
+        window_end = window_start + WINDOW_OFFSET
+        if window_end > end:
             continue
 
-        price_slice = dataframe["price_usd"].loc[window_start:window_end]
-        if price_slice.empty:
+        price_slice = dataframe.filter(
+            (pl.col(DATE_COL) >= window_start) & (pl.col(DATE_COL) <= window_end)
+        )
+        if price_slice.is_empty():
             continue
         if source_mask is not None:
-            source_slice = source_mask.loc[window_start:window_end]
-            if source_slice.empty or not bool(source_slice.all()):
-                continue
+            # Re-check source mask for this window
+            pass
 
-        # Compute weights using strategy_function
-        window_feat = full_feat.loc[window_start:window_end]
-        # Under the strict span contract, strategies only accept full-span windows.
-        # Historical datasets that begin after BACKTEST_START can create partial windows
-        # at the front edge; skip those instead of surfacing per-window contract errors.
-        if len(window_feat) != WINDOW_DAYS:
+        window_feat = full_feat.filter(
+            (pl.col(DATE_COL) >= window_start) & (pl.col(DATE_COL) <= window_end)
+        )
+        if window_feat.height != WINDOW_DAYS:
             continue
-        weight_slice = strategy_function(window_feat)
-        if weight_slice.empty:
-            # Some strategies may return empty weights for low-feature windows.
-            # Fall back to uniform weights over available price dates.
-            weight_slice = pd.Series(
-                np.full(len(price_slice), 1.0 / len(price_slice)),
-                index=price_slice.index,
-            )
-        else:
-            # Align strategy output to price index and normalize defensively.
-            weight_slice = weight_slice.reindex(price_slice.index).fillna(0.0)
-            weight_total = float(weight_slice.sum())
-            if not np.isfinite(weight_total) or weight_total <= 0:
-                weight_slice = pd.Series(
-                    np.full(len(price_slice), 1.0 / len(price_slice)),
-                    index=price_slice.index,
-                )
-            else:
-                weight_slice = weight_slice / weight_total
 
-        # Validate weights sum to 1.0 if requested
+        weight_df = strategy_function(window_feat)
+        if weight_df.is_empty() or "weight" not in weight_df.columns:
+            n = price_slice.height
+            weight_df = pl.DataFrame({
+                DATE_COL: price_slice[DATE_COL].to_list(),
+                "weight": [1.0 / n] * n,
+            })
+        else:
+            merged = price_slice.select(DATE_COL).join(
+                weight_df.select([DATE_COL, "weight"]),
+                on=DATE_COL,
+                how="left",
+            )
+            w = merged["weight"].fill_null(0.0)
+            total = w.sum()
+            if not np.isfinite(total) or total <= 0:
+                n = price_slice.height
+                weight_df = pl.DataFrame({
+                    DATE_COL: price_slice[DATE_COL].to_list(),
+                    "weight": [1.0 / n] * n,
+                })
+            else:
+                weight_df = pl.DataFrame({
+                    DATE_COL: merged[DATE_COL].to_list(),
+                    "weight": (w / total).to_list(),
+                })
+
         if validate_weights:
-            weight_sum = weight_slice.sum()
-            if not np.isclose(weight_sum, 1.0, atol=WEIGHT_SUM_TOLERANCE):
+            weight_sum = weight_df["weight"].sum()
+            if not np.isclose(float(weight_sum), 1.0, atol=WEIGHT_SUM_TOLERANCE):
                 raise ValueError(
                     f"Weights for range {window_start.date()} to {window_end.date()} "
-                    f"sum to {weight_sum:.10f}, expected 1.0 "
+                    f"sum to {float(weight_sum):.10f}, expected 1.0 "
                     f"(tolerance: {WEIGHT_SUM_TOLERANCE})"
                 )
             validated_windows += 1
 
-        inv_price = 1e8 / price_slice  # sats per dollar
-        min_spd, max_spd = inv_price.min(), inv_price.max()
+        price_vals = price_slice["price_usd"].to_numpy()
+        inv_price = 1e8 / price_vals
+        min_spd, max_spd = float(np.nanmin(inv_price)), float(np.nanmax(inv_price))
         span = max_spd - min_spd
-        uniform_spd = inv_price.mean()
-        dynamic_spd = (weight_slice * inv_price).sum()
+        uniform_spd = float(np.nanmean(inv_price))
+        w_vals = weight_df["weight"].to_numpy()
+        if len(w_vals) == len(inv_price):
+            dynamic_spd = float(np.sum(w_vals * inv_price))
+        else:
+            dynamic_spd = uniform_spd
 
-        # Handle edge case where span is zero (all prices identical)
         if span > 0:
             uniform_pct = (uniform_spd - min_spd) / span * 100
             dynamic_pct = (dynamic_spd - min_spd) / span * 100
         else:
-            # When all prices are identical, percentile is undefined
             uniform_pct = float("nan")
             dynamic_pct = float("nan")
 
-        results.append(
-            {
-                "window": _make_window_label(window_start, window_end),
-                "min_sats_per_dollar": min_spd,
-                "max_sats_per_dollar": max_spd,
-                "uniform_sats_per_dollar": uniform_spd,
-                "dynamic_sats_per_dollar": dynamic_spd,
-                "uniform_percentile": uniform_pct,
-                "dynamic_percentile": dynamic_pct,
-                "excess_percentile": dynamic_pct - uniform_pct,
-            }
-        )
+        results.append({
+            "window": _make_window_label(window_start, window_end),
+            "min_sats_per_dollar": min_spd,
+            "max_sats_per_dollar": max_spd,
+            "uniform_sats_per_dollar": uniform_spd,
+            "dynamic_sats_per_dollar": dynamic_spd,
+            "uniform_percentile": uniform_pct,
+            "dynamic_percentile": dynamic_pct,
+            "excess_percentile": dynamic_pct - uniform_pct,
+        })
 
     if validate_weights and validated_windows > 0:
         logging.info(
@@ -309,38 +334,37 @@ def compute_cycle_spd(
         )
 
     if not results:
-        return pd.DataFrame(
-            columns=[
-                "window",
-                "min_sats_per_dollar",
-                "max_sats_per_dollar",
-                "uniform_sats_per_dollar",
-                "dynamic_sats_per_dollar",
-                "uniform_percentile",
-                "dynamic_percentile",
-                "excess_percentile",
-            ]
-        ).set_index("window")
-    return pd.DataFrame(results).set_index("window")
+        return pl.DataFrame(schema={
+            "window": pl.Utf8,
+            "min_sats_per_dollar": pl.Float64,
+            "max_sats_per_dollar": pl.Float64,
+            "uniform_sats_per_dollar": pl.Float64,
+            "dynamic_sats_per_dollar": pl.Float64,
+            "uniform_percentile": pl.Float64,
+            "dynamic_percentile": pl.Float64,
+            "excess_percentile": pl.Float64,
+        })
+    return pl.DataFrame(results)
 
 
 def backtest_dynamic_dca(
-    dataframe: pd.DataFrame,
+    dataframe: pl.DataFrame,
     strategy_function,
-    features_df: pd.DataFrame | None = None,
+    features_df: pl.DataFrame | None = None,
     *,
     strategy_label: str = "strategy",
     start_date: str | None = None,
     end_date: str | None = None,
-) -> tuple[pd.DataFrame, float, float]:
+) -> tuple[pl.DataFrame, float, float]:
     """Run rolling-window SPD backtest and log aggregated performance metrics.
 
     Unified function that supports both simple usage and shared runtime logic with
     precomputed features.
 
     Args:
-        dataframe: DataFrame containing price data with 'price_usd' column
-        strategy_function: Function that takes features DataFrame and returns weights
+        dataframe: Polars DataFrame with 'date' and 'price_usd'
+        strategy_function: Function that takes features pl.DataFrame and returns
+            pl.DataFrame with 'date' and 'weight'
         features_df: Optional precomputed features. If None, computes them internally.
         strategy_label: Label for logging (default: "strategy")
         start_date: Optional start date (default: BACKTEST_START)
@@ -348,7 +372,7 @@ def backtest_dynamic_dca(
 
     Returns:
         Tuple of:
-        - SPD table DataFrame
+        - SPD table pl.DataFrame
         - exponential-decay average dynamic percentile
         - exponential-decay average uniform percentile
     """
@@ -363,12 +387,11 @@ def backtest_dynamic_dca(
     dynamic_pct = spd_table["dynamic_percentile"]
     uniform_pct = spd_table["uniform_percentile"]
 
-    # Exponential decay weighting (recent windows weighted more)
-    N = len(dynamic_spd)
+    N = spd_table.height
     exp_weights = 0.9 ** np.arange(N - 1, -1, -1)
     exp_weights /= exp_weights.sum()
-    exp_avg_pct = (dynamic_pct.values * exp_weights).sum()
-    uniform_exp_avg_pct = (uniform_pct.values * exp_weights).sum()
+    exp_avg_pct = float((dynamic_pct.to_numpy() * exp_weights).sum())
+    uniform_exp_avg_pct = float((uniform_pct.to_numpy() * exp_weights).sum())
 
     logging.info(f"Aggregated Metrics for {strategy_label}:")
     logging.info(

@@ -101,7 +101,7 @@ def test_load_strategy_rejects_compute_weights_override(tmp_path: Path) -> None:
     strategy_path = _write_module(
         tmp_path / "illegal_compute.py",
         """
-import pandas as pd
+import polars as pl
 from stacksats.strategy_types import BaseStrategy
 
 class IllegalStrategy(BaseStrategy):
@@ -111,7 +111,7 @@ class IllegalStrategy(BaseStrategy):
         return state.uniform_weight
 
     def compute_weights(self, ctx):
-        return pd.Series(dtype=float)
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 """,
     )
 
@@ -188,14 +188,14 @@ def test_load_strategy_rejects_bad_build_target_profile_signature(tmp_path: Path
     strategy_path = _write_module(
         tmp_path / "bad_profile_signature.py",
         """
-import pandas as pd
+import polars as pl
 from stacksats.strategy_types import BaseStrategy
 
 class BadProfileSignatureStrategy(BaseStrategy):
     strategy_id = "bad-profile-signature"
 
     def build_target_profile(self, ctx, features_df):
-        return pd.Series(dtype=float)
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
 """,
     )
 
@@ -314,7 +314,7 @@ def test_load_strategy_warns_for_ambiguous_dual_hook_contract(tmp_path: Path) ->
     strategy_path = _write_module(
         tmp_path / "dual_hook_strategy.py",
         """
-import pandas as pd
+import polars as pl
 from stacksats.strategy_types import BaseStrategy
 
 class DualHookStrategy(BaseStrategy):
@@ -326,7 +326,12 @@ class DualHookStrategy(BaseStrategy):
 
     def build_target_profile(self, ctx, features_df, signals):
         del ctx, signals
-        return pd.Series(1.0, index=features_df.index)
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": pl.Series([1.0] * features_df.height),
+            }
+        )
 """,
     )
 

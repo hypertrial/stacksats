@@ -1,11 +1,8 @@
-"""Baseline regression tests for strategy runtime behavior.
-
-These tests pin down known fragile areas so refactors can be validated against
-a stable contract.
-"""
+"""Baseline regression tests for the Polars strategy runtime."""
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import subprocess
@@ -13,10 +10,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
-
-pytestmark = pytest.mark.integration
 
 from stacksats.api import BacktestResult
 from stacksats.export_weights import process_start_date_batch
@@ -30,20 +25,15 @@ from stacksats.strategy_types import (
     StrategyContext,
     TargetProfile,
 )
+from tests.integration.backtest.polars_backtest_testkit import (
+    dt_at,
+    make_btc_df,
+    normalize_weight_frame,
+)
+
+pytestmark = pytest.mark.integration
 
 PRICE_COL = "price_usd"
-
-
-def _sample_btc_df(start: str = "2021-01-01", days: int = 900) -> pd.DataFrame:
-    idx = pd.date_range(start, periods=days, freq="D")
-    trend = np.linspace(10000, 60000, num=days)
-    return pd.DataFrame(
-        {
-            PRICE_COL: trend,
-            "mvrv": np.linspace(0.8, 2.2, num=days),
-        },
-        index=idx,
-    )
 
 
 class _UniformBaseStrategy(BaseStrategy):
@@ -53,66 +43,72 @@ class _UniformBaseStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx, signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="absolute",
+            )
         return TargetProfile(
-            values=pd.Series(np.ones(len(features_df.index)), index=features_df.index),
+            values=features_df.select("date").with_columns(pl.lit(1.0).alias("value")),
             mode="absolute",
         )
 
 
 def test_empty_backtest_range_returns_clear_error() -> None:
-    btc_df = _sample_btc_df()
-    strategy = _UniformBaseStrategy()
     runner = StrategyRunner()
+    strategy = _UniformBaseStrategy()
 
     with pytest.raises(Exception):
         runner.backtest(
             strategy,
-            BacktestConfig(
-                start_date="2050-01-01",
-                end_date="2050-12-31",
-            ),
-            btc_df=btc_df,
+            BacktestConfig(start_date="2050-01-01", end_date="2050-12-31"),
+            btc_df=make_btc_df(),
         )
 
 
 def test_export_backtest_weight_alignment_regression() -> None:
-    btc_df = _sample_btc_df(start="2020-01-01", days=2500)
+    btc_df = make_btc_df(start="2020-01-01", days=2500)
     features_df = precompute_features(btc_df)
 
-    start_date = pd.Timestamp("2024-01-01")
-    end_date = start_date + pd.Timedelta(days=ALLOCATION_SPAN_DAYS - 1)
-    current_date = pd.Timestamp("2024-07-01")
+    start_date = dt_at("2024-01-01")
+    end_date = start_date + dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
+    current_date = dt_at("2024-07-01")
 
-    backtest_weights = compute_window_weights(
-        features_df=features_df,
-        start_date=start_date,
-        end_date=end_date,
-        current_date=current_date,
+    backtest_weights = normalize_weight_frame(
+        compute_window_weights(
+            features_df=features_df,
+            start_date=start_date,
+            end_date=end_date,
+            current_date=current_date,
+        )
     )
-    export_df = process_start_date_batch(
-        start_date,
-        [end_date],
-        features_df,
-        btc_df,
-        current_date,
-        PRICE_COL,
+    export_weights = normalize_weight_frame(
+        process_start_date_batch(
+            start_date,
+            [end_date],
+            features_df,
+            btc_df,
+            current_date,
+            PRICE_COL,
+        ).select(["date", "weight"])
     )
-    export_weights = export_df.set_index("date")["weight"]
-    export_weights.index = pd.to_datetime(export_weights.index)
 
-    np.testing.assert_allclose(backtest_weights.values, export_weights.values, atol=1e-12)
+    np.testing.assert_allclose(
+        backtest_weights["weight"].to_numpy(),
+        export_weights["weight"].to_numpy(),
+        atol=1e-12,
+    )
 
 
 def test_runner_export_backtest_parity_with_base_strategy(tmp_path: Path) -> None:
-    btc_df = _sample_btc_df(start="2020-01-01", days=2500)
+    btc_df = make_btc_df(start="2020-01-01", days=2500)
     runner = StrategyRunner()
     strategy = _UniformBaseStrategy()
+
     backtest_result = runner.backtest(
         strategy,
         BacktestConfig(start_date="2023-01-01", end_date="2024-12-31"),
@@ -126,11 +122,11 @@ def test_runner_export_backtest_parity_with_base_strategy(tmp_path: Path) -> Non
             output_dir=str(tmp_path),
         ),
         btc_df=btc_df,
-        current_date=pd.Timestamp("2024-07-01"),
+        current_date=dt_at("2024-07-01"),
     )
-    assert not backtest_result.spd_table.empty
-    exported = exported_batch.to_dataframe()
-    assert not exported.empty
+
+    assert not backtest_result.spd_table.is_empty()
+    assert not exported_batch.to_dataframe().is_empty()
 
 
 def test_assert_bypass_not_allowed_under_python_optimize(tmp_path: Path) -> None:
@@ -139,10 +135,11 @@ def test_assert_bypass_not_allowed_under_python_optimize(tmp_path: Path) -> None
     script.write_text(
         """
 import json
-import pandas as pd
 import numpy as np
+import polars as pl
+from datetime import datetime, timedelta
 from stacksats.runner import StrategyRunner
-from stacksats.strategy_types import BacktestConfig, BaseStrategy, StrategyContext
+from stacksats.strategy_types import BacktestConfig, BaseStrategy
 
 class BadStrategy(BaseStrategy):
     strategy_id = "bad-opt"
@@ -150,15 +147,17 @@ class BadStrategy(BaseStrategy):
 
     def build_target_profile(self, ctx, features_df, signals):
         del ctx, signals
-        return pd.Series(np.nan, index=features_df.index)
+        return pl.DataFrame({"date": features_df["date"], "bad": np.nan})
 
-idx = pd.date_range("2022-01-01", periods=500, freq="D")
-btc_df = pd.DataFrame(
+start = datetime(2022, 1, 1)
+dates = [start + timedelta(days=i) for i in range(500)]
+btc_df = pl.DataFrame(
     {
+        "date": dates,
         "price_usd": np.linspace(20000, 40000, 500),
+        "PriceUSD": np.linspace(20000, 40000, 500),
         "mvrv": np.linspace(1.0, 2.0, 500),
-    },
-    index=idx,
+    }
 )
 
 ok = False
@@ -202,18 +201,16 @@ def test_backtest_json_schema_snapshot_contract() -> None:
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
-    spd = pd.DataFrame(
-        {
-            "window": ["2024-01-01 → 2025-01-01"],
-            "uniform_percentile": [50.0],
-            "dynamic_percentile": [55.0],
-            "dynamic_sats_per_dollar": [5000.0],
-            "uniform_sats_per_dollar": [4800.0],
-            "min_sats_per_dollar": [4000.0],
-            "max_sats_per_dollar": [6000.0],
-            "excess_percentile": [5.0],
-        }
-    ).set_index("window")
+    spd = pl.DataFrame({
+        "window": ["2024-01-01 → 2025-01-01"],
+        "uniform_percentile": [50.0],
+        "dynamic_percentile": [55.0],
+        "dynamic_sats_per_dollar": [5000.0],
+        "uniform_sats_per_dollar": [4800.0],
+        "min_sats_per_dollar": [4000.0],
+        "max_sats_per_dollar": [6000.0],
+        "excess_percentile": [5.0],
+    })
     result = BacktestResult(
         spd_table=spd,
         exp_decay_percentile=55.0,

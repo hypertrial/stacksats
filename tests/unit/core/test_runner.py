@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.runner import StrategyRunner
@@ -23,14 +25,20 @@ class UniformBaseStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx, signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="absolute")
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="absolute",
+            )
         return TargetProfile(
-            values=pd.Series(np.ones(len(features_df.index)), index=features_df.index),
+            values=pl.DataFrame({
+                "date": features_df["date"],
+                "value": pl.Series([1.0] * features_df.height),
+            }),
             mode="absolute",
         )
 
@@ -42,22 +50,29 @@ class BadStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> TargetProfile:
         del ctx, signals
-        return pd.Series(np.nan, index=features_df.index)
+        return TargetProfile(
+            values=pl.DataFrame({
+                "date": features_df["date"],
+                "value": pl.Series([float("nan")] * features_df.height),
+            }),
+            mode="absolute",
+        )
 
 
-def _btc_df() -> pd.DataFrame:
-    idx = pd.date_range("2021-01-01", periods=1500, freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(10000, 60000, len(idx)),
-            "mvrv": np.linspace(0.9, 2.1, len(idx)),
-        },
-        index=idx,
-    )
+def _btc_df() -> pl.DataFrame:
+    dates = pl.datetime_range(
+        dt.datetime(2021, 1, 1), dt.datetime(2021, 1, 1) + dt.timedelta(days=1499),
+        interval="1d", eager=True
+    ).to_list()
+    return pl.DataFrame({
+        "date": dates,
+        "price_usd": np.linspace(10000, 60000, 1500),
+        "mvrv": np.linspace(0.9, 2.1, 1500),
+    })
 
 
 @pytest.mark.slow
@@ -104,7 +119,7 @@ def test_runner_export_writes_artifacts(tmp_path) -> None:
             output_dir=str(tmp_path),
         ),
         btc_df=_btc_df(),
-        current_date=pd.Timestamp("2024-01-15"),
+        current_date=dt.datetime(2024, 1, 15),
     )
     assert batch.row_count > 0
     flattened = batch.to_dataframe()
@@ -150,12 +165,15 @@ def test_runner_backtest_does_not_require_params_serialization_for_runtime_execu
         def build_target_profile(
             self,
             ctx: StrategyContext,
-            features_df: pd.DataFrame,
-            signals: dict[str, pd.Series],
+            features_df: pl.DataFrame,
+            signals: dict[str, pl.Series],
         ) -> TargetProfile:
             del ctx, signals
             return TargetProfile(
-                values=pd.Series(np.ones(len(features_df.index)), index=features_df.index),
+                values=pl.DataFrame({
+                    "date": features_df["date"],
+                    "value": pl.Series([1.0] * features_df.height),
+                }),
                 mode="absolute",
             )
 
@@ -173,12 +191,12 @@ def test_runner_backtest_materializes_features_per_window_end(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
-    seen_current_dates: list[pd.Timestamp] = []
+    seen_current_dates: list[dt.datetime] = []
     btc_df = _btc_df()
     original_materialize = runner._materialize_strategy_features
 
     def _wrapped_materialize(strategy, btc_df_arg, *, start_date, end_date, current_date):
-        seen_current_dates.append(pd.Timestamp(current_date))
+        seen_current_dates.append(current_date)
         return original_materialize(
             strategy,
             btc_df_arg,

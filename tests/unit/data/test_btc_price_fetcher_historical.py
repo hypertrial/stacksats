@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import pandas as pd
+from datetime import datetime
+
 import pytest
 import responses
 
@@ -12,7 +13,7 @@ from stacksats.btc_price_fetcher import (
     fetch_historical_price_coingecko,
 )
 
-TEST_DATE = pd.Timestamp("2024-01-01")
+TEST_DATE = datetime(2024, 1, 1)
 
 
 @responses.activate

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
 from unittest.mock import MagicMock
 
-import pandas as pd
+import polars as pl
 import pytest
 
 import stacksats.export_weights as export_weights
@@ -32,17 +33,17 @@ def test_fetch_btc_price_robust_handles_unexpected_source_exception() -> None:
     assert price is None
 
 
-def _sample_frames() -> tuple[pd.Timestamp, pd.Timestamp, pd.DataFrame, pd.DataFrame]:
-    idx = pd.date_range("2024-01-01", periods=2, freq="D")
-    start_date, end_date = idx.min(), idx.max()
-    features_df = pd.DataFrame(
+def _sample_frames() -> tuple[dt.datetime, dt.datetime, pl.DataFrame, pl.DataFrame]:
+    dates = [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)]
+    start_date, end_date = dates[0], dates[-1]
+    features_df = pl.DataFrame(
         {
+            "date": dates,
             "price_usd": [100.0, 101.0],
             "mvrv_zscore": [0.0, 0.1],
-        },
-        index=idx,
+        }
     )
-    btc_df = pd.DataFrame({"price_usd": [100.0, 101.0]}, index=idx)
+    btc_df = pl.DataFrame({"date": dates, "price_usd": [100.0, 101.0]})
     return start_date, end_date, features_df, btc_df
 
 
@@ -122,7 +123,7 @@ def test_update_today_weights_continues_when_previous_price_lookup_fails(
         _fake_get_current_btc_price,
     )
 
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
             "day_index": [0],
             "start_date": ["2024-01-01"],

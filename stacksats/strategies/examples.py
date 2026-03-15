@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from ..strategy_types import BaseStrategy, DayState, StrategyContext
 
@@ -40,15 +40,21 @@ class SimpleZScoreStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del ctx, signals
-        window = features_df
-        if window.empty:
-            return pd.Series(dtype=float)
-        z = window.get("mvrv_zscore", pd.Series(0.0, index=window.index)).to_numpy()
-        return pd.Series(-z, index=window.index)
+        if features_df.is_empty():
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
+        if "mvrv_zscore" in features_df.columns:
+            z = features_df["mvrv_zscore"].to_numpy()
+        else:
+            z = np.zeros(features_df.height)
+        values = -z
+        return pl.DataFrame({
+            "date": features_df["date"],
+            "value": values,
+        })
 
 
 class MomentumStrategy(BaseStrategy):
@@ -68,13 +74,16 @@ class MomentumStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del ctx, signals
-        window = features_df
-        if window.empty:
-            return pd.Series(dtype=float)
-        price = window["price_usd"]
-        momentum = price.pct_change(30).fillna(0.0)
-        return pd.Series(-np.clip(momentum.to_numpy(), -1.0, 1.0), index=window.index)
+        if features_df.is_empty():
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
+        price = features_df["price_usd"]
+        momentum = price.pct_change(30).fill_null(0.0)
+        values = -np.clip(momentum.to_numpy(), -1.0, 1.0)
+        return pl.DataFrame({
+            "date": features_df["date"],
+            "value": values,
+        })

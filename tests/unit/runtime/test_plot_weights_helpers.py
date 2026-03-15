@@ -7,7 +7,7 @@ import sys
 import warnings
 from unittest.mock import MagicMock
 
-import pandas as pd
+import polars as pl
 import pytest
 from matplotlib.axes import Axes
 
@@ -49,9 +49,9 @@ def test_get_date_range_options_returns_typed_dataframe() -> None:
     df = get_date_range_options(conn)
 
     assert list(df.columns) == ["start_date", "end_date", "count"]
-    assert pd.api.types.is_datetime64_any_dtype(df["start_date"])
-    assert pd.api.types.is_datetime64_any_dtype(df["end_date"])
-    assert df.iloc[0]["count"] == 366
+    assert "Datetime" in str(df["start_date"].dtype)
+    assert "Datetime" in str(df["end_date"].dtype)
+    assert df.row(0, named=True)["count"] == 366
 
 
 def test_get_date_range_options_raises_when_no_rows() -> None:
@@ -104,7 +104,7 @@ def test_fetch_weights_for_date_range_returns_dataframe() -> None:
     df = fetch_weights_for_date_range(conn, "2024-01-01", "2024-12-31")
 
     assert list(df.columns) == ["date", "weight", "price_usd", "day_index"]
-    assert pd.api.types.is_datetime64_any_dtype(df["date"])
+    assert "Datetime" in str(df["date"].dtype)
     assert len(df) == 2
 
 
@@ -120,25 +120,29 @@ def test_fetch_weights_for_date_range_raises_when_no_rows() -> None:
 def test_plot_dca_weights_draws_boundary_for_mixed_past_and_future(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    boundary_calls: list[pd.Timestamp] = []
+    boundary_calls: list = []
     original_axvline = Axes.axvline
 
     def _spy_axvline(self, *args, **kwargs):
         x = kwargs.get("x", args[0] if args else None)
-        boundary_calls.append(pd.Timestamp(x))
+        boundary_calls.append(x)
         return original_axvline(self, *args, **kwargs)
 
     monkeypatch.setattr(Axes, "axvline", _spy_axvline)
     monkeypatch.setattr("stacksats.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
 
-    df = pd.DataFrame(
-        {
-            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
-            "weight": [0.2, 0.3, 0.25, 0.25],
-            "price_usd": [50000.0, 51000.0, None, None],
-            "day_index": [0, 1, 2, 3],
-        }
-    )
+    import datetime as dt
+
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 4),
+        interval="1d", eager=True
+    ).to_list()
+    df = pl.DataFrame({
+        "date": dates,
+        "weight": [0.2, 0.3, 0.25, 0.25],
+        "price_usd": [50000.0, 51000.0, None, None],
+        "day_index": [0, 1, 2, 3],
+    })
 
     plot_dca_weights(
         df,
@@ -148,7 +152,9 @@ def test_plot_dca_weights_draws_boundary_for_mixed_past_and_future(
     )
 
     assert len(boundary_calls) == 1
-    assert boundary_calls[0] == pd.Timestamp("2024-01-02")
+    bd = boundary_calls[0]
+    expected = dt.datetime(2024, 1, 2)
+    assert (bd == expected) or (str(bd)[:10] == "2024-01-02")
 
 
 def test_plot_weights_import_falls_back_when_dotenv_missing(

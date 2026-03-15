@@ -1,11 +1,11 @@
 """Step definitions for database and export operations."""
 
+import datetime as dt
 import os
 import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 from pytest_bdd import given, parsers, then, when
 
 # Add parent directory to path for imports
@@ -21,8 +21,12 @@ from stacksats.export_weights import (
     today_data_exists,
 )
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
-from stacksats.prelude import DATE_FREQ
+from stacksats.prelude import DATE_FREQ, date_range_list
 from tests.test_helpers import PRICE_COL
+
+
+def _parse_date(s: str) -> dt.datetime:
+    return dt.datetime.strptime(s[:10], "%Y-%m-%d")
 
 DEFAULT_RANGE_START = "2025-12-01"
 DEFAULT_RANGE_END = "2027-12-31"
@@ -145,15 +149,15 @@ def when_get_connection_valid(bdd_context):
 @when("I process a start date batch")
 def when_process_batch(sample_features_df, sample_btc_df, bdd_context):
     """Process a start date batch."""
-    start_date = bdd_context.get("start_date", pd.Timestamp("2024-01-07"))
+    start_date = bdd_context.get("start_date", _parse_date("2024-01-07"))
     # Handle both end_date (singular) and end_dates (plural)
     if "end_dates" in bdd_context:
         end_dates = bdd_context["end_dates"]
     elif "end_date" in bdd_context:
         end_dates = [bdd_context["end_date"]]
     else:
-        end_dates = [pd.Timestamp("2025-01-05")]
-    current_date = bdd_context.get("current_date", pd.Timestamp("2025-01-05"))
+        end_dates = [_parse_date("2025-01-05")]
+    current_date = bdd_context.get("current_date", _parse_date("2025-01-05"))
 
     result = process_start_date_batch(
         start_date,
@@ -183,7 +187,9 @@ def then_ranges_one_year(bdd_context):
     """Assert all ranges have the configured fixed span."""
     ranges = bdd_context["date_ranges"]
     for start, end in ranges:
-        cardinality = len(pd.date_range(start=start, end=end, freq="D"))
+        start_s = str(start)[:10] if hasattr(start, "__str__") else start
+        end_s = str(end)[:10] if hasattr(end, "__str__") else end
+        cardinality = len(date_range_list(start_s, end_s))
         assert cardinality == ALLOCATION_SPAN_DAYS, (
             f"Range has {cardinality} allocation days, "
             f"expected {ALLOCATION_SPAN_DAYS}"
@@ -194,8 +200,8 @@ def then_ranges_one_year(bdd_context):
 def then_ranges_in_bounds(bdd_context):
     """Assert all ranges are within bounds."""
     ranges = bdd_context["date_ranges"]
-    range_start = pd.Timestamp(bdd_context["range_start"])
-    range_end = pd.Timestamp(bdd_context["range_end"])
+    range_start = _parse_date(bdd_context["range_start"])
+    range_end = _parse_date(bdd_context["range_end"])
     for start, end in ranges:
         assert start >= range_start, f"Start {start} < range_start"
         assert end <= range_end, f"End {end} > range_end"
@@ -290,7 +296,7 @@ def then_batch_has_columns(bdd_context):
 def then_batch_weights_sum(bdd_context):
     """Assert batch weights sum to 1."""
     result = bdd_context["batch_result"]
-    weight_sum = result["weight"].sum()
+    weight_sum = float(result["weight"].sum())
     assert np.isclose(weight_sum, 1.0, rtol=1e-6), (
         f"Weights sum to {weight_sum}, expected 1.0"
     )

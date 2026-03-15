@@ -4,70 +4,78 @@ from __future__ import annotations
 
 from typing import Callable
 
-import pandas as pd
+import polars as pl
 
 
-def prepare_copy_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_copy_dataframe(df: pl.DataFrame) -> pl.DataFrame:
     """Build temp-table COPY payload with canonical DB column names."""
-    copy_df = df[
+    copy_df = df.select(
         ["day_index", "start_date", "end_date", "date", "price_usd", "weight"]
-    ].copy()
-    copy_df = copy_df.rename(
-        columns={
-            "day_index": "id",
-            "date": "DCA_date",
-            "price_usd": "btc_usd",
-        }
     )
-    copy_df["id"] = copy_df["id"].astype(int)
-    copy_df["btc_usd"] = copy_df["btc_usd"].where(pd.notna(copy_df["btc_usd"]), "")
-    copy_df["weight"] = copy_df["weight"].where(pd.notna(copy_df["weight"]), "")
+    copy_df = copy_df.rename({
+        "day_index": "id",
+        "date": "DCA_date",
+        "price_usd": "btc_usd",
+    })
+    copy_df = copy_df.with_columns(pl.col("id").cast(pl.Int64))
+    copy_df = copy_df.with_columns(
+        pl.when(pl.col("btc_usd").is_null() | ~pl.col("btc_usd").is_finite())
+        .then(pl.lit(""))
+        .otherwise(pl.col("btc_usd").cast(pl.Utf8))
+        .alias("btc_usd"),
+        pl.when(pl.col("weight").is_null() | ~pl.col("weight").is_finite())
+        .then(pl.lit(""))
+        .otherwise(pl.col("weight").cast(pl.Utf8))
+        .alias("weight"),
+    )
     return copy_df
 
 
-def build_insert_rows(df: pd.DataFrame) -> list[tuple[int, object, object, object, float | None, float | None]]:
+def build_insert_rows(df: pl.DataFrame) -> list[tuple[int, object, object, object, float | None, float | None]]:
     """Build execute_values rows for INSERT fallback path."""
-    return [
-        (
+    rows = []
+    for row in df.iter_rows(named=True):
+        price = row["price_usd"]
+        weight = row["weight"]
+        rows.append((
             int(row["day_index"]),
             row["start_date"],
             row["end_date"],
             row["date"],
-            float(row["price_usd"]) if pd.notna(row["price_usd"]) else None,
-            float(row["weight"]) if pd.notna(row["weight"]) else None,
-        )
-        for _, row in df.iterrows()
-    ]
+            float(price) if price is not None and (isinstance(price, (int, float)) or str(price) != "nan") else None,
+            float(weight) if weight is not None and (isinstance(weight, (int, float)) or str(weight) != "nan") else None,
+        ))
+    return rows
 
 
 def build_update_rows(
-    today_df: pd.DataFrame,
+    today_df: pl.DataFrame,
     *,
     current_btc_price: float | None,
 ) -> list[tuple]:
     """Build rows for bulk UPDATE statements."""
-    if current_btc_price is not None:
-        return [
-            (
+    rows = []
+    for row in today_df.iter_rows(named=True):
+        weight = row["weight"]
+        weight_val = float(weight) if weight is not None and (isinstance(weight, (int, float)) or str(weight) != "nan") else None
+        if current_btc_price is not None:
+            rows.append((
                 int(row["day_index"]),
                 row["start_date"],
                 row["end_date"],
                 row["date"],
-                float(row["weight"]) if pd.notna(row["weight"]) else None,
+                weight_val,
                 current_btc_price,
-            )
-            for _, row in today_df.iterrows()
-        ]
-    return [
-        (
-            int(row["day_index"]),
-            row["start_date"],
-            row["end_date"],
-            row["date"],
-            float(row["weight"]) if pd.notna(row["weight"]) else None,
-        )
-        for _, row in today_df.iterrows()
-    ]
+            ))
+        else:
+            rows.append((
+                int(row["day_index"]),
+                row["start_date"],
+                row["end_date"],
+                row["date"],
+                weight_val,
+            ))
+    return rows
 
 
 def build_values_sql(

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 
-import pandas as pd
+import polars as pl
 
 
 VERSIONED_FEATURE_REQUIRED_COLUMNS = (
@@ -13,55 +14,71 @@ VERSIONED_FEATURE_REQUIRED_COLUMNS = (
     "available_at",
 )
 
+DATE_COL = "date"
 
-def normalize_timestamp(value: pd.Timestamp | str) -> pd.Timestamp:
+
+def _normalized_daily_expr(frame: pl.DataFrame, column: str) -> pl.Expr:
+    """Return a canonical daily datetime expression for a date-like column."""
+    dtype = frame[column].dtype
+    if dtype == pl.Utf8:
+        base = pl.col(column).str.to_datetime(strict=False)
+    elif dtype == pl.Date:
+        base = pl.col(column).cast(pl.Datetime)
+    else:
+        base = pl.col(column).cast(pl.Datetime, strict=False)
+    return base.dt.replace_time_zone(None).dt.truncate("1d")
+
+
+def normalize_timestamp(value: dt.datetime | str) -> dt.datetime:
     """Normalize date-like values into timezone-naive daily timestamps."""
-    ts = pd.Timestamp(value)
-    if ts.tzinfo is not None:
-        ts = ts.tz_localize(None)
-    return ts.normalize()
+    if isinstance(value, str):
+        value = dt.datetime.strptime(value[:10], "%Y-%m-%d")
+    out = value.replace(hour=0, minute=0, second=0, microsecond=0)
+    if out.tzinfo is not None:
+        out = out.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return out
 
 
 def build_observed_frame(
-    features_df: pd.DataFrame,
+    features_df: pl.DataFrame,
     *,
-    start_date: pd.Timestamp | str,
-    current_date: pd.Timestamp | str,
-) -> pd.DataFrame:
+    start_date: dt.datetime | str,
+    current_date: dt.datetime | str,
+) -> pl.DataFrame:
     """Return a sorted copy restricted to the observed prefix."""
-    if features_df.empty:
-        observed_index = pd.date_range(
-            normalize_timestamp(start_date),
-            normalize_timestamp(current_date),
-            freq="D",
-        )
-        return pd.DataFrame(index=observed_index)
+    if features_df.is_empty():
+        start_ts = normalize_timestamp(start_date)
+        current_ts = normalize_timestamp(current_date)
+        dates = pl.datetime_range(start_ts, current_ts, interval="1d", eager=True)
+        return pl.DataFrame({DATE_COL: dates})
+
+    if DATE_COL not in features_df.columns:
+        raise ValueError(f"features_df must have '{DATE_COL}' column.")
 
     start_ts = normalize_timestamp(start_date)
     current_ts = normalize_timestamp(current_date)
     if current_ts < start_ts:
-        return pd.DataFrame(
-            columns=list(features_df.columns),
-            index=pd.DatetimeIndex([], dtype="datetime64[ns]"),
-        )
+        return pl.DataFrame(schema=features_df.schema)
 
-    frame = features_df.copy(deep=True)
-    frame.index = pd.DatetimeIndex(frame.index).normalize()
-    frame = frame.loc[~frame.index.duplicated(keep="last")].sort_index()
-    return frame.loc[start_ts:current_ts].copy()
+    frame = features_df.clone()
+    frame = frame.with_columns(_normalized_daily_expr(frame, DATE_COL).alias(DATE_COL))
+    frame = frame.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
+    return frame.filter(
+        (pl.col(DATE_COL) >= start_ts) & (pl.col(DATE_COL) <= current_ts)
+    )
 
 
 def materialize_versioned_observations(
-    observations: pd.DataFrame,
+    observations: pl.DataFrame,
     *,
-    as_of_date: pd.Timestamp | str,
+    as_of_date: dt.datetime | str,
     effective_date_col: str = "effective_date",
     available_at_col: str = "available_at",
     revision_col: str = "revision_id",
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Select the latest available revision for each effective date."""
-    if observations.empty:
-        return pd.DataFrame()
+    if observations.is_empty():
+        return pl.DataFrame()
 
     missing = [
         column
@@ -75,33 +92,37 @@ def materialize_versioned_observations(
         )
 
     as_of_ts = normalize_timestamp(as_of_date)
-    frame = observations.copy(deep=True)
-    frame[effective_date_col] = pd.to_datetime(frame[effective_date_col]).dt.normalize()
-    frame[available_at_col] = pd.to_datetime(frame[available_at_col]).dt.normalize()
-    frame = frame.loc[frame[available_at_col] <= as_of_ts].copy()
-    if frame.empty:
-        return pd.DataFrame()
+    frame = observations.clone()
+    for col in (effective_date_col, available_at_col):
+        frame = frame.with_columns(_normalized_daily_expr(frame, col).alias(col))
+    frame = frame.filter(pl.col(available_at_col) <= as_of_ts)
+    if frame.is_empty():
+        return pl.DataFrame()
 
-    sort_columns = [effective_date_col, available_at_col]
-    ascending = [True, True]
+    sort_cols = [effective_date_col, available_at_col]
     if revision_col in frame.columns:
-        sort_columns.append(revision_col)
-        ascending.append(True)
-    frame = frame.sort_values(sort_columns, ascending=ascending)
-    latest = frame.groupby(effective_date_col, sort=True, as_index=False).tail(1)
-    latest = latest.set_index(effective_date_col).sort_index()
-    return latest.drop(columns=[available_at_col], errors="ignore")
+        sort_cols.append(revision_col)
+    frame = frame.sort(sort_cols)
+    latest = frame.group_by(effective_date_col).tail(1).sort(effective_date_col)
+    return latest.drop(available_at_col)
 
 
-def hash_dataframe(df: pd.DataFrame) -> str:
-    """Return a stable content hash for a dataframe."""
-    normalized = df.copy(deep=True)
-    normalized.index = pd.DatetimeIndex(normalized.index).normalize()
+def hash_dataframe(df: pl.DataFrame) -> str:
+    """Return a stable content hash for a Polars dataframe."""
+    normalized = df.clone()
+    date_col = DATE_COL if DATE_COL in normalized.columns else None
+    if date_col is not None:
+        normalized = normalized.with_columns(
+            _normalized_daily_expr(normalized, date_col).alias(date_col)
+        )
     payload = {
-        "index": [ts.strftime("%Y-%m-%d") for ts in normalized.index],
-        "columns": [str(column) for column in normalized.columns],
-        "dtypes": [str(dtype) for dtype in normalized.dtypes],
-        "records": normalized.where(pd.notna(normalized), None).to_dict(orient="records"),
+        "columns": [str(c) for c in normalized.columns],
+        "dtypes": [str(normalized[c].dtype) for c in normalized.columns],
+        "records": normalized.to_dicts(),
     }
+    if date_col is not None:
+        payload["index"] = [
+            str(d)[:10] for d in normalized[date_col].to_list()
+        ]
     raw = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()

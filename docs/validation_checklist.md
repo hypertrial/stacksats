@@ -39,17 +39,17 @@ flowchart LR
    - Hard failures include negative `.shift(...)`, centered `.rolling(..., center=True)`, direct file I/O, direct DB access, and direct network access inside strategy methods.
 
 6. [ ] **`transform_features` output type is valid**
-   - Must return a pandas `DataFrame`.
+   - Must return a Polars `DataFrame`.
 
 7. [ ] **Observed-only feature context is enforced**
    - `ctx.features_df` only contains rows from `start_date` through `current_date`.
    - Strategy hooks never receive rows after `current_date`.
 
 8. [ ] **`build_signals` output type is valid**
-   - Must return `dict[str, pandas.Series]`.
+   - Must return `dict[str, pl.Series]`.
 
 9. [ ] **Signal and profile series shape/index contract holds**
-   - Each series must be a pandas `Series`, with no duplicate index, ascending index, exact match to the observed window index.
+   - Each series must be a Polars `Series`, with no duplicate dates and exact alignment to the observed window `date` column.
 
 10. [ ] **Signal and profile series numeric validity holds**
    - Series values must be finite numeric (no `NaN`, `inf`, or non-numeric coercion failures).

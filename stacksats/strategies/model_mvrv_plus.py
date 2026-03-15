@@ -7,10 +7,11 @@ lightweight, lagged gating to reduce over-allocation in adverse regimes.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from ..model_development import FEATS, compute_preference_scores
 from ..strategy_types import (
@@ -20,6 +21,12 @@ from ..strategy_types import (
     TargetProfile,
     ValidationConfig,
 )
+
+
+def _to_dt(val) -> dt.datetime:
+    if isinstance(val, dt.datetime):
+        return val.replace(hour=0, minute=0, second=0, microsecond=0)
+    return dt.datetime.strptime(str(val)[:10], "%Y-%m-%d")
 
 
 class MVRVPlusStrategy(BaseStrategy):
@@ -76,16 +83,17 @@ class MVRVPlusStrategy(BaseStrategy):
         self.hash_momentum_weight = hash_momentum_weight
 
     def required_feature_columns(self) -> tuple[str, ...]:
-        return ("price_usd", *FEATS, *self.overlay_features, *self.derived_features)
+        # derived_features are created in transform_features(), so only require
+        # source/provider columns at context construction time.
+        return ("price_usd", *FEATS, *self.overlay_features)
 
     def required_feature_sets(self) -> tuple[str, ...]:
         return ("core_model_features_v1", "brk_overlay_v1")
 
     @staticmethod
-    def _safe_array(values: pd.Series, fill: float = 0.0) -> np.ndarray:
-        arr = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
-        arr = np.where(np.isfinite(arr), arr, fill)
-        return arr
+    def _safe_array(values: pl.Series, fill: float = 0.0) -> np.ndarray:
+        arr = values.cast(pl.Float64, strict=False).fill_null(fill).to_numpy()
+        return np.where(np.isfinite(arr), arr, fill)
 
     @staticmethod
     def _adaptive_ewma(values: np.ndarray, alpha: np.ndarray) -> np.ndarray:
@@ -98,89 +106,79 @@ class MVRVPlusStrategy(BaseStrategy):
             out[i] = (a * float(values[i])) + ((1.0 - a) * out[i - 1])
         return out
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
-        window = ctx.features.to_pandas().copy()
-        if window.empty:
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
+        window = ctx.features.data.clone()
+        if window.is_empty():
             return window
-        start_date = pd.Timestamp(ctx.start_date).normalize()
-        end_date = pd.Timestamp(ctx.end_date).normalize()
-        if start_date > end_date:
-            return window.iloc[0:0].copy()
-        window = window.loc[(window.index >= start_date) & (window.index <= end_date)].copy()
-        if window.empty:
+        start_dt = _to_dt(ctx.start_date)
+        end_dt = _to_dt(ctx.end_date)
+        if start_dt > end_dt:
+            return window.head(0)
+        window = window.filter(
+            (pl.col("date") >= start_dt) & (pl.col("date") <= end_dt)
+        )
+        if window.is_empty():
             return window
 
-        price = pd.to_numeric(window.get("price_usd"), errors="coerce")
+        price = pl.col("price_usd").cast(pl.Float64, strict=False)
         returns = price.pct_change()
-        rolling_vol = returns.rolling(21, min_periods=10).std()
-        rolling_max = price.rolling(90, min_periods=30).max()
+        rolling_vol = returns.rolling_std(window_size=21, min_samples=10)
+        rolling_max = price.rolling_max(window_size=90, min_samples=30)
         drawdown = (price / rolling_max) - 1.0
+        vol21 = rolling_vol.shift(1).fill_null(0.0)
+        drawdown90 = drawdown.shift(1).fill_null(0.0)
 
-        # Shift by one day to avoid using same-day information.
-        vol21 = rolling_vol.shift(1).fillna(0.0)
-        drawdown90 = drawdown.shift(1).fillna(0.0)
-
-        # Collision-safe behavior: keep provider values when present and only fill gaps.
         if "plus_vol21" in window.columns:
-            existing_vol21 = pd.to_numeric(window["plus_vol21"], errors="coerce")
-            window["plus_vol21"] = existing_vol21.fillna(vol21)
+            existing = pl.col("plus_vol21").cast(pl.Float64, strict=False)
+            window = window.with_columns(pl.coalesce(existing, vol21).alias("plus_vol21"))
         else:
-            window["plus_vol21"] = vol21
+            window = window.with_columns(vol21.alias("plus_vol21"))
         if "plus_drawdown90" in window.columns:
-            existing_drawdown = pd.to_numeric(window["plus_drawdown90"], errors="coerce")
-            window["plus_drawdown90"] = existing_drawdown.fillna(drawdown90)
+            existing = pl.col("plus_drawdown90").cast(pl.Float64, strict=False)
+            window = window.with_columns(pl.coalesce(existing, drawdown90).alias("plus_drawdown90"))
         else:
-            window["plus_drawdown90"] = drawdown90
-        window = window.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        return window
+            window = window.with_columns(drawdown90.alias("plus_drawdown90"))
+        return window.fill_null(0.0)
+
+    def _safe_get(self, df: pl.DataFrame, col: str, fill: float = 0.0) -> pl.Series:
+        if col in df.columns:
+            return df[col].cast(pl.Float64, strict=False).fill_null(fill)
+        return pl.Series([fill] * df.height)
 
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del signals
-        if features_df.empty:
-            return TargetProfile(values=pd.Series(dtype=float), mode="preference")
+        if features_df.is_empty():
+            return TargetProfile(
+                values=pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64}),
+                mode="preference",
+            )
 
         base_pref = compute_preference_scores(
             features_df=features_df,
             start_date=ctx.start_date,
             end_date=ctx.end_date,
-        ).to_numpy(dtype=float)
+        )["preference"].to_numpy().astype(float)
 
-        zone = self._safe_array(
-            features_df.get("mvrv_zone", pd.Series(0.0, index=features_df.index))
-        )
-        mvrv_zscore = self._safe_array(
-            features_df.get("mvrv_zscore", pd.Series(0.0, index=features_df.index))
-        )
-        price_vs_ma = self._safe_array(
-            features_df.get("price_vs_ma", pd.Series(0.0, index=features_df.index))
-        )
-        confidence = self._safe_array(
-            features_df.get(
-                "signal_confidence", pd.Series(0.5, index=features_df.index)
-            ),
-            fill=0.5,
-        )
+        zone = self._safe_array(self._safe_get(features_df, "mvrv_zone"))
+        mvrv_zscore = self._safe_array(self._safe_get(features_df, "mvrv_zscore"))
+        price_vs_ma = self._safe_array(self._safe_get(features_df, "price_vs_ma"))
+        confidence = self._safe_array(self._safe_get(features_df, "signal_confidence", 0.5), fill=0.5)
         confidence = np.where(confidence == 0.0, 0.5, confidence)
         confidence = np.clip(confidence, 0.0, 1.0)
 
         mvrv_volatility = self._safe_array(
-            features_df.get("mvrv_volatility", pd.Series(0.5, index=features_df.index)),
-            fill=0.5,
+            self._safe_get(features_df, "mvrv_volatility", 0.5), fill=0.5
         )
         mvrv_volatility = np.where(mvrv_volatility == 0.0, 0.5, mvrv_volatility)
         mvrv_volatility = np.clip(mvrv_volatility, 0.0, 1.0)
 
-        vol21 = self._safe_array(
-            features_df.get("plus_vol21", pd.Series(0.0, index=features_df.index))
-        )
-        drawdown90 = self._safe_array(
-            features_df.get("plus_drawdown90", pd.Series(0.0, index=features_df.index))
-        )
+        vol21 = self._safe_array(self._safe_get(features_df, "plus_vol21"))
+        drawdown90 = self._safe_array(self._safe_get(features_df, "plus_drawdown90"))
 
         regime_scale = np.where(
             zone <= -1.0,
@@ -220,38 +218,14 @@ class MVRVPlusStrategy(BaseStrategy):
         vol21_cap = np.clip(vol21 / 0.08, 0.0, 1.0)
         realized_vol_scale = 1.0 - (0.10 * vol21_cap)
 
-        netflow = self._safe_array(
-            features_df.get("brk_netflow", pd.Series(0.0, index=features_df.index))
-        )
-        exchange_share = self._safe_array(
-            features_df.get(
-                "brk_exchange_share", pd.Series(0.0, index=features_df.index)
-            )
-        )
-        exchange_share_delta = self._safe_array(
-            features_df.get(
-                "brk_exchange_share_delta", pd.Series(0.0, index=features_df.index)
-            )
-        )
-        activity_div = self._safe_array(
-            features_df.get("brk_activity_div", pd.Series(0.0, index=features_df.index))
-        )
-        roi_context = self._safe_array(
-            features_df.get("brk_roi_context", pd.Series(0.0, index=features_df.index))
-        )
-        liquidity_impulse = self._safe_array(
-            features_df.get(
-                "brk_liquidity_impulse", pd.Series(0.0, index=features_df.index)
-            )
-        )
-        miner_pressure = self._safe_array(
-            features_df.get(
-                "brk_miner_pressure", pd.Series(0.0, index=features_df.index)
-            )
-        )
-        hash_momentum = self._safe_array(
-            features_df.get("brk_hash_momentum", pd.Series(0.0, index=features_df.index))
-        )
+        netflow = self._safe_array(self._safe_get(features_df, "brk_netflow"))
+        exchange_share = self._safe_array(self._safe_get(features_df, "brk_exchange_share"))
+        exchange_share_delta = self._safe_array(self._safe_get(features_df, "brk_exchange_share_delta"))
+        activity_div = self._safe_array(self._safe_get(features_df, "brk_activity_div"))
+        roi_context = self._safe_array(self._safe_get(features_df, "brk_roi_context"))
+        liquidity_impulse = self._safe_array(self._safe_get(features_df, "brk_liquidity_impulse"))
+        miner_pressure = self._safe_array(self._safe_get(features_df, "brk_miner_pressure"))
+        hash_momentum = self._safe_array(self._safe_get(features_df, "brk_hash_momentum"))
 
         value_gate = np.where(zone <= -1.0, 1.20, np.where(zone >= 1.0, 0.80, 1.00))
         risk_gate = np.where(zone >= 1.0, 1.25, np.where(zone <= -1.0, 0.80, 1.00))
@@ -314,10 +288,14 @@ class MVRVPlusStrategy(BaseStrategy):
         preference = self._adaptive_ewma(preference, smooth_alpha_regime)
         preference = np.where(np.isfinite(preference), preference, 0.0)
 
-        return TargetProfile(
-            values=pd.Series(preference, index=features_df.index, dtype=float),
-            mode="preference",
+        date_col = features_df["date"] if "date" in features_df.columns else pl.Series(
+            "date", pl.datetime_range(_to_dt(ctx.start_date), _to_dt(ctx.end_date), interval="1d", eager=True).to_list()
         )
+        values_df = pl.DataFrame({
+            "date": date_col,
+            "value": pl.Series(preference.astype(float)),
+        })
+        return TargetProfile(values=values_df, mode="preference")
 
 
 def main() -> None:

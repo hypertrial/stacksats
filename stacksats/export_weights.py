@@ -6,11 +6,13 @@ to focused helper modules.
 
 from __future__ import annotations
 
+import math
 import sys
+from datetime import datetime, timedelta
 from types import ModuleType
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 try:
     import psycopg2
@@ -143,17 +145,26 @@ def today_data_exists(conn, today_str):
 
 def get_current_btc_price(previous_price=None):
     """Fetch current BTC price from BRK-local-node data first, then API fallback."""
-    today = pd.Timestamp.now().normalize()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_str = today.strftime("%Y-%m-%d")
     try:
         provider = BTCDataProvider(max_staleness_days=14)
-        history_start = (today - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
-        btc_df = provider.load(backtest_start=history_start, end_date=today.strftime("%Y-%m-%d"))
-        series = pd.to_numeric(btc_df.get("price_usd"), errors="coerce")
-        if today in series.index and pd.notna(series.loc[today]):
-            return float(series.loc[today])
-        series = series.dropna()
-        if not series.empty:
-            return float(series.iloc[-1])
+        history_start = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        btc_df = provider.load(backtest_start=history_start, end_date=today_str)
+        if "price_usd" not in btc_df.columns:
+            raise ValueError("No price_usd column")
+        date_col = btc_df["date"]
+        if date_col.dtype == pl.Datetime:
+            today_match = btc_df.filter(pl.col("date").dt.strftime("%Y-%m-%d") == today_str)
+        else:
+            today_match = btc_df.filter(pl.col("date").cast(pl.Utf8).str.slice(0, 10) == today_str)
+        if today_match.height > 0:
+            price = today_match["price_usd"][0]
+            if price is not None and isinstance(price, (int, float)) and math.isfinite(price):
+                return float(price)
+        valid = btc_df.filter(pl.col("price_usd").is_finite())
+        if valid.height > 0:
+            return float(valid["price_usd"][-1])
     except Exception:
         pass
     return _get_current_btc_price(

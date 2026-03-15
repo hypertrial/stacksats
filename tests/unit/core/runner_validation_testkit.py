@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import BaseStrategy, StrategyContext, ValidationConfig
+from tests.test_helpers import btc_frame
+
+
+def _window_dates(ctx: StrategyContext) -> list[dt.datetime]:
+    return pl.datetime_range(ctx.start_date, ctx.end_date, interval="1d", eager=True).to_list()
 
 
 class UniformProposeStrategy(BaseStrategy):
@@ -20,10 +27,14 @@ class MutatingProposeStrategy(BaseStrategy):
     strategy_id = "runner-mutating"
     version = "1.0.0"
 
-    def transform_features(self, ctx):
-        # Intentional contract violation for strict-mode guard coverage.
-        ctx.features_df["__mutated__"] = 1.0
-        return ctx.features_df.loc[ctx.start_date : ctx.end_date].copy()
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
+        ctx.features_df.insert_column(
+            ctx.features_df.width,
+            pl.Series("__mutated__", [1.0] * ctx.features_df.height),
+        )
+        return ctx.features_df.filter(
+            (pl.col("date") >= ctx.start_date) & (pl.col("date") <= ctx.end_date)
+        )
 
     def propose_weight(self, state):
         return state.uniform_weight
@@ -45,15 +56,19 @@ class ProfileOffsetLeakStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del signals
-        future_rows = ctx.features_df.index[ctx.features_df.index > ctx.end_date]
-        offset = float(len(future_rows))
-        # Additive offsets leave softmax weights unchanged, but profile checks should still catch leakage.
-        base = np.linspace(-1.0, 1.0, len(features_df), dtype=float)
-        return pd.Series(base + offset, index=features_df.index, dtype=float)
+        future_rows = ctx.features_df.filter(pl.col("date") > ctx.end_date)
+        offset = float(future_rows.height)
+        base = np.linspace(-1.0, 1.0, features_df.height, dtype=float)
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": base + offset,
+            }
+        )
 
 
 class ProfileMutationStrategy(BaseStrategy):
@@ -63,14 +78,20 @@ class ProfileMutationStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del signals
-        ctx.features_df["__profile_mutation__"] = 1.0
-        if features_df.empty:
-            return pd.Series(dtype=float)
-        return pd.Series(np.ones(len(features_df), dtype=float), index=features_df.index)
+        ctx.features_df.insert_column(
+            ctx.features_df.width,
+            pl.Series("__profile_mutation__", [1.0] * ctx.features_df.height),
+        )
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": [1.0] * features_df.height,
+            }
+        )
 
 
 class DualHookProfilePreferredLeakStrategy(BaseStrategy):
@@ -84,25 +105,23 @@ class DualHookProfilePreferredLeakStrategy(BaseStrategy):
     def build_target_profile(
         self,
         ctx: StrategyContext,
-        features_df: pd.DataFrame,
-        signals: dict[str, pd.Series],
-    ) -> pd.Series:
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
         del signals
-        future_rows = ctx.features_df.index[ctx.features_df.index > ctx.end_date]
-        offset = float(len(future_rows))
-        base = np.linspace(-1.0, 1.0, len(features_df), dtype=float)
-        return pd.Series(base + offset, index=features_df.index, dtype=float)
+        future_rows = ctx.features_df.filter(pl.col("date") > ctx.end_date)
+        offset = float(future_rows.height)
+        base = np.linspace(-1.0, 1.0, features_df.height, dtype=float)
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": base + offset,
+            }
+        )
 
 
-def btc_df(days: int = 900) -> pd.DataFrame:
-    idx = pd.date_range("2021-01-01", periods=days, freq="D")
-    return pd.DataFrame(
-        {
-            "price_usd": np.linspace(10000.0, 50000.0, len(idx)),
-            "mvrv": np.linspace(1.0, 2.0, len(idx)),
-        },
-        index=idx,
-    )
+def btc_df(days: int = 900) -> pl.DataFrame:
+    return btc_frame(start="2021-01-01", days=days)
 
 
 def fast_strict_validation_config(**overrides) -> ValidationConfig:

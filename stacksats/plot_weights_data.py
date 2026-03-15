@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import polars as pl
 
 
 def get_db_connection(*, load_dotenv_fn, getenv_fn, psycopg2_module):
@@ -14,7 +14,7 @@ def get_db_connection(*, load_dotenv_fn, getenv_fn, psycopg2_module):
     return psycopg2_module.connect(database_url)
 
 
-def get_date_range_options(conn) -> pd.DataFrame:
+def get_date_range_options(conn) -> pl.DataFrame:
     """Get all available date range options from the database."""
     with conn.cursor() as cur:
         cur.execute(
@@ -30,17 +30,33 @@ def get_date_range_options(conn) -> pd.DataFrame:
     if not rows:
         raise ValueError("No data found in bitcoin_dca table")
 
-    df = pd.DataFrame(rows, columns=["start_date", "end_date", "count"])
-    df["start_date"] = pd.to_datetime(df["start_date"])
-    df["end_date"] = pd.to_datetime(df["end_date"])
+    cols = ["start_date", "end_date", "count"]
+    df = pl.DataFrame(
+        {col: [r[i] for r in rows] for i, col in enumerate(cols)}
+    )
+    for col in ["start_date", "end_date"]:
+        if df[col].dtype == pl.Utf8:
+            df = df.with_columns(
+                pl.col(col).str.to_datetime().dt.replace_time_zone(None)
+            )
     return df
 
 
 def get_oldest_date_range(conn):
     """Find the oldest start_date and its corresponding end_date."""
     options = get_date_range_options(conn)
-    oldest = options.iloc[0]
-    return oldest["start_date"].date().isoformat(), oldest["end_date"].date().isoformat()
+    first = options.row(0, named=True)
+    start_dt = first["start_date"]
+    end_dt = first["end_date"]
+    if hasattr(start_dt, "date"):
+        start_str = start_dt.date().isoformat()
+    else:
+        start_str = str(start_dt)[:10]
+    if hasattr(end_dt, "date"):
+        end_str = end_dt.date().isoformat()
+    else:
+        end_str = str(end_dt)[:10]
+    return start_str, end_str
 
 
 def validate_date_range(conn, start_date: str, end_date: str) -> bool:
@@ -58,7 +74,7 @@ def validate_date_range(conn, start_date: str, end_date: str) -> bool:
         return count > 0
 
 
-def fetch_weights_for_date_range(conn, start_date: str, end_date: str) -> pd.DataFrame:
+def fetch_weights_for_date_range(conn, start_date: str, end_date: str) -> pl.DataFrame:
     """Fetch all DCA weights for a specific start_date and end_date pair."""
     query = """
         SELECT DCA_date AS date, weight, btc_usd AS price_usd, id AS day_index
@@ -74,6 +90,9 @@ def fetch_weights_for_date_range(conn, start_date: str, end_date: str) -> pd.Dat
     if not rows:
         raise ValueError(f"No data found for date range {start_date} to {end_date}")
 
-    df = pd.DataFrame(rows, columns=["date", "weight", "price_usd", "day_index"])
-    df["date"] = pd.to_datetime(df["date"])
+    cols = ["date", "weight", "price_usd", "day_index"]
+    df = pl.DataFrame({col: [r[i] for r in rows] for i, col in enumerate(cols)})
+    df = df.with_columns(
+        pl.col("date").str.to_datetime().dt.replace_time_zone(None)
+    )
     return df

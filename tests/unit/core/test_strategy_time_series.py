@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
 import polars as pl
 import pytest
 
+from stacksats.prelude import date_range_list
 from stacksats.strategy_time_series import (
     StrategySeriesMetadata,
     StrategyTimeSeries,
@@ -18,18 +20,19 @@ def _metadata() -> StrategySeriesMetadata:
         strategy_version="1.2.3",
         run_id="run-1",
         config_hash="abc123",
-        window_start=pd.Timestamp("2024-01-01"),
-        window_end=pd.Timestamp("2024-01-03"),
+        window_start=dt.datetime(2024, 1, 1),
+        window_end=dt.datetime(2024, 1, 3),
     )
 
 
 def test_strategy_time_series_valid_payload() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
             "day_index": [0, 1, 2],
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
-            "price_usd": [42000.0, 43000.0, np.nan],
+            "price_usd": [42000.0, 43000.0, None],
             "locked": [True, True, False],
         }
     )
@@ -41,9 +44,10 @@ def test_strategy_time_series_valid_payload() -> None:
 
 
 def test_strategy_time_series_rejects_unknown_columns() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-02")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "date": dates,
             "weight": [0.4, 0.6],
             "price_usd": [42000.0, 43000.0],
             "mystery": [1, 2],
@@ -55,11 +59,12 @@ def test_strategy_time_series_rejects_unknown_columns() -> None:
 
 
 def test_strategy_time_series_accepts_brk_passthrough_column() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
-            "price_usd": [42000.0, 43000.0, np.nan],
+            "price_usd": [42000.0, 43000.0, None],
             "SplyCur": [100.0, 101.0, 102.0],
         }
     )
@@ -72,9 +77,10 @@ def test_strategy_time_series_accepts_brk_passthrough_column() -> None:
 
 
 def test_strategy_time_series_rejects_weight_sum_mismatch() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-02")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "date": dates,
             "weight": [0.4, 0.4],
             "price_usd": [42000.0, 43000.0],
         }
@@ -87,15 +93,15 @@ def test_strategy_time_series_rejects_weight_sum_mismatch() -> None:
                 strategy_version="1.2.3",
                 run_id="run-1",
                 config_hash="abc123",
-                window_start=pd.Timestamp("2024-01-01"),
-                window_end=pd.Timestamp("2024-01-02"),
+                window_start=dt.datetime(2024, 1, 1),
+                window_end=dt.datetime(2024, 1, 2),
             ),
             data=data,
         )
 
 
 def test_strategy_time_series_batch_from_flat_dataframe() -> None:
-    flat = pd.DataFrame(
+    flat = pl.DataFrame(
         {
             "start_date": ["2024-01-01", "2024-01-01", "2024-02-01", "2024-02-01"],
             "end_date": ["2024-01-02", "2024-01-02", "2024-02-02", "2024-02-02"],
@@ -123,7 +129,7 @@ def test_strategy_time_series_batch_from_flat_dataframe() -> None:
 
 
 def test_strategy_time_series_batch_preserves_brk_passthrough_columns() -> None:
-    flat = pd.DataFrame(
+    flat = pl.DataFrame(
         {
             "start_date": ["2024-01-01", "2024-01-01"],
             "end_date": ["2024-01-02", "2024-01-02"],
@@ -147,9 +153,10 @@ def test_strategy_time_series_batch_preserves_brk_passthrough_columns() -> None:
 
 def test_strategy_time_series_batch_rejects_duplicate_windows() -> None:
     md = _metadata()
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
             "price_usd": [1.0, 2.0, 3.0],
         }
@@ -166,13 +173,14 @@ def test_strategy_time_series_batch_rejects_duplicate_windows() -> None:
 
 
 def test_strategy_time_series_profile_returns_dataset_summary() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
             "day_index": [0, 1, 2],
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
-            "price_usd": [42000.0, 43000.0, np.nan],
-            "SplyCur": [100.0, np.nan, 102.0],
+            "price_usd": [42000.0, 43000.0, None],
+            "SplyCur": [100.0, None, 102.0],
         }
     )
     series = StrategyTimeSeries(metadata=_metadata(), data=data)
@@ -189,9 +197,10 @@ def test_strategy_time_series_profile_returns_dataset_summary() -> None:
 
 
 def test_strategy_time_series_weight_diagnostics_returns_expected_metrics() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
             "price_usd": [100.0, 110.0, 120.0],
         }
@@ -210,9 +219,10 @@ def test_strategy_time_series_weight_diagnostics_returns_expected_metrics() -> N
 
 
 def test_strategy_time_series_returns_diagnostics_returns_expected_metrics() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-03")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": dates,
             "weight": [0.2, 0.3, 0.5],
             "price_usd": [100.0, 110.0, 121.0],
         }
@@ -231,9 +241,10 @@ def test_strategy_time_series_returns_diagnostics_returns_expected_metrics() -> 
 
 
 def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-05")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "date": dates,
             "weight": [0.05, 0.1, 0.1, 0.15, 0.6],
             "price_usd": [100.0, 101.0, 102.0, 103.0, 1000.0],
             "SplyCur": [10.0, 10.0, 10.0, 10.0, 10.0],
@@ -245,8 +256,8 @@ def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-05"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 5),
         ),
         data=data,
     )
@@ -267,9 +278,10 @@ def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
 
 
 def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_values() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-04")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
+            "date": dates,
             "weight": [0.1, 0.2, 0.3, 0.4],
             "price_usd": [100.0, 110.0, 120.0, 130.0],
         }
@@ -280,8 +292,8 @@ def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_va
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-04"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 4),
         ),
         data=data,
     )
@@ -295,9 +307,10 @@ def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_va
 
 
 def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-05")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "date": dates,
             "weight": [0.1, 0.2, 0.2, 0.2, 0.3],
             "price_usd": [100.0, 110.0, 100.0, 110.0, 100.0],
         }
@@ -308,8 +321,8 @@ def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-05"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 5),
         ),
         data=data,
     )
@@ -324,9 +337,10 @@ def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
 
 
 def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-04")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=4, freq="D"),
+            "date": dates,
             "weight": [0.1, 0.2, 0.3, 0.4],
             "price_usd": [100.0, 90.0, 95.0, 100.0],
         }
@@ -337,8 +351,8 @@ def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-04"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 4),
         ),
         data=data,
     )
@@ -354,9 +368,10 @@ def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None
 
 
 def test_strategy_time_series_seasonality_profile_weekday_returns_expected_counts() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-07")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=7, freq="D"),
+            "date": dates,
             "weight": [1 / 7] * 7,
             "price_usd": [100.0, 101.0, 99.0, 102.0, 100.0, 103.0, 104.0],
         }
@@ -367,8 +382,8 @@ def test_strategy_time_series_seasonality_profile_weekday_returns_expected_count
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-07"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 7),
         ),
         data=data,
     )
@@ -383,9 +398,10 @@ def test_strategy_time_series_seasonality_profile_weekday_returns_expected_count
 
 
 def test_strategy_time_series_resample_returns_expected_frequency_shape() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-10")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=10, freq="D"),
+            "date": dates,
             "weight": [0.1] * 10,
             "price_usd": np.arange(100.0, 110.0),
         }
@@ -396,8 +412,8 @@ def test_strategy_time_series_resample_returns_expected_frequency_shape() -> Non
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-10"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 10),
         ),
         data=data,
     )
@@ -410,9 +426,10 @@ def test_strategy_time_series_resample_returns_expected_frequency_shape() -> Non
 
 
 def test_strategy_time_series_decompose_additive_returns_expected_columns() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-12")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=12, freq="D"),
+            "date": dates,
             "weight": [1 / 12] * 12,
             "price_usd": [100.0, 102.0, 104.0, 103.0, 105.0, 107.0, 106.0, 108.0, 110.0, 109.0, 111.0, 113.0],
         }
@@ -423,8 +440,8 @@ def test_strategy_time_series_decompose_additive_returns_expected_columns() -> N
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-12"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 12),
         ),
         data=data,
     )
@@ -438,9 +455,10 @@ def test_strategy_time_series_decompose_additive_returns_expected_columns() -> N
 
 
 def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-05")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=5, freq="D"),
+            "date": dates,
             "weight": [0.1, 0.15, 0.2, 0.25, 0.3],
             "price_usd": [100.0, 101.0, 102.0, 103.0, 104.0],
         }
@@ -451,8 +469,8 @@ def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-05"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 5),
         ),
         data=data,
     )
@@ -465,9 +483,10 @@ def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None
 
 
 def test_strategy_time_series_difference_returns_expected_shape() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-06")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=6, freq="D"),
+            "date": dates,
             "weight": [0.1, 0.15, 0.2, 0.2, 0.15, 0.2],
             "price_usd": [100.0, 103.0, 106.0, 109.0, 112.0, 115.0],
         }
@@ -478,8 +497,8 @@ def test_strategy_time_series_difference_returns_expected_shape() -> None:
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-06"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 6),
         ),
         data=data,
     )
@@ -493,9 +512,10 @@ def test_strategy_time_series_difference_returns_expected_shape() -> None:
 
 
 def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-08")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "date": dates,
             "weight": [0.05, 0.1, 0.15, 0.2, 0.15, 0.1, 0.1, 0.15],
             "price_usd": [100.0, 102.0, 101.0, 103.0, 102.0, 104.0, 103.0, 105.0],
         }
@@ -506,8 +526,8 @@ def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-08"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 8),
         ),
         data=data,
     )
@@ -519,9 +539,10 @@ def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
 
 
 def test_strategy_time_series_cross_correlation_returns_lag_window() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-08")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=8, freq="D"),
+            "date": dates,
             "weight": [0.05, 0.1, 0.15, 0.2, 0.15, 0.1, 0.1, 0.15],
             "price_usd": [100.0, 101.0, 102.0, 103.0, 102.0, 101.0, 102.0, 103.0],
         }
@@ -532,8 +553,8 @@ def test_strategy_time_series_cross_correlation_returns_lag_window() -> None:
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-08"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 8),
         ),
         data=data,
     )
@@ -546,9 +567,10 @@ def test_strategy_time_series_cross_correlation_returns_lag_window() -> None:
 
 
 def test_strategy_time_series_spectral_density_periodogram_returns_expected_columns() -> None:
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-16")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=16, freq="D"),
+            "date": dates,
             "weight": [1 / 16] * 16,
             "price_usd": [100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0],
         }
@@ -559,8 +581,8 @@ def test_strategy_time_series_spectral_density_periodogram_returns_expected_colu
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-16"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 16),
         ),
         data=data,
     )
@@ -574,9 +596,10 @@ def test_strategy_time_series_spectral_density_periodogram_returns_expected_colu
 def test_strategy_time_series_integration_order_returns_per_column_output() -> None:
     weights = np.linspace(1.0, 2.0, 10)
     weights = weights / weights.sum()
-    data = pd.DataFrame(
+    dates = date_range_list("2024-01-01", "2024-01-10")
+    data = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=10, freq="D"),
+            "date": dates,
             "weight": weights,
             "price_usd": np.linspace(100.0, 110.0, 10),
             "SplyCur": np.linspace(10.0, 11.0, 10),
@@ -588,8 +611,8 @@ def test_strategy_time_series_integration_order_returns_per_column_output() -> N
             strategy_version="1.2.3",
             run_id="run-1",
             config_hash="abc123",
-            window_start=pd.Timestamp("2024-01-01"),
-            window_end=pd.Timestamp("2024-01-10"),
+            window_start=dt.datetime(2024, 1, 1),
+            window_end=dt.datetime(2024, 1, 10),
         ),
         data=data,
     )

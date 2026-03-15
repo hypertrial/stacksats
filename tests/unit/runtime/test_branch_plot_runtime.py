@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import datetime as dt
 import sys
 from unittest.mock import MagicMock
 
-import pandas as pd
+import polars as pl
 
 from stacksats.plot_mvrv import main as plot_mvrv_main
 from stacksats.plot_weights import main as plot_weights_main, plot_dca_weights
@@ -12,9 +13,11 @@ from stacksats.plot_weights import main as plot_weights_main, plot_dca_weights
 def test_plot_mvrv_main_returns_nonzero_on_value_error(
     monkeypatch,
 ) -> None:
-    bad_df = pd.DataFrame(
-        {"price_usd": [100.0, 101.0]},
-        index=pd.date_range("2024-01-01", periods=2, freq="D"),
+    bad_df = pl.DataFrame(
+        {
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "price_usd": [100.0, 101.0],
+        }
     )
     monkeypatch.setattr("stacksats.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: bad_df)
     monkeypatch.setattr(sys, "argv", ["plot_mvrv.py"])
@@ -39,9 +42,9 @@ def test_plot_weights_handles_future_only_data_and_normalizes(
     capsys,
     tmp_path,
 ) -> None:
-    df = pd.DataFrame(
+    df = pl.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=3, freq="D"),
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2), dt.datetime(2024, 1, 3)],
             "weight": [2.0, 2.0, 2.0],
             "price_usd": [None, None, None],
             "day_index": [0, 1, 2],
@@ -79,9 +82,9 @@ def test_plot_weights_main_uses_oldest_range_when_no_args(
     )
     monkeypatch.setattr(
         "stacksats.plot_weights.fetch_weights_for_date_range",
-        lambda _conn, _start, _end: pd.DataFrame(
+        lambda _conn, _start, _end: pl.DataFrame(
             {
-                "date": pd.date_range("2024-01-01", periods=2, freq="D"),
+                "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
                 "weight": [0.5, 0.5],
                 "price_usd": [50000.0, None],
                 "day_index": [0, 1],

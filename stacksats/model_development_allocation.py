@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from .framework_contract import (
     ALLOCATION_SPAN_DAYS,
@@ -122,69 +124,136 @@ def allocate_from_proposals(
     return w
 
 
+def _to_datetime(val: dt.datetime | str) -> dt.datetime:
+    if isinstance(val, dt.datetime):
+        out = val
+    else:
+        out = dt.datetime.strptime(str(val)[:10], "%Y-%m-%d")
+    if out.tzinfo is not None:
+        out = out.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return out.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _normalize_intent_frame(frame: pl.DataFrame, *, name: str) -> pl.DataFrame:
+    """Validate and normalize intent payloads to canonical date/value columns."""
+    if not isinstance(frame, pl.DataFrame):
+        raise TypeError(f"{name} must be a Polars DataFrame.")
+    if "date" not in frame.columns or "value" not in frame.columns:
+        raise ValueError(f"{name} must have 'date' and 'value' columns.")
+    if frame.is_empty():
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
+    return frame.select(
+        pl.col("date").cast(pl.Datetime("us")).dt.replace_time_zone(None).alias("date"),
+        pl.col("value").cast(pl.Float64, strict=False).alias("value"),
+    )
+
+
+def _target_profile_to_pl(target_profile: object) -> pl.DataFrame:
+    """Normalize TargetProfile or pl.DataFrame to canonical date/value columns."""
+    if isinstance(target_profile, pl.DataFrame):
+        return _normalize_intent_frame(target_profile, name="target_profile")
+    if hasattr(target_profile, "values") and isinstance(
+        getattr(target_profile, "values"), pl.DataFrame
+    ):
+        return _normalize_intent_frame(target_profile.values, name="target_profile")
+    raise TypeError("target_profile must be a Polars DataFrame or TargetProfile.")
+
+
+def _proposals_to_pl(proposals: object) -> pl.DataFrame:
+    """Normalize proposals from a Polars DataFrame."""
+    if isinstance(proposals, pl.DataFrame):
+        return _normalize_intent_frame(proposals, name="proposals")
+    raise TypeError("proposals must be a Polars DataFrame.")
+
+
 def compute_weights_from_target_profile(
     *,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
-    current_date: pd.Timestamp,
-    target_profile: pd.Series,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+    current_date: dt.datetime | str,
+    target_profile: pl.DataFrame | object,
     mode: str = "preference",
     locked_weights: np.ndarray | None = None,
     n_past: int | None = None,
-) -> pd.Series:
-    """Convert a target profile into final iterative stable allocation weights."""
-    full_range = pd.date_range(start=start_date, end=end_date, freq="D")
-    if len(full_range) == 0:
-        return pd.Series(dtype=float)
+) -> pl.DataFrame:
+    """Convert a target profile into final iterative stable allocation weights.
 
-    target = target_profile.reindex(full_range)
-    target = pd.to_numeric(target, errors="coerce")
+    target_profile must be a Polars DataFrame or TargetProfile with date/value columns.
+    Returns pl.DataFrame with columns 'date' and 'weight'.
+    """
+    target_profile = _target_profile_to_pl(target_profile)
+    start_ts = _to_datetime(start_date)
+    end_ts = _to_datetime(end_date)
+    full_range = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True)
+    if full_range.len() == 0:
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 
-    n = len(full_range)
+    n = full_range.len()
     base = np.ones(n, dtype=float) / n
+
+    target_renamed = target_profile.select(["date", pl.col("value").alias("_v")])
+    target_df = pl.DataFrame({"date": full_range}).join(
+        target_renamed,
+        on="date",
+        how="left",
+    )
+    target_arr = target_df["_v"].fill_null(0.0).to_numpy()
+    target_arr = np.where(np.isfinite(target_arr), target_arr, 0.0)
+
     if mode == "absolute":
-        absolute = target.fillna(0.0).to_numpy(dtype=float)
-        absolute = np.where(np.isfinite(absolute), absolute, 0.0)
-        absolute = np.clip(absolute, 0.0, None)
+        absolute = np.clip(target_arr, 0.0, None)
         if absolute.sum() <= 0:
             raw = base
         else:
             raw = absolute / absolute.sum()
     elif mode == "preference":
-        preference = target.fillna(0.0).to_numpy(dtype=float)
-        preference = np.where(np.isfinite(preference), preference, 0.0)
-        preference = np.clip(preference, -50, 50)
+        preference = np.clip(target_arr, -50, 50)
         raw = base * np.exp(preference)
     else:
         raise ValueError(f"Unsupported target profile mode '{mode}'.")
 
+    curr_ts = _to_datetime(current_date)
     if n_past is None:
-        n_past = compute_n_past(full_range, current_date)
-    weights = allocate_sequential_stable(raw, n_past, locked_weights)
-    assert_final_invariants(weights)
-    return pd.Series(weights, index=full_range, dtype=float)
+        n_past = compute_n_past(full_range.to_list(), curr_ts)
+    weights_arr = allocate_sequential_stable(raw, n_past, locked_weights)
+    assert_final_invariants(weights_arr)
+    return pl.DataFrame({"date": full_range, "weight": weights_arr})
 
 
 def compute_weights_from_proposals(
     *,
-    proposals: pd.Series,
-    start_date: pd.Timestamp,
-    end_date: pd.Timestamp,
+    proposals: pl.DataFrame | object,
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
     n_past: int,
     locked_weights: np.ndarray | None = None,
-) -> pd.Series:
-    """Convert per-day user proposals into final framework weights."""
-    full_range = pd.date_range(start=start_date, end=end_date, freq="D")
-    if len(full_range) == 0:
-        return pd.Series(dtype=float)
+) -> pl.DataFrame:
+    """Convert per-day user proposals into final framework weights.
 
-    proposed = pd.to_numeric(proposals.reindex(full_range), errors="coerce")
-    proposed_arr = proposed.fillna(0.0).to_numpy(dtype=float)
-    weights = allocate_from_proposals(
+    proposals must be a Polars DataFrame with date/value columns.
+    Returns pl.DataFrame with columns 'date' and 'weight'.
+    """
+    proposals = _proposals_to_pl(proposals)
+    start_ts = _to_datetime(start_date)
+    end_ts = _to_datetime(end_date)
+    full_range = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True)
+    if full_range.len() == 0:
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+
+    prop_renamed = proposals.select(["date", pl.col("value").alias("_v")])
+    full_df = pl.DataFrame({"date": full_range}).join(
+        prop_renamed,
+        on="date",
+        how="left",
+    )
+    proposed_arr = full_df["_v"].fill_null(0.0).to_numpy()
+    proposed_arr = np.where(np.isfinite(proposed_arr), proposed_arr, 0.0)
+
+    weights_arr = allocate_from_proposals(
         proposals=proposed_arr,
         n_past=n_past,
-        n_total=len(full_range),
+        n_total=full_range.len(),
         locked_weights=locked_weights,
     )
-    assert_final_invariants(weights)
-    return pd.Series(weights, index=full_range, dtype=float)
+    assert_final_invariants(weights_arr)
+    return pl.DataFrame({"date": full_range, "weight": weights_arr})
