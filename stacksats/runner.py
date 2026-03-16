@@ -451,12 +451,12 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             (config.end_date or BACKTEST_END)[:10],
             "%Y-%m-%d",
         )
-        end_ts = min(requested_end, data_end_ts)
-        if end_ts < start_ts:
+        if requested_end < start_ts:
             raise ValueError(
                 "Backtest end date must be on or after start date. "
-                f"Resolved start={start_ts.date()} end={end_ts.date()}."
+                f"Resolved start={start_ts.date()} end={requested_end.date()}."
             )
+        end_ts = min(requested_end, data_end_ts)
         try:
             full_features_df = self._materialize_strategy_features(
                 strategy,
