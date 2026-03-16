@@ -1,4 +1,4 @@
-"""Schema and lineage definitions for TimeSeries."""
+"""Schema and lineage definitions for WeightTimeSeries."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class ColumnSpec:
 
 @dataclass(frozen=True, slots=True)
 class BRKLineageSpec:
-    """BRK source column lineage into TimeSeries columns."""
+    """BRK source column lineage into WeightTimeSeries columns."""
 
     source_column: str
     required: bool
@@ -90,7 +90,6 @@ BRK_SOURCE_COLUMNS: tuple[str, ...] = (
     "volume_reported_spot_usd_1d",
 )
 
-# Backward-compatible alias kept for callers/tests that still reference legacy name.
 BRK_BTC_CSV_COLUMNS: tuple[str, ...] = BRK_SOURCE_COLUMNS
 
 BRK_LINEAGE: tuple[BRKLineageSpec, ...] = (
@@ -99,7 +98,7 @@ BRK_LINEAGE: tuple[BRKLineageSpec, ...] = (
         required=True,
         description="BRK daily timestamp column.",
         strategy_column="date",
-        notes="Loaded as index, then represented by TimeSeries.date.",
+        notes="Loaded as canonical daily dates in WeightTimeSeries.date.",
     ),
     BRKLineageSpec(
         source_column="AdrActCnt",
@@ -636,7 +635,7 @@ def validate_schema_specs(
         collisions = sorted(name for name in seen if name in core_names)
         if collisions:
             raise ValueError(
-                "Extra schema columns collide with core TimeSeries schema: "
+                "Extra schema columns collide with core WeightTimeSeries schema: "
                 + ", ".join(collisions)
             )
     return specs
@@ -666,7 +665,7 @@ def validate_brk_lineage_coverage(
     ]
     if missing_targets:
         raise ValueError(
-            "BRK lineage mappings reference undocumented TimeSeries "
+            "BRK lineage mappings reference undocumented WeightTimeSeries "
             "columns for source columns: " + ", ".join(missing_targets)
         )
 

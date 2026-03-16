@@ -349,8 +349,3 @@ class WeightTimeSeriesBatch:
             raise KeyError(
                 f"Window not found: {start.strftime('%Y-%m-%d')} -> {end.strftime('%Y-%m-%d')}"
             ) from exc
-
-
-# Deprecated aliases — remove in 0.9.0
-TimeSeriesBatch = WeightTimeSeriesBatch
-StrategyTimeSeriesBatch = WeightTimeSeriesBatch

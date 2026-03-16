@@ -13,7 +13,7 @@ StackSats strategy runtime is BRK-only.
 
 ## Expected parquet schema
 
-The parquet file must have a daily datetime index (or a `date` column) and at least:
+The parquet file must have a daily date-like column that normalizes to the canonical `date` field, and at least:
 
 - `price_usd`: required
 - `mvrv`: optional; used by overlay and some strategies

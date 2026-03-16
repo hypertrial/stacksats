@@ -9,8 +9,8 @@ from stacksats.runner import StrategyRunner
 from stacksats.strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
-    StrategyTimeSeries,
-    StrategyTimeSeriesBatch,
+    WeightTimeSeries,
+    WeightTimeSeriesBatch,
 )
 from stacksats.strategy_types import BaseStrategy, ExportConfig, StrategyContext, TargetProfile
 from tests.test_helpers import btc_frame
@@ -94,7 +94,7 @@ def test_strategy_time_series_extra_schema_supports_declared_columns() -> None:
         ),
     )
     data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
-    series = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
+    series = WeightTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
 
     assert "custom_signal" in series.schema()
     assert "custom_signal" in series.schema_markdown()
@@ -118,7 +118,7 @@ def test_strategy_time_series_extra_schema_rejects_duplicate_and_core_collision(
         ),
     )
     with pytest.raises(ValueError, match="duplicate column names"):
-        StrategyTimeSeries(metadata=_metadata(), data=_data(), extra_schema=duplicate)
+        WeightTimeSeries(metadata=_metadata(), data=_data(), extra_schema=duplicate)
 
     collision = (
         ColumnSpec(
@@ -129,8 +129,8 @@ def test_strategy_time_series_extra_schema_rejects_duplicate_and_core_collision(
             source="strategy",
         ),
     )
-    with pytest.raises(ValueError, match="collide with core TimeSeries schema"):
-        StrategyTimeSeries(metadata=_metadata(), data=_data(), extra_schema=collision)
+    with pytest.raises(ValueError, match="collide with core WeightTimeSeries schema"):
+        WeightTimeSeries(metadata=_metadata(), data=_data(), extra_schema=collision)
 
 
 def test_strategy_time_series_csv_roundtrip(tmp_path) -> None:
@@ -144,11 +144,11 @@ def test_strategy_time_series_csv_roundtrip(tmp_path) -> None:
         ),
     )
     data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
-    series = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
+    series = WeightTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
     csv_path = tmp_path / "series.csv"
 
     series.to_csv(csv_path)
-    loaded = StrategyTimeSeries.from_csv(csv_path, metadata=_metadata(), extra_schema=extra_schema)
+    loaded = WeightTimeSeries.from_csv(csv_path, metadata=_metadata(), extra_schema=extra_schema)
 
     assert loaded.to_dataframe().equals(series.to_dataframe())
     assert loaded.columns == series.columns
@@ -176,7 +176,7 @@ def test_strategy_time_series_batch_roundtrips_and_propagates_generated_at(tmp_p
         }
     )
     generated_at = dt.datetime(2024, 2, 15, 9, 30, 0, tzinfo=dt.timezone.utc)
-    batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+    batch = WeightTimeSeriesBatch.from_flat_dataframe(
         flat,
         strategy_id="test-strategy",
         strategy_version="1.2.3",
@@ -196,7 +196,7 @@ def test_strategy_time_series_batch_roundtrips_and_propagates_generated_at(tmp_p
 
     csv_path = tmp_path / "batch.csv"
     batch.to_csv(csv_path)
-    loaded = StrategyTimeSeriesBatch.from_csv(
+    loaded = WeightTimeSeriesBatch.from_csv(
         csv_path,
         strategy_id="test-strategy",
         strategy_version="1.2.3",
@@ -221,9 +221,9 @@ def test_strategy_time_series_batch_defaults_extra_schema_from_windows() -> None
         ),
     )
     data = _data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0]))
-    window = StrategyTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
+    window = WeightTimeSeries(metadata=_metadata(), data=data, extra_schema=extra_schema)
 
-    batch = StrategyTimeSeriesBatch(
+    batch = WeightTimeSeriesBatch(
         strategy_id="test-strategy",
         strategy_version="1.2.3",
         run_id="run-1",
@@ -251,7 +251,7 @@ def test_strategy_time_series_batch_from_artifact_dir_roundtrip(tmp_path) -> Non
     payload = (artifact_dir / "artifacts.json").read_text(encoding="utf-8")
     assert '"weights_csv": "weights.csv"' in payload
 
-    loaded = StrategyTimeSeriesBatch.from_artifact_dir(artifact_dir)
+    loaded = WeightTimeSeriesBatch.from_artifact_dir(artifact_dir)
 
     assert loaded.strategy_id == "uniform-export"
     assert loaded.strategy_version == "1.0.0"

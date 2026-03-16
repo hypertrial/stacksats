@@ -83,7 +83,6 @@ All public types and functions below are exported from the top-level `stacksats`
 | `StrategySpec` | Full public contract (metadata, intent_mode, params, required features). |
 | `StrategySeriesMetadata` | Metadata on a `WeightTimeSeries` (strategy_id, version, run_id, window, etc.). |
 | `StrategyArtifactSet` | Set of artifacts produced by a strategy. |
-| `StrategyContractWarning` | Warning type for contract violations. |
 
 ### Allocation and intent
 
@@ -122,14 +121,14 @@ All public types and functions below are exported from the top-level `stacksats`
 | `load_data` | Load data from BRK parquet (prelude helper). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
 | `precompute_features` | Precompute features for a strategy. |
 
-### Deprecated aliases
+### Removed aliases
 
-| Alias | Use instead | Notes |
-|-------|-------------|-------|
-| `TimeSeries` | `WeightTimeSeries` | Deprecated; removed in 0.9.0. |
-| `TimeSeriesBatch` | `WeightTimeSeriesBatch` | Deprecated; removed in 0.9.0. |
-| `StrategyTimeSeries` | `WeightTimeSeries` | Deprecated; removed in 0.9.0. |
-| `StrategyTimeSeriesBatch` | `WeightTimeSeriesBatch` | Deprecated; removed in 0.9.0. |
+These names are no longer part of the supported API:
+
+- `TimeSeries` -> `WeightTimeSeries`
+- `TimeSeriesBatch` -> `WeightTimeSeriesBatch`
+- `StrategyTimeSeries` -> `WeightTimeSeries`
+- `StrategyTimeSeriesBatch` -> `WeightTimeSeriesBatch`
 
 ## API pointers
 

@@ -9,7 +9,7 @@ description: Metadata, guarantees, and export semantics for WeightTimeSeries and
 `WeightTimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
 
 > [!NOTE]
-> The names `TimeSeries` and `TimeSeriesBatch` are deprecated aliases for `WeightTimeSeries` and `WeightTimeSeriesBatch`; they will be removed in 0.9.0. Do not confuse with **FeatureTimeSeries**, which is the **input** to a strategy.
+> Do not confuse **WeightTimeSeries** with **FeatureTimeSeries**. `WeightTimeSeries` is validated strategy output; `FeatureTimeSeries` is validated strategy input.
 
 ## Required metadata
 

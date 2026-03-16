@@ -39,10 +39,10 @@ This page covers migration for:
 | `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
 | `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK parquet loader is canonical |
 | `strategy.spec()` as the informal contract | `strategy.spec()` as the canonical public contract |
-| `StrategyTimeSeries` | `WeightTimeSeries` (deprecated alias available until 0.9.0) |
-| `StrategyTimeSeriesBatch` | `WeightTimeSeriesBatch` (deprecated alias available until 0.9.0) |
-| `TimeSeries` | `WeightTimeSeries` (deprecated alias available until 0.9.0) |
-| `TimeSeriesBatch` | `WeightTimeSeriesBatch` (deprecated alias available until 0.9.0) |
+| `StrategyTimeSeries` | Removed. Use `WeightTimeSeries` |
+| `StrategyTimeSeriesBatch` | Removed. Use `WeightTimeSeriesBatch` |
+| `TimeSeries` | Removed. Use `WeightTimeSeries` |
+| `TimeSeriesBatch` | Removed. Use `WeightTimeSeriesBatch` |
 
 ## Polars migration (core objects)
 
@@ -156,7 +156,7 @@ class MyStrategy(BaseStrategy):
 Notes:
 - `metadata()` and `params()` now back durable provenance/idempotency behavior
 - runtime caches should stay private (for example `_cache`)
-- if both intent hooks exist and `intent_preference` is unset, StackSats currently warns and falls back to `propose_weight(state)`
+- if both intent hooks exist, `intent_preference` must be set explicitly
 
 ## Upgrade Checklist
 

@@ -35,9 +35,9 @@ Create a custom strategy file and run it end-to-end.
 ## Common failure patterns
 
 - Non-finite signal values (`NaN`/`inf`).
-- Incorrect index alignment across feature and signal series.
+- Incorrect date alignment across feature and signal series.
 - Strategy bypass attempts of framework-owned kernel behavior.
 - Missing or unregistered `required_feature_sets()`.
 - AST lint blockers such as negative `shift`, centered rolling windows, or direct file/network I/O.
-- Ambiguous dual-hook strategies: set `intent_preference` if both `propose_weight` and `build_target_profile` exist.
+- Ambiguous dual-hook strategies: define `intent_preference` if both `propose_weight` and `build_target_profile` exist, or validation will fail.
 - Missing required transformed feature columns.

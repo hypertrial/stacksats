@@ -5,7 +5,11 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from stacksats.strategy_time_series import StrategySeriesMetadata, StrategyTimeSeries, StrategyTimeSeriesBatch
+from stacksats.strategy_time_series import (
+    StrategySeriesMetadata,
+    WeightTimeSeries,
+    WeightTimeSeriesBatch,
+)
 
 
 def _metadata(
@@ -39,13 +43,13 @@ def _valid_data() -> pl.DataFrame:
     )
 
 
-def _window(md: StrategySeriesMetadata | None = None) -> StrategyTimeSeries:
-    return StrategyTimeSeries(metadata=md or _metadata(), data=_valid_data())
+def _window(md: StrategySeriesMetadata | None = None) -> WeightTimeSeries:
+    return WeightTimeSeries(metadata=md or _metadata(), data=_valid_data())
 
 
 def test_strategy_time_series_requires_polars_dataframe_data() -> None:
     with pytest.raises(TypeError, match="Polars DataFrame"):
-        StrategyTimeSeries(metadata=_metadata(), data=[1, 2])  # type: ignore[arg-type]
+        WeightTimeSeries(metadata=_metadata(), data=[1, 2])  # type: ignore[arg-type]
 
 
 def test_strategy_time_series_rejects_missing_required_columns() -> None:
@@ -56,7 +60,7 @@ def test_strategy_time_series_rejects_missing_required_columns() -> None:
         }
     )
     with pytest.raises(ValueError, match="missing required columns"):
-        StrategyTimeSeries(metadata=_metadata(), data=missing_price)
+        WeightTimeSeries(metadata=_metadata(), data=missing_price)
 
 
 def test_strategy_time_series_rejects_invalid_dates() -> None:
@@ -68,7 +72,7 @@ def test_strategy_time_series_rejects_invalid_dates() -> None:
         }
     )
     with pytest.raises(Exception, match="valid datetimes|conversion|cast|datetime"):
-        StrategyTimeSeries(metadata=_metadata(), data=bad_date)
+        WeightTimeSeries(metadata=_metadata(), data=bad_date)
 
 
 def test_strategy_time_series_rejects_duplicate_dates() -> None:
@@ -80,7 +84,7 @@ def test_strategy_time_series_rejects_duplicate_dates() -> None:
         }
     )
     with pytest.raises(ValueError, match="must not contain duplicates"):
-        StrategyTimeSeries(metadata=_metadata(), data=duplicated)
+        WeightTimeSeries(metadata=_metadata(), data=duplicated)
 
 
 def test_strategy_time_series_data_returns_copy() -> None:
@@ -101,7 +105,7 @@ def test_strategy_time_series_rejects_missing_interior_dates_with_bounds() -> No
         }
     )
     with pytest.raises(ValueError, match="must exactly match the daily range"):
-        StrategyTimeSeries(
+        WeightTimeSeries(
             metadata=_metadata(
                 window_start=dt.datetime(2024, 1, 1),
                 window_end=dt.datetime(2024, 1, 3),
@@ -118,7 +122,7 @@ def test_strategy_time_series_allows_non_daily_dates_without_bounds() -> None:
             "price_usd": [40000.0, 41000.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=_metadata(window_start=None, window_end=None),
         data=sparse,
     )
@@ -127,7 +131,7 @@ def test_strategy_time_series_allows_non_daily_dates_without_bounds() -> None:
 
 def test_strategy_time_series_rejects_window_start_mismatch() -> None:
     with pytest.raises(ValueError, match="start date does not match metadata.window_start"):
-        StrategyTimeSeries(
+        WeightTimeSeries(
             metadata=_metadata(window_start=dt.datetime(2024, 1, 2), window_end=dt.datetime(2024, 1, 2)),
             data=_valid_data(),
         )
@@ -135,7 +139,7 @@ def test_strategy_time_series_rejects_window_start_mismatch() -> None:
 
 def test_strategy_time_series_rejects_window_end_mismatch() -> None:
     with pytest.raises(ValueError, match="end date does not match metadata.window_end"):
-        StrategyTimeSeries(
+        WeightTimeSeries(
             metadata=_metadata(window_start=dt.datetime(2024, 1, 1), window_end=dt.datetime(2024, 1, 3)),
             data=_valid_data(),
         )
@@ -144,13 +148,13 @@ def test_strategy_time_series_rejects_window_end_mismatch() -> None:
 def test_strategy_time_series_rejects_nonfinite_weights() -> None:
     nonfinite_weights = _valid_data().with_columns(pl.Series("weight", [0.4, float("inf")]))
     with pytest.raises(ValueError, match="must contain finite numeric values"):
-        StrategyTimeSeries(metadata=_metadata(), data=nonfinite_weights)
+        WeightTimeSeries(metadata=_metadata(), data=nonfinite_weights)
 
 
 def test_strategy_time_series_rejects_negative_weights() -> None:
     negative_weights = _valid_data().with_columns(pl.Series("weight", [-0.1, 1.1]))
     with pytest.raises(ValueError, match="must not contain negative values"):
-        StrategyTimeSeries(metadata=_metadata(), data=negative_weights)
+        WeightTimeSeries(metadata=_metadata(), data=negative_weights)
 
 
 def test_strategy_time_series_rejects_nonnumeric_price_usd() -> None:
@@ -162,42 +166,42 @@ def test_strategy_time_series_rejects_nonnumeric_price_usd() -> None:
         }
     )
     with pytest.raises(ValueError, match="numeric when present"):
-        StrategyTimeSeries(metadata=_metadata(), data=bad_price)
+        WeightTimeSeries(metadata=_metadata(), data=bad_price)
 
 
 def test_strategy_time_series_rejects_nonfinite_price_usd() -> None:
     nonfinite_price = _valid_data().with_columns(pl.Series("price_usd", [40000.0, float("inf")]))
     with pytest.raises(ValueError, match="price_usd' must be finite"):
-        StrategyTimeSeries(metadata=_metadata(), data=nonfinite_price)
+        WeightTimeSeries(metadata=_metadata(), data=nonfinite_price)
 
 
 def test_strategy_time_series_rejects_nonboolean_locked_column() -> None:
     bad_locked = _valid_data().with_columns(pl.Series("locked", [True, "bad"], strict=False))
     with pytest.raises(ValueError, match="boolean values"):
-        StrategyTimeSeries(metadata=_metadata(), data=bad_locked)
+        WeightTimeSeries(metadata=_metadata(), data=bad_locked)
 
 
 def test_strategy_time_series_rejects_nonnumeric_day_index() -> None:
     bad_day_index = _valid_data().with_columns(pl.Series("day_index", [0, "bad"], strict=False))
     with pytest.raises(ValueError, match="integer values"):
-        StrategyTimeSeries(metadata=_metadata(), data=bad_day_index)
+        WeightTimeSeries(metadata=_metadata(), data=bad_day_index)
 
 
 def test_strategy_time_series_rejects_negative_day_index() -> None:
     negative_day_index = _valid_data().with_columns(pl.Series("day_index", [-1, 0]))
     with pytest.raises(ValueError, match="day_index' must be >= 0"):
-        StrategyTimeSeries(metadata=_metadata(), data=negative_day_index)
+        WeightTimeSeries(metadata=_metadata(), data=negative_day_index)
 
 
 def test_strategy_time_series_rejects_noncontiguous_day_index() -> None:
     noncontiguous_day_index = _valid_data().with_columns(pl.Series("day_index", [0, 2]))
     with pytest.raises(ValueError, match="must be contiguous starting at 0"):
-        StrategyTimeSeries(metadata=_metadata(), data=noncontiguous_day_index)
+        WeightTimeSeries(metadata=_metadata(), data=noncontiguous_day_index)
 
 
 def test_batch_requires_polars_dataframe_and_columns() -> None:
     with pytest.raises(TypeError, match="Polars DataFrame"):
-        StrategyTimeSeriesBatch.from_flat_dataframe(  # type: ignore[arg-type]
+        WeightTimeSeriesBatch.from_flat_dataframe(  # type: ignore[arg-type]
             [{"a": 1}],
             strategy_id="s1",
             strategy_version="1.0.0",
@@ -206,7 +210,7 @@ def test_batch_requires_polars_dataframe_and_columns() -> None:
         )
 
     with pytest.raises(ValueError, match="Flat dataframe missing required columns"):
-        StrategyTimeSeriesBatch.from_flat_dataframe(
+        WeightTimeSeriesBatch.from_flat_dataframe(
             pl.DataFrame(
                 {
                     "start_date": ["2024-01-01"],
@@ -224,7 +228,7 @@ def test_batch_requires_polars_dataframe_and_columns() -> None:
 
 def test_batch_validate_mismatch_and_window_lookup_paths() -> None:
     with pytest.raises(ValueError, match="strategy_id does not match"):
-        StrategyTimeSeriesBatch(
+        WeightTimeSeriesBatch(
             strategy_id="other",
             strategy_version="1.0.0",
             run_id="run-1",
@@ -233,7 +237,7 @@ def test_batch_validate_mismatch_and_window_lookup_paths() -> None:
         )
 
     with pytest.raises(ValueError, match="must define metadata.window_start and metadata.window_end"):
-        StrategyTimeSeriesBatch(
+        WeightTimeSeriesBatch(
             strategy_id="s1",
             strategy_version="1.0.0",
             run_id="run-1",
@@ -241,7 +245,7 @@ def test_batch_validate_mismatch_and_window_lookup_paths() -> None:
             windows=(_window(_metadata(window_start=None, window_end=None)),),
         )
 
-    batch = StrategyTimeSeriesBatch(
+    batch = WeightTimeSeriesBatch(
         strategy_id="s1",
         strategy_version="1.0.0",
         run_id="run-1",
@@ -254,17 +258,17 @@ def test_batch_validate_mismatch_and_window_lookup_paths() -> None:
 
 
 def test_native_helpers_and_diagnostic_edge_paths() -> None:
-    assert StrategyTimeSeries._native_float(None) is None
-    assert StrategyTimeSeries._native_float(float("inf")) is None
-    assert StrategyTimeSeries._native_timestamp(None) is None
+    assert WeightTimeSeries._native_float(None) is None
+    assert WeightTimeSeries._native_float(float("inf")) is None
+    assert WeightTimeSeries._native_timestamp(None) is None
 
-    summary = StrategyTimeSeries._series_numeric_summary(
+    summary = WeightTimeSeries._series_numeric_summary(
         pl.Series("s", [None, None], dtype=pl.Float64)
     )
     assert summary["count"] == 0
     assert summary["mean"] is None
 
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -321,7 +325,7 @@ def test_outlier_and_returns_diagnostics_validation_paths() -> None:
     with pytest.raises(ValueError, match="threshold must be > 0"):
         series.outlier_report(threshold=0.0)
 
-    constant = StrategyTimeSeries(
+    constant = WeightTimeSeries(
         metadata=_metadata(window_end=dt.datetime(2024, 1, 3)),
         data=pl.DataFrame(
             {
@@ -336,7 +340,7 @@ def test_outlier_and_returns_diagnostics_validation_paths() -> None:
     assert report.is_empty()
     assert list(report.columns) == ["date", "column", "value", "score", "method", "threshold"]
 
-    iqr = StrategyTimeSeries(
+    iqr = WeightTimeSeries(
         metadata=_metadata(window_end=dt.datetime(2024, 1, 5)),
         data=pl.DataFrame(
             {
@@ -355,7 +359,7 @@ def test_outlier_and_returns_diagnostics_validation_paths() -> None:
     iqr_report = iqr.outlier_report(method="IQR")
     assert not iqr_report.is_empty()
 
-    short_prices = StrategyTimeSeries(
+    short_prices = WeightTimeSeries(
         metadata=_metadata(),
         data=pl.DataFrame(
             {

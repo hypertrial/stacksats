@@ -48,8 +48,8 @@ flowchart LR
 8. [ ] **`build_signals` output type is valid**
    - Must return `dict[str, pl.Series]`.
 
-9. [ ] **Signal and profile series shape/index contract holds**
-   - Each series must be a Polars `Series`, with no duplicate dates and exact alignment to the observed window `date` column.
+9. [ ] **Signal and profile series shape/date contract holds**
+   - Each series must be a Polars `Series`, with exact positional alignment to the observed window `date` column.
 
 10. [ ] **Signal and profile series numeric validity holds**
    - Series values must be finite numeric (no `NaN`, `inf`, or non-numeric coercion failures).

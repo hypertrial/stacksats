@@ -16,8 +16,6 @@ from .runner import StrategyRunner
 from .strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
-    TimeSeries,
-    TimeSeriesBatch,
     WeightTimeSeries,
     WeightTimeSeriesBatch,
 )
@@ -31,7 +29,6 @@ from .strategy_types import (
     ExportConfig,
     RunDailyConfig,
     StrategyArtifactSet,
-    StrategyContractWarning,
     StrategyContext,
     StrategyMetadata,
     StrategyRunResult,
@@ -40,10 +37,6 @@ from .strategy_types import (
     ValidationConfig,
     strategy_context_from_features_df,
 )
-
-# Deprecated aliases — remove in 0.9.0
-StrategyTimeSeries = TimeSeries
-StrategyTimeSeriesBatch = TimeSeriesBatch
 
 __all__ = [
     # Primary objects
@@ -73,7 +66,6 @@ __all__ = [
     "StrategyRunner",
     "StrategySeriesMetadata",
     "StrategyArtifactSet",
-    "StrategyContractWarning",
     "StrategyContext",
     "StrategyMetadata",
     "StrategyRunResult",
@@ -83,9 +75,4 @@ __all__ = [
     "load_data",
     "precompute_features",
     "strategy_context_from_features_df",
-    # Deprecated aliases — remove in 0.9.0
-    "TimeSeries",
-    "TimeSeriesBatch",
-    "StrategyTimeSeries",
-    "StrategyTimeSeriesBatch",
 ]

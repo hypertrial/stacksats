@@ -5,7 +5,7 @@ description: Validated feature input to a strategy (schema and time-series valid
 
 # FeatureTimeSeries
 
-`FeatureTimeSeries` (`stacksats/feature_time_series.py`) is the **input** object passed into strategy computation. It wraps a Polars DataFrame with a datetime index (stored as a `date` column) and feature columns. It provides schema validation and time-series invariants so that strategies receive validated feature data.
+`FeatureTimeSeries` (`stacksats/feature_time_series.py`) is the **input** object passed into strategy computation. It wraps a Polars DataFrame with a canonical `date` column and feature columns. It provides schema validation and time-series invariants so that strategies receive validated feature data.
 
 Do not confuse with **WeightTimeSeries**, which is the **output** of a strategy (weights and prices).
 
@@ -13,7 +13,7 @@ Do not confuse with **WeightTimeSeries**, which is the **output** of a strategy 
 
 - **Backing store**: Polars DataFrame with a `date` column (sorted, unique, no nulls).
 - **Feature columns**: All other columns are features; required columns can be enforced on construction.
-- **Immutability**: The object is immutable after construction; use `.to_dataframe()` for a Polars copy if you need to transform.
+- **Read semantics**: Treat the object as immutable. `data` exposes the underlying Polars frame for read access; strategy code should usually work through `ctx.features_df`.
 
 ## Construction
 
@@ -43,9 +43,10 @@ Parameters:
 - `as_of_date`: If set, validates that no row has date after this date (no forward-looking data).
 - `require_finite`: Optional tuple of column names that must be finite numeric.
 
-## Conversion
+## Access
 
-- **To DataFrame**: `fts.to_dataframe()` returns a Polars DataFrame with the canonical `date` column preserved. Strategy hooks are Polars-only and should use `ctx.features_df`.
+- **Underlying frame**: `fts.data` returns the Polars DataFrame with the canonical `date` column preserved.
+- **Strategy hooks**: Strategy hooks are Polars-only and should use `ctx.features_df`.
 
 ## StrategyContext
 

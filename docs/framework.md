@@ -37,8 +37,8 @@ This document is the canonical strategy contract for StackSats.
    - `propose_weight(state)` for per-day proposals, or
    - `build_target_profile(...)` for a full-window intent series
 
-When both intent hooks are implemented, `intent_preference` should be set explicitly.
-Current compatibility fallback warns and selects `propose_weight(state)`.
+When both intent hooks are implemented, `intent_preference` must be set explicitly.
+Ambiguous dual-hook strategies are rejected by contract validation.
 
 ## Handoff Boundary
 

@@ -7,12 +7,15 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.strategy_time_series import StrategySeriesMetadata, StrategyTimeSeries
+from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
 
 
-def _series(prices: list[float] | None = None) -> StrategyTimeSeries:
+def _series(prices: list[float] | None = None) -> WeightTimeSeries:
     price_vals = prices or [100.0, 95.0, 90.0, 85.0, 80.0, 82.0]
-    dates = [dt.datetime(2024, 1, 1) + dt.timedelta(days=offset) for offset in range(len(price_vals))]
+    dates = [
+        dt.datetime(2024, 1, 1) + dt.timedelta(days=offset)
+        for offset in range(len(price_vals))
+    ]
     data = pl.DataFrame(
         {
             "date": dates,
@@ -30,7 +33,7 @@ def _series(prices: list[float] | None = None) -> StrategyTimeSeries:
         window_start=dates[0],
         window_end=dates[-1],
     )
-    return StrategyTimeSeries(metadata=meta, data=data)
+    return WeightTimeSeries(metadata=meta, data=data)
 
 
 def test_eda_series_variants_and_errors() -> None:
@@ -49,7 +52,7 @@ def test_eda_series_variants_and_errors() -> None:
 def test_drawdown_branches_no_valid_and_unrecovered() -> None:
     ts = _series()
     empty_df = ts.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
-    empty = StrategyTimeSeries(metadata=ts.metadata, data=empty_df).drawdown_table()
+    empty = WeightTimeSeries(metadata=ts.metadata, data=empty_df).drawdown_table()
     assert empty.is_empty()
 
     unrecovered = _series([100.0, 90.0, 80.0, 70.0, 60.0, 50.0]).drawdown_table(top_n=3)
@@ -72,9 +75,9 @@ def test_resolve_series_like_and_cross_correlation_paths() -> None:
 
 def test_pacf_edge_paths() -> None:
     values = pl.Series("constant", [1.0, 1.0, 1.0, 1.0])
-    assert StrategyTimeSeries._pacf_at_lag(values, 0) is None
-    assert StrategyTimeSeries._pacf_at_lag(values.head(2), 2) is None
-    assert StrategyTimeSeries._pacf_at_lag(values, 2) is None
+    assert WeightTimeSeries._pacf_at_lag(values, 0) is None
+    assert WeightTimeSeries._pacf_at_lag(values.head(2), 2) is None
+    assert WeightTimeSeries._pacf_at_lag(values, 2) is None
 
 
 def test_resample_and_decompose_error_paths() -> None:
@@ -109,7 +112,7 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
     sparse_metric = ts.to_dataframe().with_columns(
         pl.Series("mvrv", [None, None, None, None, None, 1.0], dtype=pl.Float64)
     )
-    detrended = StrategyTimeSeries(metadata=ts.metadata, data=sparse_metric).detrend(
+    detrended = WeightTimeSeries(metadata=ts.metadata, data=sparse_metric).detrend(
         method="linear",
         columns=["mvrv"],
     )
@@ -120,7 +123,12 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
     with pytest.raises(ValueError, match="Unknown columns for difference"):
         ts.difference(columns=["unknown_col"])
 
-    seasonal = ts.difference(order=1, seasonal_order=1, seasonal_period=2, columns=["price_usd"])
+    seasonal = ts.difference(
+        order=1,
+        seasonal_order=1,
+        seasonal_period=2,
+        columns=["price_usd"],
+    )
     assert "price_usd_diff" in seasonal.columns
 
 
@@ -128,19 +136,23 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
     ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
     acf = ts.acf_pacf(lags=[1, 100], series="returns")
     row_high = acf.filter(pl.col("lag") == 100).row(0, named=True)
-    assert row_high["acf"] is None or (isinstance(row_high["acf"], float) and np.isnan(row_high["acf"]))
-    assert row_high["pacf"] is None or (isinstance(row_high["pacf"], float) and np.isnan(row_high["pacf"]))
+    assert row_high["acf"] is None or (
+        isinstance(row_high["acf"], float) and np.isnan(row_high["acf"])
+    )
+    assert row_high["pacf"] is None or (
+        isinstance(row_high["pacf"], float) and np.isnan(row_high["pacf"])
+    )
 
     ts_nan = _series([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     nan_prices = ts_nan.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
-    empty_spec = StrategyTimeSeries(metadata=ts_nan.metadata, data=nan_prices).spectral_density(
+    empty_spec = WeightTimeSeries(metadata=ts_nan.metadata, data=nan_prices).spectral_density(
         series="returns"
     )
     assert empty_spec.is_empty()
 
-    assert StrategyTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 2.0]), acf_threshold=0.8)
-    assert StrategyTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 1.0, 1.0]), acf_threshold=0.8)
-    assert StrategyTimeSeries._stationarity_proxy(
+    assert WeightTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 2.0]), acf_threshold=0.8)
+    assert WeightTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 1.0, 1.0]), acf_threshold=0.8)
+    assert WeightTimeSeries._stationarity_proxy(
         pl.Series("s", [1.0, None, 1.0], dtype=pl.Float64),
         acf_threshold=0.8,
     )
@@ -149,19 +161,20 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
 def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_lag(monkeypatch) -> None:
     ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
     nan_prices = ts.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
-    ts_all_nan = StrategyTimeSeries(metadata=ts.metadata, data=nan_prices)
+    ts_all_nan = WeightTimeSeries(metadata=ts.metadata, data=nan_prices)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Mean of empty slice", category=RuntimeWarning)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         dec = ts_all_nan.decompose(period=2, model="multiplicative", series="price")
     assert "seasonal" in dec.columns
     assert len(dec) == len(ts.data)
+    assert caught == []
 
     monkeypatch.setattr(
         "stacksats.strategy_time_series_analysis._autocorr_pl",
         lambda s, lag: None,
     )
-    assert StrategyTimeSeries._stationarity_proxy(
+    assert WeightTimeSeries._stationarity_proxy(
         pl.Series("s", [1.0, 2.0, 3.0]),
         acf_threshold=0.8,
     )

@@ -66,7 +66,7 @@ Refresh with:
 
 | source_column | required | description | strategy_column | notes |
 | --- | --- | --- | --- | --- |
-| time | True | BRK daily timestamp column. | date | Loaded as index, then represented by TimeSeries.date. |
+| time | True | BRK daily timestamp column. | date | Loaded as canonical daily dates in WeightTimeSeries.date. |
 | AdrActCnt | False | BRK active addresses count. | AdrActCnt |  |
 | AdrBalCnt | False | BRK addresses with non-zero balance. | AdrBalCnt |  |
 | AssetCompletionTime | False | BRK ingestion completion timestamp for asset-day data. | AssetCompletionTime |  |

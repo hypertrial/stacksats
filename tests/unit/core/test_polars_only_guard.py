@@ -46,12 +46,16 @@ def test_find_disallowed_refs_ignores_allowlisted_changelog(tmp_path: Path) -> N
 
 def test_find_disallowed_refs_reports_active_docs_and_tests(tmp_path: Path) -> None:
     legacy = "".join(["pan", "das"])
+    legacy_alias = "".join(["p", "d", "."])
     docs_dir = tmp_path / "docs"
     tests_dir = tmp_path / "tests"
     docs_dir.mkdir()
     tests_dir.mkdir()
     (docs_dir / "guide.md").write_text(f"This mentions {legacy}.\n", encoding="utf-8")
-    (tests_dir / "test_guard.py").write_text(f"from_{legacy} should not appear\n", encoding="utf-8")
+    (tests_dir / "test_guard.py").write_text(
+        f"from_{legacy} should not appear\n{legacy_alias}DataFrame should not appear\n",
+        encoding="utf-8",
+    )
 
     matches = guard.find_disallowed_refs(
         tmp_path,
@@ -62,4 +66,22 @@ def test_find_disallowed_refs_reports_active_docs_and_tests(tmp_path: Path) -> N
     assert [(match.path, match.line) for match in matches] == [
         ("docs/guide.md", 1),
         ("tests/test_guard.py", 1),
+        ("tests/test_guard.py", 2),
     ]
+
+
+def test_find_disallowed_refs_does_not_flag_spd_identifiers(tmp_path: Path) -> None:
+    stacksats_dir = tmp_path / "stacksats"
+    stacksats_dir.mkdir()
+    (stacksats_dir / "module.py").write_text(
+        "for row in df_spd.iter_rows(named=True):\n    pass\n",
+        encoding="utf-8",
+    )
+
+    matches = guard.find_disallowed_refs(
+        tmp_path,
+        roots=("stacksats",),
+        allowlist=("CHANGELOG.md",),
+    )
+
+    assert matches == []

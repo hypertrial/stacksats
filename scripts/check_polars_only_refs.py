@@ -11,8 +11,18 @@ import sys
 DEFAULT_ROOTS = ("stacksats", "tests", "docs", "scripts")
 DEFAULT_ALLOWLIST = ("CHANGELOG.md",)
 _LEGACY_LIB = "".join(["pan", "das"])
-LEGACY_TOKENS = (_LEGACY_LIB, "to_" + _LEGACY_LIB, "from_" + _LEGACY_LIB)
-PATTERN = re.compile("|".join(re.escape(token) for token in LEGACY_TOKENS), re.IGNORECASE)
+_LEGACY_ALIAS = "".join(["p", "d", "."])
+PATTERN = re.compile(
+    "|".join(
+        (
+            rf"(?<![A-Za-z0-9_]){re.escape(_LEGACY_LIB)}(?![A-Za-z0-9_])",
+            rf"(?<![A-Za-z0-9_]){re.escape('to_' + _LEGACY_LIB)}(?![A-Za-z0-9_])",
+            rf"(?<![A-Za-z0-9_]){re.escape('from_' + _LEGACY_LIB)}(?![A-Za-z0-9_])",
+            rf"\b{re.escape(_LEGACY_ALIAS)}",
+        )
+    ),
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)

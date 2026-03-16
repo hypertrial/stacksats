@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
+import stacksats
 import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
-from stacksats import BacktestConfig, MVRVStrategy
+import stacksats.strategy_time_series as strategy_time_series
+from stacksats import BacktestConfig, MVRVStrategy, WeightTimeSeries, WeightTimeSeriesBatch
 from stacksats.strategies.examples import UniformStrategy
 from tests.test_helpers import btc_frame
 
@@ -54,3 +56,16 @@ def test_backtest_default_strategy():
 
     assert result.spd_table.height > 0
     assert np.isfinite(result.exp_decay_percentile)
+
+
+def test_removed_timeseries_aliases_are_not_exported() -> None:
+    assert WeightTimeSeries is not None
+    assert WeightTimeSeriesBatch is not None
+    assert not hasattr(stacksats, "TimeSeries")
+    assert not hasattr(stacksats, "TimeSeriesBatch")
+    assert not hasattr(stacksats, "StrategyTimeSeries")
+    assert not hasattr(stacksats, "StrategyTimeSeriesBatch")
+    assert not hasattr(strategy_time_series, "TimeSeries")
+    assert not hasattr(strategy_time_series, "TimeSeriesBatch")
+    assert not hasattr(strategy_time_series, "StrategyTimeSeries")
+    assert not hasattr(strategy_time_series, "StrategyTimeSeriesBatch")

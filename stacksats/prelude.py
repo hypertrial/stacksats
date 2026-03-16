@@ -125,7 +125,7 @@ def date_range_list(
 ) -> list[dt.datetime]:
     """Return list of dates from start to end inclusive (1d interval).
 
-    Replaces pd.date_range(..., freq='D') for Polars migration.
+    Generate an inclusive daily date range using canonical Python datetimes.
     """
     if isinstance(start, str):
         start = dt.datetime.strptime(start[:10], "%Y-%m-%d")

@@ -9,8 +9,8 @@ import pytest
 from stacksats.prelude import date_range_list
 from stacksats.strategy_time_series import (
     StrategySeriesMetadata,
-    StrategyTimeSeries,
-    StrategyTimeSeriesBatch,
+    WeightTimeSeries,
+    WeightTimeSeriesBatch,
 )
 
 
@@ -36,7 +36,7 @@ def test_strategy_time_series_valid_payload() -> None:
             "locked": [True, True, False],
         }
     )
-    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+    series = WeightTimeSeries(metadata=_metadata(), data=data)
 
     out = series.to_dataframe()
     assert list(out.columns) == ["day_index", "date", "weight", "price_usd", "locked"]
@@ -55,7 +55,7 @@ def test_strategy_time_series_rejects_unknown_columns() -> None:
     )
 
     with pytest.raises(ValueError, match="Schema coverage missing"):
-        StrategyTimeSeries(metadata=_metadata(), data=data)
+        WeightTimeSeries(metadata=_metadata(), data=data)
 
 
 def test_strategy_time_series_accepts_brk_passthrough_column() -> None:
@@ -68,7 +68,7 @@ def test_strategy_time_series_accepts_brk_passthrough_column() -> None:
             "SplyCur": [100.0, 101.0, 102.0],
         }
     )
-    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+    series = WeightTimeSeries(metadata=_metadata(), data=data)
 
     schema = series.schema()
     assert "SplyCur" in schema
@@ -87,7 +87,7 @@ def test_strategy_time_series_rejects_weight_sum_mismatch() -> None:
     )
 
     with pytest.raises(ValueError, match="must sum to 1.0"):
-        StrategyTimeSeries(
+        WeightTimeSeries(
             metadata=StrategySeriesMetadata(
                 strategy_id="test-strategy",
                 strategy_version="1.2.3",
@@ -110,7 +110,7 @@ def test_strategy_time_series_batch_from_flat_dataframe() -> None:
             "price_usd": [40000.0, 41000.0, 50000.0, np.nan],
         }
     )
-    batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+    batch = WeightTimeSeriesBatch.from_flat_dataframe(
         flat,
         strategy_id="test-strategy",
         strategy_version="1.2.3",
@@ -139,7 +139,7 @@ def test_strategy_time_series_batch_preserves_brk_passthrough_columns() -> None:
             "SplyCur": [100.0, 101.0],
         }
     )
-    batch = StrategyTimeSeriesBatch.from_flat_dataframe(
+    batch = WeightTimeSeriesBatch.from_flat_dataframe(
         flat,
         strategy_id="test-strategy",
         strategy_version="1.2.3",
@@ -161,9 +161,9 @@ def test_strategy_time_series_batch_rejects_duplicate_windows() -> None:
             "price_usd": [1.0, 2.0, 3.0],
         }
     )
-    window = StrategyTimeSeries(metadata=md, data=data)
+    window = WeightTimeSeries(metadata=md, data=data)
     with pytest.raises(ValueError, match="Duplicate window key"):
-        StrategyTimeSeriesBatch(
+        WeightTimeSeriesBatch(
             strategy_id=md.strategy_id,
             strategy_version=md.strategy_version,
             run_id=md.run_id,
@@ -183,7 +183,7 @@ def test_strategy_time_series_profile_returns_dataset_summary() -> None:
             "SplyCur": [100.0, None, 102.0],
         }
     )
-    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+    series = WeightTimeSeries(metadata=_metadata(), data=data)
 
     profile = series.profile()
 
@@ -205,7 +205,7 @@ def test_strategy_time_series_weight_diagnostics_returns_expected_metrics() -> N
             "price_usd": [100.0, 110.0, 120.0],
         }
     )
-    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+    series = WeightTimeSeries(metadata=_metadata(), data=data)
 
     diagnostics = series.weight_diagnostics(top_k=2)
 
@@ -227,7 +227,7 @@ def test_strategy_time_series_returns_diagnostics_returns_expected_metrics() -> 
             "price_usd": [100.0, 110.0, 121.0],
         }
     )
-    series = StrategyTimeSeries(metadata=_metadata(), data=data)
+    series = WeightTimeSeries(metadata=_metadata(), data=data)
 
     diagnostics = series.returns_diagnostics()
 
@@ -250,7 +250,7 @@ def test_strategy_time_series_outlier_report_detects_mad_outliers() -> None:
             "SplyCur": [10.0, 10.0, 10.0, 10.0, 10.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -286,7 +286,7 @@ def test_strategy_time_series_rolling_statistics_returns_expected_columns_and_va
             "price_usd": [100.0, 110.0, 120.0, 130.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -315,7 +315,7 @@ def test_strategy_time_series_autocorrelation_returns_expected_shape() -> None:
             "price_usd": [100.0, 110.0, 100.0, 110.0, 100.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -345,7 +345,7 @@ def test_strategy_time_series_drawdown_table_returns_recovered_episode() -> None
             "price_usd": [100.0, 90.0, 95.0, 100.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -376,7 +376,7 @@ def test_strategy_time_series_seasonality_profile_weekday_returns_expected_count
             "price_usd": [100.0, 101.0, 99.0, 102.0, 100.0, 103.0, 104.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -406,7 +406,7 @@ def test_strategy_time_series_resample_returns_expected_frequency_shape() -> Non
             "price_usd": np.arange(100.0, 110.0),
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -434,7 +434,7 @@ def test_strategy_time_series_decompose_additive_returns_expected_columns() -> N
             "price_usd": [100.0, 102.0, 104.0, 103.0, 105.0, 107.0, 106.0, 108.0, 110.0, 109.0, 111.0, 113.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -463,7 +463,7 @@ def test_strategy_time_series_detrend_linear_returns_detrended_columns() -> None
             "price_usd": [100.0, 101.0, 102.0, 103.0, 104.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -491,7 +491,7 @@ def test_strategy_time_series_difference_returns_expected_shape() -> None:
             "price_usd": [100.0, 103.0, 106.0, 109.0, 112.0, 115.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -520,7 +520,7 @@ def test_strategy_time_series_acf_pacf_returns_expected_columns() -> None:
             "price_usd": [100.0, 102.0, 101.0, 103.0, 102.0, 104.0, 103.0, 105.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -547,7 +547,7 @@ def test_strategy_time_series_cross_correlation_returns_lag_window() -> None:
             "price_usd": [100.0, 101.0, 102.0, 103.0, 102.0, 101.0, 102.0, 103.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -575,7 +575,7 @@ def test_strategy_time_series_spectral_density_periodogram_returns_expected_colu
             "price_usd": [100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0, 100.0, 101.0, 100.0, 99.0],
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",
@@ -605,7 +605,7 @@ def test_strategy_time_series_integration_order_returns_per_column_output() -> N
             "SplyCur": np.linspace(10.0, 11.0, 10),
         }
     )
-    series = StrategyTimeSeries(
+    series = WeightTimeSeries(
         metadata=StrategySeriesMetadata(
             strategy_id="test-strategy",
             strategy_version="1.2.3",

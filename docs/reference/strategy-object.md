@@ -45,18 +45,25 @@ Use `spec()` when you need a durable view of strategy identity and configuration
 ## Minimal strategy shape
 
 ```python
+import polars as pl
+
 class MyStrategy(BaseStrategy):
     strategy_id = "my-strategy"
     version = "1.0.0"
     description = "Example strategy."
 
-    def transform_features(self, ctx: StrategyContext) -> pd.DataFrame:
+    def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
         ...
 
-    def build_signals(self, ctx: StrategyContext, features_df: pd.DataFrame) -> dict[str, pd.Series]:
+    def build_signals(self, ctx: StrategyContext, features_df: pl.DataFrame) -> dict[str, pl.Series]:
         ...
 
-    def build_target_profile(self, ctx: StrategyContext, features_df: pd.DataFrame, signals: dict[str, pd.Series]) -> TargetProfile:
+    def build_target_profile(
+        self,
+        ctx: StrategyContext,
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> TargetProfile:
         ...
 ```
 
@@ -80,8 +87,7 @@ Optional contract helpers:
 If a strategy implements both intent hooks:
 
 - set `intent_preference = "propose"` or `intent_preference = "profile"` to make the active path explicit
-- if unset, StackSats currently warns and falls back to `propose_weight(state)`
-- that fallback will become an error in a future breaking release
+- if unset, StackSats raises a contract error during validation/load/spec access
 
 ## Lifecycle methods
 

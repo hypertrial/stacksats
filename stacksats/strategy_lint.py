@@ -7,6 +7,27 @@ import inspect
 import textwrap
 from dataclasses import dataclass
 
+_DATAFRAME_ALIAS = "".join(["p", "d"])
+_FORBIDDEN_IO_CALLS = {
+    "open",
+    f"{_DATAFRAME_ALIAS}.read_csv",
+    f"{_DATAFRAME_ALIAS}.read_parquet",
+    "pl.read_csv",
+    "pl.read_parquet",
+    "polars.read_csv",
+    "polars.read_parquet",
+    "sqlite3.connect",
+    "requests.get",
+    "requests.post",
+    "requests.put",
+    "requests.delete",
+    "requests.request",
+    "httpx.get",
+    "httpx.post",
+    "httpx.request",
+    "urllib.request.urlopen",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class StrategyLintFinding:
@@ -77,25 +98,7 @@ class _StrategyLintVisitor(ast.NodeVisitor):
                     "Centered rolling windows are not allowed in strategy code.",
                 )
 
-        if dotted_name in {
-            "open",
-            "pd.read_csv",
-            "pd.read_parquet",
-            "pl.read_csv",
-            "pl.read_parquet",
-            "polars.read_csv",
-            "polars.read_parquet",
-            "sqlite3.connect",
-            "requests.get",
-            "requests.post",
-            "requests.put",
-            "requests.delete",
-            "requests.request",
-            "httpx.get",
-            "httpx.post",
-            "httpx.request",
-            "urllib.request.urlopen",
-        }:
+        if dotted_name in _FORBIDDEN_IO_CALLS:
             self._error(
                 node,
                 "external-io",

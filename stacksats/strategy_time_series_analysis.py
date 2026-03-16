@@ -364,19 +364,31 @@ class StrategyTimeSeriesAnalysisMixin:
         if model_name == "multiplicative" and np.any(arr <= 0):
             raise ValueError("multiplicative decomposition requires strictly positive values.")
 
-        detrended = arr - trend_arr if model_name == "additive" else arr / np.where(trend_arr != 0, trend_arr, np.nan)
+        detrended = (
+            arr - trend_arr
+            if model_name == "additive"
+            else arr / np.where(trend_arr != 0, trend_arr, np.nan)
+        )
         seasonal = np.full(len(arr), np.nan)
         for i in range(int(period)):
             idx = np.arange(i, len(arr), int(period))
             if idx.size > 0:
-                seasonal_value = float(np.nanmean(detrended[idx]))
+                period_values = detrended[idx]
+                finite_values = period_values[np.isfinite(period_values)]
+                if finite_values.size == 0:
+                    seasonal_value = 0.0 if model_name == "additive" else 1.0
+                else:
+                    seasonal_value = float(finite_values.mean())
                 seasonal[idx] = seasonal_value
 
         if model_name == "additive":
-            seasonal = seasonal - float(np.nanmean(seasonal))
+            finite_seasonal = seasonal[np.isfinite(seasonal)]
+            seasonal_mean = float(finite_seasonal.mean()) if finite_seasonal.size else 0.0
+            seasonal = seasonal - seasonal_mean
             residual = arr - trend_arr - seasonal
         else:
-            seasonal_mean = float(np.nanmean(seasonal))
+            finite_seasonal = seasonal[np.isfinite(seasonal)]
+            seasonal_mean = float(finite_seasonal.mean()) if finite_seasonal.size else 1.0
             if not np.isfinite(seasonal_mean) or np.isclose(seasonal_mean, 0.0):
                 seasonal_mean = 1.0
             seasonal = seasonal / seasonal_mean

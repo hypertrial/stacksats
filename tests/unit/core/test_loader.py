@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from stacksats.loader import load_strategy
-from stacksats.strategy_types import BaseStrategy, StrategyContractWarning
+from stacksats.strategy_types import BaseStrategy
 
 
 def _write_module(path: Path, source: str) -> Path:
@@ -310,7 +310,7 @@ class NanParamsStrategy(BaseStrategy):
         load_strategy(f"{strategy_path}:NanParamsStrategy")
 
 
-def test_load_strategy_warns_for_ambiguous_dual_hook_contract(tmp_path: Path) -> None:
+def test_load_strategy_rejects_ambiguous_dual_hook_contract(tmp_path: Path) -> None:
     strategy_path = _write_module(
         tmp_path / "dual_hook_strategy.py",
         """
@@ -335,10 +335,8 @@ class DualHookStrategy(BaseStrategy):
 """,
     )
 
-    with pytest.warns(StrategyContractWarning, match="Current fallback uses propose_weight"):
-        strategy = load_strategy(f"{strategy_path}:DualHookStrategy")
-
-    assert isinstance(strategy, BaseStrategy)
+    with pytest.raises(ValueError, match="Set intent_preference = 'propose' or 'profile' explicitly"):
+        load_strategy(f"{strategy_path}:DualHookStrategy")
 
 
 def test_load_strategy_cleans_sys_modules_on_import_failure(tmp_path: Path) -> None:

@@ -11,7 +11,6 @@ from stacksats.prelude import date_range_list
 from stacksats.strategy_types import (
     BaseStrategy,
     StrategyContext,
-    StrategyContractWarning,
     StrategyMetadata,
     StrategySpec,
     strategy_context_from_features_df,
@@ -120,7 +119,7 @@ def test_spec_returns_stable_public_contract() -> None:
     assert spec.required_feature_columns == ()
 
 
-def test_intent_mode_warns_and_defaults_to_propose_for_dual_hook_strategy() -> None:
+def test_intent_mode_requires_explicit_preference_for_dual_hook_strategy() -> None:
     class _DualHookStrategy(BaseStrategy):
         strategy_id = "dual"
         version = "1.0.0"
@@ -132,8 +131,8 @@ def test_intent_mode_warns_and_defaults_to_propose_for_dual_hook_strategy() -> N
             del ctx, signals
             return pl.DataFrame({"date": features_df["date"], "value": pl.lit(1.0)})
 
-    with pytest.warns(StrategyContractWarning, match="Current fallback uses propose_weight"):
-        assert _DualHookStrategy().intent_mode() == "propose"
+    with pytest.raises(ValueError, match="Set intent_preference = 'propose' or 'profile' explicitly"):
+        _DualHookStrategy().intent_mode()
 
 
 def test_intent_mode_uses_explicit_profile_preference() -> None:

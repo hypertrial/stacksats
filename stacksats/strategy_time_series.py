@@ -170,7 +170,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
 
     @classmethod
     def validate_brk_lineage_coverage(cls) -> None:
-        """Ensure lineage mappings target documented core TimeSeries columns."""
+        """Ensure lineage mappings target documented core WeightTimeSeries columns."""
         validate_lineage_coverage(
             lineage=cls.BRK_LINEAGE,
             schema_specs_iter=cls._core_schema_specs(),
@@ -185,7 +185,7 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
 
     @classmethod
     def schema_markdown_table(cls, extra_schema: Iterable[ColumnSpec] = ()) -> str:
-        """Render TimeSeries schema specs as a markdown table."""
+        """Render WeightTimeSeries schema specs as a markdown table."""
         cls.validate_brk_lineage_coverage()
         return cls._render_schema_markdown(cls._merged_schema_specs(extra_schema))
 
@@ -400,20 +400,10 @@ class WeightTimeSeries(StrategyTimeSeriesDiagnosticsMixin, StrategyTimeSeriesAna
         }
 
 
-# Deprecated aliases — remove in 0.9.0
-TimeSeries = WeightTimeSeries
-TimeSeriesBatch = WeightTimeSeriesBatch
-StrategyTimeSeries = WeightTimeSeries
-StrategyTimeSeriesBatch = WeightTimeSeriesBatch
-
 __all__ = [
     "ColumnSpec",
     "BRKLineageSpec",
     "StrategySeriesMetadata",
     "WeightTimeSeries",
     "WeightTimeSeriesBatch",
-    "TimeSeries",
-    "TimeSeriesBatch",
-    "StrategyTimeSeries",
-    "StrategyTimeSeriesBatch",
 ]

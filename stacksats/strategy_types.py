@@ -6,7 +6,6 @@ import datetime as dt
 import inspect
 import math
 import types as pytypes
-import warnings
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -256,11 +255,6 @@ class DayState:
     total_days: int
     uniform_weight: float
 
-
-class StrategyContractWarning(UserWarning):
-    """Warning emitted for ambiguous or transitional strategy contracts."""
-
-
 _METADATA_FIELD_NAMES = frozenset({"strategy_id", "version", "description", "intent_preference"})
 
 
@@ -402,16 +396,11 @@ class BaseStrategy(ABC):
         if has_propose_hook and has_profile_hook:
             if self.intent_preference in {"propose", "profile"}:
                 return self.intent_preference
-            warnings.warn(
+            raise ValueError(
                 "Strategy implements both propose_weight(state) and "
                 "build_target_profile(ctx, features_df, signals). "
-                "Current fallback uses propose_weight(state). "
-                "Set intent_preference = 'propose' or 'profile' to make this explicit "
-                "before the next breaking release.",
-                StrategyContractWarning,
-                stacklevel=2,
+                "Set intent_preference = 'propose' or 'profile' explicitly."
             )
-            return "propose"
         return "propose" if has_propose_hook else "profile"
 
     def required_feature_columns(self) -> tuple[str, ...]:
@@ -754,6 +743,12 @@ def validate_strategy_contract(strategy: BaseStrategy) -> tuple[bool, bool]:
     preference = strategy.intent_preference
     if preference is not None and preference not in {"propose", "profile"}:
         raise ValueError("intent_preference must be 'propose', 'profile', or None.")
+    if has_propose_hook and has_profile_hook and preference is None:
+        raise ValueError(
+            "Strategy implements both propose_weight(state) and "
+            "build_target_profile(ctx, features_df, signals). "
+            "Set intent_preference = 'propose' or 'profile' explicitly."
+        )
     feature_sets = tuple(strategy.required_feature_sets())
     if len(feature_sets) == 0:
         raise ValueError("Strategy must declare at least one required_feature_set.")
