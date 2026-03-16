@@ -212,3 +212,5 @@ __marimo__/
 
 /output
 *.parquet
+merged_metrics*.parquet
+bitcoin_analytics*.parquet

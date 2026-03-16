@@ -15,6 +15,18 @@ Canonical file link:
 Canonical schema page:
 
 - [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
+- [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
+
+## Snapshot scale (current canonical repo snapshot)
+
+The current canonical snapshot is large enough to support long-horizon strategy
+research, not just toy examples:
+
+- `236,259,020` rows
+- `6,274` daily observations
+- `41,407` distinct metric keys
+- `284` top-level metric families
+- coverage from `2009-01-03` to `2026-03-13`
 
 ## Canonical merged_metrics schema
 
@@ -25,6 +37,9 @@ The canonical parquet has exactly:
 - `value` (`Float64`)
 
 This is the source-of-truth dataset for StackSats documentation and data workflow.
+The physical long-format schema and the semantic metric taxonomy are documented
+separately so metric grouping can evolve without conflating it with the parquet
+column contract.
 
 ## Runtime ingestion contract
 

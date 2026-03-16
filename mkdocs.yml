@@ -114,6 +114,7 @@ nav:
   - Reference:
       - Glossary: glossary.md
       - Merged Metrics Schema: reference/merged-metrics-parquet-schema.md
+      - Merged Metrics Taxonomy: reference/merged-metrics-taxonomy.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - Strategies: reference/strategies.md

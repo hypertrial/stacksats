@@ -73,7 +73,7 @@ From repository root:
 bash scripts/release_check.sh
 ```
 
-This is a release-preflight command. It runs lint, docs checks, the full non-performance test suite, a preflight package build, and `twine check`.
+This is a release-preflight command. It runs lint, docs checks, generated-doc sync checks, the full non-performance test suite, a preflight package build, and `twine check`.
 It also runs the BRK source-contract guard (`scripts/check_no_coinmetrics_refs.py`).
 The preflight build only verifies buildability; rebuild release artifacts after the release tag is created.
 

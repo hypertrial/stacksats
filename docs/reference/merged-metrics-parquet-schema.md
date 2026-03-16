@@ -8,6 +8,9 @@ description: Canonical schema for the Google Drive distributed merged_metrics pa
 This page defines the canonical StackSats dataset contract for the Google Drive
 `merged_metrics*.parquet` file.
 
+Use [Merged Metrics Taxonomy](merged-metrics-taxonomy.md) for the semantic
+grouping model of the full `metric` namespace.
+
 Canonical file link:
 
 - <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>

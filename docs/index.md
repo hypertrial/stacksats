@@ -14,6 +14,20 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
   </p>
 </div>
 
+## Canonical Dataset
+
+StackSats is anchored on the canonical BRK `merged_metrics*.parquet` dataset.
+
+- `236,259,020` rows in the current repo snapshot
+- `6,274` daily observations from `2009-01-03` to `2026-03-13`
+- `41,407` distinct metric keys across `284` top-level families
+
+Start here:
+
+- [BRK Data Source](data-source.md)
+- [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
+- [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
+
 ## Core Objects
 
 StackSats is built around three fundamental runtime objects:

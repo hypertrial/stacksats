@@ -96,6 +96,18 @@ stacksats strategy animate \
 
 Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
 
+Current canonical `merged_metrics*.parquet` snapshot in repo-backed docs:
+
+- `236,259,020` rows
+- `6,274` daily observations
+- `41,407` distinct metric keys
+- `284` top-level metric families
+
+Detailed references:
+
+- [docs/reference/merged-metrics-parquet-schema.md](docs/reference/merged-metrics-parquet-schema.md)
+- [docs/reference/merged-metrics-taxonomy.md](docs/reference/merged-metrics-taxonomy.md)
+
 Quick command:
 
 ```bash
@@ -159,6 +171,7 @@ venv/bin/python -m pre_commit install -t pre-commit
 venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
 venv/bin/python scripts/check_no_coinmetrics_refs.py
+venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 bash scripts/check_docs_refs.sh
 bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
 bash scripts/clean_local.sh

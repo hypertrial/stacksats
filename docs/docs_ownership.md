@@ -13,6 +13,8 @@ This page defines who updates what and when documentation updates are required.
 - `docs/commands.md` is the canonical command index/routing page.
 - `docs/run/*.md` pages are the canonical flag/reference truth for each lifecycle command.
 - `docs/reference/strategies.md` is the canonical built-in strategy catalog (intent, required columns, tuning defaults, run guidance).
+- `docs/reference/merged-metrics-parquet-schema.md` is the canonical physical schema page for the long-format BRK parquet.
+- `docs/reference/merged-metrics-taxonomy.md` is the canonical semantic taxonomy page for the merged-metrics namespace.
 - `docs/migration.md` is the canonical old->new compatibility mapping page.
 - `docs/start/minimal-strategy-examples.md` is the canonical minimal template page for both strategy hook styles.
 - `docs/faq.md` captures recurring docs questions sourced from docs feedback issues.
@@ -27,6 +29,7 @@ This page defines who updates what and when documentation updates are required.
 - `docs/model*.md` and `docs/concepts/*`: model/runtime maintainers.
 - `docs/reference/*`: API and object model maintainers.
 - `docs/reference/strategies.md`: strategy/runtime maintainers.
+- `docs/reference/merged-metrics-*.md`: data/runtime maintainers.
 - `docs/commands.md`, `docs/run/*`, and `docs/recipes/*`: CLI/runtime maintainers.
 - `docs/tasks.md` and `docs/migration.md`: CLI/runtime maintainers.
 - `docs/start/minimal-strategy-examples.md` and `docs/faq.md`: CLI/runtime maintainers.
@@ -46,6 +49,7 @@ Update docs in the same PR when any of these change:
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
 - BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
 - BRK data distribution changes (`data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
+- merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.
 - Docs IA changes (`mkdocs.yml`, `docs/commands.md`, `docs/run/*`): update `scripts/check_docs_ux.py` rules in the same PR.
 
 ## Generated artifact policy
@@ -72,5 +76,6 @@ bash scripts/check_docs_refs.sh
 venv/bin/python scripts/check_docs_ux.py
 venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
+venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 venv/bin/python -m mkdocs build --strict
 ```

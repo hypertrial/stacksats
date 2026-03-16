@@ -35,7 +35,7 @@ The amount of new Bitcoin created in each block (approximately every 10 minutes)
 ## System Terms
 
 ### Canonical merged_metrics parquet
-The canonical Bitcoin analytics dataset used by StackSats is the long-format `merged_metrics*.parquet` distribution (`day_utc`, `metric`, `value`). See [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) and [BRK Data Source](data-source.md).
+The canonical Bitcoin analytics dataset used by StackSats is the long-format `merged_metrics*.parquet` distribution (`day_utc`, `metric`, `value`). See [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md), [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md), and [BRK Data Source](data-source.md).
 
 ### Runtime BRK parquet
 Runtime commands and `load_data(...)` read a runtime-compatible BRK-wide parquet (for example `bitcoin_analytics.parquet`) via `STACKSATS_ANALYTICS_PARQUET`. This runtime parquet is a derived artifact from canonical `merged_metrics`. For custom DataFrames, use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe(...)`.

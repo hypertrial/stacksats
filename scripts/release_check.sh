@@ -109,6 +109,7 @@ bash scripts/check_docs_refs.sh
 python scripts/check_docs_ux.py
 python scripts/check_release_docs_sync.py
 python scripts/sync_objects_schema_docs.py --check
+python scripts/generate_merged_metrics_taxonomy.py --check
 python -m mkdocs build --strict
 
 log "Running unit and BDD release suite"

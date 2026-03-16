@@ -33,6 +33,14 @@ Canonical dataset schema and projection workflow:
 
 - [BRK Data Source](../data-source.md)
 - [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)
+- [Merged Metrics Taxonomy](../reference/merged-metrics-taxonomy.md)
+
+Current canonical snapshot scale:
+
+- `236,259,020` rows
+- `41,407` metric keys
+- `284` top-level families
+- daily coverage from `2009-01-03` to `2026-03-13`
 
 If you already have a runtime-compatible BRK parquet:
 
