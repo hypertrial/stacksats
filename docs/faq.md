@@ -53,12 +53,12 @@ See: [Backtest Runtime](model_backtest.md) and [WeightTimeSeries](reference/stra
 
 ## Migration and compatibility
 
-### My code used `compute_weights_shared` or `BACKTEST_END`. What do I use now?
+### My code used `compute_weights_shared` or a hardcoded backtest end. What do I use now?
 
 Use explicit replacements from [Migration Guide](migration.md):
 
 - `compute_weights_shared(...)` -> `compute_weights_with_features(..., features_df=...)`
-- `BACKTEST_END` -> `get_backtest_end()`
+- backtest end constant/override -> `get_backtest_end()` (canonical default is `2025-12-31`)
 
 ### My code used `model_development.softmax` or `strategy.export_weights(...)`. What now?
 
@@ -76,8 +76,9 @@ Yes. `stacksats.load_data(...)` now follows strict `BTCDataProvider` source-only
 - no synthetic "today" row
 - no historical gap filling
 - no MVRV fallback substitution
+- feature warmup history is retained by default (rows before `backtest_start` are included for feature computation)
 
-The supported source is BRK parquet (see [BRK Data Source](data-source.md)); for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Use `end_date=...` when you need an explicit end bound.
+The canonical source dataset is long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) and [BRK Data Source](data-source.md)). Runtime commands read a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`; for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Use `end_date=...` when you need an explicit end bound.
 
 ### Which modules are stable public API?
 

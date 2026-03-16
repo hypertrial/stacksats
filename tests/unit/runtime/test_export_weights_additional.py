@@ -148,6 +148,33 @@ def test_get_current_btc_price_logs_success_path(
     assert price == 50000.0
 
 
+def test_get_current_btc_price_disables_warmup_for_recent_history_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import stacksats.export_weights as export_weights_module
+
+    observed: dict[str, object] = {}
+
+    class _Provider:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        def load(self, **kwargs):
+            observed.update(kwargs)
+            return pl.DataFrame(
+                {
+                    "date": [dt.datetime(2024, 1, 1)],
+                    "price_usd": [42000.0],
+                }
+            )
+
+    monkeypatch.setattr(export_weights_module, "BTCDataProvider", _Provider)
+    price = export_weights_module.get_current_btc_price(previous_price=40000.0)
+
+    assert price == 42000.0
+    assert observed["include_warmup"] is False
+
+
 class _StrategyWithHook(BaseStrategy):
     strategy_id = "test-hook"
 

@@ -118,7 +118,7 @@ All public types and functions below are exported from the top-level `stacksats`
 |--------|-------------|
 | `StrategyRunner` | Orchestrates backtest, export, run, and validation. |
 | `load_strategy` | Load a strategy (e.g. from JSON). |
-| `load_data` | Load data from BRK parquet (prelude helper). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
+| `load_data` | Load runtime BRK-wide parquet (prelude helper). Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
 | `precompute_features` | Precompute features for a strategy. |
 
 ### Removed aliases

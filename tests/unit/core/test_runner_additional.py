@@ -149,6 +149,50 @@ def test_backtest_win_rate_counts_only_deltas_above_tolerance(
     assert result.win_rate == pytest.approx(66.6666666667, rel=0.0, abs=1e-9)
 
 
+def test_backtest_defaults_to_fixed_scoring_end_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    strategy = UniformProposeStrategy()
+    observed: dict[str, object] = {}
+
+    def _fake_backtest_dynamic_dca(
+        _btc_df,
+        _strategy_fn,
+        *,
+        features_df,
+        strategy_label,
+        start_date,
+        end_date,
+    ):
+        del _btc_df, _strategy_fn, strategy_label
+        observed["start_date"] = start_date
+        observed["end_date"] = end_date
+        observed["feature_max_date"] = str(features_df["date"].max())[:10]
+        return (
+            pl.DataFrame(
+                {
+                    "dynamic_percentile": [60.0],
+                    "uniform_percentile": [40.0],
+                }
+            ),
+            55.0,
+            45.0,
+        )
+
+    monkeypatch.setattr("stacksats.runner.backtest_dynamic_dca", _fake_backtest_dynamic_dca)
+
+    runner.backtest(
+        strategy,
+        BacktestConfig(),
+        btc_df=btc_df(days=2200),
+    )
+
+    assert observed["start_date"] is None
+    assert observed["end_date"] is None
+    assert observed["feature_max_date"] == "2025-12-31"
+
+
 def test_validate_reports_win_rate_threshold_failure_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -38,7 +38,7 @@ stacksats strategy run-daily \
 ## Troubleshooting
 
 - If live mode fails without adapter, pass `--adapter`.
-- If price coverage fails, verify BRK parquet path and run-date coverage.
+- If price coverage fails, verify runtime BRK parquet path and run-date coverage (and confirm it was derived from canonical `merged_metrics`).
 
 ## Next step
 

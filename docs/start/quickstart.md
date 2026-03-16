@@ -27,18 +27,20 @@ Use this page for a 5-minute first run.
     pip install stacksats
     ```
 
-## 2) Make BRK data available
+## 2) Make canonical data available
 
-Use the canonical data workflow in [BRK Data Source](../data-source.md).
+Canonical dataset schema and projection workflow:
 
-Most direct path:
+- [BRK Data Source](../data-source.md)
+- [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)
+
+If you already have a runtime-compatible BRK parquet:
 
 ```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
 export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ```
 
-If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.parquet` at repo root manually and set `STACKSATS_ANALYTICS_PARQUET` to that path.
+If you start from canonical `merged_metrics*.parquet`, use the projection step in [BRK Data Source](../data-source.md) to derive `bitcoin_analytics.parquet` first, then export `STACKSATS_ANALYTICS_PARQUET`.
 
 ## 3) Run an example strategy
 

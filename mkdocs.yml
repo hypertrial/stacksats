@@ -113,6 +113,7 @@ nav:
       - Migration Guide: migration.md
   - Reference:
       - Glossary: glossary.md
+      - Merged Metrics Schema: reference/merged-metrics-parquet-schema.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - FeatureTimeSeries: reference/feature-timeseries.md

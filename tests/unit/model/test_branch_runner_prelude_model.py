@@ -25,6 +25,10 @@ from stacksats.strategy_types import (
 )
 
 
+def test_get_backtest_end_is_fixed_scoring_horizon() -> None:
+    assert prelude_module.get_backtest_end() == "2025-12-31"
+
+
 def _btc_df() -> pl.DataFrame:
     dates = pl.datetime_range(
         dt.datetime(2023, 1, 1),

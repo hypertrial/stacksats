@@ -50,16 +50,15 @@ class MyStrategy(BaseStrategy):
         )
 ```
 
-## 2) Make BRK data available
+## 2) Make canonical data available
 
-Use [BRK Data Source](../data-source.md) before validation/backtest.
+Use [BRK Data Source](../data-source.md) and [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md) before validation/backtest.
 
 ```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
 export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ```
 
-If your manifest still has placeholder Drive IDs, fetch will fail by design. In that case, place `bitcoin_analytics.parquet` at repo root manually and export `STACKSATS_ANALYTICS_PARQUET` to that file.
+If you start from canonical `merged_metrics*.parquet`, derive `bitcoin_analytics.parquet` using the projection workflow in [BRK Data Source](../data-source.md), then export `STACKSATS_ANALYTICS_PARQUET`.
 
 ## 3) Validate your strategy
 

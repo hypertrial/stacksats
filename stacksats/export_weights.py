@@ -150,7 +150,11 @@ def get_current_btc_price(previous_price=None):
     try:
         provider = BTCDataProvider(max_staleness_days=14)
         history_start = (today - timedelta(days=30)).strftime("%Y-%m-%d")
-        btc_df = provider.load(backtest_start=history_start, end_date=today_str)
+        btc_df = provider.load(
+            backtest_start=history_start,
+            end_date=today_str,
+            include_warmup=False,
+        )
         if "price_usd" not in btc_df.columns:
             raise ValueError("No price_usd column")
         date_col = btc_df["date"]

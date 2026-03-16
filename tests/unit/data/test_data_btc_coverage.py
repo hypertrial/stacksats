@@ -77,7 +77,7 @@ def test_load_fails_when_all_price_values_are_nan(tmp_path: Path, monkeypatch: p
         provider.load(backtest_start="2024-01-01", end_date="2024-01-02")
 
 
-def test_load_fails_when_data_stale_but_end_date_covered(
+def test_load_uses_available_horizon_when_data_stale_but_end_date_covered(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,7 +93,51 @@ def test_load_fails_when_data_stale_but_end_date_covered(
         max_staleness_days=3,
     )
 
-    with pytest.raises(DataLoadError, match="BRK data is stale for runtime usage"):
+    loaded = provider.load(backtest_start="2024-01-01", end_date="2024-01-02")
+    assert loaded.height == 2
+    assert str(loaded["date"].max())[:10] == "2024-01-02"
+
+
+def test_load_without_end_date_uses_latest_available_date(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pq_path = tmp_path / "stale-no-end-date.parquet"
+    _write_parquet(
+        pq_path,
+        prices=[("2024-01-01", 40000.0), ("2024-01-02", 40100.0)],
+        mvrv=[("2024-01-01", 2.0), ("2024-01-02", 2.1)],
+    )
+    monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 10), max_staleness_days=3)
+
+    loaded = provider.load(backtest_start="2024-01-01")
+    assert loaded.height == 2
+    assert str(loaded["date"].max())[:10] == "2024-01-02"
+
+
+def test_load_rejects_non_finite_price_in_warmup_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pq_path = tmp_path / "warmup-nan.parquet"
+    _write_parquet(
+        pq_path,
+        prices=[
+            ("2023-12-31", float("nan")),
+            ("2024-01-01", 40000.0),
+            ("2024-01-02", 40100.0),
+        ],
+        mvrv=[
+            ("2023-12-31", 1.9),
+            ("2024-01-01", 2.0),
+            ("2024-01-02", 2.1),
+        ],
+    )
+    monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 2))
+
+    with pytest.raises(DataLoadError, match="missing price_usd values"):
         provider.load(backtest_start="2024-01-01", end_date="2024-01-02")
 
 

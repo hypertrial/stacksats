@@ -71,11 +71,18 @@ class TestColumnMapProviderHappyPath:
         assert "price_usd" in result.columns
         assert "mvrv" in result.columns
 
-    def test_load_windowing_respects_backtest_start(self) -> None:
-        """load() slices the window from backtest_start onward."""
+    def test_load_includes_pre_start_history_for_warmup_by_default(self) -> None:
+        """load() retains pre-start rows so feature warmup is available."""
         df = _make_df(start="2015-01-01", periods=3000)
         provider = ColumnMapDataProvider(df=df)
         result = provider.load(backtest_start="2018-06-01")
+        assert str(result["date"].min())[:10] == "2015-01-01"
+
+    def test_load_windowing_respects_backtest_start_when_warmup_disabled(self) -> None:
+        """load() clips to backtest_start when include_warmup=False."""
+        df = _make_df(start="2015-01-01", periods=3000)
+        provider = ColumnMapDataProvider(df=df)
+        result = provider.load(backtest_start="2018-06-01", include_warmup=False)
         assert str(result["date"].min())[:10] == "2018-06-01"
 
     def test_load_windowing_respects_end_date(self) -> None:
@@ -161,6 +168,22 @@ class TestColumnMapProviderErrors:
         provider = ColumnMapDataProvider(df=df)
         with pytest.raises(ColumnMapError, match="Missing price_usd"):
             provider.load(backtest_start="2020-01-01", end_date="2020-01-05")
+
+    def test_price_usd_nan_in_warmup_history_raises(self) -> None:
+        """Warmup rows are part of the loaded frame and must have valid price_usd."""
+        df = pl.DataFrame(
+            {
+                "date": [
+                    dt.datetime(2019, 12, 31),
+                    dt.datetime(2020, 1, 1),
+                    dt.datetime(2020, 1, 2),
+                ],
+                "price_usd": [float("nan"), 100.0, 101.0],
+            }
+        )
+        provider = ColumnMapDataProvider(df=df)
+        with pytest.raises(ColumnMapError, match="Missing price_usd"):
+            provider.load(backtest_start="2020-01-01", end_date="2020-01-02")
 
 
 # ---------------------------------------------------------------------------

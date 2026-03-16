@@ -17,7 +17,7 @@ Legacy CoinMetrics source paths are removed from active runtime and docs workflo
 This page covers migration for:
 
 - backtest helper removals
-- runtime constant removals
+- runtime end-date default changes
 - export/date-range signature changes
 - compatibility API removals
 - strict source-only loader behavior
@@ -29,7 +29,7 @@ This page covers migration for:
 | --- | --- |
 | `compute_weights_shared(window_feat)` | `compute_weights_with_features(window_feat, features_df=...)` |
 | `stacksats.backtest._FEATURES_DF` global mutation | pass `features_df` explicitly at call sites |
-| `BACKTEST_END` constant | `get_backtest_end()` |
+| hardcoded backtest end constants | `get_backtest_end()` |
 | `generate_date_ranges(start, end, min_length_days)` | `generate_date_ranges(start, end)` |
 | `RANGE_START` / `RANGE_END` / `MIN_RANGE_LENGTH_DAYS` module defaults | set explicit app-level defaults in your own code/config |
 | `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
@@ -37,7 +37,7 @@ This page covers migration for:
 | `stacksats.load_data(cache_dir=..., max_age_hours=...)` | `stacksats.load_data(parquet_path=..., max_staleness_days=..., end_date=...)` |
 | `coinmetrics_overlay_v1` provider ID | `brk_overlay_v1` provider ID |
 | `PriceUSD_coinmetrics` / `CapMVRVCur` runtime columns | canonical runtime columns `price_usd` / `mvrv` |
-| `stacksats.btc_api.coinmetrics_btc_csv` | removed; BRK parquet loader is canonical |
+| `stacksats.btc_api.coinmetrics_btc_csv` | removed; canonical source dataset is `merged_metrics*.parquet` and runtime consumes a derived BRK-wide parquet |
 | `strategy.spec()` as the informal contract | `strategy.spec()` as the canonical public contract |
 | `StrategyTimeSeries` | Removed. Use `WeightTimeSeries` |
 | `StrategyTimeSeriesBatch` | Removed. Use `WeightTimeSeriesBatch` |
@@ -75,10 +75,6 @@ weights = compute_weights_with_features(
 ### 2) Backtest end date
 
 ```python
-# old
-assert max_received <= BACKTEST_END
-
-# new
 from datetime import datetime
 
 backtest_end = datetime.strptime(get_backtest_end(), "%Y-%m-%d")
@@ -133,7 +129,7 @@ df = load_data(
 - no synthetic "today" row creation
 - no historical date gap filling
 - no MVRV fallback substitution
-- BRK parquet (or user-supplied DataFrame) is the supported source path
+- canonical source dataset is `merged_metrics*.parquet` (long-format), and runtime consumes a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`
 
 ### 7) Strategy contract hardening
 

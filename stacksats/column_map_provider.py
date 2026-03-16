@@ -73,11 +73,14 @@ class ColumnMapDataProvider:
         *,
         backtest_start: str = "2018-01-01",
         end_date: str | None = None,
+        include_warmup: bool = True,
     ) -> pl.DataFrame:
         """Return the canonical BTC DataFrame for the requested window.
 
         Applies the column map, enforces a daily date column, and slices
-        to ``[backtest_start, end_date]``.
+        to ``[backtest_start, end_date]`` for scoring.
+        When ``include_warmup`` is True (default), rows before
+        ``backtest_start`` are retained for feature warmup.
         """
         frame = self._apply_column_map(self.df)
         frame = self._to_daily_date(frame)
@@ -101,10 +104,16 @@ class ColumnMapDataProvider:
                 f"Received backtest_start={start_ts.date()} and end_date={end_ts.date()}."
             )
 
-        window = frame.filter(
-            (pl.col(DATE_COL) >= start_ts) & (pl.col(DATE_COL) <= end_ts)
-        )
-        if window.is_empty():
+        if include_warmup:
+            window = frame.filter(pl.col(DATE_COL) <= end_ts)
+            scored_window = window.filter(pl.col(DATE_COL) >= start_ts)
+        else:
+            window = frame.filter(
+                (pl.col(DATE_COL) >= start_ts) & (pl.col(DATE_COL) <= end_ts)
+            )
+            scored_window = window
+
+        if scored_window.is_empty():
             raise ColumnMapError(
                 "No rows available in the requested backtest window "
                 f"[{start_ts.date()}, {end_ts.date()}]."

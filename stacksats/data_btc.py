@@ -29,10 +29,10 @@ def _resolve_parquet_path(path_override: str | None) -> Path:
 
 
 def _norm_dt(value: dt.datetime) -> dt.datetime:
-    out = value.replace(hour=0, minute=0, second=0, microsecond=0)
+    out = value
     if value.tzinfo is not None:
         out = value.astimezone(dt.timezone.utc).replace(tzinfo=None)
-    return out
+    return out.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _require_daily_index(
@@ -103,6 +103,7 @@ class BTCDataProvider:
 
     parquet_path: str | None = None
     clock: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc)
+    # Retained for API compatibility; runtime now defaults to available parquet horizon.
     max_staleness_days: int = 3
 
     def load(
@@ -110,23 +111,19 @@ class BTCDataProvider:
         *,
         backtest_start: str = "2018-01-01",
         end_date: str | None = None,
+        include_warmup: bool = True,
     ) -> pl.DataFrame:
         now = _norm_dt(self.clock())
         backtest_start_ts = _norm_dt(dt.datetime.strptime(backtest_start[:10], "%Y-%m-%d"))
         if end_date is not None:
             try:
-                target_end = _norm_dt(dt.datetime.strptime(end_date[:10], "%Y-%m-%d"))
+                requested_end = _norm_dt(dt.datetime.strptime(end_date[:10], "%Y-%m-%d"))
             except Exception as exc:
                 raise ValueError(f"Invalid end_date value: {end_date!r}") from exc
+            if requested_end > now:
+                requested_end = now
         else:
-            target_end = now
-        if target_end > now:
-            target_end = now
-        if target_end < backtest_start_ts:
-            raise ValueError(
-                "end_date must be on or after backtest_start. "
-                f"Received backtest_start={backtest_start_ts.date()} and end_date={target_end.date()}."
-            )
+            requested_end = None
 
         frame = _load_btc_from_parquet(_resolve_parquet_path(self.parquet_path))
         if "price_usd" not in frame.columns:
@@ -141,24 +138,38 @@ class BTCDataProvider:
         else:
             latest_dt = dt.datetime.fromisoformat(str(latest_price_date)[:10])
         latest_dt = _norm_dt(latest_dt)
+        # Default to available parquet horizon when no explicit end date is provided.
+        target_end = requested_end if requested_end is not None else min(now, latest_dt)
+
+        if target_end < backtest_start_ts:
+            raise ValueError(
+                "end_date must be on or after backtest_start. "
+                f"Received backtest_start={backtest_start_ts.date()} and end_date={target_end.date()}."
+            )
         if latest_dt < target_end:
             raise DataLoadError(
                 "BRK data does not cover requested end_date. "
                 f"Latest available={latest_dt.date()}, requested={target_end.date()}."
             )
-        if latest_dt < (now - dt.timedelta(days=int(self.max_staleness_days))):
-            raise DataLoadError(
-                "BRK data is stale for runtime usage. "
-                f"Latest available={latest_dt.date()}, now={now.date()}."
-            )
 
-        window = frame.filter(
-            (pl.col(DATE_COL) >= backtest_start_ts) & (pl.col(DATE_COL) <= target_end)
-        )
-        if window.is_empty():
+        if include_warmup:
+            window = frame.filter(pl.col(DATE_COL) <= target_end)
+            scored_window = window.filter(pl.col(DATE_COL) >= backtest_start_ts)
+        else:
+            window = frame.filter(
+                (pl.col(DATE_COL) >= backtest_start_ts) & (pl.col(DATE_COL) <= target_end)
+            )
+            scored_window = window
+
+        if scored_window.is_empty():
             raise DataLoadError("No BRK rows available in requested backtest window.")
-        if window.filter(pl.col("price_usd").is_null()).height > 0:
-            first_null = window.filter(pl.col("price_usd").is_null())[DATE_COL][0]
+
+        invalid_price = pl.col("price_usd").is_null()
+        if window["price_usd"].dtype in (pl.Float32, pl.Float64):
+            invalid_price = invalid_price | ~pl.col("price_usd").is_finite()
+        invalid_rows = window.filter(invalid_price)
+        if invalid_rows.height > 0:
+            first_null = invalid_rows[DATE_COL][0]
             first_str = str(first_null)[:10] if first_null is not None else "unknown"
             raise DataLoadError(
                 "BRK data has missing price_usd values in requested window. "

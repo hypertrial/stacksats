@@ -8,9 +8,9 @@ description: Task-first workflows for common StackSats goals.
 Use this page to jump directly to the workflow you need.
 
 Global source contract:
-- Strategy runtime and validation use BRK parquet only (no other data backends).
-- Set `STACKSATS_ANALYTICS_PARQUET` or place `bitcoin_analytics.parquet` at repo root.
-- For canonical Drive-distributed artifacts + checksum workflow, see [BRK Data Source](data-source.md).
+- Canonical dataset is long-format `merged_metrics*.parquet`; schema is documented in [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
+- Strategy runtime and validation read a runtime BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET` (or `./bitcoin_analytics.parquet` fallback).
+- Use [BRK Data Source](data-source.md) for canonical source, projection, and checksum workflow.
 
 ## I want to validate a strategy
 
@@ -192,7 +192,7 @@ stacksats strategy run-daily \
 
 ### Expected output
 
-- No references to removed internals (`compute_weights_shared`, `_FEATURES_DF`, `BACKTEST_END`, old `generate_date_ranges` signature).
+- No references to removed internals (`compute_weights_shared`, `_FEATURES_DF`, old `generate_date_ranges` signature).
 
 ### Troubleshooting
 

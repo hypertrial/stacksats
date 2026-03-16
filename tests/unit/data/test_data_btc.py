@@ -57,6 +57,40 @@ def test_load_success_from_parquet(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert last_row.height == 1 and float(last_row["price_usd"][0]) > 0.0
 
 
+def test_load_includes_pre_start_history_for_warmup_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pq_path = tmp_path / "bitcoin_analytics.parquet"
+    _create_parquet_fixture(pq_path, start="2023-12-29", days=8)
+    monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
+
+    df = provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
+
+    assert str(df["date"].min())[:10] == "2023-12-29"
+    assert str(df["date"].max())[:10] == "2024-01-05"
+
+
+def test_load_can_disable_warmup_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pq_path = tmp_path / "bitcoin_analytics.parquet"
+    _create_parquet_fixture(pq_path, start="2023-12-29", days=8)
+    monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
+
+    df = provider.load(
+        backtest_start="2024-01-01",
+        end_date="2024-01-05",
+        include_warmup=False,
+    )
+
+    assert str(df["date"].min())[:10] == "2024-01-01"
+    assert str(df["date"].max())[:10] == "2024-01-05"
+
+
 def test_load_missing_parquet_file_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", "/tmp/does-not-exist.parquet")
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
@@ -87,7 +121,10 @@ def test_load_parquet_missing_price_column_fails(tmp_path: Path, monkeypatch: py
         provider.load(backtest_start="2024-01-01", end_date="2024-01-03")
 
 
-def test_load_stale_data_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_fails_when_requested_end_date_is_not_covered(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     pq_path = tmp_path / "stale.parquet"
     _create_parquet_fixture(pq_path, start="2024-01-01", days=3)
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))

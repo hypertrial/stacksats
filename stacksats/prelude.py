@@ -11,6 +11,7 @@ from .runner_helpers import build_window_index, slice_window_or_filter
 
 # Configuration
 BACKTEST_START = "2018-01-01"
+BACKTEST_END = "2025-12-31"
 # Fixed allocation span used across modules.
 WINDOW_DAYS = ALLOCATION_SPAN_DAYS
 WINDOW_OFFSET = ALLOCATION_WINDOW_OFFSET
@@ -34,12 +35,8 @@ WEIGHT_SUM_TOLERANCE = 1e-5
 
 
 def get_backtest_end() -> str:
-    """Return dynamic default end date as yesterday (UTC-localized date)."""
-    today = dt.datetime.now(dt.timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    yesterday = today - dt.timedelta(days=1)
-    return yesterday.strftime("%Y-%m-%d")
+    """Return canonical default scoring end date for backtests."""
+    return BACKTEST_END
 
 
 def load_data(
@@ -237,7 +234,7 @@ def compute_cycle_spd(
             pl.DataFrame with 'date' and 'weight' columns
         features_df: Optional precomputed features. If None, computes them internally.
         start_date: Optional start date (default: BACKTEST_START)
-        end_date: Optional end date (default: dynamic yesterday)
+        end_date: Optional end date (default: BACKTEST_END)
         validate_weights: Whether to validate that weights sum to 1.0 (default: True)
 
     Returns:
@@ -252,6 +249,9 @@ def compute_cycle_spd(
 
     dataframe = _ensure_pl_with_date(dataframe)
     dataframe = dataframe.with_columns(_daily_datetime_expr(dataframe).alias(DATE_COL))
+    data_end = dataframe[DATE_COL].max()
+    if data_end is not None:
+        end = min(end, data_end)
 
     if features_df is None:
         full_feat = precompute_features(dataframe)
@@ -427,7 +427,7 @@ def backtest_dynamic_dca(
         features_df: Optional precomputed features. If None, computes them internally.
         strategy_label: Label for logging (default: "strategy")
         start_date: Optional start date (default: BACKTEST_START)
-        end_date: Optional end date (default: dynamic yesterday)
+        end_date: Optional end date (default: BACKTEST_END)
 
     Returns:
         Tuple of:

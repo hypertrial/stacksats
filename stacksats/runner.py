@@ -17,7 +17,7 @@ from .data_btc import BTCDataProvider
 from .feature_materialization import hash_dataframe
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
-from .prelude import BACKTEST_START, backtest_dynamic_dca
+from .prelude import BACKTEST_END, BACKTEST_START, backtest_dynamic_dca
 from .runner_validation import (
     STRICT_MUTATION_MESSAGE,
     STRICT_PROFILE_MUTATION_MESSAGE,
@@ -442,13 +442,20 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             (config.start_date or BACKTEST_START)[:10], "%Y-%m-%d"
         )
         end_col = btc_df["date"].max()
-        if config.end_date:
-            end_ts = dt.datetime.strptime(config.end_date[:10], "%Y-%m-%d")
-        else:
-            end_ts = (
-                end_col
-                if isinstance(end_col, dt.datetime)
-                else dt.datetime.fromisoformat(str(end_col)[:10])
+        data_end_ts = (
+            end_col
+            if isinstance(end_col, dt.datetime)
+            else dt.datetime.fromisoformat(str(end_col)[:10])
+        )
+        requested_end = dt.datetime.strptime(
+            (config.end_date or BACKTEST_END)[:10],
+            "%Y-%m-%d",
+        )
+        end_ts = min(requested_end, data_end_ts)
+        if end_ts < start_ts:
+            raise ValueError(
+                "Backtest end date must be on or after start date. "
+                f"Resolved start={start_ts.date()} end={end_ts.date()}."
             )
         try:
             full_features_df = self._materialize_strategy_features(
@@ -556,11 +563,16 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
         start_date = config.start_date or BACKTEST_START
         end_col = btc_df["date"].max()
-        end_date = config.end_date or (
-            end_col.strftime("%Y-%m-%d")
-            if hasattr(end_col, "strftime")
-            else str(end_col)[:10]
+        resolved_end = dt.datetime.strptime(
+            (config.end_date or BACKTEST_END)[:10],
+            "%Y-%m-%d",
         )
+        data_end = (
+            end_col
+            if isinstance(end_col, dt.datetime)
+            else dt.datetime.fromisoformat(str(end_col)[:10])
+        )
+        end_date = min(resolved_end, data_end).strftime("%Y-%m-%d")
         start_ts = dt.datetime.strptime(start_date[:10], "%Y-%m-%d")
         end_ts = dt.datetime.strptime(end_date[:10], "%Y-%m-%d")
         backtest_slice = btc_df.filter(

@@ -8,7 +8,8 @@ description: Reference for `stacksats strategy validate`.
 ## Prerequisites
 
 - Strategy spec format: `module_or_path:ClassName`
-- BRK parquet available (`STACKSATS_ANALYTICS_PARQUET` or `./bitcoin_analytics.parquet`)
+- Canonical source dataset is `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)).
+- Runtime BRK-wide parquet available (`STACKSATS_ANALYTICS_PARQUET` or `./bitcoin_analytics.parquet`).
 
 ## Command
 
@@ -27,6 +28,7 @@ stacksats strategy validate \
 ## Key options
 
 - `--strategy-config <path>`: strategy params JSON.
+- default validation bounds if omitted: start `2018-01-01`, end `2025-12-31` (clamped to available data).
 - `--min-win-rate <float>`: validation threshold (default `50.0`).
 - `--no-strict`: disable strict robustness gates intentionally.
 

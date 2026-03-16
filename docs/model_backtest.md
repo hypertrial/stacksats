@@ -14,7 +14,8 @@ The backtest compares a strategy against uniform DCA (equal daily allocations) a
 Default behavior:
 - Fixed allocation span: configured globally (`STACKSATS_ALLOCATION_SPAN_DAYS`, default `365`)
 - Default start: `2018-01-01`
-- Default end: dynamic "yesterday" (`get_backtest_end()`), unless overridden
+- Default end: fixed `2025-12-31` (`get_backtest_end()`), unless overridden
+- Feature materialization includes pre-start history by default for warmup; scoring windows still start at `start_date`.
 
 Allocation invariants and the framework/user boundary are defined in `docs/framework.md`.
 
@@ -37,7 +38,7 @@ Backtesting is orchestrated through these modules:
    - `StrategyRunner.backtest(...)` is the canonical entry point.
    - Validates strategy contract, builds `StrategyContext`, computes per-window weights, and enforces weight constraints.
 2. `stacksats/prelude.py`
-   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only BRK parquet validation (no synthetic fill behavior).
+   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only runtime BRK parquet validation (no synthetic fill behavior). Canonical source dataset remains long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)).
    - `compute_cycle_spd(...)` builds rolling windows and computes sats-per-dollar metrics.
    - `backtest_dynamic_dca(...)` aggregates window-level results and computes the exponential-decay percentile.
 3. `stacksats/model_development.py`
@@ -53,8 +54,7 @@ If you maintained custom tooling around older backtest internals:
 
 - Removed: `compute_weights_shared(window_feat)`.
   - Use: `compute_weights_with_features(window_feat, features_df=...)`.
-- Removed: `BACKTEST_END` constant.
-  - Use: `get_backtest_end()` at runtime.
+- `get_backtest_end()` returns the canonical default scoring horizon (`2025-12-31`).
 - Updated signature: `generate_date_ranges(start, end, min_length_days)` -> `generate_date_ranges(start, end)`.
 
 Internal helper modules are not part of the stable public API. Prefer `StrategyRunner`, top-level `stacksats` exports, and CLI commands for long-term integrations.

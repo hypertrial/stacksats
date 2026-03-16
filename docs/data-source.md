@@ -1,30 +1,109 @@
 ---
 title: BRK Data Source
-description: Canonical data distribution and integrity workflow for BRK parquet artifacts.
+description: Canonical merged_metrics parquet contract and runtime projection workflow.
 ---
 
-# BRK Data Source (Parquet + Schema)
+# BRK Data Source (Canonical Merged Metrics + Runtime Projection)
 
-StackSats strategy runtime is BRK-only.
+StackSats canonical dataset is the long-format Google Drive parquet:
+`merged_metrics*.parquet`.
 
-- canonical runtime env var: `STACKSATS_ANALYTICS_PARQUET`
+Canonical file link:
+
+- <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>
+
+Canonical schema page:
+
+- [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
+
+## Canonical merged_metrics schema
+
+The canonical parquet has exactly:
+
+- `day_utc` (`Date`)
+- `metric` (`String`)
+- `value` (`Float64`)
+
+This is the source-of-truth dataset for StackSats documentation and data workflow.
+
+## Runtime ingestion contract
+
+Runtime APIs are strict and deterministic:
+
+- runtime env var: `STACKSATS_ANALYTICS_PARQUET`
 - local fallback path when env var is unset: `./bitcoin_analytics.parquet`
 - runtime does not auto-download data
+- framework loaders retain pre-start history by default for feature warmup; scoring windows still respect requested start/end bounds
 
-## Expected parquet schema
+Runtime expects a BRK-wide parquet (for example columns like `date`, `price_usd`,
+`mvrv`, and optional overlay features).
 
-The parquet file must have a daily date-like column that normalizes to the canonical `date` field, and at least:
+That BRK-wide parquet is a derived artifact from canonical `merged_metrics`.
 
-- `price_usd`: required
-- `mvrv`: optional; used by overlay and some strategies
+Current minimal projection for built-in strategy audit tooling:
 
-Optional overlay columns (when present, used by `brk_overlay_v1`): `adjusted_sopr`, `adjusted_sopr_7d_ema`, `realized_cap_growth_rate`, `market_cap_growth_rate`, `tx_count_pct10`, `annualized_volume_usd`, `hash_rate_1y_sma`, `subsidy_usd_average`, `net_sentiment`, `greed_index`, `pain_index`.
+- `market_cap`
+- `supply_btc`
+- `mvrv`
+- `adjusted_sopr`
+- `adjusted_sopr_7d_ema`
+- `realized_cap_growth_rate`
+- `market_cap_growth_rate`
 
-For repo audit helpers that start from long-format `merged_metrics*.parquet`, the current projection explicitly lifts `market_cap`, `supply_btc`, `mvrv`, `adjusted_sopr`, `adjusted_sopr_7d_ema`, `realized_cap_growth_rate`, and `market_cap_growth_rate` into the temporary BRK-wide frame.
+With:
+
+- `price_usd = market_cap / supply_btc`
+- rename `day_utc` to `date`
+
+## Derive runtime parquet from canonical merged_metrics
+
+```bash
+python - <<'PY'
+import polars as pl
+from pathlib import Path
+
+src = Path("merged_metrics_2026-03-15_04-29-57.parquet")
+dst = Path("bitcoin_analytics.parquet")
+
+metrics = [
+    "market_cap",
+    "supply_btc",
+    "mvrv",
+    "adjusted_sopr",
+    "adjusted_sopr_7d_ema",
+    "realized_cap_growth_rate",
+    "market_cap_growth_rate",
+]
+
+(
+    pl.scan_parquet(src)
+    .filter(pl.col("metric").is_in(metrics))
+    .select("day_utc", "metric", "value")
+    .collect()
+    .pivot(values="value", index="day_utc", on="metric")
+    .with_columns((pl.col("market_cap") / pl.col("supply_btc")).alias("price_usd"))
+    .rename({"day_utc": "date"})
+    .select(
+        "date",
+        "price_usd",
+        "mvrv",
+        "adjusted_sopr",
+        "adjusted_sopr_7d_ema",
+        "realized_cap_growth_rate",
+        "market_cap_growth_rate",
+    )
+    .filter(pl.col("price_usd").is_finite() & (pl.col("price_usd") > 0))
+    .write_parquet(dst)
+)
+print(f"wrote {dst.resolve()}")
+PY
+
+export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
+```
 
 ## Canonical Source of Truth
 
-- Google Drive folder: <https://drive.google.com/drive/folders/1SvAwcdegMzgPANM4pnuTH_9DbNEyXt8N?usp=drive_link>
+- Google Drive parquet: <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>
 - Manifest in repo: `data/brk_data_manifest.json`
 
 The manifest defines, for both parquet and schema artifacts:
@@ -51,7 +130,7 @@ venv/bin/python scripts/fetch_brk_data.py --target-dir .
 Default behavior:
 
 - downloads parquet to `./bitcoin_analytics.parquet`
-- downloads schema markdown to `./docs/reference/bitcoin-analytics-parquet-schema.md`
+- downloads schema markdown path from manifest metadata
 - verifies `sha256` and exact file size from manifest
 - fails closed on missing metadata, hash mismatch, size mismatch, or partial download
 
@@ -69,6 +148,7 @@ When Drive artifacts are refreshed:
 
 1. update `file_id`, `sha256`, `size_bytes`, `version`, `updated_at_utc` in `data/brk_data_manifest.json`
 2. run `venv/bin/python scripts/fetch_brk_data.py --target-dir . --overwrite`
-3. verify docs/tests pass
+3. update [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) when canonical schema/profile changes
+4. verify docs/tests pass
 
 Do not add network fetches to runtime providers. Keep downloads script-only to preserve deterministic runtime behavior.

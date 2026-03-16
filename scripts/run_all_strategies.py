@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 
 from stacksats.framework_contract import ALLOCATION_WINDOW_OFFSET
 from stacksats.loader import load_strategy
+from stacksats.prelude import BACKTEST_END
 from stacksats.runner import StrategyRunner
 from stacksats.runner_helpers import weights_match
 from stacksats.strategy_types import BacktestConfig, ValidationConfig
@@ -108,7 +109,10 @@ def _load_audit_dataset(root_dir: Path) -> tuple[Path, pl.DataFrame, str, str]:
         pq_path = raw_pq
     brk_df = pl.read_parquet(pq_path)
     last_date = brk_df["date"].max()
-    end_date = last_date.isoformat() if hasattr(last_date, "isoformat") else str(last_date)[:10]
+    latest_date = last_date.isoformat() if hasattr(last_date, "isoformat") else str(last_date)[:10]
+    latest_dt = dt.datetime.strptime(latest_date[:10], "%Y-%m-%d")
+    fixed_end_dt = dt.datetime.strptime(BACKTEST_END, "%Y-%m-%d")
+    end_date = min(latest_dt, fixed_end_dt).strftime("%Y-%m-%d")
     start_date = "2018-01-01"
     try:
         end_dt = dt.datetime.strptime(end_date[:10], "%Y-%m-%d")
