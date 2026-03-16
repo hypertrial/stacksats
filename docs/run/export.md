@@ -20,6 +20,8 @@ stacksats strategy export \
   --output-dir output
 ```
 
+Built-in strategy catalog and expected behavior: [Strategies](../reference/strategies.md).
+
 ## Expected output
 
 - Artifacts under `output/<strategy_id>/<version>/<run_id>/`.

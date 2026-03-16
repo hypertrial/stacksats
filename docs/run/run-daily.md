@@ -20,6 +20,8 @@ stacksats strategy run-daily \
   --mode paper
 ```
 
+Built-in strategy catalog and expected behavior: [Strategies](../reference/strategies.md).
+
 ## Expected output
 
 - Structured JSON payload plus status line:

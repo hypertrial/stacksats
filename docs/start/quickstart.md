@@ -52,6 +52,9 @@ stacksats strategy backtest \
   --output-dir output
 ```
 
+Built-in strategy catalog (intent mode, required columns, and tuning parameters):
+[Strategies](../reference/strategies.md).
+
 This runs a packaged example through the canonical lifecycle and writes artifacts under:
 
 ```text
@@ -87,6 +90,7 @@ Typical files:
 - [Notebook Demo](notebook-demo.md)
 - [First Strategy Run](first-strategy-run.md)
 - [Minimal Strategy Examples](minimal-strategy-examples.md)
+- [Strategies](../reference/strategies.md)
 - [Framework Boundary](../framework.md)
 - [CLI Commands](../commands.md)
 - [Migration Guide](../migration.md)

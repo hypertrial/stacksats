@@ -15,6 +15,7 @@ Create a custom strategy file and run it end-to-end.
 2. Declare `required_feature_sets()` so the framework materializes the feature providers your strategy needs.
 3. Implement `transform_features`, `build_signals`, and one intent hook.
    - Use copyable templates: [Minimal Strategy Examples](../start/minimal-strategy-examples.md).
+   - Use built-in reference models: [Strategies](../reference/strategies.md).
 4. Declare any hard-required transformed columns with `required_feature_columns()`.
 5. Keep durable config in public attrs or `params()`, and keep runtime caches private.
 6. Validate and backtest with CLI from the canonical command guide:

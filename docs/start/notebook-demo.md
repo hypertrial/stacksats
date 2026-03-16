@@ -27,6 +27,8 @@ stacksats strategy backtest \
   --output-dir output
 ```
 
+   Built-in strategy catalog: [Strategies](../reference/strategies.md).
+
 3. Run the lifecycle commands from [Command Index](../commands.md):
    - `stacksats strategy validate ...`
    - `stacksats strategy backtest ...`

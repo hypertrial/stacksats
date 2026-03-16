@@ -6,6 +6,7 @@ description: Canonical index for StackSats strategy lifecycle commands.
 # Command Index
 
 Use this page to find the canonical command reference for each lifecycle action.
+For built-in strategy behavior and parameter defaults, see [Strategies](reference/strategies.md).
 
 ## Most Common Commands (copy/paste)
 

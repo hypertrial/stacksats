@@ -132,6 +132,7 @@ A successful first run should include:
 
 - Use [Task Hub](../tasks.md) for focused workflows.
 - Use [Minimal Strategy Examples](minimal-strategy-examples.md) to compare `propose_weight` vs `build_target_profile`.
+- Use [Strategies](../reference/strategies.md) to compare built-in models and expected behavior.
 - Use [Interpret Backtest Metrics](../recipes/interpret-backtest.md) for comparison discipline.
 - Use [FAQ](../faq.md) for recurring setup and integration questions.
 

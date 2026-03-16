@@ -20,6 +20,8 @@ stacksats strategy validate \
   --end-date 2024-12-31
 ```
 
+Built-in strategy catalog and expected behavior: [Strategies](../reference/strategies.md).
+
 ## Expected output
 
 - Summary line with pass/fail and gate statuses.

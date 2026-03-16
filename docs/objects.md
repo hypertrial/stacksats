@@ -106,11 +106,9 @@ All public types and functions below are exported from the top-level `stacksats`
 
 ### Example strategies
 
-| Object | Description |
-|--------|-------------|
-| `ExampleMVRVStrategy` | Example MVRV strategy. |
-| `MVRVStrategy` | MVRV strategy. |
-| `MVRVPlusStrategy` | MVRV+ strategy. |
+Canonical built-in strategy documentation (behavior, required columns, intent mode, and tuning defaults):
+
+- [Strategies](reference/strategies.md)
 
 ### Runners and helpers
 

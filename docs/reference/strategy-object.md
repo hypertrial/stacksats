@@ -13,6 +13,9 @@ A strategy subclasses `BaseStrategy` (`stacksats/strategy_types.py`) and defines
 - intent path: `propose_weight(...)` or `build_target_profile(...)`
 - lifecycle helpers: `validate(...)`, `backtest(...)`, `export(...)`, `run(...)`
 
+Built-in strategy behavior, required columns, and tuning defaults are maintained in
+[Strategies](strategies.md). This page focuses on the base API contract.
+
 `BaseStrategy.spec()` is the canonical public contract for a strategy. It includes:
 
 - `metadata`: normalized identity (`strategy_id`, `version`, `description`)
@@ -109,6 +112,7 @@ If a strategy implements both intent hooks:
 
 ## Related docs
 
+- [Strategies](strategies.md)
 - [Framework Boundary](../framework.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
 - [WeightTimeSeries](strategy-timeseries.md)

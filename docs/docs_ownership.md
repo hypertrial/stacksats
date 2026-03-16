@@ -12,6 +12,7 @@ This page defines who updates what and when documentation updates are required.
 - `docs/tasks.md` is the canonical workflow-intent hub (`what to do`, `when to do it`, `what success looks like`).
 - `docs/commands.md` is the canonical command index/routing page.
 - `docs/run/*.md` pages are the canonical flag/reference truth for each lifecycle command.
+- `docs/reference/strategies.md` is the canonical built-in strategy catalog (intent, required columns, tuning defaults, run guidance).
 - `docs/migration.md` is the canonical old->new compatibility mapping page.
 - `docs/start/minimal-strategy-examples.md` is the canonical minimal template page for both strategy hook styles.
 - `docs/faq.md` captures recurring docs questions sourced from docs feedback issues.
@@ -25,6 +26,7 @@ This page defines who updates what and when documentation updates are required.
 - `docs/framework.md`: framework contract maintainers.
 - `docs/model*.md` and `docs/concepts/*`: model/runtime maintainers.
 - `docs/reference/*`: API and object model maintainers.
+- `docs/reference/strategies.md`: strategy/runtime maintainers.
 - `docs/commands.md`, `docs/run/*`, and `docs/recipes/*`: CLI/runtime maintainers.
 - `docs/tasks.md` and `docs/migration.md`: CLI/runtime maintainers.
 - `docs/start/minimal-strategy-examples.md` and `docs/faq.md`: CLI/runtime maintainers.

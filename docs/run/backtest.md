@@ -21,6 +21,8 @@ stacksats strategy backtest \
   --output-dir output
 ```
 
+Built-in strategy catalog and expected behavior: [Strategies](../reference/strategies.md).
+
 ## Expected output
 
 - Run artifacts under `output/<strategy_id>/<version>/<run_id>/`.

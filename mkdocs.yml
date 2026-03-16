@@ -116,6 +116,7 @@ nav:
       - Merged Metrics Schema: reference/merged-metrics-parquet-schema.md
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
+      - Strategies: reference/strategies.md
       - FeatureTimeSeries: reference/feature-timeseries.md
       - WeightTimeSeries: reference/strategy-timeseries.md
       - WeightTimeSeries Schema: reference/strategy-timeseries-schema.md
