@@ -7,7 +7,7 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats is a **strategy-first backtesting and execution framework** for Bitcoin weight management. It separates **Strategy** intent from **TimeSeries** outcomes, providing a strict boundary for causal validation.
+StackSats is a **strategy-first backtesting and execution framework** for Bitcoin weight management. It separates **Strategy** intent from validated weight time-series outcomes, providing a strict boundary for causal validation.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
@@ -143,8 +143,8 @@ stacksats strategy export \
 
 Use date bounds that are covered by available BTC source data.
 
-Exported `TimeSeries` objects are read-only validated artifacts.
-If you need to reload an export later, use `TimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
+Exported `WeightTimeSeries` objects are read-only validated artifacts.
+If you need to reload an export later, use `WeightTimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
 
 ## Public API
 
@@ -155,7 +155,7 @@ Top-level exports:
 - `RunDailyConfig`
 - `StrategyMetadata`, `StrategySpec`, `StrategyContractWarning`
 - `StrategyArtifactSet`
-- `TimeSeries`, `TimeSeriesBatch`
+- `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - `BacktestResult`, `ValidationResult`, `DailyRunResult`
 - `load_strategy()`, `load_data()`, `precompute_features()`
 - `MVRVStrategy`
@@ -173,7 +173,7 @@ venv/bin/python -m ruff check .
 venv/bin/python scripts/check_no_coinmetrics_refs.py
 venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 bash scripts/check_docs_refs.sh
-bash scripts/check_coverage.sh  # heavy; mirrored by scheduled/manual coverage-report workflow
+bash scripts/check_coverage.sh  # heavy; enforces 100% line coverage on stacksats/
 bash scripts/clean_local.sh
 bash scripts/release_check.sh
 ```

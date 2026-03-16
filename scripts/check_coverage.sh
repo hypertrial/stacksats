@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # The fail-under floor is intentionally ratcheted upward over time and should not
 # be lowered in routine cleanup PRs.
-COVERAGE_FAIL_UNDER="${COVERAGE_FAIL_UNDER:-97}"
+COVERAGE_FAIL_UNDER="${COVERAGE_FAIL_UNDER:-100}"
 
 python -m pytest \
   --cov=stacksats \

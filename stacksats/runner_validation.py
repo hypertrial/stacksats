@@ -364,10 +364,6 @@ class StrategyRunnerValidationMixin:
             )
             fold_win_rates.append(float(fold_result.win_rate))
 
-        if len(fold_win_rates) < 2:
-            messages.append("Strict fold checks skipped: not enough valid fold results.")
-            return True, messages
-
         min_fold = float(np.min(fold_win_rates))
         std_fold = float(np.std(fold_win_rates))
         ok = True

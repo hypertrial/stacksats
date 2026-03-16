@@ -39,7 +39,7 @@ def test_cli_run_daily_noop_status_prints_idempotent(monkeypatch, capsys) -> Non
         cli,
         "_build_parser",
         lambda: SimpleNamespace(
-            parse_args=lambda: SimpleNamespace(
+            parse_args=lambda argv=None: SimpleNamespace(
                 strategy="dummy.py:Dummy",
                 strategy_config=None,
                 strategy_command="run-daily",
@@ -78,7 +78,7 @@ def test_cli_error_handlers_exit_with_user_errors(
     monkeypatch, capsys, exc: Exception, expected: str, hint_expected: bool
 ) -> None:
     parser = SimpleNamespace(
-        parse_args=_parser_args,
+        parse_args=lambda argv=None: _parser_args(),
         error=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
     )
     monkeypatch.setattr(cli, "_build_parser", lambda: parser)

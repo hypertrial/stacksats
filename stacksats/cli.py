@@ -259,9 +259,9 @@ def _backtest_result_from_json(path: str | Path):
     )
 
 
-def main() -> None:
+def run(argv: list[str] | None = None) -> int:
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     strategy_command = getattr(args, "strategy_command", None)
     try:
         if strategy_command == "animate":
@@ -283,7 +283,7 @@ def main() -> None:
             )
             print(json.dumps(paths, indent=2))
             print(f"Saved: {output_dir}")
-            return
+            return 0
 
         strategy = load_strategy(args.strategy, config_path=args.strategy_config)
         runner = StrategyRunner()
@@ -302,7 +302,7 @@ def main() -> None:
                 print(f"- {msg}")
             if not result.passed:
                 raise SystemExit(1)
-            return
+            return 0
 
         if strategy_command == "backtest":
             result = runner.backtest(
@@ -326,7 +326,7 @@ def main() -> None:
             output_path = output_root / "backtest_result.json"
             result.to_json(output_path)
             print(f"Saved: {output_root}")
-            return
+            return 0
 
         if strategy_command == "export":
             batch = runner.export(
@@ -353,7 +353,7 @@ def main() -> None:
             }
             print(json.dumps(meta, indent=2))
             print(f"Saved: {output_root}")
-            return
+            return 0
 
         if strategy_command == "run-daily":
             result = runner.run_daily(
@@ -372,10 +372,10 @@ def main() -> None:
             print(json.dumps(result.to_json(), indent=2))
             if result.status == "executed":
                 print("Status: EXECUTED")
-                return
+                return 0
             if result.status == "noop":
                 print("Status: NO-OP (idempotent)")
-                return
+                return 0
             print("Status: FAILED")
             raise SystemExit(1)
 
@@ -387,7 +387,7 @@ def main() -> None:
                 state_db_path=args.state_db_path,
             )
             print(json.dumps(result, indent=2))
-            return
+            return 0
 
         parser.error("Unsupported command.")
     except JSONDecodeError as exc:
@@ -415,5 +415,9 @@ def main() -> None:
         _exit_user_error(str(exc))
 
 
+def main(argv: list[str] | None = None) -> int:
+    return run(argv)
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

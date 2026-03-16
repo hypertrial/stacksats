@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 
 import polars as pl
 import pytest
 
 from stacksats.docs_merged_metrics_taxonomy import (
+    _is_mining_pool_family,
     build_taxonomy_from_metrics,
     build_taxonomy_from_parquet,
+    classify_family,
+    render_taxonomy_docs,
+    render_taxonomy_json,
+    resolve_default_parquet_path,
+    taxonomy_docs_path,
+    taxonomy_json_path,
 )
 
 
@@ -160,3 +168,72 @@ def test_build_taxonomy_from_parquet_requires_long_format_schema(tmp_path: Path)
 
     with pytest.raises(ValueError, match="requires long-format parquet columns"):
         build_taxonomy_from_parquet(parquet_path)
+
+
+def test_taxonomy_path_helpers_and_default_parquet_resolution(tmp_path: Path) -> None:
+    (tmp_path / "data").mkdir()
+    (tmp_path / "docs" / "reference").mkdir(parents=True)
+    older = tmp_path / "merged_metrics_2026-01-01.parquet"
+    newer = tmp_path / "merged_metrics_2026-02-01.parquet"
+    pl.DataFrame({"day_utc": [], "metric": [], "value": []}).write_parquet(older)
+    pl.DataFrame({"day_utc": [], "metric": [], "value": []}).write_parquet(newer)
+
+    assert taxonomy_json_path(tmp_path) == tmp_path / "data" / "brk_merged_metrics_taxonomy.json"
+    assert taxonomy_docs_path(tmp_path) == tmp_path / "docs" / "reference" / "merged-metrics-taxonomy.md"
+    assert resolve_default_parquet_path(tmp_path) == newer
+
+
+def test_resolve_default_parquet_path_raises_when_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="No merged_metrics"):
+        resolve_default_parquet_path(tmp_path)
+
+
+def test_classify_family_fallback_and_core_market_cases() -> None:
+    assert classify_family("price", ["price_usd"]) == "core_market_metrics"
+    assert classify_family("mystery", ["mystery_metric"]) == "other_standalone_metrics"
+    assert classify_family("p2tr", ["p2tr_outputs"]) == "script_output_type_cohorts"
+    assert classify_family(
+        "poolx",
+        [
+            "poolx_blocks_mined",
+            "poolx_dominance",
+            "poolx_coinbase",
+            "poolx_fee",
+            "poolx_subsidy",
+        ],
+    ) == "mining_pool_metrics"
+    assert _is_mining_pool_family("p2tr", ["p2tr_blocks_mined"]) is False
+
+
+def test_render_taxonomy_docs_and_json_include_expected_sections() -> None:
+    taxonomy = _taxonomy_for(
+        [
+            "price_usd",
+            "utxos_1d_to_1w_mvrv",
+            "mystery_metric",
+        ]
+    )
+
+    docs = render_taxonomy_docs(taxonomy)
+    payload = render_taxonomy_json(taxonomy)
+
+    assert "Dataset scale in the current canonical snapshot" in docs
+    assert "## Namespace Registry" in docs
+    assert "`data/brk_merged_metrics_taxonomy.json`" in docs
+    assert '"dataset_snapshot"' in payload
+    assert '"namespace_registry"' in payload
+
+
+def test_build_taxonomy_from_parquet_success_path(tmp_path: Path) -> None:
+    parquet_path = tmp_path / "merged_metrics_sample.parquet"
+    pl.DataFrame(
+        {
+            "day_utc": [dt.date(2024, 1, 1), dt.date(2024, 1, 2)],
+            "metric": ["price_usd", "utxos_1d_to_1w_mvrv"],
+            "value": [1.0, 2.0],
+        }
+    ).write_parquet(parquet_path)
+
+    taxonomy = build_taxonomy_from_parquet(parquet_path)
+    assert taxonomy["dataset_snapshot"]["parquet_name"] == parquet_path.name
+    assert taxonomy["dataset_snapshot"]["distinct_metrics"] == 2

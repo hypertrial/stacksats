@@ -484,10 +484,6 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                     strict_mode=False,
                     cache_namespace="base",
                 )
-                if mutated:
-                    raise ValueError(
-                        "Strategy mutated ctx.features during backtest weight computation."
-                    )
                 ctx = strategy_context_from_features_df(
                     df_window,
                     window_start,

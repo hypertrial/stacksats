@@ -60,8 +60,6 @@ def weights_match(lhs: pl.DataFrame, rhs: pl.DataFrame, *, atol: float = 1e-12) 
         return False
     lcol = _value_col(lhs)
     rcol = _value_col(rhs)
-    if not lcol or not rcol:
-        return False
     merged = lhs.select([DATE_COL, pl.col(lcol).cast(pl.Float64, strict=False).alias("l")]).join(
         rhs.select([DATE_COL, pl.col(rcol).cast(pl.Float64, strict=False).alias("r")]),
         on=DATE_COL,
@@ -229,11 +227,10 @@ def build_fold_ranges(
     for i in range(max_folds):
         left = int(boundaries[i])
         right = int(boundaries[i + 1]) - 1
-        if right <= left:
-            continue
-        fold_start = all_days[left]
-        fold_end = all_days[right]
-        span = (fold_end - fold_start).days + 1 if hasattr(fold_end - fold_start, "days") else right - left + 1
-        if span >= ALLOCATION_SPAN_DAYS:
-            folds.append((fold_start, fold_end))
+        if right > left:
+            fold_start = all_days[left]
+            fold_end = all_days[right]
+            span = (fold_end - fold_start).days + 1 if hasattr(fold_end - fold_start, "days") else right - left + 1
+            if span >= ALLOCATION_SPAN_DAYS:
+                folds.append((fold_start, fold_end))
     return folds

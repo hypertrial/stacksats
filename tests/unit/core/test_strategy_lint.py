@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import ast
+
 import polars as pl
 
-from stacksats.strategy_lint import lint_strategy_class, summarize_lint_findings
+from stacksats.strategy_lint import (
+    _attribute_name,
+    _call_argument,
+    _is_negative_integer,
+    _is_rolling_aggregation,
+    _is_true_literal,
+    lint_strategy_class,
+    summarize_lint_findings,
+)
 from stacksats.strategy_types import BaseStrategy
 
 
@@ -58,6 +68,32 @@ class _WarningStrategy(BaseStrategy):
         return state.uniform_weight
 
 
+class _PathIOStrategy(BaseStrategy):
+    strategy_id = "lint-path-io"
+
+    def transform_features(self, ctx):
+        from pathlib import Path
+
+        path = Path("demo.txt")
+        path.read_text()
+        return ctx.features.data.clone()
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+
+
+class _IlocWarningStrategy(BaseStrategy):
+    strategy_id = "lint-iloc-negative"
+
+    def transform_features(self, ctx):
+        frame = ctx.features.data
+        _ = frame.iloc[-1]
+        return ctx.features.data.clone()
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+
+
 def test_lint_strategy_class_finds_hard_errors() -> None:
     findings = lint_strategy_class(_NegativeShiftStrategy)
     errors, _ = summarize_lint_findings(findings)
@@ -76,11 +112,18 @@ def test_lint_strategy_class_finds_centered_rolling_and_io() -> None:
 
 
 def test_lint_strategy_class_emits_warnings() -> None:
-    findings = lint_strategy_class(_WarningStrategy)
+    findings = lint_strategy_class(_WarningStrategy) + lint_strategy_class(_IlocWarningStrategy)
     _, warnings = summarize_lint_findings(findings)
 
     assert any("tail-usage" in warning for warning in warnings)
     assert any("global-ranking" in warning for warning in warnings)
+    assert any("iloc-negative" in warning for warning in warnings)
+
+
+def test_lint_strategy_class_finds_path_io() -> None:
+    findings = lint_strategy_class(_PathIOStrategy)
+    errors, _ = summarize_lint_findings(findings)
+    assert any("path-io" in error for error in errors)
 
 
 def test_lint_strategy_class_handles_uninspectable_source() -> None:
@@ -94,3 +137,25 @@ def test_lint_strategy_class_handles_uninspectable_source() -> None:
     _, warnings = summarize_lint_findings(findings)
 
     assert any("source-unavailable" in warning for warning in warnings)
+
+
+def test_strategy_lint_helper_functions_cover_edge_paths() -> None:
+    node = ast.parse("obj.attr").body[0].value
+    assert _attribute_name(node) == "obj.attr"
+    assert _attribute_name(ast.parse("plain").body[0].value) == "plain"
+    assert _attribute_name(ast.parse("1").body[0].value) == ""
+
+    call = ast.parse("func(-1, center=True)").body[0].value
+    assert _call_argument(call, 0, "periods") is not None
+    assert _is_negative_integer(_call_argument(call, 0, "periods")) is True
+    assert _is_true_literal(call.keywords[0].value) is True
+    assert _is_negative_integer(ast.parse("1").body[0].value) is False
+    keyword_only = ast.parse("func(periods=2)").body[0].value
+    assert _call_argument(keyword_only, 0, "missing") is None
+
+    rolling_call = ast.parse("series.rolling(3).quantile(0.5)").body[0].value
+    plain_call = ast.parse("series.quantile(0.5)").body[0].value
+    name_call = ast.parse("func()").body[0].value
+    assert _is_rolling_aggregation(rolling_call) is True
+    assert _is_rolling_aggregation(plain_call) is False
+    assert _is_rolling_aggregation(name_call) is False

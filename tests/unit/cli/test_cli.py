@@ -303,7 +303,8 @@ def test_cli_strategy_run_daily_live_without_adapter_exits_user_error(
 
 def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:
     class FakeParser:
-        def parse_args(self):
+        def parse_args(self, argv=None):
+            del argv
             return SimpleNamespace(
                 strategy="dummy.py:Dummy",
                 strategy_config=None,
@@ -361,4 +362,6 @@ def test_cli_module_dunder_main_executes(monkeypatch) -> None:
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.cli", run_name="__main__")
+        with pytest.raises(SystemExit) as raised:
+            runpy.run_module("stacksats.cli", run_name="__main__")
+    assert raised.value.code == 0

@@ -257,3 +257,144 @@ def test_strategy_time_series_batch_from_artifact_dir_roundtrip(tmp_path) -> Non
     assert loaded.strategy_version == "1.0.0"
     assert loaded.run_id == batch.run_id
     assert loaded.row_count == batch.row_count
+
+
+def test_metadata_datetime_fallback_and_batch_edge_paths(tmp_path) -> None:
+    fallback = StrategySeriesMetadata(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_id="run-1",
+        config_hash="cfg",
+        generated_at="2024-01-03 trailing",
+    )
+    assert fallback.generated_at == dt.datetime(2024, 1, 3, tzinfo=dt.timezone.utc)
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        WeightTimeSeriesBatch(
+            strategy_id="s",
+            strategy_version="1.0.0",
+            run_id="run-1",
+            config_hash="cfg",
+            windows=(),
+        )
+
+    dt_flat = pl.DataFrame(
+        {
+            "start_date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "end_date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+            "weight": [1.0, 1.0],
+            "price_usd": [100.0, 101.0],
+        }
+    )
+    batch = WeightTimeSeriesBatch.from_flat_dataframe(
+        dt_flat,
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_id="run-1",
+        config_hash="cfg",
+    )
+    assert batch.window_count == 2
+
+    bad_flat = dt_flat.with_columns(pl.lit(None).alias("date"))
+    with pytest.raises(ValueError, match="valid datetimes"):
+        WeightTimeSeriesBatch.from_flat_dataframe(
+            bad_flat,
+            strategy_id="s",
+            strategy_version="1.0.0",
+            run_id="run-1",
+            config_hash="cfg",
+        )
+
+
+def test_batch_artifact_dir_resolution_and_validation_edges(tmp_path) -> None:
+    window = WeightTimeSeries(metadata=_metadata(), data=_data())
+    batch = WeightTimeSeriesBatch(
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+        windows=(window,),
+    )
+
+    mismatch_run = WeightTimeSeriesBatch(
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+        windows=(window,),
+    )
+    object.__setattr__(mismatch_run, "run_id", "batch-run")
+    with pytest.raises(ValueError, match="run_id does not match"):
+        mismatch_run.validate()
+
+    mismatch_schema = WeightTimeSeriesBatch(
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+        windows=(window,),
+        schema_version="1.0.0",
+    )
+    object.__setattr__(mismatch_schema, "schema_version", "9.9.9")
+    with pytest.raises(ValueError, match="schema_version does not match"):
+        mismatch_schema.validate()
+
+    mismatch_config = WeightTimeSeriesBatch(
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+        windows=(window,),
+    )
+    object.__setattr__(mismatch_config, "config_hash", "other")
+    with pytest.raises(ValueError, match="config_hash does not match"):
+        mismatch_config.validate()
+
+    extra_schema = (
+        ColumnSpec(
+            name="custom_signal",
+            dtype="float64",
+            required=False,
+            description="Custom strategy score.",
+            source="strategy",
+        ),
+    )
+    window_with_schema = WeightTimeSeries(
+        metadata=_metadata(),
+        data=_data().with_columns(pl.Series("custom_signal", [1.0, 2.0, 3.0])),
+        extra_schema=extra_schema,
+    )
+    batch_mismatch_extra = WeightTimeSeriesBatch(
+        strategy_id="test-strategy",
+        strategy_version="1.2.3",
+        run_id="run-1",
+        config_hash="abc123",
+        windows=(window_with_schema,),
+    )
+    object.__setattr__(batch_mismatch_extra, "extra_schema", ())
+    with pytest.raises(ValueError, match="extra_schema"):
+        batch_mismatch_extra.validate()
+
+    artifact_dir = tmp_path / "artifact"
+    artifact_dir.mkdir()
+    csv_path = artifact_dir / "weights.csv"
+    batch.to_csv(csv_path)
+
+    (artifact_dir / "artifacts.json").write_text(
+        '{"strategy_id":"test-strategy","version":"1.2.3","run_id":"run-1","config_hash":"abc123","files":{"weights_csv":"missing/subdir.csv"}}',
+        encoding="utf-8",
+    )
+    renamed = artifact_dir / "subdir.csv"
+    csv_path.replace(renamed)
+    loaded = WeightTimeSeriesBatch.from_artifact_dir(artifact_dir)
+    assert loaded.row_count == batch.row_count
+
+    direct_csv = artifact_dir / "direct.csv"
+    batch.to_csv(direct_csv)
+    (artifact_dir / "artifacts.json").write_text(
+        f'{{"strategy_id":"test-strategy","version":"1.2.3","run_id":"run-1","config_hash":"abc123","files":{{"weights_csv":"{direct_csv}"}}}}',
+        encoding="utf-8",
+    )
+    loaded_direct = WeightTimeSeriesBatch.from_artifact_dir(artifact_dir)
+    assert loaded_direct.row_count == batch.row_count

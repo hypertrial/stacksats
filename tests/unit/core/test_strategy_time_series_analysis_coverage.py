@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
+from stacksats.strategy_time_series_analysis import _autocorr_pl
 
 
 def _series(prices: list[float] | None = None) -> WeightTimeSeries:
@@ -49,6 +50,21 @@ def test_eda_series_variants_and_errors() -> None:
         ts._eda_value_series("bad-series")
 
 
+def test_analysis_helper_validation_edges() -> None:
+    ts = _series([100.0, 101.0, 102.0])
+    assert _autocorr_pl(pl.Series("x", [1.0]), 1) is None
+
+    with pytest.raises(ValueError, match="Unknown price column"):
+        ts._eda_price_series("missing")
+    with pytest.raises(ValueError, match="positive integers"):
+        ts._normalize_positive_ints([1, 0], "lags")
+    with pytest.raises(ValueError, match="lags must be > 0"):
+        ts._resolve_lags(0)
+
+    acf = ts.autocorrelation(lags=(10,), series="returns")
+    assert acf["autocorrelation"]["10"] is None
+
+
 def test_drawdown_branches_no_valid_and_unrecovered() -> None:
     ts = _series()
     empty_df = ts.to_dataframe().with_columns(pl.lit(float("nan")).alias("price_usd"))
@@ -58,6 +74,12 @@ def test_drawdown_branches_no_valid_and_unrecovered() -> None:
     unrecovered = _series([100.0, 90.0, 80.0, 70.0, 60.0, 50.0]).drawdown_table(top_n=3)
     assert not unrecovered.is_empty()
     assert bool((unrecovered["recovered"] == False).any())  # noqa: E712
+
+    flat = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0]).drawdown_table(top_n=3)
+    assert flat.is_empty()
+
+    with pytest.raises(ValueError, match="top_n must be > 0"):
+        _series().drawdown_table(top_n=0)
 
 
 def test_resolve_series_like_and_cross_correlation_paths() -> None:
@@ -90,6 +112,16 @@ def test_resample_and_decompose_error_paths() -> None:
     object.__setattr__(ts, "_data", non_numeric)
     out = ts.resample("D")
     assert list(out.columns) == ["date"]
+    assert list(_series().resample("D").columns) == ["date", "weight", "price_usd", "mvrv"]
+    assert list(_series().resample("W").columns) == ["date", "weight", "price_usd", "mvrv"]
+    assert list(_series().resample("M", agg="sum").columns) == ["date", "weight", "price_usd", "mvrv"]
+
+    with pytest.raises(ValueError, match="non-empty Polars interval string"):
+        _series().resample("")
+    with pytest.raises(ValueError, match="model must be one of"):
+        _series().decompose(period=2, model="bad", series="price")
+    with pytest.raises(ValueError, match="period must be an integer > 1"):
+        _series().decompose(period=1, model="additive", series="price")
 
     bad = _series([100.0, 0.0, 110.0, 115.0, 120.0, 125.0])
     with pytest.raises(ValueError, match="strictly positive"):
@@ -105,6 +137,8 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
     ts = _series()
     with pytest.raises(ValueError, match="method must be one of"):
         ts.detrend(method="bad")
+    with pytest.raises(ValueError, match="Unknown columns for detrend"):
+        ts.detrend(columns=["missing"])
 
     diffed = ts.detrend(method="difference", columns=["price_usd"])
     assert "price_usd_detrended" in diffed.columns
@@ -122,6 +156,12 @@ def test_detrend_and_difference_error_and_branch_paths() -> None:
 
     with pytest.raises(ValueError, match="Unknown columns for difference"):
         ts.difference(columns=["unknown_col"])
+    with pytest.raises(ValueError, match="order must be >= 0"):
+        ts.difference(order=-1)
+    with pytest.raises(ValueError, match="seasonal_order must be >= 0"):
+        ts.difference(order=0, seasonal_order=-1)
+    with pytest.raises(ValueError, match="seasonal_period must be a positive integer"):
+        ts.difference(order=0, seasonal_order=1, seasonal_period=0)
 
     seasonal = ts.difference(
         order=1,
@@ -149,6 +189,8 @@ def test_acf_pacf_spectral_and_stationarity_edge_paths() -> None:
         series="returns"
     )
     assert empty_spec.is_empty()
+    with pytest.raises(ValueError, match="method must be 'periodogram'"):
+        ts.spectral_density(method="welch")
 
     assert WeightTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 2.0]), acf_threshold=0.8)
     assert WeightTimeSeries._stationarity_proxy(pl.Series("s", [1.0, 1.0, 1.0]), acf_threshold=0.8)
@@ -178,3 +220,38 @@ def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_la
         pl.Series("s", [1.0, 2.0, 3.0]),
         acf_threshold=0.8,
     )
+
+    orig_isfinite = np.isfinite
+
+    def _patched_isfinite(value):
+        if isinstance(value, float) and value == 1.0:
+            return False
+        return orig_isfinite(value)
+
+    monkeypatch.setattr("stacksats.strategy_time_series_analysis.np.isfinite", _patched_isfinite)
+    dec_fallback = ts.decompose(period=2, model="multiplicative", series="price")
+    assert "residual" in dec_fallback.columns
+
+
+def test_calendar_cross_correlation_and_integration_order_edge_paths() -> None:
+    ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
+
+    month = ts.seasonality_profile(freq="month", series="returns")
+    assert month.height == 12
+    assert month.filter(pl.col("count") == 0).height >= 1
+
+    with pytest.raises(ValueError, match="freq must be one of"):
+        ts.seasonality_profile(freq="year")
+    with pytest.raises(ValueError, match="max_lag must be >= 0"):
+        ts.cross_correlation("mvrv", max_lag=-1)
+
+    empty_other = pl.Series("other", [None, None, None, None, None, None], dtype=pl.Float64)
+    corr = ts.cross_correlation(empty_other, max_lag=1)
+    assert corr["correlation"].null_count() == corr.height
+
+    with pytest.raises(ValueError, match="max_order must be >= 0"):
+        ts.integration_order(max_order=-1)
+    with pytest.raises(ValueError, match="acf_threshold must be between 0 and 1"):
+        ts.integration_order(acf_threshold=1.0)
+    with pytest.raises(ValueError, match="Unknown columns for integration_order"):
+        ts.integration_order(columns=["missing"])

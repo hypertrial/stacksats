@@ -240,6 +240,67 @@ class MissingVersionStrategy(BaseStrategy):
         load_strategy(f"{strategy_path}:MissingVersionStrategy")
 
 
+def test_load_strategy_requires_params_dict(tmp_path: Path) -> None:
+    strategy_path = _write_module(
+        tmp_path / "bad_params.py",
+        """
+from stacksats.strategy_types import BaseStrategy
+
+class BadParamsStrategy(BaseStrategy):
+    strategy_id = "bad-params"
+
+    def params(self):
+        return []
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+
+    with pytest.raises(TypeError, match="params\\(\\) must return a dict"):
+        load_strategy(f"{strategy_path}:BadParamsStrategy")
+
+
+def test_load_strategy_metadata_override_branches(tmp_path: Path) -> None:
+    missing_id = _write_module(
+        tmp_path / "override_missing_id.py",
+        """
+from types import SimpleNamespace
+from stacksats.strategy_types import BaseStrategy
+
+class OverrideMissingId(BaseStrategy):
+    strategy_id = "ok"
+
+    def metadata(self):
+        return SimpleNamespace(strategy_id="", version="1.0.0")
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+    with pytest.raises(ValueError, match="must define non-empty strategy_id"):
+        load_strategy(f"{missing_id}:OverrideMissingId")
+
+    missing_version = _write_module(
+        tmp_path / "override_missing_version.py",
+        """
+from types import SimpleNamespace
+from stacksats.strategy_types import BaseStrategy
+
+class OverrideMissingVersion(BaseStrategy):
+    strategy_id = "ok"
+
+    def metadata(self):
+        return SimpleNamespace(strategy_id="ok", version="")
+
+    def propose_weight(self, state):
+        return state.uniform_weight
+""",
+    )
+    with pytest.raises(ValueError, match="non-empty version"):
+        load_strategy(f"{missing_version}:OverrideMissingVersion")
+
+
 def test_load_strategy_merges_inline_and_file_config(tmp_path: Path) -> None:
     strategy_path = _write_module(
         tmp_path / "configurable.py",

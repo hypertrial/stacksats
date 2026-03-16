@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 import polars as pl
 import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
-from stacksats.strategy_types import BacktestConfig, BaseStrategy, DayState, strategy_context_from_features_df
+from stacksats.strategy_types import (
+    BacktestConfig,
+    BaseStrategy,
+    DayState,
+    StrategyContext,
+    _to_datetime,
+    strategy_context_from_features_df,
+)
 
 
 def _features_df(*, start: str = "2024-01-01", periods: int = 3) -> pl.DataFrame:
@@ -37,6 +45,16 @@ class _SimpleProposeStrategy(BaseStrategy):
 
     def propose_weight(self, state):
         return state.uniform_weight
+
+
+class _DateLike:
+    def to_pydatetime(self):
+        return datetime(2024, 1, 5, 17, 30)
+
+
+class _StringDateLike:
+    def __str__(self) -> str:
+        return "2024-01-06 something"
 
 
 def _weight_frame(values: list[float], *, start: datetime | None = None) -> pl.DataFrame:
@@ -179,6 +197,145 @@ def test_strategy_contract_helper_methods_reflect_hook_status() -> None:
     validated_propose, validated_profile = strategy.validate_contract()
     assert validated_propose is True
     assert validated_profile is False
+
+
+def test_to_datetime_and_required_feature_preview_edges() -> None:
+    assert _to_datetime("2024-01-03T10:00:00Z") == datetime(2024, 1, 3)
+    assert _to_datetime("2024-01-03 invalid") == datetime(2024, 1, 3)
+    assert _to_datetime(_DateLike()) == datetime(2024, 1, 5)
+    assert _to_datetime(_StringDateLike()) == datetime(2024, 1, 6)
+
+    class NeedsColumnStrategy(_SimpleProposeStrategy):
+        def required_feature_columns(self):
+            return ("missing_col",)
+
+    dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(3)]
+    wide = pl.DataFrame({"date": dates, **{f"c{i}": [float(i)] * 3 for i in range(11)}})
+    ctx = StrategyContext.from_features_df(
+        wide,
+        dates[0],
+        dates[-1],
+        dates[-1],
+    )
+    with pytest.raises(ValueError, match="Available columns \\(12\\): .*\\.\\.\\.") as exc:
+        NeedsColumnStrategy().compute_weights(ctx)
+    assert "missing_col" in str(exc.value)
+
+
+def test_strategy_params_and_contract_edge_paths() -> None:
+    class ParamStrategy(_SimpleProposeStrategy):
+        module_value = np
+        type_value = dict
+
+        @staticmethod
+        def static_value():
+            return "x"
+
+        @classmethod
+        def class_value(cls):
+            return cls.__name__
+
+        @property
+        def prop_value(self):
+            return "x"
+
+        def __init__(self):
+            self.path = Path("demo.txt")
+
+    params = ParamStrategy().params()
+    assert "module_value" not in params
+    assert "type_value" not in params
+    assert "static_value" not in params
+    assert "class_value" not in params
+    assert "prop_value" not in params
+    assert params["path"] == "demo.txt"
+
+    class LintFailureStrategy(BaseStrategy):
+        strategy_id = "lint-failure"
+
+        def transform_features(self, ctx):
+            import polars as pl
+
+            pl.read_csv("bad.csv")
+            return ctx.features.data.clone()
+
+        def propose_weight(self, state):
+            return state.uniform_weight
+
+    with pytest.raises(TypeError, match="causal lint checks"):
+        LintFailureStrategy().validate_contract()
+
+
+def test_compute_weights_target_profile_and_signal_edge_paths() -> None:
+    class BadFiniteSignalStrategy(_SimpleProposeStrategy):
+        def build_signals(self, ctx, features_df):
+            del ctx, features_df
+            return {"bad": pl.Series("bad", [1.0, float("inf"), 2.0])}
+
+    with pytest.raises(ValueError, match="signal 'bad' must contain finite"):
+        BadFiniteSignalStrategy().compute_weights(_context())
+
+    class MissingColumnsProfileStrategy(BaseStrategy):
+        strategy_id = "missing-columns-profile"
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx, features_df, signals
+            return pl.DataFrame({"date": [datetime(2024, 1, 1)]})
+
+    with pytest.raises(ValueError, match="must have 'date' and 'value' columns"):
+        MissingColumnsProfileStrategy().compute_weights(_context())
+
+    class MismatchedProfileStrategy(BaseStrategy):
+        strategy_id = "mismatched-profile"
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx, features_df, signals
+            return pl.DataFrame(
+                {
+                    "date": [datetime(2024, 1, 1)],
+                    "value": [1.0],
+                }
+            )
+
+    with pytest.raises(ValueError, match="length must match observed window"):
+        MismatchedProfileStrategy().compute_weights(_context())
+
+    class NonFiniteProfileStrategy(BaseStrategy):
+        strategy_id = "non-finite-profile"
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx, signals
+            return pl.DataFrame(
+                {
+                    "date": features_df["date"],
+                    "value": [1.0, float("inf"), 3.0],
+                }
+            )
+
+    with pytest.raises(ValueError, match="must contain finite numeric values"):
+        NonFiniteProfileStrategy().compute_weights(_context())
+
+    class EmptyFeatureStrategy(_SimpleProposeStrategy):
+        pass
+
+    empty_ctx = StrategyContext.from_features_df(
+        pl.DataFrame({"date": [], "price_usd": []}, schema={"date": pl.Datetime, "price_usd": pl.Float64}),
+        "2024-01-01",
+        "2024-01-01",
+        "2024-01-01",
+    )
+    proposals = EmptyFeatureStrategy()._collect_proposals(empty_ctx.features_df)
+    assert proposals.is_empty()
+
+    class EmptyProfileStrategy(BaseStrategy):
+        strategy_id = "empty-profile"
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx, features_df, signals
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "value": pl.Float64})
+
+    weights = EmptyProfileStrategy().compute_weights(_context())
+    assert weights.is_empty()
 
 
 def test_backtest_and_save_writes_standard_artifacts(tmp_path) -> None:
