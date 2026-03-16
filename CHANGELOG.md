@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-03-16
+
+### Changed
+- Backtest/validation default scoring horizon is now fixed to `2018-01-01` through `2025-12-31` (with end-date clamped to available data).
+- Data loader defaults now retain pre-start history for feature warmup while preserving requested scoring bounds.
+- Strategy audit runner now enforces the canonical default end horizon (`2025-12-31`) when source data extends beyond it.
+
+### Fixed
+- `export_weights.get_current_btc_price(...)` now disables warmup for its short lookback fetch, avoiding unnecessary full-history loads.
+- Warmup-inclusive loader paths now consistently reject missing/non-finite `price_usd` values in returned frames.
+
+### Docs
+- Added canonical merged-metrics schema reference page and aligned docs to the canonical long-format parquet + derived runtime parquet flow.
+- Updated runtime/backtest/validation docs to reflect fixed default horizon and warmup-default behavior.
+
 ## [0.8.0] - 2026-03-15
 
 ### Changed

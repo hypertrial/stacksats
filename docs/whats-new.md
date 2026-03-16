@@ -7,17 +7,17 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.8.0 highlights
+## 0.8.1 highlights
 
-- Completed the hard-cut Polars-only migration across runtime contracts, framework helpers, tests, and docs.
-- Finalized the parquet-only BRK data path and removed the remaining DuckDB runtime surface.
-- Added strategy hot-path profiling and hardened the built-in strategy audit flow with projected `merged_metrics*.parquet` loading and partial-failure reporting.
-- Canonical dataset docs now center on long-format `merged_metrics*.parquet` schema, with runtime BRK-wide parquet documented as a derived projection.
+- Fixed default backtest/validation scoring horizon to `2018-01-01` -> `2025-12-31` for stable comparisons (while clamping to available data coverage).
+- Enabled feature warmup history by default in loader-backed runtime paths so rolling features can use pre-start context.
+- Added canonical merged-metrics parquet schema docs and aligned data-source guidance around long-format source + BRK-wide runtime projection.
+- Hardened loader/export edge behavior and added targeted regression coverage for warmup and short-lookback runtime paths.
 
 ## Upgrade notes
 
-- No new top-level public API families are introduced in this release; the major change is the Polars-only and parquet-only contract cutover.
-- Source-contract posture is strict: canonical source dataset is `merged_metrics*.parquet`, while runtime workflows consume a derived BRK-wide parquet (or user-supplied Polars DataFrame).
+- No new top-level public API families are introduced in this release.
+- Source-contract posture remains strict: canonical source dataset is `merged_metrics*.parquet`, while runtime workflows consume a derived BRK-wide parquet (or user-supplied Polars DataFrame).
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.
 - For behavior and compatibility notes, use [Migration Guide](migration.md) and [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 
