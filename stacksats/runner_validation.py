@@ -594,6 +594,13 @@ class StrategyRunnerValidationMixin:
             as_of_date=probe,
         )
 
+    @staticmethod
+    def _align_profile_horizon(
+        horizon_dates: pl.DataFrame,
+        features_df: pl.DataFrame,
+    ) -> pl.DataFrame:
+        return horizon_dates.join(features_df, on="date", how="left")
+
     def _check_prefix_invariance(
         self,
         *,
@@ -747,16 +754,18 @@ class StrategyRunnerValidationMixin:
                     break
 
                 if has_profile_hook and not has_propose_hook:
+                    horizon_end = full_features_df["date"].max()
+                    horizon_dates = full_features_df.select("date")
                     profile_full_ctx = strategy_context_from_features_df(
                         full_features_df,
                         start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
-                        # Keep future rows visible in ctx.features so validation
-                        # can detect profile strategies that illegally peek beyond
-                        # the active observed window inside transform_features().
-                        as_of_date=full_features_df["date"].max(),
+                        # Keep future rows visible in ctx.features so profile
+                        # leakage checks can distinguish date-spine access from
+                        # illegal access to future feature values.
+                        as_of_date=horizon_end,
                     )
                     masked_profile_features = self._strategy_ctx_from_source(
                         strategy=strategy,
@@ -766,12 +775,12 @@ class StrategyRunnerValidationMixin:
                         cache_namespace=f"profile-masked:{self._cache_dt(probe_ts)}",
                     ).features.data
                     profile_masked_ctx = strategy_context_from_features_df(
-                        masked_profile_features,
+                        self._align_profile_horizon(horizon_dates, masked_profile_features),
                         start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
-                        as_of_date=probe_ts,
+                        as_of_date=horizon_end,
                     )
                     perturbed_profile_features = self._strategy_ctx_from_source(
                         strategy=strategy,
@@ -781,12 +790,12 @@ class StrategyRunnerValidationMixin:
                         cache_namespace=f"profile-perturbed:{self._cache_dt(probe_ts)}",
                     ).features.data
                     profile_perturbed_ctx = strategy_context_from_features_df(
-                        perturbed_profile_features,
+                        self._align_profile_horizon(horizon_dates, perturbed_profile_features),
                         start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
-                        as_of_date=probe_ts,
+                        as_of_date=horizon_end,
                     )
                     (
                         full_profile_series,

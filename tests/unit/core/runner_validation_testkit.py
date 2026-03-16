@@ -120,6 +120,27 @@ class DualHookProfilePreferredLeakStrategy(BaseStrategy):
         )
 
 
+class ProfileValuePeekStrategy(BaseStrategy):
+    strategy_id = "runner-leak-profile-values"
+    version = "1.0.0"
+
+    def build_target_profile(
+        self,
+        ctx: StrategyContext,
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
+        del signals
+        future_rows = ctx.features_df.filter(pl.col("date") > ctx.end_date)
+        future_mean = float(future_rows["price_usd"].mean() or 0.0)
+        return pl.DataFrame(
+            {
+                "date": features_df["date"],
+                "value": [future_mean] * features_df.height,
+            }
+        )
+
+
 def btc_df(days: int = 900) -> pl.DataFrame:
     return btc_frame(start="2021-01-01", days=days)
 
