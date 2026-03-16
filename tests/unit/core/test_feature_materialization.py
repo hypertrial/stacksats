@@ -102,3 +102,13 @@ def test_hash_dataframe_accepts_date_dtype() -> None:
     })
 
     assert hash_dataframe(frame)
+
+
+def test_hash_dataframe_changes_when_row_order_changes() -> None:
+    frame = pl.DataFrame({
+        "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
+        "x": [1.0, 2.0],
+    })
+    reversed_frame = frame.reverse()
+
+    assert hash_dataframe(frame) != hash_dataframe(reversed_frame)

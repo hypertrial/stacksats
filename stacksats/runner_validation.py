@@ -18,11 +18,13 @@ from .framework_contract import (
 )
 from .prelude import WINDOW_OFFSET as DEFAULT_WINDOW_OFFSET
 from .runner_helpers import (
+    build_window_index,
     build_fold_ranges,
     frame_signature,
     perturb_future_source_data,
     perturb_future_features,
     profile_values,
+    slice_window_or_filter,
     weights_match,
 )
 from .statistical_validation import (
@@ -494,8 +496,8 @@ class StrategyRunnerValidationMixin:
     ) -> tuple[pl.DataFrame, bool]:
         if not strict_mode:
             return strategy.compute_weights(ctx), False
-        # Use ctx.features_df so mutation of it (deprecated but still used by strategies)
-        # is detected against the canonical Polars feature frame.
+        # Use ctx.features_df so in-place mutation is detected against the
+        # canonical Polars feature frame.
         before = self._frame_signature(ctx.features_df)
         weights = strategy.compute_weights(ctx)
         after = self._frame_signature(ctx.features_df)
@@ -516,18 +518,31 @@ class StrategyRunnerValidationMixin:
         after = self._frame_signature(ctx.features_df) if strict_mode else before
         return self._profile_values(profile), before != after
 
+    @staticmethod
+    def _prefix_until(weights: pl.DataFrame, probe: dt.datetime) -> pl.DataFrame:
+        return weights.filter(pl.col("date") <= probe)
+
+    @staticmethod
+    def _aligned_prefix(weights: pl.DataFrame, prefix_dates: pl.DataFrame) -> pl.DataFrame:
+        return prefix_dates.join(weights, on="date", how="left")
+
     def _strict_determinism_check(
         self,
         *,
         strategy: BaseStrategy,
         full_features_df: pl.DataFrame,
+        feature_index: dict[dt.datetime, int],
         window_start: dt.datetime,
         probe: dt.datetime,
         full_weights: pl.DataFrame,
         state: _ValidationState,
     ) -> bool:
-        window_feat = full_features_df.filter(
-            (pl.col("date") >= window_start) & (pl.col("date") <= probe)
+        window_feat = slice_window_or_filter(
+            full_features_df,
+            feature_index,
+            window_start,
+            probe,
+            expected_days=None,
         )
         repeat_ctx = strategy_context_from_features_df(
             window_feat,
@@ -615,14 +630,19 @@ class StrategyRunnerValidationMixin:
         window_offset = self.WINDOW_OFFSET
         probes = backtest_idx.to_list()[::probe_step]
         try:
+            full_features_df, feature_index = build_window_index(full_features_df)
             for probe in probes:
                 probe_ts = _to_naive_utc(probe)
                 window_start = max(start_ts, probe_ts - window_offset)
                 if window_start > probe_ts:
                     continue
 
-                window_feat = full_features_df.filter(
-                    (pl.col("date") >= window_start) & (pl.col("date") <= probe_ts)
+                window_feat = slice_window_or_filter(
+                    full_features_df,
+                    feature_index,
+                    window_start,
+                    probe_ts,
+                    expected_days=None,
                 )
                 full_weights, full_mutated = self._compute_strategy_weights(
                     strategy,
@@ -644,6 +664,7 @@ class StrategyRunnerValidationMixin:
                 if strict_mode and not self._strict_determinism_check(
                     strategy=strategy,
                     full_features_df=full_features_df,
+                    feature_index=feature_index,
                     window_start=window_start,
                     probe=probe_ts,
                     full_weights=full_weights,
@@ -701,13 +722,12 @@ class StrategyRunnerValidationMixin:
                 ):
                     break
 
-                prefix_dates = full_weights.filter(pl.col("date") <= probe_ts)
+                prefix_dates = self._prefix_until(full_weights, probe_ts).select("date")
                 if prefix_dates.is_empty():
                     continue
-                full_prefix = full_weights.filter(pl.col("date") <= probe_ts)
-                date_list = prefix_dates["date"].to_list()
-                masked_prefix = masked_weights.filter(pl.col("date").is_in(date_list))
-                perturbed_prefix = perturbed_weights.filter(pl.col("date").is_in(date_list))
+                full_prefix = prefix_dates.join(full_weights, on="date", how="left")
+                masked_prefix = self._aligned_prefix(masked_weights, prefix_dates)
+                perturbed_prefix = self._aligned_prefix(perturbed_weights, prefix_dates)
 
                 if not self._check_prefix_invariance(
                     state=state,
@@ -728,24 +748,41 @@ class StrategyRunnerValidationMixin:
 
                 if has_profile_hook and not has_propose_hook:
                     profile_full_ctx = strategy_context_from_features_df(
-                        window_feat,
-                        window_start,
+                        full_features_df,
+                        start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
-                        as_of_date=probe_ts,
+                        # Keep future rows visible in ctx.features so validation
+                        # can detect profile strategies that illegally peek beyond
+                        # the active observed window inside transform_features().
+                        as_of_date=full_features_df["date"].max(),
                     )
+                    masked_profile_features = self._strategy_ctx_from_source(
+                        strategy=strategy,
+                        source_df=masked_source,
+                        window_start=start_ts,
+                        probe=probe_ts,
+                        cache_namespace=f"profile-masked:{self._cache_dt(probe_ts)}",
+                    ).features.data
                     profile_masked_ctx = strategy_context_from_features_df(
-                        masked_ctx.features.data,
-                        window_start,
+                        masked_profile_features,
+                        start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
                         as_of_date=probe_ts,
                     )
+                    perturbed_profile_features = self._strategy_ctx_from_source(
+                        strategy=strategy,
+                        source_df=perturbed_source,
+                        window_start=start_ts,
+                        probe=probe_ts,
+                        cache_namespace=f"profile-perturbed:{self._cache_dt(probe_ts)}",
+                    ).features.data
                     profile_perturbed_ctx = strategy_context_from_features_df(
-                        perturbed_ctx.features.data,
-                        window_start,
+                        perturbed_profile_features,
+                        start_ts,
                         probe_ts,
                         probe_ts,
                         required_columns=tuple(strategy.required_feature_columns()),
@@ -787,14 +824,17 @@ class StrategyRunnerValidationMixin:
                     ):
                         break
 
-                    full_profile_prefix = full_profile_series.filter(
-                        pl.col("date").is_in(date_list)
+                    full_profile_prefix = self._aligned_prefix(
+                        full_profile_series,
+                        prefix_dates,
                     )
-                    masked_profile_prefix = masked_profile_series.filter(
-                        pl.col("date").is_in(date_list)
+                    masked_profile_prefix = self._aligned_prefix(
+                        masked_profile_series,
+                        prefix_dates,
                     )
-                    perturbed_profile_prefix = perturbed_profile_series.filter(
-                        pl.col("date").is_in(date_list)
+                    perturbed_profile_prefix = self._aligned_prefix(
+                        perturbed_profile_series,
+                        prefix_dates,
                     )
                     if not self._check_prefix_invariance(
                         state=state,
@@ -834,8 +874,10 @@ class StrategyRunnerValidationMixin:
         max_window_start = end_ts - window_offset
         boundary_hits = 0
         boundary_total = 0
+        del btc_df
         try:
             if start_ts <= max_window_start:
+                features_df, feature_index = build_window_index(features_df)
                 window_starts = pl.datetime_range(
                     start_ts, max_window_start, interval="1d", eager=True
                 ).to_list()
@@ -845,13 +887,12 @@ class StrategyRunnerValidationMixin:
                 )
                 for window_start in window_starts[::step]:
                     window_end = window_start + window_offset
-                    window_features = self._materialize_strategy_features(
-                        strategy,
-                        btc_df,
-                        start_date=window_start,
-                        end_date=window_end,
-                        current_date=window_end,
-                        cache_namespace="base",
+                    window_features = slice_window_or_filter(
+                        features_df,
+                        feature_index,
+                        window_start,
+                        window_end,
+                        expected_days=None,
                     )
                     weights, mutated = self._compute_strategy_weights(
                         strategy,

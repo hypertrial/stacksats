@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
-import json
 
 import numpy as np
 import polars as pl
 
+from .feature_materialization import hash_dataframe
 from .framework_contract import ALLOCATION_SPAN_DAYS
 from .strategy_types import TargetProfile
 
@@ -23,6 +22,36 @@ def _value_col(df: pl.DataFrame) -> str:
     return df.columns[-1] if df.columns else ""
 
 
+def build_window_index(frame: pl.DataFrame) -> tuple[pl.DataFrame, dict[dt.datetime, int]]:
+    """Return a date-sorted frame and a start-position index for fast window slicing."""
+    sorted_frame = frame.sort(DATE_COL)
+    return sorted_frame, {
+        value: idx for idx, value in enumerate(sorted_frame[DATE_COL].to_list())
+    }
+
+
+def slice_window_or_filter(
+    frame: pl.DataFrame,
+    date_index: dict[dt.datetime, int],
+    start: dt.datetime,
+    end: dt.datetime,
+    *,
+    expected_days: int | None = None,
+) -> pl.DataFrame:
+    """Slice contiguous daily windows by position, falling back to date filtering."""
+    start_idx = date_index.get(start)
+    if start_idx is not None:
+        if expected_days is not None:
+            window = frame.slice(start_idx, expected_days)
+            if window.height == expected_days and window[DATE_COL][-1] == end:
+                return window
+        else:
+            end_idx = date_index.get(end)
+            if end_idx is not None and end_idx >= start_idx:
+                return frame.slice(start_idx, end_idx - start_idx + 1)
+    return frame.filter((pl.col(DATE_COL) >= start) & (pl.col(DATE_COL) <= end))
+
+
 def weights_match(lhs: pl.DataFrame, rhs: pl.DataFrame, *, atol: float = 1e-12) -> bool:
     """Compare two DataFrames (date, weight/value) for equality."""
     if lhs.is_empty() and rhs.is_empty():
@@ -33,17 +62,26 @@ def weights_match(lhs: pl.DataFrame, rhs: pl.DataFrame, *, atol: float = 1e-12) 
     rcol = _value_col(rhs)
     if not lcol or not rcol:
         return False
-    merged = lhs.select([DATE_COL, pl.col(lcol).alias("l")]).join(
-        rhs.select([DATE_COL, pl.col(rcol).alias("r")]),
+    merged = lhs.select([DATE_COL, pl.col(lcol).cast(pl.Float64, strict=False).alias("l")]).join(
+        rhs.select([DATE_COL, pl.col(rcol).cast(pl.Float64, strict=False).alias("r")]),
         on=DATE_COL,
         how="full",
+        coalesce=True,
     )
-    l_vals = merged["l"].fill_null(0.0).to_numpy()
-    r_vals = merged["r"].fill_null(0.0).to_numpy()
-    return bool(
-        np.all(np.isfinite(l_vals))
-        and np.all(np.isfinite(r_vals))
-        and np.allclose(l_vals, r_vals, rtol=0.0, atol=atol)
+    stats = merged.select(
+        (
+            (~pl.col("l").fill_null(0.0).is_finite())
+            | (~pl.col("r").fill_null(0.0).is_finite())
+        ).any().alias("has_non_finite"),
+        (
+            (pl.col("l").fill_null(0.0) - pl.col("r").fill_null(0.0))
+            .abs()
+            .max()
+        ).alias("max_diff"),
+    ).row(0, named=True)
+    return (
+        not bool(stats["has_non_finite"])
+        and float(stats["max_diff"] or 0.0) <= float(atol)
     )
 
 
@@ -56,19 +94,7 @@ def profile_values(profile: TargetProfile | pl.DataFrame) -> pl.DataFrame:
 
 def frame_signature(df: pl.DataFrame) -> tuple:
     """Return a hashable signature for a DataFrame."""
-    try:
-        payload = json.dumps(
-            {
-                "cols": list(df.columns),
-                "dtypes": [str(df[c].dtype) for c in df.columns],
-                "rows": df.to_dicts(),
-            },
-            sort_keys=True,
-            default=str,
-        )
-        row_hash = int(hashlib.sha256(payload.encode()).hexdigest()[:16], 16)
-    except (TypeError, ValueError):
-        row_hash = hash(str(df.to_dicts()))
+    row_hash = int(hash_dataframe(df)[:16], 16)
     return (
         row_hash,
         tuple(str(c) for c in df.columns),
@@ -93,21 +119,34 @@ def perturb_future_features(
         if c != DATE_COL and future[c].dtype in (pl.Float32, pl.Float64, pl.Int32, pl.Int64)
     ]
     if numeric_cols:
-        n = perturbed.height
-        mask_arr = (perturbed[DATE_COL] > probe).to_numpy()
-        n_future = int(mask_arr.sum())
-        ramp = np.linspace(1.0, 2.0, n_future, dtype=float)
-        for col in numeric_cols:
-            arr = perturbed[col].to_numpy().astype(float)
-            future_vals = arr[mask_arr]
-            perturbed_vals = np.where(
-                np.isfinite(future_vals), (-3.0 * future_vals) + ramp, 0.0
+        n_future = future.height
+        denom = max(n_future - 1, 1)
+        perturbed = perturbed.with_row_index("__row").with_columns(
+            pl.when(pl.col(DATE_COL) > probe)
+            .then(
+                1.0
+                + ((pl.col("__row") - (perturbed.height - n_future)) / float(denom))
             )
-            arr[mask_arr] = perturbed_vals
-            perturbed = perturbed.with_columns(pl.Series(col, arr))
+            .otherwise(None)
+            .alias("__future_ramp")
+        )
+        perturbed = perturbed.with_columns(
+            [
+                pl.when(pl.col(DATE_COL) > probe)
+                .then(
+                    pl.when(pl.col(col).cast(pl.Float64, strict=False).is_finite())
+                    .then((-3.0 * pl.col(col).cast(pl.Float64, strict=False)) + pl.col("__future_ramp"))
+                    .otherwise(0.0)
+                )
+                .otherwise(pl.col(col))
+                .alias(col)
+                for col in numeric_cols
+            ]
+        ).drop(["__row", "__future_ramp"])
 
     non_numeric = [c for c in future.columns if c not in numeric_cols and c != DATE_COL]
     if non_numeric and future.height > 1:
+        n = perturbed.height
         for col in non_numeric:
             rev_vals = future[col].reverse().to_list()
             arr = perturbed[col].to_list()
@@ -137,17 +176,30 @@ def perturb_future_source_data(
         if c != DATE_COL and future[c].dtype in (pl.Float32, pl.Float64, pl.Int32, pl.Int64)
     ]
     if numeric_cols:
-        mask_arr = (perturbed[DATE_COL] > probe).to_numpy()
-        n_future = int(mask_arr.sum())
-        ramp = np.linspace(0.5, 1.5, n_future, dtype=float)
-        for col in numeric_cols:
-            arr = perturbed[col].to_numpy().astype(float)
-            future_vals = arr[mask_arr]
-            perturbed_vals = np.where(
-                np.isfinite(future_vals), (-2.0 * future_vals) + ramp, 0.0
+        n_future = future.height
+        denom = max(n_future - 1, 1)
+        perturbed = perturbed.with_row_index("__row").with_columns(
+            pl.when(pl.col(DATE_COL) > probe)
+            .then(
+                0.5
+                + ((pl.col("__row") - (perturbed.height - n_future)) / float(denom))
             )
-            arr[mask_arr] = perturbed_vals
-            perturbed = perturbed.with_columns(pl.Series(col, arr))
+            .otherwise(None)
+            .alias("__future_ramp")
+        )
+        perturbed = perturbed.with_columns(
+            [
+                pl.when(pl.col(DATE_COL) > probe)
+                .then(
+                    pl.when(pl.col(col).cast(pl.Float64, strict=False).is_finite())
+                    .then((-2.0 * pl.col(col).cast(pl.Float64, strict=False)) + pl.col("__future_ramp"))
+                    .otherwise(0.0)
+                )
+                .otherwise(pl.col(col))
+                .alias(col)
+                for col in numeric_cols
+            ]
+        ).drop(["__row", "__future_ramp"])
     return perturbed
 
 

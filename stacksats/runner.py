@@ -468,17 +468,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
                 window_start = df_window["date"].min()
                 window_end = df_window["date"].max()
-                window_features = self._materialize_strategy_features(
-                    strategy,
-                    btc_df,
-                    start_date=window_start,
-                    end_date=window_end,
-                    current_date=window_end,
-                    cache_namespace="base",
-                )
                 weights, mutated = self._compute_strategy_weights(
                     strategy,
-                    features_df=window_features,
+                    features_df=df_window,
                     start_date=window_start,
                     end_date=window_end,
                     current_date=window_end,
@@ -490,7 +482,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                         "Strategy mutated ctx.features during backtest weight computation."
                     )
                 ctx = strategy_context_from_features_df(
-                    window_features,
+                    df_window,
                     window_start,
                     window_end,
                     window_end,

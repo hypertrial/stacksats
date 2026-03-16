@@ -21,8 +21,11 @@ sys.path.insert(0, str(ROOT))
 
 from run_all_strategies import ROOT as AUDIT_ROOT
 from run_all_strategies import STRATEGY_SPECS, _load_audit_dataset
+from stacksats.feature_providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
+from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from stacksats.loader import load_strategy
+from stacksats.model_development import precompute_features
 from stacksats.model_development_allocation import (
     _compute_stable_signal,
     allocate_sequential_stable,
@@ -180,6 +183,8 @@ def _uniform_strategy_fn(window: pl.DataFrame) -> pl.DataFrame:
 def main() -> int:
     pq_path, btc_df, start_date, end_date = _load_audit_dataset(AUDIT_ROOT)
     strategy = load_strategy(STRATEGY_SPECS[1])
+    start_ts = dt.datetime.strptime(start_date[:10], "%Y-%m-%d")
+    end_ts = dt.datetime.strptime(end_date[:10], "%Y-%m-%d")
     config = ValidationConfig(
         start_date=start_date,
         end_date=end_date,
@@ -200,6 +205,38 @@ def main() -> int:
         strategy,
         config,
         btc_df=btc_df,
+    )
+    precompute_current = _profile_call(
+        "precompute_features_current",
+        precompute_features,
+        btc_df,
+    )
+    core_provider = CoreModelFeatureProvider()
+    core_provider_current = _profile_call(
+        "core_provider_materialize_current",
+        core_provider.materialize,
+        btc_df,
+        start_date=start_ts,
+        end_date=end_ts,
+        as_of_date=end_ts,
+    )
+    overlay_provider = BRKOverlayFeatureProvider()
+    overlay_provider_current = _profile_call(
+        "overlay_provider_materialize_current",
+        overlay_provider.materialize,
+        btc_df,
+        start_date=start_ts,
+        end_date=end_ts,
+        as_of_date=end_ts,
+    )
+    registry_current = _profile_call(
+        "registry_materialize_current",
+        DEFAULT_FEATURE_REGISTRY.materialize_for_strategy,
+        strategy,
+        btc_df,
+        start_date=start_ts,
+        end_date=end_ts,
+        current_date=end_ts,
     )
     backtest_reference = _profile_call(
         "compute_cycle_spd_reference",
@@ -246,6 +283,24 @@ def main() -> int:
             "uncached_top_cumulative": validate_uncached["top_cumulative"],
             "cached_top_cumulative": validate_cached["top_cumulative"],
         },
+        "precompute_features": {
+            "current_wall_seconds": round(precompute_current["wall_seconds"], 3),
+            "current_top_cumulative": precompute_current["top_cumulative"],
+        },
+        "providers": {
+            "core_model_features_v1": {
+                "current_wall_seconds": round(core_provider_current["wall_seconds"], 3),
+                "current_top_cumulative": core_provider_current["top_cumulative"],
+            },
+            "brk_overlay_v1": {
+                "current_wall_seconds": round(overlay_provider_current["wall_seconds"], 3),
+                "current_top_cumulative": overlay_provider_current["top_cumulative"],
+            },
+        },
+        "registry_materialization": {
+            "current_wall_seconds": round(registry_current["wall_seconds"], 3),
+            "current_top_cumulative": registry_current["top_cumulative"],
+        },
         "compute_cycle_spd": {
             "reference_wall_seconds": round(backtest_reference["wall_seconds"], 3),
             "current_wall_seconds": round(backtest_current["wall_seconds"], 3),
@@ -279,6 +334,14 @@ def main() -> int:
         f"uncached={payload['validate']['uncached_wall_seconds']:.3f}, "
         f"cached={payload['validate']['cached_wall_seconds']:.3f}, "
         f"speedup={payload['validate']['speedup_multiple']:.3f}x"
+    )
+    print(
+        "precompute_features wall seconds: "
+        f"current={payload['precompute_features']['current_wall_seconds']:.3f}"
+    )
+    print(
+        "registry materialization wall seconds: "
+        f"current={payload['registry_materialization']['current_wall_seconds']:.3f}"
     )
     print(
         "compute_cycle_spd wall seconds: "

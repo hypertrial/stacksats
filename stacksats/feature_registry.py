@@ -8,7 +8,7 @@ import json
 
 import polars as pl
 
-from .feature_materialization import build_observed_frame, hash_dataframe, normalize_timestamp
+from .feature_materialization import hash_dataframe, normalize_timestamp
 from .feature_providers import (
     BRKOverlayFeatureProvider,
     CoreModelFeatureProvider,
@@ -16,6 +16,34 @@ from .feature_providers import (
 )
 
 DATE_COL = "date"
+
+
+def _lazy_daily_date_expr(dtype: pl.DataType) -> pl.Expr:
+    if dtype == pl.Utf8:
+        base = pl.col(DATE_COL).str.to_datetime(strict=False)
+    elif dtype == pl.Date:
+        base = pl.col(DATE_COL).cast(pl.Datetime)
+    else:
+        base = pl.col(DATE_COL).cast(pl.Datetime, strict=False)
+    return base.dt.replace_time_zone(None).dt.truncate("1d")
+
+
+def _lazy_observed_frame(
+    frame_lazy: pl.LazyFrame,
+    *,
+    schema: pl.Schema,
+    start_date: dt.datetime,
+    current_date: dt.datetime,
+) -> pl.LazyFrame:
+    if DATE_COL not in schema:
+        raise ValueError(f"features_df must have '{DATE_COL}' column.")
+    return (
+        frame_lazy
+        .with_columns(_lazy_daily_date_expr(schema[DATE_COL]).alias(DATE_COL))
+        .filter((pl.col(DATE_COL) >= start_date) & (pl.col(DATE_COL) <= current_date))
+        .unique(subset=[DATE_COL], keep="last")
+        .sort(DATE_COL)
+    )
 
 
 class FeatureRegistry:
@@ -51,30 +79,42 @@ class FeatureRegistry:
         if not provider_ids:
             return pl.DataFrame({DATE_COL: dates})
 
-        merged = pl.DataFrame({DATE_COL: dates})
+        merged_lazy = pl.DataFrame({DATE_COL: dates}).lazy()
+        merged_columns = {DATE_COL}
         for provider_id in provider_ids:
             provider = self.get(provider_id)
-            frame = provider.materialize(
-                btc_df,
+            if hasattr(provider, "materialize_lazy"):
+                frame_lazy = provider.materialize_lazy(
+                    btc_df,
+                    start_date=start_ts,
+                    end_date=normalize_timestamp(end_date),
+                    as_of_date=observed_end,
+                )
+            else:
+                frame_lazy = provider.materialize(
+                    btc_df,
+                    start_date=start_ts,
+                    end_date=normalize_timestamp(end_date),
+                    as_of_date=observed_end,
+                ).lazy()
+            observed_schema = frame_lazy.collect_schema()
+            observed = _lazy_observed_frame(
+                frame_lazy,
+                schema=observed_schema,
                 start_date=start_ts,
-                end_date=normalize_timestamp(end_date),
-                as_of_date=observed_end,
-            )
-            observed = build_observed_frame(
-                frame,
-                start_date=start_date,
                 current_date=observed_end,
             )
             duplicate_columns = sorted(
-                set(merged.columns).intersection(observed.columns) - {DATE_COL}
+                (set(observed_schema.names()) & merged_columns) - {DATE_COL}
             )
             if duplicate_columns:
                 raise ValueError(
                     f"Feature providers produced duplicate columns for strategy "
                     f"{strategy.metadata().strategy_id}: {duplicate_columns}."
                 )
-            merged = merged.join(observed, on=DATE_COL, how="left")
-        return merged.sort(DATE_COL)
+            merged_columns.update(name for name in observed_schema.names() if name != DATE_COL)
+            merged_lazy = merged_lazy.join(observed, on=DATE_COL, how="left")
+        return merged_lazy.sort(DATE_COL).collect()
 
     def provider_fingerprint(self, strategy) -> str:
         payload = {"provider_ids": list(strategy.required_feature_sets())}

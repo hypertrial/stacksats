@@ -5,15 +5,25 @@ import datetime as dt
 import numpy as np
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
+from stacksats.feature_providers import BRKOverlayFeatureProvider, _rolling_zscore_pl
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY
 from stacksats.loader import load_strategy
+from stacksats.model_development import precompute_features
 from stacksats.model_development_allocation import (
     _compute_stable_signal,
     allocate_sequential_stable,
 )
 from stacksats.framework_contract import apply_clipped_weight
+from stacksats.model_development_helpers import (
+    classify_mvrv_zone,
+    compute_mvrv_volatility,
+    compute_signal_confidence,
+    rolling_percentile,
+    zscore,
+)
 from stacksats.prelude import DATE_COL, compute_cycle_spd
 from stacksats.runner import StrategyRunner
 from stacksats.runner_validation import WIN_RATE_TOLERANCE
@@ -46,6 +56,193 @@ class _TiltedStrategy(BaseStrategy):
         del ctx, signals
         values = np.linspace(-0.5, 0.5, features_df.height)
         return pl.DataFrame({"date": features_df["date"], "value": values})
+
+
+def _precompute_features_reference(df: pl.DataFrame) -> pl.DataFrame:
+    price_col = "price_usd"
+    mvrv_col = "mvrv"
+    ma_window = 200
+    mvrv_rolling_window = 365
+    mvrv_cycle_window = 1461
+    mvrv_gradient_window = 30
+    mvrv_accel_window = 14
+    mvrv_volatility_window = 90
+    cutoff = dt.datetime(2010, 7, 18)
+    frame = df.filter(pl.col("date") >= cutoff).sort("date")
+    if frame.is_empty():
+        return pl.DataFrame(schema={"date": pl.Datetime("us")})
+
+    price = frame[price_col].cast(pl.Float64, strict=False).to_numpy()
+    n = len(price)
+    ma_arr = np.full(n, np.nan)
+    for i in range(ma_window // 2, n):
+        start = max(0, i - ma_window + 1)
+        ma_arr[i] = np.nanmean(price[start : i + 1])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        price_vs_ma = np.clip((price / ma_arr) - 1, -1, 1)
+    price_vs_ma = np.where(np.isfinite(price_vs_ma), price_vs_ma, 0)
+
+    if mvrv_col in frame.columns:
+        mvrv_s = pl.Series("mvrv", frame[mvrv_col].to_numpy())
+        mvrv_z = zscore(mvrv_s, mvrv_rolling_window)
+        mvrv_z_arr = np.clip(mvrv_z.to_numpy(), -4, 4)
+        mvrv_z_arr = np.where(np.isfinite(mvrv_z_arr), mvrv_z_arr, 0)
+        mvrv_pct_s = rolling_percentile(mvrv_s, mvrv_cycle_window)
+        mvrv_pct = mvrv_pct_s.to_numpy()
+        mvrv_pct = np.where(np.isfinite(mvrv_pct), mvrv_pct, 0.5)
+
+        gradient_raw = np.zeros(n)
+        gradient_raw[mvrv_gradient_window:] = (
+            mvrv_z_arr[mvrv_gradient_window:] - mvrv_z_arr[:-mvrv_gradient_window]
+        )
+        alpha = 2 / (mvrv_gradient_window + 1)
+        gradient_smooth = np.zeros(n)
+        for i in range(1, n):
+            gradient_smooth[i] = (
+                alpha * gradient_raw[i] + (1 - alpha) * gradient_smooth[i - 1]
+            )
+        mvrv_gradient = np.tanh(gradient_smooth * 2)
+        mvrv_gradient = np.where(np.isfinite(mvrv_gradient), mvrv_gradient, 0)
+
+        accel_raw = np.zeros(n)
+        accel_raw[mvrv_accel_window:] = (
+            mvrv_gradient[mvrv_accel_window:] - mvrv_gradient[:-mvrv_accel_window]
+        )
+        accel_alpha = 2 / (mvrv_accel_window + 1)
+        mvrv_acceleration = np.zeros(n)
+        for i in range(1, n):
+            mvrv_acceleration[i] = (
+                accel_alpha * accel_raw[i]
+                + (1 - accel_alpha) * mvrv_acceleration[i - 1]
+            )
+        mvrv_acceleration = np.tanh(mvrv_acceleration * 3)
+        mvrv_acceleration = np.where(np.isfinite(mvrv_acceleration), mvrv_acceleration, 0)
+
+        mvrv_zone = classify_mvrv_zone(mvrv_z_arr)
+        mvrv_volatility = compute_mvrv_volatility(
+            pl.Series("z", mvrv_z_arr), mvrv_volatility_window
+        ).to_numpy()
+        mvrv_volatility = np.where(np.isfinite(mvrv_volatility), mvrv_volatility, 0.5)
+        signal_confidence = np.full(n, 0.5)
+    else:
+        mvrv_z_arr = np.zeros(n)
+        mvrv_pct = np.full(n, 0.5)
+        mvrv_gradient = np.zeros(n)
+        mvrv_acceleration = np.zeros(n)
+        mvrv_zone = np.zeros(n, dtype=int)
+        mvrv_volatility = np.full(n, 0.5)
+        signal_confidence = np.full(n, 0.5)
+
+    features = pl.DataFrame({
+        "date": frame["date"].to_list(),
+        price_col: price,
+        "price_ma": ma_arr,
+        "price_vs_ma": price_vs_ma,
+        "mvrv_zscore": mvrv_z_arr,
+        "mvrv_gradient": mvrv_gradient,
+        "mvrv_percentile": mvrv_pct,
+        "mvrv_acceleration": mvrv_acceleration,
+        "mvrv_zone": mvrv_zone,
+        "mvrv_volatility": mvrv_volatility,
+        "signal_confidence": signal_confidence,
+    })
+    signal_cols = [
+        "price_vs_ma",
+        "mvrv_zscore",
+        "mvrv_gradient",
+        "mvrv_percentile",
+        "mvrv_acceleration",
+        "mvrv_zone",
+        "mvrv_volatility",
+    ]
+    for col in signal_cols:
+        features = features.with_columns(pl.col(col).shift(1).alias(col))
+    features = features.with_columns(
+        pl.col("mvrv_percentile").fill_null(0.5),
+        pl.col("mvrv_zone").fill_null(0),
+        pl.col("mvrv_volatility").fill_null(0.5),
+    ).fill_null(0)
+    sc = compute_signal_confidence(
+        features["mvrv_zscore"].to_numpy(),
+        features["mvrv_percentile"].to_numpy(),
+        features["mvrv_gradient"].to_numpy(),
+        features["price_vs_ma"].to_numpy(),
+    )
+    return features.with_columns(pl.Series("signal_confidence", sc))
+
+
+def _overlay_reference(btc_df: pl.DataFrame) -> pl.DataFrame:
+    price_arr = btc_df["price_usd"].cast(pl.Float64, strict=False).to_numpy()
+    price_safe = np.where(price_arr > 0, price_arr, 1.0)
+    price_log = np.log(price_safe)
+    diff_30 = np.zeros_like(price_log)
+    diff_30[30:] = price_log[30:] - price_log[:-30]
+    diff_90 = np.zeros_like(price_log)
+    diff_90[90:] = price_log[90:] - price_log[:-90]
+    mom_30 = _rolling_zscore_pl(pl.Series("d30", diff_30), 365)
+    mom_90 = _rolling_zscore_pl(pl.Series("d90", diff_90), 365)
+
+    n = btc_df.height
+    features = pl.DataFrame({
+        DATE_COL: btc_df[DATE_COL].to_list(),
+        "brk_flow": [0.0] * n,
+        "brk_supply_pressure": [0.0] * n,
+        "brk_activity_div": [0.0] * n,
+        "brk_roi_context": [0.0] * n,
+        "brk_liquidity_impulse": [0.0] * n,
+        "brk_miner_pressure": [0.0] * n,
+        "brk_hash_momentum": [0.0] * n,
+        "brk_sentiment": [0.0] * n,
+    })
+    if "adjusted_sopr" in btc_df.columns and "adjusted_sopr_7d_ema" in btc_df.columns:
+        sopr = btc_df["adjusted_sopr"].cast(pl.Float64, strict=False).fill_null(0)
+        sopr_ema = btc_df["adjusted_sopr_7d_ema"].cast(pl.Float64, strict=False).fill_null(0)
+        diff = sopr - sopr_ema
+        features = features.with_columns(
+            _rolling_zscore_pl(diff, 240).alias("brk_flow"),
+            _rolling_zscore_pl((-0.65 * sopr) + (-0.35 * sopr_ema), 365).alias("brk_roi_context"),
+        )
+    else:
+        features = features.with_columns(((-0.65 * mom_30) + (-0.35 * mom_90)).alias("brk_roi_context"))
+    if "realized_cap_growth_rate" in btc_df.columns and "market_cap_growth_rate" in btc_df.columns:
+        mkt = btc_df["market_cap_growth_rate"].cast(pl.Float64, strict=False).fill_null(0)
+        real = btc_df["realized_cap_growth_rate"].cast(pl.Float64, strict=False).fill_null(0)
+        features = features.with_columns(
+            _rolling_zscore_pl(mkt - real, 365).alias("brk_supply_pressure"),
+        )
+    flow_fast = features["brk_flow"].rolling_mean(window_size=7, min_samples=3)
+    flow_slow = features["brk_flow"].rolling_mean(window_size=30, min_samples=10)
+    features = features.with_columns(
+        _rolling_zscore_pl(flow_fast, 120).alias("brk_netflow_fast"),
+        _rolling_zscore_pl(flow_slow, 240).alias("brk_netflow_slow"),
+        _rolling_zscore_pl(flow_fast - flow_slow, 180).alias("brk_netflow_slope"),
+        _rolling_zscore_pl(flow_fast, 180).alias("brk_netflow"),
+    )
+    activity_level = _rolling_zscore_pl(features["brk_activity_div"] + mom_30, 365)
+    features = features.with_columns(
+        activity_level.alias("brk_activity_level"),
+        features["brk_activity_div"].alias("brk_activity_div_fast"),
+        (activity_level - mom_90).alias("brk_activity_div_slow"),
+        _rolling_zscore_pl(features["brk_liquidity_impulse"], 180).alias("brk_liquidity_level"),
+        _rolling_zscore_pl(features["brk_supply_pressure"], 240).alias("brk_exchange_share_level"),
+    )
+    exchange_level = features["brk_exchange_share_level"]
+    features = features.with_columns(
+        _rolling_zscore_pl(exchange_level.diff(30), 240).alias("brk_exchange_share_delta"),
+        _rolling_zscore_pl(exchange_level, 365).alias("brk_exchange_share"),
+        _rolling_zscore_pl(mom_30, 365).alias("brk_roi30"),
+        _rolling_zscore_pl(mom_90, 365).alias("brk_roi1y"),
+    )
+    lagged_cols = [c for c in features.columns if c != DATE_COL]
+    features = features.with_columns(
+        [pl.col(c).shift(1).fill_null(0.0).alias(c) for c in lagged_cols]
+    ).fill_null(0)
+    float_cols = [
+        c
+        for c in features.columns
+        if c != DATE_COL and features.schema[c] in (pl.Float64, pl.Float32, pl.Int64, pl.Int32)
+    ]
+    return features.with_columns([pl.col(c).clip(-6.0, 6.0) for c in float_cols])
 
 
 def _allocate_reference(raw: np.ndarray, n_past: int) -> np.ndarray:
@@ -183,6 +380,90 @@ def test_compute_cycle_spd_matches_reference_window_metrics(sample_btc_df) -> No
         atol=1e-12,
         rtol=0.0,
     )
+
+
+def test_precompute_features_matches_reference_parity(sample_btc_df) -> None:
+    btc_df = sample_btc_df.select(["date", "price_usd", "mvrv"]).slice(0, 520)
+
+    current = precompute_features(btc_df)
+    reference = _precompute_features_reference(btc_df)
+
+    assert current.columns == reference.columns
+    assert current.height == reference.height
+    assert_frame_equal(current, reference, check_dtypes=False, atol=1e-9, rtol=0.0)
+
+
+def test_precompute_features_matches_reference_without_mvrv(sample_btc_df) -> None:
+    btc_df = sample_btc_df.select(["date", "price_usd"]).slice(0, 520)
+
+    current = precompute_features(btc_df)
+    reference = _precompute_features_reference(btc_df)
+
+    assert current.columns == reference.columns
+    assert current.height == reference.height
+    assert_frame_equal(current, reference, check_dtypes=False, atol=1e-9, rtol=0.0)
+
+
+def test_brk_overlay_provider_matches_reference_with_optional_columns() -> None:
+    provider = BRKOverlayFeatureProvider()
+    days = 420
+    btc_df = pl.DataFrame(
+        {
+            "date": pl.datetime_range(
+                dt.datetime(2024, 1, 1),
+                dt.datetime(2024, 1, 1) + dt.timedelta(days=days - 1),
+                interval="1d",
+                eager=True,
+            ),
+            "price_usd": np.linspace(40_000.0, 60_000.0, days),
+            "mvrv": np.linspace(0.8, 2.2, days),
+            "adjusted_sopr": np.linspace(0.9, 1.1, days),
+            "adjusted_sopr_7d_ema": np.linspace(0.92, 1.08, days),
+            "realized_cap_growth_rate": np.linspace(-0.1, 0.15, days),
+            "market_cap_growth_rate": np.linspace(-0.08, 0.2, days),
+        }
+    )
+
+    current = provider.materialize(
+        btc_df,
+        start_date=btc_df["date"][0],
+        end_date=btc_df["date"][-1],
+        as_of_date=btc_df["date"][-1],
+    )
+    reference = _overlay_reference(btc_df)
+
+    assert current.columns == reference.columns
+    assert current.height == reference.height
+    assert_frame_equal(current, reference, check_dtypes=False, atol=1e-12, rtol=0.0)
+
+
+def test_brk_overlay_provider_matches_reference_without_optional_columns() -> None:
+    provider = BRKOverlayFeatureProvider()
+    days = 420
+    btc_df = pl.DataFrame(
+        {
+            "date": pl.datetime_range(
+                dt.datetime(2024, 1, 1),
+                dt.datetime(2024, 1, 1) + dt.timedelta(days=days - 1),
+                interval="1d",
+                eager=True,
+            ),
+            "price_usd": np.linspace(40_000.0, 60_000.0, days),
+            "mvrv": np.linspace(0.8, 2.2, days),
+        }
+    )
+
+    current = provider.materialize(
+        btc_df,
+        start_date=btc_df["date"][0],
+        end_date=btc_df["date"][-1],
+        as_of_date=btc_df["date"][-1],
+    )
+    reference = _overlay_reference(btc_df)
+
+    assert current.columns == reference.columns
+    assert current.height == reference.height
+    assert_frame_equal(current, reference, check_dtypes=False, atol=1e-12, rtol=0.0)
 
 
 def test_brk_overlay_materialization_preserves_columns_for_single_row_prefix() -> None:

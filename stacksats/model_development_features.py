@@ -8,7 +8,6 @@ import numpy as np
 import polars as pl
 
 from .model_development_helpers import (
-    classify_mvrv_zone,
     compute_acceleration_modifier,
     compute_adaptive_trend_modifier,
     compute_asymmetric_extreme_boost,
@@ -49,27 +48,51 @@ def precompute_features(
     # Filter from 2010-07-18 for consistency with legacy
     cutoff = dt.datetime(2010, 7, 18)
     frame = df.filter(pl.col(date_col) >= cutoff).sort(date_col)
+    if frame.is_empty():
+        return pl.DataFrame(schema={date_col: pl.Datetime("us")})
 
-    price = frame[price_col].to_numpy()
-    n = len(price)
+    frame = frame.with_columns(pl.col(price_col).cast(pl.Float64, strict=False).alias(price_col))
+    n = frame.height
 
-    # Rolling MA
-    ma_arr = np.full(n, np.nan)
-    for i in range(ma_window // 2, n):
-        start = max(0, i - ma_window + 1)
-        ma_arr[i] = np.nanmean(price[start : i + 1])
-    with np.errstate(divide="ignore", invalid="ignore"):
-        price_vs_ma = np.clip((price / ma_arr) - 1, -1, 1)
-    price_vs_ma = np.where(np.isfinite(price_vs_ma), price_vs_ma, 0)
+    price_frame = frame.with_row_index("__row").with_columns(
+        pl.when(pl.col("__row") >= (ma_window // 2))
+        .then(pl.col(price_col).rolling_mean(window_size=ma_window, min_samples=1))
+        .otherwise(float("nan"))
+        .alias("price_ma")
+    )
+    price_frame = price_frame.with_columns(
+        pl.when(
+            pl.col("price_ma").is_not_null()
+            & pl.col("price_ma").is_finite()
+            & (pl.col("price_ma") != 0.0)
+        )
+        .then(((pl.col(price_col) / pl.col("price_ma")) - 1.0).clip(-1.0, 1.0))
+        .otherwise(None)
+        .fill_null(0.0)
+        .fill_nan(0.0)
+        .alias("price_vs_ma")
+    )
+    price_ma = price_frame["price_ma"]
+    price_vs_ma = price_frame["price_vs_ma"]
 
     if mvrv_col in frame.columns:
-        mvrv_s = pl.Series("mvrv", frame[mvrv_col].to_numpy())
-        mvrv_z = zscore(mvrv_s, mvrv_rolling_window)
+        mvrv_s = frame[mvrv_col].cast(pl.Float64, strict=False).rename("mvrv")
+        mvrv_z = (
+            zscore(mvrv_s, mvrv_rolling_window)
+            .clip(-4, 4)
+            .replace([np.inf, -np.inf], 0.0)
+            .fill_null(0.0)
+            .rename("mvrv_zscore")
+        )
         mvrv_z_arr = mvrv_z.to_numpy()
-        mvrv_z_arr = np.clip(mvrv_z_arr, -4, 4)
-        mvrv_z_arr = np.where(np.isfinite(mvrv_z_arr), mvrv_z_arr, 0)
 
         mvrv_pct_s = rolling_percentile(mvrv_s, mvrv_cycle_window)
+        mvrv_pct_s = (
+            mvrv_pct_s
+            .replace([np.inf, -np.inf], 0.5)
+            .fill_null(0.5)
+            .rename("mvrv_percentile")
+        )
         mvrv_pct = mvrv_pct_s.to_numpy()
         mvrv_pct = np.where(np.isfinite(mvrv_pct), mvrv_pct, 0.5)
 
@@ -98,46 +121,47 @@ def precompute_features(
         mvrv_acceleration = np.tanh(mvrv_acceleration * 3)
         mvrv_acceleration = np.where(np.isfinite(mvrv_acceleration), mvrv_acceleration, 0)
 
-        mvrv_zone = classify_mvrv_zone(
-            mvrv_z_arr,
-            zone_deep_value=mvrv_zone_deep_value,
-            zone_value=mvrv_zone_value,
-            zone_caution=mvrv_zone_caution,
-            zone_danger=mvrv_zone_danger,
-        )
-
         mvrv_volatility = compute_mvrv_volatility(
             pl.Series("z", mvrv_z_arr), mvrv_volatility_window
-        ).to_numpy()
-        mvrv_volatility = np.where(np.isfinite(mvrv_volatility), mvrv_volatility, 0.5)
+        ).replace([np.inf, -np.inf], 0.5).fill_null(0.5).rename("mvrv_volatility")
+        mvrv_volatility_arr = mvrv_volatility.to_numpy()
+        mvrv_volatility_arr = np.where(np.isfinite(mvrv_volatility_arr), mvrv_volatility_arr, 0.5)
 
         signal_confidence = np.full(n, 0.5)
     else:
-        mvrv_z_arr = np.zeros(n)
+        mvrv_z = pl.Series("mvrv_zscore", np.zeros(n, dtype=float))
+        mvrv_z_arr = mvrv_z.to_numpy()
+        mvrv_pct_s = pl.Series("mvrv_percentile", np.full(n, 0.5, dtype=float))
         mvrv_pct = np.full(n, 0.5)
         mvrv_gradient = np.zeros(n)
         mvrv_acceleration = np.zeros(n)
-        mvrv_zone = np.zeros(n, dtype=int)
-        mvrv_volatility = np.full(n, 0.5)
+        mvrv_volatility = pl.Series("mvrv_volatility", np.full(n, 0.5, dtype=float))
+        mvrv_volatility_arr = mvrv_volatility.to_numpy()
         signal_confidence = np.full(n, 0.5)
 
-    dates = frame[date_col].to_list()
+    features = frame.select(date_col, price_col).with_columns(
+        price_ma.alias("price_ma"),
+        price_vs_ma.alias("price_vs_ma"),
+        mvrv_z,
+        pl.Series("mvrv_gradient", mvrv_gradient),
+        mvrv_pct_s,
+        pl.Series("mvrv_acceleration", mvrv_acceleration),
+        mvrv_volatility.alias("mvrv_volatility"),
+        pl.Series("signal_confidence", signal_confidence),
+    )
+    features = features.with_columns(
+        pl.when(pl.col("mvrv_zscore") < mvrv_zone_deep_value)
+        .then(pl.lit(-2))
+        .when(pl.col("mvrv_zscore") < mvrv_zone_value)
+        .then(pl.lit(-1))
+        .when(pl.col("mvrv_zscore") < mvrv_zone_caution)
+        .then(pl.lit(0))
+        .when(pl.col("mvrv_zscore") < mvrv_zone_danger)
+        .then(pl.lit(1))
+        .otherwise(pl.lit(2))
+        .alias("mvrv_zone"),
+    )
 
-    features = pl.DataFrame({
-        date_col: dates,
-        price_col: price,
-        "price_ma": ma_arr,
-        "price_vs_ma": price_vs_ma,
-        "mvrv_zscore": mvrv_z_arr,
-        "mvrv_gradient": mvrv_gradient,
-        "mvrv_percentile": mvrv_pct,
-        "mvrv_acceleration": mvrv_acceleration,
-        "mvrv_zone": mvrv_zone,
-        "mvrv_volatility": mvrv_volatility,
-        "signal_confidence": signal_confidence,
-    })
-
-    # Shift signal cols by 1 (lag)
     signal_cols = [
         "price_vs_ma",
         "mvrv_zscore",
@@ -147,17 +171,16 @@ def precompute_features(
         "mvrv_zone",
         "mvrv_volatility",
     ]
-    for col in signal_cols:
-        if col in features.columns:
-            features = features.with_columns(
-                pl.col(col).shift(1).alias(col)
-            )
+    features = features.with_columns([pl.col(col).shift(1).alias(col) for col in signal_cols])
     features = features.with_columns(
+        pl.col("price_vs_ma").fill_null(0.0),
+        pl.col("mvrv_zscore").fill_null(0.0),
+        pl.col("mvrv_gradient").fill_null(0.0),
         pl.col("mvrv_percentile").fill_null(0.5),
+        pl.col("mvrv_acceleration").fill_null(0.0),
         pl.col("mvrv_zone").fill_null(0),
         pl.col("mvrv_volatility").fill_null(0.5),
     )
-    features = features.fill_null(0)
 
     sc = compute_signal_confidence(
         features["mvrv_zscore"].to_numpy(),
@@ -167,7 +190,19 @@ def precompute_features(
     )
     features = features.with_columns(pl.Series("signal_confidence", sc))
 
-    return features
+    return features.select(
+        date_col,
+        price_col,
+        "price_ma",
+        "price_vs_ma",
+        "mvrv_zscore",
+        "mvrv_gradient",
+        "mvrv_percentile",
+        "mvrv_acceleration",
+        "mvrv_zone",
+        "mvrv_volatility",
+        "signal_confidence",
+    )
 
 
 def compute_dynamic_multiplier(

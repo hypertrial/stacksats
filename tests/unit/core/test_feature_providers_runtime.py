@@ -68,7 +68,7 @@ def test_core_provider_cache_invalidates_after_price_change() -> None:
     )
 
     btc_df = btc_df.with_columns(
-        price_usd=np.where(np.arange(btc_df.height) == (btc_df.height - 1), 2_000_000.0, btc_df["price_usd"].to_numpy())
+        price_usd=np.where(np.arange(btc_df.height) == (btc_df.height // 2), 2_000_000.0, btc_df["price_usd"].to_numpy())
     )
     second = provider.materialize(
         btc_df,
@@ -78,3 +78,68 @@ def test_core_provider_cache_invalidates_after_price_change() -> None:
     )
 
     assert not first.equals(second)
+
+
+def test_core_provider_materialize_respects_observed_window() -> None:
+    provider = CoreModelFeatureProvider()
+    btc_df = _btc_frame()
+    dates = btc_df["date"].to_list()
+
+    features = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[30],
+    )
+
+    assert features["date"][0] == dates[20]
+    assert features["date"][-1] == dates[30]
+
+
+def test_overlay_provider_cache_invalidates_after_optional_source_change() -> None:
+    provider = BRKOverlayFeatureProvider()
+    btc_df = _btc_frame().with_columns(
+        adjusted_sopr=np.linspace(0.9, 1.1, 420),
+        adjusted_sopr_7d_ema=np.linspace(0.92, 1.08, 420),
+        realized_cap_growth_rate=np.linspace(-0.05, 0.08, 420),
+        market_cap_growth_rate=np.linspace(-0.03, 0.1, 420),
+    )
+    dates = btc_df["date"].to_list()
+    first = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[-1],
+    )
+
+    btc_df = btc_df.with_columns(
+        adjusted_sopr=np.where(
+            np.arange(btc_df.height) == (btc_df.height // 2),
+            1.75,
+            btc_df["adjusted_sopr"].to_numpy(),
+        )
+    )
+    second = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[-1],
+    )
+
+    assert not first.equals(second)
+
+
+def test_overlay_provider_materialize_respects_observed_window() -> None:
+    provider = BRKOverlayFeatureProvider()
+    btc_df = _btc_frame()
+    dates = btc_df["date"].to_list()
+
+    features = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[30],
+    )
+
+    assert features["date"][0] == dates[20]
+    assert features["date"][-1] == dates[30]

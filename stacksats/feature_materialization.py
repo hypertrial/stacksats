@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 
+import numpy as np
 import polars as pl
 
 
@@ -115,14 +115,15 @@ def hash_dataframe(df: pl.DataFrame) -> str:
         normalized = normalized.with_columns(
             _normalized_daily_expr(normalized, date_col).alias(date_col)
         )
-    payload = {
-        "columns": [str(c) for c in normalized.columns],
-        "dtypes": [str(normalized[c].dtype) for c in normalized.columns],
-        "records": normalized.to_dicts(),
-    }
-    if date_col is not None:
-        payload["index"] = [
-            str(d)[:10] for d in normalized[date_col].to_list()
-        ]
-    raw = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    digest = hashlib.sha256()
+    digest.update("\x1f".join(str(c) for c in normalized.columns).encode("utf-8"))
+    digest.update(b"\x1e")
+    digest.update(
+        "\x1f".join(str(normalized[c].dtype) for c in normalized.columns).encode("utf-8")
+    )
+    digest.update(b"\x1e")
+    digest.update(f"{normalized.height}:{normalized.width}".encode("utf-8"))
+    if normalized.width > 0 and normalized.height > 0:
+        row_hashes = normalized.hash_rows(seed=0, seed_1=0, seed_2=0, seed_3=0)
+        digest.update(np.asarray(row_hashes, dtype=np.uint64).tobytes())
+    return digest.hexdigest()

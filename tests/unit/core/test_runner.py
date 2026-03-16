@@ -187,7 +187,7 @@ def test_runner_backtest_does_not_require_params_serialization_for_runtime_execu
     assert result.strategy_id == "runtime-only-param"
 
 
-def test_runner_backtest_materializes_features_per_window_end(
+def test_runner_backtest_materializes_features_once_for_full_backtest_range(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = StrategyRunner()
@@ -222,5 +222,4 @@ def test_runner_backtest_materializes_features_per_window_end(
         btc_df=btc_df,
     )
 
-    assert seen_current_dates
-    assert len(set(seen_current_dates)) > 1
+    assert seen_current_dates == [dt.datetime(2024, 1, 1)]
