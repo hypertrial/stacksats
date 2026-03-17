@@ -26,6 +26,29 @@ def _shared_strategy(features_df):
     )
 
 
+def _framework_shared_strategy(features_df):
+    class _FrameworkAdapter:
+        _stacksats_framework_fast_path = True
+
+        def __call__(self, window_feat):
+            return self._compute_window_weights(window_feat)
+
+        def _compute_window_weights(
+            self,
+            window_feat,
+            *,
+            window_start=None,
+            window_end=None,
+        ):
+            del window_start, window_end
+            return compute_weights_with_features(
+                window_feat,
+                features_df=features_df,
+            )
+
+    return _FrameworkAdapter()
+
+
 @pytest.mark.performance
 class TestFeaturePrecomputationPerformance:
     def test_feature_precompute_time(self, sample_btc_df):
@@ -116,6 +139,26 @@ class TestFullBacktestPerformance:
         per_window = elapsed / max(spd_table.height, 1)
         assert elapsed < 60.0
         assert per_window < 0.1
+
+    def test_framework_fast_path_is_not_slower_than_generic(self, sample_btc_df, sample_features_df):
+        generic_start = time.time()
+        generic = compute_cycle_spd(
+            sample_btc_df,
+            _shared_strategy(sample_features_df),
+            features_df=sample_features_df,
+        )
+        generic_elapsed = time.time() - generic_start
+
+        fast_start = time.time()
+        fast = compute_cycle_spd(
+            sample_btc_df,
+            _framework_shared_strategy(sample_features_df),
+            features_df=sample_features_df,
+        )
+        fast_elapsed = time.time() - fast_start
+
+        assert generic.height == fast.height
+        assert fast_elapsed <= generic_elapsed * 1.5
 
 
 @pytest.mark.performance

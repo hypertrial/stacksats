@@ -11,7 +11,6 @@ from .framework_contract import (
     ALLOCATION_SPAN_DAYS,
     apply_clipped_weight,
     assert_final_invariants,
-    compute_n_past,
     validate_locked_prefix,
 )
 
@@ -167,6 +166,36 @@ def _proposals_to_pl(proposals: object) -> pl.DataFrame:
     raise TypeError("proposals must be a Polars DataFrame.")
 
 
+def compute_n_past_span(
+    start_date: dt.datetime | str,
+    end_date: dt.datetime | str,
+    current_date: dt.datetime | str,
+) -> int:
+    """Compute inclusive observed-day count without materializing a date index."""
+    start_ts = _to_datetime(start_date)
+    end_ts = _to_datetime(end_date)
+    current_ts = _to_datetime(current_date)
+    if end_ts < start_ts or current_ts < start_ts:
+        return 0
+    observed_end = min(end_ts, current_ts)
+    return (observed_end - start_ts).days + 1
+
+
+def _calendar_frame(start_ts: dt.datetime, end_ts: dt.datetime) -> pl.DataFrame:
+    return pl.DataFrame({
+        "date": pl.datetime_range(start_ts, end_ts, interval="1d", eager=True),
+    })
+
+
+def _finite_value_expr(column: str = "_v") -> pl.Expr:
+    return (
+        pl.col(column)
+        .cast(pl.Float64, strict=False)
+        .fill_null(0.0)
+        .fill_nan(0.0)
+    )
+
+
 def compute_weights_from_target_profile(
     *,
     start_date: dt.datetime | str,
@@ -185,40 +214,47 @@ def compute_weights_from_target_profile(
     target_profile = _target_profile_to_pl(target_profile)
     start_ts = _to_datetime(start_date)
     end_ts = _to_datetime(end_date)
-    full_range = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True)
-    if full_range.len() == 0:
+    full_range = _calendar_frame(start_ts, end_ts)
+    if full_range.is_empty():
         return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 
-    n = full_range.len()
-    base = np.ones(n, dtype=float) / n
+    n = full_range.height
+    base = 1.0 / float(n)
 
     target_renamed = target_profile.select(["date", pl.col("value").alias("_v")])
-    target_df = pl.DataFrame({"date": full_range}).join(
+    target_df = full_range.join(
         target_renamed,
         on="date",
         how="left",
-    )
-    target_arr = target_df["_v"].fill_null(0.0).to_numpy()
-    target_arr = np.where(np.isfinite(target_arr), target_arr, 0.0)
+    ).with_columns(_finite_value_expr("_v").alias("_v"))
 
     if mode == "absolute":
-        absolute = np.clip(target_arr, 0.0, None)
-        if absolute.sum() <= 0:
-            raw = base
+        target_df = target_df.with_columns(
+            pl.col("_v").clip(lower_bound=0.0).alias("_absolute")
+        )
+        absolute_total = float(target_df["_absolute"].sum() or 0.0)
+        if absolute_total <= 0.0:
+            target_df = target_df.with_columns(pl.lit(base).alias("_raw"))
         else:
-            raw = absolute / absolute.sum()
+            target_df = target_df.with_columns(
+                (pl.col("_absolute") / pl.lit(absolute_total)).alias("_raw")
+            )
     elif mode == "preference":
-        preference = np.clip(target_arr, -50, 50)
-        raw = base * np.exp(preference)
+        target_df = target_df.with_columns(
+            (pl.lit(base) * pl.col("_v").clip(-50.0, 50.0).exp()).alias("_raw")
+        )
     else:
         raise ValueError(f"Unsupported target profile mode '{mode}'.")
 
     curr_ts = _to_datetime(current_date)
     if n_past is None:
-        n_past = compute_n_past(full_range.to_list(), curr_ts)
+        n_past = compute_n_past_span(start_ts, end_ts, curr_ts)
+    raw = target_df["_raw"].to_numpy()
     weights_arr = allocate_sequential_stable(raw, n_past, locked_weights)
     assert_final_invariants(weights_arr)
-    return pl.DataFrame({"date": full_range, "weight": weights_arr})
+    return target_df.select("date").with_columns(
+        pl.Series("weight", weights_arr.astype(float))
+    )
 
 
 def compute_weights_from_proposals(
@@ -237,24 +273,23 @@ def compute_weights_from_proposals(
     proposals = _proposals_to_pl(proposals)
     start_ts = _to_datetime(start_date)
     end_ts = _to_datetime(end_date)
-    full_range = pl.datetime_range(start_ts, end_ts, interval="1d", eager=True)
-    if full_range.len() == 0:
+    full_range = _calendar_frame(start_ts, end_ts)
+    if full_range.is_empty():
         return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
 
     prop_renamed = proposals.select(["date", pl.col("value").alias("_v")])
-    full_df = pl.DataFrame({"date": full_range}).join(
+    full_df = full_range.join(
         prop_renamed,
         on="date",
         how="left",
-    )
-    proposed_arr = full_df["_v"].fill_null(0.0).to_numpy()
-    proposed_arr = np.where(np.isfinite(proposed_arr), proposed_arr, 0.0)
+    ).with_columns(_finite_value_expr("_v").alias("_v"))
+    proposed_arr = full_df["_v"].to_numpy()
 
     weights_arr = allocate_from_proposals(
         proposals=proposed_arr,
         n_past=n_past,
-        n_total=full_range.len(),
+        n_total=full_range.height,
         locked_weights=locked_weights,
     )
     assert_final_invariants(weights_arr)
-    return pl.DataFrame({"date": full_range, "weight": weights_arr})
+    return full_df.select("date").with_columns(pl.Series("weight", weights_arr.astype(float)))

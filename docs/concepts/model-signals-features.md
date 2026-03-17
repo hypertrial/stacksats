@@ -15,6 +15,7 @@ The framework now owns raw feature sourcing.
 - Registered feature providers build lazy, as-of-filtered feature pipelines and the registry collects once after joining the observed feature set.
 - Strategy hooks still receive an eager `ctx.features_df` only for `start_date..current_date`.
 - Strategy methods must not load external files or make network/database calls directly.
+- The weight path now keeps date alignment, preference/profile preparation, and calendar normalization in Polars. NumPy is reserved for the final sequential allocation kernels where order-dependent state still matters.
 
 ## Primary signals
 

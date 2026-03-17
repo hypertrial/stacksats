@@ -35,23 +35,26 @@ def compute_weights_fast(
     if df.is_empty():
         return pl.DataFrame(schema={DATE_COL: pl.Datetime("us"), "weight": pl.Float64})
 
-    n = len(df)
+    n = df.height
     preference_df = compute_preference_scores_fn(features_df, start_date, end_date)
     pref_col = "preference" if "preference" in preference_df.columns else preference_df.columns[-1]
     merged = df.select(DATE_COL).join(
         preference_df.select([DATE_COL, pl.col(pref_col).alias("_pref")]),
         on=DATE_COL,
         how="left",
+    ).with_columns(
+        (pl.lit(1.0 / float(n)) * pl.col("_pref").fill_null(0.0).fill_nan(0.0).clip(-50.0, 50.0).exp())
+        .alias("_raw")
     )
-    pref_arr = merged["_pref"].fill_null(0.0).to_numpy()
-    raw = (np.ones(n, dtype=float) / n) * np.exp(np.clip(pref_arr, -50, 50))
+    raw = merged["_raw"].to_numpy()
 
     if n_past is None:
         n_past = n
     weights = allocate_sequential_stable_fn(raw, n_past, locked_weights)
 
-    dates = df[DATE_COL].to_list()
-    return pl.DataFrame({DATE_COL: dates, "weight": weights.astype(float)})
+    return merged.select(DATE_COL).with_columns(
+        pl.Series("weight", weights.astype(float))
+    )
 
 
 def compute_window_weights(

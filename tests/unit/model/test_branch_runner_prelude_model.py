@@ -14,9 +14,12 @@ from stacksats.model_development import (
     compute_weights_from_proposals,
     compute_weights_from_target_profile,
 )
+from stacksats.model_development_allocation import compute_n_past_span
 from stacksats.prelude import compute_cycle_spd
 from stacksats.runner import StrategyRunner
+from stacksats.runner_helpers import build_window_bounds, build_window_index
 from stacksats.strategy_types import (
+    BacktestConfig,
     BaseStrategy,
     StrategyContext,
     TargetProfile,
@@ -282,6 +285,85 @@ def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
     assert result.height == 1
 
 
+def test_build_window_bounds_marks_contiguous_windows() -> None:
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 6),
+        interval="1d",
+        eager=True,
+    )
+    frame = pl.DataFrame({"date": dates, "value": np.arange(dates.len(), dtype=float)})
+    sorted_frame, plan = build_window_index(frame)
+    bounds = build_window_bounds(
+        plan,
+        pl.DataFrame({
+            "window_start": [dates[0], dates[1]],
+            "window_end": [dates[2], dates[5]],
+        }),
+        expected_days=3,
+        prefix="feature",
+    )
+
+    assert sorted_frame["date"].to_list() == dates.to_list()
+    assert bounds["feature_can_slice"].to_list() == [True, False]
+    assert bounds["feature_start_idx"].to_list() == [0, 1]
+    assert bounds["feature_end_idx"].to_list() == [2, 5]
+
+
+def test_compute_n_past_span_counts_observed_days_without_index_materialization() -> None:
+    start = dt.datetime(2024, 1, 1)
+    end = dt.datetime(2024, 1, 10)
+
+    assert compute_n_past_span(start, end, dt.datetime(2023, 12, 31)) == 0
+    assert compute_n_past_span(start, end, dt.datetime(2024, 1, 1)) == 1
+    assert compute_n_past_span(start, end, dt.datetime(2024, 1, 5)) == 5
+    assert compute_n_past_span(start, end, dt.datetime(2024, 1, 20)) == 10
+
+
+def test_compute_cycle_spd_framework_fast_path_matches_generic() -> None:
+    btc_df, features_df = _single_window_data()
+
+    def _weights(window: pl.DataFrame) -> pl.DataFrame:
+        base = np.linspace(1.0, 2.0, window.height, dtype=float)
+        base /= base.sum()
+        return pl.DataFrame({"date": window["date"], "weight": base})
+
+    class _FrameworkStrategyCallable:
+        _stacksats_framework_fast_path = True
+
+        def __call__(self, window: pl.DataFrame) -> pl.DataFrame:
+            return self._compute_window_weights(window)
+
+        def _compute_window_weights(
+            self,
+            window: pl.DataFrame,
+            *,
+            window_start: dt.datetime | None = None,
+            window_end: dt.datetime | None = None,
+        ) -> pl.DataFrame:
+            del window_start, window_end
+            return _weights(window)
+
+    generic = compute_cycle_spd(
+        btc_df,
+        strategy_function=_weights,
+        features_df=features_df,
+        start_date="2024-01-01",
+        end_date="2025-01-01",
+        validate_weights=True,
+    )
+    fast = compute_cycle_spd(
+        btc_df,
+        strategy_function=_FrameworkStrategyCallable(),
+        features_df=features_df,
+        start_date="2024-01-01",
+        end_date="2025-01-01",
+        validate_weights=True,
+    )
+
+    assert generic.to_dict(as_series=False) == fast.to_dict(as_series=False)
+
+
 def test_allocate_from_proposals_returns_empty_when_total_is_zero() -> None:
     weights = allocate_from_proposals(np.array([], dtype=float), n_past=0, n_total=0)
     assert weights.size == 0
@@ -402,6 +484,25 @@ class _NanProposalStrategy(BaseStrategy):
         return float("nan")
 
 
+class _ProfileBacktestStrategy(BaseStrategy):
+    strategy_id = "profile-backtest"
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ("price_usd",)
+
+    def build_target_profile(
+        self,
+        ctx: StrategyContext,
+        features_df: pl.DataFrame,
+        signals: dict[str, pl.Series],
+    ) -> pl.DataFrame:
+        del ctx, signals
+        return pl.DataFrame({
+            "date": features_df["date"],
+            "value": np.linspace(-0.1, 0.1, features_df.height),
+        })
+
+
 def _strategy_context(periods: int = 3) -> StrategyContext:
     dates = pl.datetime_range(
         dt.datetime(2024, 1, 1),
@@ -459,3 +560,50 @@ def test_base_strategy_validate_weights_allows_empty_weights() -> None:
         pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
         _strategy_context(),
     )
+
+
+def test_runner_backtest_marks_profile_strategy_for_framework_fast_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    seen: dict[str, bool] = {}
+
+    def _fake_backtest_dynamic_dca(
+        dataframe,
+        strategy_function,
+        *,
+        features_df,
+        strategy_label,
+        start_date,
+        end_date,
+    ):
+        del dataframe, strategy_label, start_date, end_date
+        seen["fast_path"] = bool(
+            getattr(strategy_function, "_stacksats_framework_fast_path", False)
+        )
+        preview = features_df.head(10)
+        assert not strategy_function._compute_window_weights(preview).is_empty()
+        return (
+            pl.DataFrame({
+                "window": ["2024-01-01 → 2024-12-30"],
+                "min_sats_per_dollar": [1000.0],
+                "max_sats_per_dollar": [2000.0],
+                "uniform_sats_per_dollar": [1500.0],
+                "dynamic_sats_per_dollar": [1600.0],
+                "uniform_percentile": [50.0],
+                "dynamic_percentile": [60.0],
+                "excess_percentile": [10.0],
+            }),
+            60.0,
+            50.0,
+        )
+
+    monkeypatch.setattr("stacksats.runner.backtest_dynamic_dca", _fake_backtest_dynamic_dca)
+
+    runner.backtest(
+        _ProfileBacktestStrategy(),
+        BacktestConfig(start_date="2024-01-01", end_date="2024-12-31"),
+        btc_df=_btc_df(),
+    )
+
+    assert seen == {"fast_path": True}

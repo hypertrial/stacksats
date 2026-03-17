@@ -41,6 +41,56 @@ from .strategy_types import (
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 
+class _FrameworkBacktestAdapter:
+    """Private runner-owned callable that enables batched backtest execution."""
+
+    _stacksats_framework_fast_path = True
+
+    def __init__(self, runner: "StrategyRunner", strategy: BaseStrategy):
+        self._runner = runner
+        self._strategy = strategy
+
+    @staticmethod
+    def _empty_weights() -> pl.DataFrame:
+        return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+
+    def _compute_window_weights(
+        self,
+        df_window: pl.DataFrame,
+        *,
+        window_start: dt.datetime | None = None,
+        window_end: dt.datetime | None = None,
+    ) -> pl.DataFrame:
+        if df_window.is_empty():
+            return self._empty_weights()
+
+        resolved_start = window_start or df_window["date"].min()
+        resolved_end = window_end or df_window["date"].max()
+        weights, _ = self._runner._compute_strategy_weights(
+            self._strategy,
+            features_df=df_window,
+            start_date=resolved_start,
+            end_date=resolved_end,
+            current_date=resolved_end,
+            strict_mode=False,
+            cache_namespace="base",
+        )
+        ctx = strategy_context_from_features_df(
+            df_window,
+            resolved_start,
+            resolved_end,
+            resolved_end,
+            required_columns=tuple(self._strategy.required_feature_columns()),
+            as_of_date=resolved_end,
+        )
+        self._runner._validate_weights(weights, resolved_start, resolved_end)
+        self._strategy.validate_weights(weights, ctx)
+        return weights
+
+    def __call__(self, df_window: pl.DataFrame) -> pl.DataFrame:
+        return self._compute_window_weights(df_window)
+
+
 class StrategyRunner(StrategyRunnerValidationMixin):
     """Single orchestration path for strategy lifecycle operations."""
 
@@ -466,41 +516,43 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 current_date=end_ts,
                 cache_namespace="base-full",
             )
+            if strategy.intent_mode() == "profile":
+                strategy_fn = _FrameworkBacktestAdapter(self, strategy)
+            else:
+                def strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
+                    if df_window.is_empty():
+                        return pl.DataFrame(
+                            schema={"date": pl.Datetime("us"), "weight": pl.Float64}
+                        )
 
-            def _strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
-                if df_window.is_empty():
-                    return pl.DataFrame(
-                        schema={"date": pl.Datetime("us"), "weight": pl.Float64}
+                    window_start = df_window["date"].min()
+                    window_end = df_window["date"].max()
+                    weights, _ = self._compute_strategy_weights(
+                        strategy,
+                        features_df=df_window,
+                        start_date=window_start,
+                        end_date=window_end,
+                        current_date=window_end,
+                        strict_mode=False,
+                        cache_namespace="base",
                     )
-
-                window_start = df_window["date"].min()
-                window_end = df_window["date"].max()
-                weights, mutated = self._compute_strategy_weights(
-                    strategy,
-                    features_df=df_window,
-                    start_date=window_start,
-                    end_date=window_end,
-                    current_date=window_end,
-                    strict_mode=False,
-                    cache_namespace="base",
-                )
-                ctx = strategy_context_from_features_df(
-                    df_window,
-                    window_start,
-                    window_end,
-                    window_end,
-                    required_columns=tuple(strategy.required_feature_columns()),
-                    as_of_date=window_end,
-                )
-                self._validate_weights(weights, window_start, window_end)
-                strategy.validate_weights(weights, ctx)
-                return weights
+                    ctx = strategy_context_from_features_df(
+                        df_window,
+                        window_start,
+                        window_end,
+                        window_end,
+                        required_columns=tuple(strategy.required_feature_columns()),
+                        as_of_date=window_end,
+                    )
+                    self._validate_weights(weights, window_start, window_end)
+                    strategy.validate_weights(weights, ctx)
+                    return weights
 
             strategy_label = config.strategy_label or metadata.strategy_id
             spd_table, exp_decay_percentile, uniform_exp_decay_percentile = (
                 backtest_dynamic_dca(
                     btc_df,
-                    _strategy_fn,
+                    strategy_fn,
                     features_df=full_features_df,
                     strategy_label=strategy_label,
                     start_date=config.start_date,

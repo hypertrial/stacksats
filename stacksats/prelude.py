@@ -7,7 +7,7 @@ import polars as pl
 from .data_btc import BTCDataProvider
 from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from .model_development import precompute_features
-from .runner_helpers import build_window_index, slice_window_or_filter
+from .runner_helpers import build_window_bounds, build_window_index, slice_window_or_filter
 
 # Configuration
 BACKTEST_START = "2018-01-01"
@@ -215,6 +215,149 @@ def _normalize_weight_frame(
     return aligned.with_columns((pl.col("weight") / total).alias("weight"))
 
 
+def _empty_spd_frame() -> pl.DataFrame:
+    return pl.DataFrame(schema={
+        "window": pl.Utf8,
+        "min_sats_per_dollar": pl.Float64,
+        "max_sats_per_dollar": pl.Float64,
+        "uniform_sats_per_dollar": pl.Float64,
+        "dynamic_sats_per_dollar": pl.Float64,
+        "uniform_percentile": pl.Float64,
+        "dynamic_percentile": pl.Float64,
+        "excess_percentile": pl.Float64,
+    })
+
+
+def _candidate_windows(start_ts: dt.datetime, end: dt.datetime) -> pl.DataFrame:
+    max_start_date = end - WINDOW_OFFSET
+    if max_start_date < start_ts:
+        return pl.DataFrame(schema={
+            "window_start": pl.Datetime("us"),
+            "window_end": pl.Datetime("us"),
+        })
+    start_dates = pl.datetime_range(start_ts, max_start_date, interval="1d", eager=True)
+    return pl.DataFrame({"window_start": start_dates}).with_columns(
+        (pl.col("window_start") + pl.duration(days=WINDOW_DAYS - 1)).alias("window_end")
+    )
+
+
+def _window_label_expr(start_col: str = "window_start", end_col: str = "window_end") -> pl.Expr:
+    return pl.format(
+        "{} → {}",
+        pl.col(start_col).dt.strftime("%Y-%m-%d"),
+        pl.col(end_col).dt.strftime("%Y-%m-%d"),
+    ).alias("window")
+
+
+def _window_slice_from_row(
+    frame: pl.DataFrame,
+    plan,
+    row: dict[str, object],
+    *,
+    prefix: str,
+    expected_days: int | None,
+) -> pl.DataFrame:
+    can_slice = bool(row.get(f"{prefix}_can_slice", False))
+    start_idx = row.get(f"{prefix}_start_idx")
+    end_idx = row.get(f"{prefix}_end_idx")
+    if can_slice and start_idx is not None and end_idx is not None:
+        return frame.slice(int(start_idx), int(end_idx) - int(start_idx) + 1)
+    return slice_window_or_filter(
+        frame,
+        plan,
+        row["window_start"],
+        row["window_end"],
+        expected_days=expected_days,
+    )
+
+
+def _window_percentiles(
+    *,
+    min_spd: float,
+    max_spd: float,
+    uniform_spd: float,
+    dynamic_spd: float,
+) -> tuple[float, float]:
+    span = max_spd - min_spd
+    if span > 0:
+        uniform_pct = (uniform_spd - min_spd) / span * 100
+        dynamic_pct = (dynamic_spd - min_spd) / span * 100
+    else:
+        uniform_pct = float("nan")
+        dynamic_pct = float("nan")
+    return float(uniform_pct), float(dynamic_pct)
+
+
+def _batched_spd_windows(
+    dataframe: pl.DataFrame,
+    full_feat: pl.DataFrame,
+    *,
+    start_ts: dt.datetime,
+    end: dt.datetime,
+) -> tuple[pl.DataFrame, pl.DataFrame, object, pl.DataFrame, object, pl.DataFrame]:
+    dataframe, price_plan = build_window_index(dataframe.filter(pl.col(DATE_COL) >= start_ts))
+    full_feat, feature_plan = build_window_index(full_feat)
+    inv_price_frame = dataframe.select(
+        DATE_COL,
+        (pl.lit(1e8) / pl.col("price_usd").cast(pl.Float64, strict=False)).alias("_inv_price"),
+    )
+    windows = _candidate_windows(start_ts, end)
+    if windows.is_empty():
+        return dataframe, price_plan, full_feat, feature_plan, inv_price_frame, windows
+
+    windows = build_window_bounds(
+        price_plan,
+        windows,
+        expected_days=WINDOW_DAYS,
+        prefix="price",
+    )
+    windows = build_window_bounds(
+        feature_plan,
+        windows,
+        expected_days=WINDOW_DAYS,
+        prefix="feature",
+    )
+    if price_plan.has_unique_dates and not inv_price_frame.is_empty():
+        inv_metrics = inv_price_frame.with_columns(
+            pl.col("_inv_price")
+            .rolling_min(window_size=WINDOW_DAYS, min_samples=WINDOW_DAYS)
+            .alias("min_sats_per_dollar"),
+            pl.col("_inv_price")
+            .rolling_max(window_size=WINDOW_DAYS, min_samples=WINDOW_DAYS)
+            .alias("max_sats_per_dollar"),
+            pl.col("_inv_price")
+            .rolling_mean(window_size=WINDOW_DAYS, min_samples=WINDOW_DAYS)
+            .alias("uniform_sats_per_dollar"),
+        ).select(
+            pl.col(DATE_COL).alias("window_end"),
+            "min_sats_per_dollar",
+            "max_sats_per_dollar",
+            "uniform_sats_per_dollar",
+        )
+        windows = windows.join(inv_metrics, on="window_end", how="left").with_columns(
+            pl.when(pl.col("price_can_slice"))
+            .then(pl.col("min_sats_per_dollar"))
+            .otherwise(None)
+            .alias("min_sats_per_dollar"),
+            pl.when(pl.col("price_can_slice"))
+            .then(pl.col("max_sats_per_dollar"))
+            .otherwise(None)
+            .alias("max_sats_per_dollar"),
+            pl.when(pl.col("price_can_slice"))
+            .then(pl.col("uniform_sats_per_dollar"))
+            .otherwise(None)
+            .alias("uniform_sats_per_dollar"),
+        )
+    else:
+        windows = windows.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("min_sats_per_dollar"),
+            pl.lit(None, dtype=pl.Float64).alias("max_sats_per_dollar"),
+            pl.lit(None, dtype=pl.Float64).alias("uniform_sats_per_dollar"),
+        )
+    windows = windows.with_columns(_window_label_expr())
+    return dataframe, price_plan, full_feat, feature_plan, inv_price_frame, windows
+
+
 def compute_cycle_spd(
     dataframe: pl.DataFrame,
     strategy_function,
@@ -272,138 +415,257 @@ def compute_cycle_spd(
             if source_end is not None:
                 end = min(end, source_end)
                 full_feat = full_feat.filter(pl.col(DATE_COL) <= end)
-
-    dataframe, price_index = build_window_index(dataframe.filter(pl.col(DATE_COL) >= start_ts))
-    full_feat, feature_index = build_window_index(full_feat)
-    inv_price_frame, inv_price_index = build_window_index(
-        dataframe.select(
-            DATE_COL,
-            (pl.lit(1e8) / pl.col("price_usd").cast(pl.Float64, strict=False)).alias("_inv_price"),
-        )
+    (
+        dataframe,
+        price_plan,
+        full_feat,
+        feature_plan,
+        inv_price_frame,
+        windows,
+    ) = _batched_spd_windows(
+        dataframe,
+        full_feat,
+        start_ts=start_ts,
+        end=end,
     )
 
-    max_start_date = end - WINDOW_OFFSET
-    start_dates = pl.datetime_range(start_ts, max_start_date, interval="1d", eager=True)
+    if windows.is_empty():
+        return _empty_spd_frame()
 
-    if start_dates.len() > 0:
-        last_start = start_dates[-1]
-        actual_end = last_start + WINDOW_OFFSET
-        logging.info(
-            f"Backtesting date range: {start_dates[0]} to {actual_end} "
-            f"({start_dates.len()} total windows)"
+    logging.info(
+        "Backtesting date range: %s to %s (%s total windows)",
+        windows["window_start"][0],
+        windows["window_end"][-1],
+        windows.height,
+    )
+    if getattr(strategy_function, "_stacksats_framework_fast_path", False):
+        return _compute_cycle_spd_framework(
+            dataframe,
+            price_plan,
+            full_feat,
+            feature_plan,
+            inv_price_frame,
+            windows,
+            strategy_function,
+            validate_weights=validate_weights,
+        )
+    return _compute_cycle_spd_generic(
+        dataframe,
+        price_plan,
+        full_feat,
+        feature_plan,
+        inv_price_frame,
+        windows,
+        strategy_function,
+        validate_weights=validate_weights,
+    )
+
+
+def _validate_window_weights(
+    weight_df: pl.DataFrame,
+    *,
+    window_start: dt.datetime,
+    window_end: dt.datetime,
+) -> None:
+    weight_sum = weight_df["weight"].sum()
+    if not np.isclose(float(weight_sum), 1.0, atol=WEIGHT_SUM_TOLERANCE):
+        raise ValueError(
+            f"Weights for range {window_start.date()} to {window_end.date()} "
+            f"sum to {float(weight_sum):.10f}, expected 1.0 "
+            f"(tolerance: {WEIGHT_SUM_TOLERANCE})"
         )
 
-    result_windows: list[str] = []
-    result_min_spd: list[float] = []
-    result_max_spd: list[float] = []
-    result_uniform_spd: list[float] = []
-    result_dynamic_spd: list[float] = []
-    result_uniform_pct: list[float] = []
-    result_dynamic_pct: list[float] = []
-    result_excess_pct: list[float] = []
-    validated_windows = 0
-    for window_start in start_dates.to_list():
-        window_end = window_start + WINDOW_OFFSET
-        if window_end > end:
-            continue
 
-        price_slice = slice_window_or_filter(
+def _spd_metrics_for_row(
+    row: dict[str, object],
+    spd_frame: pl.DataFrame,
+) -> tuple[float, float, float]:
+    min_spd = row.get("min_sats_per_dollar")
+    max_spd = row.get("max_sats_per_dollar")
+    uniform_spd = row.get("uniform_sats_per_dollar")
+    if min_spd is None or max_spd is None or uniform_spd is None:
+        inv_price = spd_frame["_inv_price"]
+        return (
+            float(inv_price.min()),
+            float(inv_price.max()),
+            float(inv_price.mean()),
+        )
+    return float(min_spd), float(max_spd), float(uniform_spd)
+
+
+def _dynamic_spd(spd_frame: pl.DataFrame, weight_df: pl.DataFrame, uniform_spd: float) -> float:
+    if weight_df.height != spd_frame.height:
+        return float(uniform_spd)
+    return float(
+        spd_frame.with_columns(weight_df["weight"].alias("_weight"))
+        .select((pl.col("_weight") * pl.col("_inv_price")).sum())
+        .item()
+    )
+
+
+def _compute_cycle_spd_generic(
+    dataframe: pl.DataFrame,
+    price_plan,
+    full_feat: pl.DataFrame,
+    feature_plan,
+    inv_price_frame: pl.DataFrame,
+    windows: pl.DataFrame,
+    strategy_function,
+    *,
+    validate_weights: bool,
+) -> pl.DataFrame:
+    rows: list[dict[str, float | str]] = []
+    validated_windows = 0
+    for idx in range(windows.height):
+        row = windows.row(idx, named=True)
+        price_slice = _window_slice_from_row(
             dataframe,
-            price_index,
-            window_start,
-            window_end,
+            price_plan,
+            row,
+            prefix="price",
             expected_days=WINDOW_DAYS,
         )
         if price_slice.is_empty():
             continue
 
-        window_feat = slice_window_or_filter(
+        window_feat = _window_slice_from_row(
             full_feat,
-            feature_index,
-            window_start,
-            window_end,
+            feature_plan,
+            row,
+            prefix="feature",
             expected_days=WINDOW_DAYS,
         )
         if window_feat.height != WINDOW_DAYS:
             continue
 
         weight_df = _normalize_weight_frame(price_slice, strategy_function(window_feat))
-
         if validate_weights:
-            weight_sum = weight_df["weight"].sum()
-            if not np.isclose(float(weight_sum), 1.0, atol=WEIGHT_SUM_TOLERANCE):
-                raise ValueError(
-                    f"Weights for range {window_start.date()} to {window_end.date()} "
-                    f"sum to {float(weight_sum):.10f}, expected 1.0 "
-                    f"(tolerance: {WEIGHT_SUM_TOLERANCE})"
-                )
+            _validate_window_weights(
+                weight_df,
+                window_start=row["window_start"],
+                window_end=row["window_end"],
+            )
             validated_windows += 1
 
-        spd_frame = slice_window_or_filter(
+        spd_frame = _window_slice_from_row(
             inv_price_frame,
-            inv_price_index,
-            window_start,
-            window_end,
+            price_plan,
+            row,
+            prefix="price",
             expected_days=WINDOW_DAYS,
         )
-        inv_price = spd_frame["_inv_price"]
-        min_spd = float(inv_price.min())
-        max_spd = float(inv_price.max())
-        span = max_spd - min_spd
-        uniform_spd = float(inv_price.mean())
-        if weight_df.height == spd_frame.height:
-            dynamic_spd = float(
-                spd_frame.with_columns(weight_df["weight"].alias("_weight"))
-                .select((pl.col("_weight") * pl.col("_inv_price")).sum())
-                .item()
-            )
-        else:
-            dynamic_spd = uniform_spd
-
-        if span > 0:
-            uniform_pct = (uniform_spd - min_spd) / span * 100
-            dynamic_pct = (dynamic_spd - min_spd) / span * 100
-        else:
-            uniform_pct = float("nan")
-            dynamic_pct = float("nan")
-
-        result_windows.append(_make_window_label(window_start, window_end))
-        result_min_spd.append(min_spd)
-        result_max_spd.append(max_spd)
-        result_uniform_spd.append(uniform_spd)
-        result_dynamic_spd.append(dynamic_spd)
-        result_uniform_pct.append(uniform_pct)
-        result_dynamic_pct.append(dynamic_pct)
-        result_excess_pct.append(dynamic_pct - uniform_pct)
+        min_spd, max_spd, uniform_spd = _spd_metrics_for_row(row, spd_frame)
+        dynamic_spd = _dynamic_spd(spd_frame, weight_df, uniform_spd)
+        uniform_pct, dynamic_pct = _window_percentiles(
+            min_spd=min_spd,
+            max_spd=max_spd,
+            uniform_spd=uniform_spd,
+            dynamic_spd=dynamic_spd,
+        )
+        rows.append({
+            "window": row["window"],
+            "min_sats_per_dollar": min_spd,
+            "max_sats_per_dollar": max_spd,
+            "uniform_sats_per_dollar": uniform_spd,
+            "dynamic_sats_per_dollar": dynamic_spd,
+            "uniform_percentile": uniform_pct,
+            "dynamic_percentile": dynamic_pct,
+            "excess_percentile": dynamic_pct - uniform_pct,
+        })
 
     if validate_weights and validated_windows > 0:
         logging.info(
-            f"✓ Validated weight sums for {validated_windows} windows (all sum to 1.0)"
+            "✓ Validated weight sums for %s windows (all sum to 1.0)",
+            validated_windows,
         )
+    return pl.DataFrame(rows) if rows else _empty_spd_frame()
 
-    if not result_windows:
-        return pl.DataFrame(schema={
-            "window": pl.Utf8,
-            "min_sats_per_dollar": pl.Float64,
-            "max_sats_per_dollar": pl.Float64,
-            "uniform_sats_per_dollar": pl.Float64,
-            "dynamic_sats_per_dollar": pl.Float64,
-            "uniform_percentile": pl.Float64,
-            "dynamic_percentile": pl.Float64,
-            "excess_percentile": pl.Float64,
+
+def _compute_cycle_spd_framework(
+    dataframe: pl.DataFrame,
+    price_plan,
+    full_feat: pl.DataFrame,
+    feature_plan,
+    inv_price_frame: pl.DataFrame,
+    windows: pl.DataFrame,
+    strategy_function,
+    *,
+    validate_weights: bool,
+) -> pl.DataFrame:
+    rows: list[dict[str, float | str]] = []
+    validated_windows = 0
+    compute_window_weights = getattr(strategy_function, "_compute_window_weights", strategy_function)
+
+    for idx in range(windows.height):
+        row = windows.row(idx, named=True)
+        price_slice = _window_slice_from_row(
+            dataframe,
+            price_plan,
+            row,
+            prefix="price",
+            expected_days=WINDOW_DAYS,
+        )
+        if price_slice.is_empty():
+            continue
+        window_feat = _window_slice_from_row(
+            full_feat,
+            feature_plan,
+            row,
+            prefix="feature",
+            expected_days=WINDOW_DAYS,
+        )
+        if window_feat.height != WINDOW_DAYS:
+            continue
+        weight_df = _normalize_weight_frame(
+            price_slice,
+            compute_window_weights(
+                window_feat,
+                window_start=row["window_start"],
+                window_end=row["window_end"],
+            ),
+        )
+        if validate_weights:
+            _validate_window_weights(
+                weight_df,
+                window_start=row["window_start"],
+                window_end=row["window_end"],
+            )
+            validated_windows += 1
+
+        spd_frame = _window_slice_from_row(
+            inv_price_frame,
+            price_plan,
+            row,
+            prefix="price",
+            expected_days=WINDOW_DAYS,
+        )
+        min_spd, max_spd, uniform_spd = _spd_metrics_for_row(row, spd_frame)
+        dynamic_spd = _dynamic_spd(spd_frame, weight_df, uniform_spd)
+        uniform_pct, dynamic_pct = _window_percentiles(
+            min_spd=min_spd,
+            max_spd=max_spd,
+            uniform_spd=uniform_spd,
+            dynamic_spd=dynamic_spd,
+        )
+        rows.append({
+            "window": row["window"],
+            "min_sats_per_dollar": min_spd,
+            "max_sats_per_dollar": max_spd,
+            "uniform_sats_per_dollar": uniform_spd,
+            "dynamic_sats_per_dollar": dynamic_spd,
+            "uniform_percentile": uniform_pct,
+            "dynamic_percentile": dynamic_pct,
+            "excess_percentile": dynamic_pct - uniform_pct,
         })
-    return pl.DataFrame(
-        {
-            "window": result_windows,
-            "min_sats_per_dollar": result_min_spd,
-            "max_sats_per_dollar": result_max_spd,
-            "uniform_sats_per_dollar": result_uniform_spd,
-            "dynamic_sats_per_dollar": result_dynamic_spd,
-            "uniform_percentile": result_uniform_pct,
-            "dynamic_percentile": result_dynamic_pct,
-            "excess_percentile": result_excess_pct,
-        }
-    )
+
+    if validate_weights and validated_windows > 0:
+        logging.info(
+            "✓ Validated weight sums for %s windows (all sum to 1.0)",
+            validated_windows,
+        )
+    if not rows:
+        return _empty_spd_frame()
+    return pl.DataFrame(rows)
 
 
 def backtest_dynamic_dca(

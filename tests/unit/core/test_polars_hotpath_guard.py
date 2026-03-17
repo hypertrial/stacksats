@@ -51,7 +51,7 @@ def test_find_hotpath_refs_allows_explicit_allowlisted_lines(tmp_path: Path) -> 
     target.mkdir()
     hotpath = target / "model_development_weights.py"
     hotpath.write_text(
-        'pref_arr = merged["_pref"].fill_null(0.0).to_numpy()\n'
+        'raw = merged["_raw"].to_numpy()\n'
         'assert_final_invariants_fn(weights["weight"].to_numpy().astype(float))\n',
         encoding="utf-8",
     )

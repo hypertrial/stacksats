@@ -11,17 +11,23 @@ import sys
 HOTPATH_FILES = (
     "stacksats/data_btc.py",
     "stacksats/column_map_provider.py",
+    "stacksats/model_development_allocation.py",
     "stacksats/model_development_features.py",
     "stacksats/model_development_helpers.py",
     "stacksats/model_development_weights.py",
     "stacksats/prelude.py",
     "stacksats/feature_providers.py",
     "stacksats/feature_registry.py",
+    "stacksats/runner_helpers.py",
 )
 
-PATTERN = re.compile(r"\bto_numpy\s*\(|\biter_rows\s*\(|\bpl\.read_parquet\s*\(")
+PATTERN = re.compile(r"\bto_numpy\s*\(|\bto_list\s*\(|\biter_rows\s*\(|\bpl\.read_parquet\s*\(")
 
 ALLOWLIST: dict[str, tuple[str, ...]] = {
+    "stacksats/model_development_allocation.py": (
+        'raw = target_df["_raw"].to_numpy()',
+        'proposed_arr = full_df["_v"].to_numpy()',
+    ),
     "stacksats/model_development_features.py": (
         'df["price_vs_ma"].to_numpy()',
         'df["mvrv_zscore"].to_numpy()',
@@ -37,12 +43,18 @@ ALLOWLIST: dict[str, tuple[str, ...]] = {
         "arr = vol.to_numpy()",
     ),
     "stacksats/model_development_weights.py": (
-        'merged["_pref"].fill_null(0.0).to_numpy()',
+        'raw = merged["_raw"].to_numpy()',
         'weights["weight"].to_numpy().astype(float)',
     ),
     "stacksats/prelude.py": (
+        "return s.to_list()",
         "dynamic_pct.to_numpy()",
         "uniform_pct.to_numpy()",
+    ),
+    "stacksats/runner_helpers.py": (
+        "rev_vals = future[col].reverse().to_list()",
+        "arr = perturbed[col].to_list()",
+        'mask_arr = (perturbed[DATE_COL] > probe).to_numpy()',
     ),
 }
 
