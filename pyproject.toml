@@ -50,6 +50,9 @@ deploy = [
 ]
 dev = [
   "build>=1.2.0",
+  "setuptools>=69",
+  "setuptools-scm>=8",
+  "wheel",
   "pytest==9.0.2",
   "pytest-bdd==8.1.0",
   "pytest-cov==7.0.0",
