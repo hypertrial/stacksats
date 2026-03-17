@@ -103,8 +103,19 @@ Current canonical `merged_metrics*.parquet` snapshot in repo-backed docs:
 - `41,407` distinct metric keys
 - `284` top-level metric families
 
+What a new user can access through this parquet:
+
+- daily BTC market and valuation metrics such as `price_*`, `market_*`, `realized_*`, `mvrv`, `investor_*`, and `cost_*`
+- supply, issuance, and scarcity metrics such as `supply_*`, `circulating_*`, `subsidy_*`, and `inflation_*`
+- cohort metrics such as `sth_*`, `lth_*`, `utxos_<age_bucket>_*`, `addrs_<balance_bucket>_*`, `year_<yyyy>_*`, and `epoch_<n>_*`
+- mining, script/output-type, block, transaction, and network-activity metrics
+- benchmark and path metrics such as `1m_*`, `1y_*`, `10y_*`, and `dca_*`
+
+The parquet is a long-format daily metric fact table. It does not contain raw transaction rows, raw block rows, or intraday event data.
+
 Detailed references:
 
+- [docs/reference/merged-metrics-data-guide.md](docs/reference/merged-metrics-data-guide.md)
 - [docs/reference/merged-metrics-parquet-schema.md](docs/reference/merged-metrics-parquet-schema.md)
 - [docs/reference/merged-metrics-taxonomy.md](docs/reference/merged-metrics-taxonomy.md)
 

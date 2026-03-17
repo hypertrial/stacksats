@@ -24,6 +24,7 @@ StackSats is anchored on the canonical BRK `merged_metrics*.parquet` dataset.
 
 Start here:
 
+- [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
 - [BRK Data Source](data-source.md)
 - [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
 - [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)

@@ -8,8 +8,15 @@ description: Canonical schema for the Google Drive distributed merged_metrics pa
 This page defines the canonical StackSats dataset contract for the Google Drive
 `merged_metrics*.parquet` file.
 
-Use [Merged Metrics Taxonomy](merged-metrics-taxonomy.md) for the semantic
-grouping model of the full `metric` namespace.
+Read these pages in order:
+
+1. [Merged Metrics Data Guide](merged-metrics-data-guide.md)
+2. [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md)
+3. [Merged Metrics Taxonomy](merged-metrics-taxonomy.md)
+
+Use [Merged Metrics Data Guide](merged-metrics-data-guide.md) for the user-facing
+answer to what data is available, and [Merged Metrics Taxonomy](merged-metrics-taxonomy.md)
+for naming structure and namespace registries.
 
 Canonical file link:
 
@@ -21,11 +28,21 @@ Profiled file in this repository:
 
 ## Physical schema
 
+This is the stable fact-table contract. Each row is one daily numeric observation
+for one metric key.
+
 | Column | Polars dtype | Required | Nulls | Meaning |
 | --- | --- | --- | --- | --- |
 | `day_utc` | `Date` | yes | no | UTC calendar day for the metric observation. |
 | `metric` | `String` | yes | no | Metric key/name (long-format keyspace). |
 | `value` | `Float64` | yes | no | Numeric metric value for `(day_utc, metric)`. |
+
+Interpretation notes:
+
+- The long-format parquet is the source-of-truth dataset for StackSats.
+- Users access many daily derived BTC time series through metric keys in `metric`.
+- This parquet does not contain raw transaction rows, raw block rows, raw address ledgers, or intraday event data.
+- Semantic interpretation lives in `data/brk_merged_metrics_catalog.json` and [Merged Metrics Taxonomy](merged-metrics-taxonomy.md), not in extra parquet columns.
 
 ## Dataset profile (current canonical snapshot)
 

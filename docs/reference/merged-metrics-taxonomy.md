@@ -7,7 +7,13 @@ description: Generated semantic taxonomy for the BRK merged_metrics parquet metr
 
 > Generated from `scripts/generate_merged_metrics_taxonomy.py` against `merged_metrics_2026-03-15_04-29-57.parquet`.
 
-This page documents the semantic metric taxonomy for the canonical long-format `merged_metrics*.parquet` dataset.
+This page documents the naming structure, compatibility taxonomy, and user-facing access categories for the canonical long-format `merged_metrics*.parquet` dataset.
+
+Read these pages in order:
+
+1. [Merged Metrics Data Guide](merged-metrics-data-guide.md)
+2. [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md)
+3. [Merged Metrics Taxonomy](merged-metrics-taxonomy.md)
 
 Dataset scale in the current canonical snapshot:
 
@@ -16,12 +22,12 @@ Dataset scale in the current canonical snapshot:
 - `41,407` distinct metric keys
 - `284` top-level metric families
 
-Use [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md) for the physical parquet schema and runtime projection contract.
-
 Canonical generated artifacts:
 
 - markdown page: `docs/reference/merged-metrics-taxonomy.md`
+- data guide: `docs/reference/merged-metrics-data-guide.md`
 - JSON taxonomy: `data/brk_merged_metrics_taxonomy.json`
+- JSON catalog: `data/brk_merged_metrics_catalog.json`
 - refresh command: `python scripts/generate_merged_metrics_taxonomy.py`
 
 ## Snapshot
@@ -35,7 +41,25 @@ Canonical generated artifacts:
 | Day range | `2009-01-03` to `2026-03-13` |
 | Top-level families | `284` |
 
-## Semantic Classes
+## User-Facing Access Categories
+
+| Category | Metric count | Family count | Meaning |
+| --- | ---: | ---: | --- |
+| Address balance cohorts | `5,249` | `1` | Address cohorts partitioned by balance bucket. |
+| Benchmarks, path metrics, and technical indicators | `392` | `21` | Windowed return paths, DCA/lump-sum ladders, and indicator-style metrics. |
+| Blocks, transactions, and network activity | `295` | `47` | Blocks, transactions, throughput, activity, address counts, and network utilization. |
+| Holder cohorts | `842` | `2` | Short-term and long-term holder slices and holder-behavior metrics. |
+| Market and valuation | `6,475` | `28` | Price, valuation bands, market value, realized value, and valuation ratios. |
+| Mining pools and miner economics | `4,936` | `162` | Mining-pool shares plus miner economics such as hash-price and fee flows. |
+| Profitability and SOPR | `74` | `15` | Realized and unrealized profit or loss, SOPR-style metrics, and spending pressure. |
+| Script and output types | `2,042` | `12` | Output/script-type cohorts including p2* families, unknown, empty, and OP_RETURN. |
+| Supply, issuance, and scarcity | `29` | `8` | Circulating supply, issuance, subsidy, inflation, and scarcity metrics. |
+| UTXO age cohorts | `18,339` | `1` | Age-bucketed UTXO metrics by holding period cohort. |
+| Vintage and halving cohorts | `2,734` | `2` | Year-vintage and halving-epoch cohort metrics. |
+
+## Compatibility Semantic Classes
+
+These classes preserve the existing namespace-oriented grouping model. Use [Merged Metrics Data Guide](merged-metrics-data-guide.md) for the main user-facing answer to what data you can access.
 
 | Class | Namespace count | Metric count | Meaning | Rule |
 | --- | ---: | ---: | --- | --- |
@@ -53,7 +77,181 @@ Canonical generated artifacts:
 | `vintage_year_cohorts` | `1` | `2135` | Vintage cohort metrics partitioned by originating year. | Top-level prefix is year with year_<yyyy>_* metric patterns. |
 | `windowed_return_and_path_metrics` | `14` | `246` | Duration-led rolling return, DCA, lump-sum, and path-statistic metrics. | Top-level prefix matches a duration token such as 1m, 1y, or 10y. |
 
-## Suffix And Unit Registry
+## Metric Dimension Registry
+
+The catalog separates units, statistics, transforms, windows, cohort schemes, and entity scopes instead of relying only on raw suffix buckets.
+
+### Units
+
+| Unit | Count |
+| --- | ---: |
+| `sats` | `8234` |
+| `usd` | `6890` |
+| `btc` | `5133` |
+| `cents` | `356` |
+| `phs` | `4` |
+| `ths` | `4` |
+
+### Statistics
+
+| Statistic | Count |
+| --- | ---: |
+| `max` | `502` |
+| `min` | `381` |
+| `average` | `158` |
+| `pct10` | `148` |
+| `pct25` | `148` |
+| `pct75` | `148` |
+| `pct90` | `148` |
+| `pct95` | `132` |
+| `sum` | `121` |
+| `median` | `101` |
+| `pct98` | `84` |
+| `pct99` | `84` |
+| `pct1` | `76` |
+| `pct2` | `76` |
+| `pct5` | `76` |
+| `pct05` | `48` |
+| `pct15` | `48` |
+| `pct20` | `48` |
+| `pct30` | `48` |
+| `pct35` | `48` |
+| `pct40` | `48` |
+| `pct45` | `48` |
+| `pct50` | `48` |
+| `pct55` | `48` |
+| `pct60` | `48` |
+| `pct65` | `48` |
+| `pct70` | `48` |
+| `pct80` | `48` |
+| `pct85` | `48` |
+
+### Transforms
+
+| Transform | Count |
+| --- | ---: |
+| `ratio` | `11660` |
+| `ema` | `5836` |
+| `cumulative` | `5501` |
+| `sma` | `3246` |
+| `dominance` | `792` |
+| `change` | `763` |
+| `delta` | `701` |
+| `zscore` | `224` |
+| `growth_rate` | `75` |
+| `returns` | `50` |
+| `cagr` | `14` |
+| `adoption` | `4` |
+
+### Windows
+
+| Window | Count |
+| --- | ---: |
+| `5sd` | `4032` |
+| `1y` | `3939` |
+| `2y` | `3615` |
+| `4y` | `3606` |
+| `1m` | `2865` |
+| `1w` | `1858` |
+| `30d` | `1830` |
+| `14d` | `1589` |
+| `3y` | `1109` |
+| `3m` | `1107` |
+| `6m` | `1107` |
+| `5y` | `1091` |
+| `6y` | `1090` |
+| `8y` | `1089` |
+| `10y` | `1088` |
+| `2m` | `1087` |
+| `4m` | `1086` |
+| `5m` | `1086` |
+| `12y` | `1066` |
+| `7y` | `1066` |
+| `10m` | `1006` |
+| `1d` | `954` |
+| `15y` | `920` |
+| `7d` | `894` |
+| `1h` | `822` |
+| `0sd` | `448` |
+| `200d` | `378` |
+| `13d` | `374` |
+| `144d` | `374` |
+| `200w` | `374` |
+| `21d` | `374` |
+| `34d` | `374` |
+| `55d` | `374` |
+| `89d` | `374` |
+| `8d` | `374` |
+| `24h` | `317` |
+| `350d` | `189` |
+| `111d` | `187` |
+| `12d` | `187` |
+| `26d` | `187` |
+| `2w` | `6` |
+| `365d` | `1` |
+
+### Cohort Schemes
+
+| Cohort scheme | Count |
+| --- | ---: |
+| `utxo_age` | `18339` |
+| `address_balance` | `5249` |
+| `mining_pool` | `4867` |
+| `vintage_year` | `2135` |
+| `script_output_type` | `2042` |
+| `holder` | `842` |
+| `halving_epoch` | `599` |
+| `windowed_path` | `246` |
+| `benchmark_class` | `120` |
+
+### Entity Scopes
+
+| Entity scope | Count |
+| --- | ---: |
+| `utxo_age_bucket` | `18339` |
+| `network_wide` | `6990` |
+| `address_balance_bucket` | `5249` |
+| `vintage_year` | `2135` |
+| `halving_epoch` | `599` |
+| `holder_short_term` | `425` |
+| `holder_long_term` | `417` |
+| `script_output_type:p2a` | `201` |
+| `script_output_type:p2pk33` | `201` |
+| `script_output_type:p2sh` | `201` |
+| `script_output_type:p2tr` | `201` |
+| `script_output_type:p2wpkh` | `201` |
+| `script_output_type:p2wsh` | `201` |
+| `script_output_type:p2pk65` | `200` |
+| `script_output_type:p2pkh` | `200` |
+| `script_output_type:unknown` | `146` |
+| `script_output_type:p2ms` | `126` |
+| `script_output_type:empty` | `118` |
+| `blockchain_blocks` | `49` |
+| `address_activity` | `48` |
+| `script_output_type:opreturn` | `46` |
+| `mining_pool:aaopool` | `31` |
+| `mining_pool:antpool` | `31` |
+| `mining_pool:arkpool` | `31` |
+| `mining_pool:asicminer` | `31` |
+| `mining_pool:axbt` | `31` |
+| `mining_pool:batpool` | `31` |
+| `mining_pool:bcmonster` | `31` |
+| `mining_pool:bcpoolio` | `31` |
+| `mining_pool:binancepool` | `31` |
+| `mining_pool:bitalo` | `31` |
+| `mining_pool:bitclub` | `31` |
+| `mining_pool:bitcoinaffiliatenetwork` | `31` |
+| `mining_pool:bitcoincom` | `31` |
+| `mining_pool:bitcoinindia` | `31` |
+| `mining_pool:bitcoinrussia` | `31` |
+| `mining_pool:bitcoinukraine` | `31` |
+| `mining_pool:bitfarms` | `31` |
+| `mining_pool:bitfufupool` | `31` |
+| `mining_pool:bitfury` | `31` |
+
+## Compatibility Suffix Registry
+
+This registry is preserved for compatibility with earlier taxonomy outputs.
 
 | Suffix | Count | Meaning |
 | --- | ---: | --- |
@@ -382,7 +580,7 @@ Canonical generated artifacts:
 
 ## Namespace Registry
 
-This table is exhaustive at the namespace/family level. The JSON artifact at `data/brk_merged_metrics_taxonomy.json` carries the full metric lists.
+This table is exhaustive at the namespace/family level. The JSON artifact at `data/brk_merged_metrics_taxonomy.json` carries the full metric lists, while `data/brk_merged_metrics_catalog.json` carries per-metric coverage and access metadata.
 
 | Family | Class | Metric count | Pattern | Examples |
 | --- | --- | ---: | --- | --- |
@@ -675,4 +873,4 @@ This table is exhaustive at the namespace/family level. The JSON artifact at `da
 
 StackSats runtime does not consume the full metric namespace directly. It projects a small BRK-wide subset into runtime columns such as `date`, `price_usd`, `mvrv`, and selected overlay features.
 
-Canonical runtime subset documentation remains on [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md) and [BRK Data Source](../data-source.md).
+Canonical runtime subset documentation remains on [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md), [Merged Metrics Data Guide](merged-metrics-data-guide.md), and [BRK Data Source](../data-source.md).

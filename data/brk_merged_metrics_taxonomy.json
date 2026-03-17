@@ -1,4 +1,237 @@
 {
+  "access_category_registry": [
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Address cohorts partitioned by balance bucket.",
+      "example_metrics": [
+        "addrs_above_100btc_under_1k_btc__30d_change",
+        "addrs_above_100btc_under_1k_btc__30d_change_btc",
+        "addrs_above_100btc_under_1k_btc__30d_change_usd",
+        "addrs_above_100btc_under_1k_btc_addr_count",
+        "addrs_above_100btc_under_1k_btc_addr_count_30d_change",
+        "addrs_above_100btc_under_1k_btc_capitulation_flow",
+        "addrs_above_100btc_under_1k_btc_coinblocks_destroyed",
+        "addrs_above_100btc_under_1k_btc_coinblocks_destroyed_cumulative"
+      ],
+      "family_count": 1,
+      "key": "address_balance_cohorts",
+      "label": "Address balance cohorts",
+      "max_day": "2026-03-13",
+      "metric_count": 5249,
+      "min_day": "2009-01-03",
+      "typical_use": "Whale, retail, and cohort-balance distribution analysis."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Windowed return paths, DCA/lump-sum ladders, and indicator-style metrics.",
+      "example_metrics": [
+        "10y_cagr",
+        "10y_dca_average_price",
+        "10y_dca_average_price_sats",
+        "10y_dca_cagr",
+        "10y_dca_days_in_loss",
+        "10y_dca_days_in_profit",
+        "10y_dca_max_return",
+        "10y_dca_min_return"
+      ],
+      "family_count": 21,
+      "key": "benchmarks_path_metrics_and_technical_indicators",
+      "label": "Benchmarks, path metrics, and technical indicators",
+      "max_day": "2026-03-13",
+      "metric_count": 392,
+      "min_day": "2009-01-03",
+      "typical_use": "Benchmarking, path-dependent outcomes, and technical overlays."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Blocks, transactions, throughput, activity, address counts, and network utilization.",
+      "example_metrics": [
+        "_30d_change",
+        "_30d_change_btc",
+        "_30d_change_usd",
+        "addr_count",
+        "addr_count_30d_change",
+        "address_activity_balance_decreased_average",
+        "address_activity_balance_decreased_max",
+        "address_activity_balance_decreased_median"
+      ],
+      "family_count": 47,
+      "key": "blocks_transactions_and_network_activity",
+      "label": "Blocks, transactions, and network activity",
+      "max_day": "2026-03-13",
+      "metric_count": 295,
+      "min_day": "2009-01-03",
+      "typical_use": "On-chain activity monitoring and network-usage context."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Short-term and long-term holder slices and holder-behavior metrics.",
+      "example_metrics": [
+        "lth__30d_change",
+        "lth__30d_change_btc",
+        "lth__30d_change_usd",
+        "lth_capitulation_flow",
+        "lth_coinblocks_destroyed",
+        "lth_coinblocks_destroyed_cumulative",
+        "lth_coindays_destroyed",
+        "lth_coindays_destroyed_cumulative"
+      ],
+      "family_count": 2,
+      "key": "holder_cohorts",
+      "label": "Holder cohorts",
+      "max_day": "2026-03-13",
+      "metric_count": 842,
+      "min_day": "2009-01-03",
+      "typical_use": "Compare STH and LTH behavior across market regimes."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Price, valuation bands, market value, realized value, and valuation ratios.",
+      "example_metrics": [
+        "active_cap",
+        "active_price",
+        "active_price_ratio",
+        "active_price_ratio_pct1",
+        "active_price_ratio_pct1_usd",
+        "active_price_ratio_pct1_usd_sats",
+        "active_price_ratio_pct2",
+        "active_price_ratio_pct2_usd"
+      ],
+      "family_count": 28,
+      "key": "market_and_valuation",
+      "label": "Market and valuation",
+      "max_day": "2026-03-13",
+      "metric_count": 6475,
+      "min_day": "2009-01-03",
+      "typical_use": "Price context, valuation regimes, and long-horizon market state modeling."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Mining-pool shares plus miner economics such as hash-price and fee flows.",
+      "example_metrics": [
+        "aaopool_1m_blocks_mined",
+        "aaopool_1m_dominance",
+        "aaopool_1w_blocks_mined",
+        "aaopool_1w_dominance",
+        "aaopool_1y_blocks_mined",
+        "aaopool_1y_dominance",
+        "aaopool_24h_blocks_mined",
+        "aaopool_24h_dominance"
+      ],
+      "family_count": 162,
+      "key": "mining_pools_and_miner_economics",
+      "label": "Mining pools and miner economics",
+      "max_day": "2026-03-13",
+      "metric_count": 4936,
+      "min_day": "2009-01-03",
+      "typical_use": "Miner revenue, pool share, and mining-economics monitoring."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Realized and unrealized profit or loss, SOPR-style metrics, and spending pressure.",
+      "example_metrics": [
+        "adjusted_sopr",
+        "adjusted_sopr_30d_ema",
+        "adjusted_sopr_7d_ema",
+        "adjusted_value_created",
+        "adjusted_value_destroyed",
+        "capitulation_flow",
+        "cointime_value_created",
+        "cointime_value_created_cumulative"
+      ],
+      "family_count": 15,
+      "key": "profitability_and_sopr",
+      "label": "Profitability and SOPR",
+      "max_day": "2026-03-13",
+      "metric_count": 74,
+      "min_day": "2009-01-03",
+      "typical_use": "Profit-taking, capitulation, and spending-behavior analysis."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Output/script-type cohorts including p2* families, unknown, empty, and OP_RETURN.",
+      "example_metrics": [
+        "empty_addr_count",
+        "empty_addr_count_30d_change",
+        "empty_outputs__30d_change",
+        "empty_outputs__30d_change_btc",
+        "empty_outputs__30d_change_usd",
+        "empty_outputs_capitulation_flow",
+        "empty_outputs_coinblocks_destroyed",
+        "empty_outputs_coinblocks_destroyed_cumulative"
+      ],
+      "family_count": 12,
+      "key": "script_and_output_types",
+      "label": "Script and output types",
+      "max_day": "2026-03-13",
+      "metric_count": 2042,
+      "min_day": "2009-01-03",
+      "typical_use": "Track script adoption, output composition, and script-specific cohorts."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Circulating supply, issuance, subsidy, inflation, and scarcity metrics.",
+      "example_metrics": [
+        "active_supply",
+        "active_supply_btc",
+        "active_supply_usd",
+        "circulating_supply",
+        "circulating_supply_btc",
+        "circulating_supply_usd",
+        "cointime_adj_inflation_rate",
+        "inflation_rate"
+      ],
+      "family_count": 8,
+      "key": "supply_issuance_and_scarcity",
+      "label": "Supply, issuance, and scarcity",
+      "max_day": "2026-03-13",
+      "metric_count": 29,
+      "min_day": "2009-01-03",
+      "typical_use": "Supply-side modeling and issuance or dilution analysis."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Age-bucketed UTXO metrics by holding period cohort.",
+      "example_metrics": [
+        "utxos_10y_to_12y_old__30d_change",
+        "utxos_10y_to_12y_old__30d_change_btc",
+        "utxos_10y_to_12y_old__30d_change_usd",
+        "utxos_10y_to_12y_old_capitulation_flow",
+        "utxos_10y_to_12y_old_coinblocks_destroyed",
+        "utxos_10y_to_12y_old_coinblocks_destroyed_cumulative",
+        "utxos_10y_to_12y_old_coindays_destroyed",
+        "utxos_10y_to_12y_old_coindays_destroyed_cumulative"
+      ],
+      "family_count": 1,
+      "key": "utxo_age_cohorts",
+      "label": "UTXO age cohorts",
+      "max_day": "2026-03-13",
+      "metric_count": 18339,
+      "min_day": "2009-01-03",
+      "typical_use": "Analyze age-distributed supply, spentness, and conviction."
+    },
+    {
+      "coverage_note": "Per-metric coverage varies within this domain; inspect the catalog for `coverage_rows`, `first_day`, and `last_day`.",
+      "description": "Year-vintage and halving-epoch cohort metrics.",
+      "example_metrics": [
+        "epoch_0__30d_change",
+        "epoch_0__30d_change_btc",
+        "epoch_0__30d_change_usd",
+        "epoch_0_capitulation_flow",
+        "epoch_0_coinblocks_destroyed",
+        "epoch_0_coinblocks_destroyed_cumulative",
+        "epoch_0_coindays_destroyed",
+        "epoch_0_coindays_destroyed_cumulative"
+      ],
+      "family_count": 2,
+      "key": "vintage_and_halving_cohorts",
+      "label": "Vintage and halving cohorts",
+      "max_day": "2026-03-13",
+      "metric_count": 2734,
+      "min_day": "2009-01-03",
+      "typical_use": "Cycle-aware cohort comparisons and halving-era analysis."
+    }
+  ],
   "dataset_snapshot": {
     "distinct_days": 6274,
     "distinct_metrics": 41407,
@@ -7,6 +240,1184 @@
     "parquet_name": "merged_metrics_2026-03-15_04-29-57.parquet",
     "row_count": 236259020,
     "top_level_family_count": 284
+  },
+  "dimension_registries": {
+    "cohort_schemes": [
+      {
+        "count": 18339,
+        "name": "utxo_age"
+      },
+      {
+        "count": 5249,
+        "name": "address_balance"
+      },
+      {
+        "count": 4867,
+        "name": "mining_pool"
+      },
+      {
+        "count": 2135,
+        "name": "vintage_year"
+      },
+      {
+        "count": 2042,
+        "name": "script_output_type"
+      },
+      {
+        "count": 842,
+        "name": "holder"
+      },
+      {
+        "count": 599,
+        "name": "halving_epoch"
+      },
+      {
+        "count": 246,
+        "name": "windowed_path"
+      },
+      {
+        "count": 120,
+        "name": "benchmark_class"
+      }
+    ],
+    "entity_scopes": [
+      {
+        "count": 18339,
+        "name": "utxo_age_bucket"
+      },
+      {
+        "count": 6990,
+        "name": "network_wide"
+      },
+      {
+        "count": 5249,
+        "name": "address_balance_bucket"
+      },
+      {
+        "count": 2135,
+        "name": "vintage_year"
+      },
+      {
+        "count": 599,
+        "name": "halving_epoch"
+      },
+      {
+        "count": 425,
+        "name": "holder_short_term"
+      },
+      {
+        "count": 417,
+        "name": "holder_long_term"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2a"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2pk33"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2sh"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2tr"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2wpkh"
+      },
+      {
+        "count": 201,
+        "name": "script_output_type:p2wsh"
+      },
+      {
+        "count": 200,
+        "name": "script_output_type:p2pk65"
+      },
+      {
+        "count": 200,
+        "name": "script_output_type:p2pkh"
+      },
+      {
+        "count": 146,
+        "name": "script_output_type:unknown"
+      },
+      {
+        "count": 126,
+        "name": "script_output_type:p2ms"
+      },
+      {
+        "count": 118,
+        "name": "script_output_type:empty"
+      },
+      {
+        "count": 49,
+        "name": "blockchain_blocks"
+      },
+      {
+        "count": 48,
+        "name": "address_activity"
+      },
+      {
+        "count": 46,
+        "name": "script_output_type:opreturn"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:aaopool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:antpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:arkpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:asicminer"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:axbt"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:batpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bcmonster"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bcpoolio"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:binancepool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitalo"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitclub"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitcoinaffiliatenetwork"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitcoincom"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitcoinindia"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitcoinrussia"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitcoinukraine"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitfarms"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitfufupool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitfury"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitminter"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitparking"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bitsolo"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bixin"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:blockfills"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:braiinspool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bravomining"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btccom"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcdig"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcguild"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btclab"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcmp"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcnuggets"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcpoolparty"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btcserv"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btctop"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:btpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bwpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:bytepool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:canoe"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:canoepool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:carbonnegative"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ckpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:cloudhashing"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:coinlab"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:cointerra"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:connectbtc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:dcex"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:dcexploration"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:digitalbtc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:digitalxmintsy"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:dpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:eclipsemc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:eightbaochi"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ekanembtc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:eligius"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:emcdpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:entrustcharitypool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:eobot"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:exxbw"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:f2pool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:fiftyeightcoin"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:foundryusa"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:futurebitapollosolo"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:gbminers"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ghashio"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:givemecoins"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:gogreenlight"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:haominer"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:haozhuzhu"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:hashbx"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:hashpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:helix"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:hhtt"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:hotpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:hummerpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:huobipool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:innopolistech"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:kanopool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:kncminer"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:kucoinpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:lubiancom"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:luckypool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:luxor"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:marapool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:maxbtc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:maxipool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:megabigpower"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:minerium"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:miningcity"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:miningdutch"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:miningkings"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:miningsquared"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:mmpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:mtred"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:multicoinco"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:multipool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:mybtccoinpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:neopool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:nexious"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:nicehash"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:nmcbit"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:novablock"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ocean"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:okexpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:okkong"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:okminer"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:okpooltop"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:onehash"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:onem1x"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:onethash"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ozcoin"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:parasite"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:patels"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:pegapool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:phashio"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:phoenix"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:polmine"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:pool175btc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:pool50btc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:poolin"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:portlandhodl"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:publicpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:purebtccom"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:rawpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:rigpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:sbicrypto"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:secpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:secretsuperstar"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:sevenpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:shawnp0wers"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:sigmapoolcom"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:simplecoinus"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:solock"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:spiderpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:stminingcorp"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:tangpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:tatmaspool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:tbdice"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:telco214"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:terrapool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:tiger"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:tigerpoolnet"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:titan"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:transactioncoinmining"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:trickysbtcpool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:triplemining"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:twentyoneinc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:ultimuspool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:unomp"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:viabtc"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:waterhole"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:wayicn"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:whitepool"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:wk057"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:yourbtcnet"
+      },
+      {
+        "count": 31,
+        "name": "mining_pool:zulupool"
+      },
+      {
+        "count": 21,
+        "name": "window:2y"
+      },
+      {
+        "count": 21,
+        "name": "window:3y"
+      },
+      {
+        "count": 21,
+        "name": "window:4y"
+      },
+      {
+        "count": 21,
+        "name": "window:5y"
+      },
+      {
+        "count": 21,
+        "name": "window:6y"
+      },
+      {
+        "count": 21,
+        "name": "window:8y"
+      },
+      {
+        "count": 20,
+        "name": "window:10y"
+      },
+      {
+        "count": 20,
+        "name": "window:1m"
+      },
+      {
+        "count": 20,
+        "name": "window:1w"
+      },
+      {
+        "count": 20,
+        "name": "window:1y"
+      },
+      {
+        "count": 19,
+        "name": "window:3m"
+      },
+      {
+        "count": 19,
+        "name": "window:6m"
+      },
+      {
+        "count": 1,
+        "name": "mining_pool:puell"
+      },
+      {
+        "count": 1,
+        "name": "window:1d"
+      },
+      {
+        "count": 1,
+        "name": "window:24h"
+      }
+    ],
+    "statistics": [
+      {
+        "count": 502,
+        "name": "max"
+      },
+      {
+        "count": 381,
+        "name": "min"
+      },
+      {
+        "count": 158,
+        "name": "average"
+      },
+      {
+        "count": 148,
+        "name": "pct10"
+      },
+      {
+        "count": 148,
+        "name": "pct25"
+      },
+      {
+        "count": 148,
+        "name": "pct75"
+      },
+      {
+        "count": 148,
+        "name": "pct90"
+      },
+      {
+        "count": 132,
+        "name": "pct95"
+      },
+      {
+        "count": 121,
+        "name": "sum"
+      },
+      {
+        "count": 101,
+        "name": "median"
+      },
+      {
+        "count": 84,
+        "name": "pct98"
+      },
+      {
+        "count": 84,
+        "name": "pct99"
+      },
+      {
+        "count": 76,
+        "name": "pct1"
+      },
+      {
+        "count": 76,
+        "name": "pct2"
+      },
+      {
+        "count": 76,
+        "name": "pct5"
+      },
+      {
+        "count": 48,
+        "name": "pct05"
+      },
+      {
+        "count": 48,
+        "name": "pct15"
+      },
+      {
+        "count": 48,
+        "name": "pct20"
+      },
+      {
+        "count": 48,
+        "name": "pct30"
+      },
+      {
+        "count": 48,
+        "name": "pct35"
+      },
+      {
+        "count": 48,
+        "name": "pct40"
+      },
+      {
+        "count": 48,
+        "name": "pct45"
+      },
+      {
+        "count": 48,
+        "name": "pct50"
+      },
+      {
+        "count": 48,
+        "name": "pct55"
+      },
+      {
+        "count": 48,
+        "name": "pct60"
+      },
+      {
+        "count": 48,
+        "name": "pct65"
+      },
+      {
+        "count": 48,
+        "name": "pct70"
+      },
+      {
+        "count": 48,
+        "name": "pct80"
+      },
+      {
+        "count": 48,
+        "name": "pct85"
+      }
+    ],
+    "transforms": [
+      {
+        "count": 11660,
+        "name": "ratio"
+      },
+      {
+        "count": 5836,
+        "name": "ema"
+      },
+      {
+        "count": 5501,
+        "name": "cumulative"
+      },
+      {
+        "count": 3246,
+        "name": "sma"
+      },
+      {
+        "count": 792,
+        "name": "dominance"
+      },
+      {
+        "count": 763,
+        "name": "change"
+      },
+      {
+        "count": 701,
+        "name": "delta"
+      },
+      {
+        "count": 224,
+        "name": "zscore"
+      },
+      {
+        "count": 75,
+        "name": "growth_rate"
+      },
+      {
+        "count": 50,
+        "name": "returns"
+      },
+      {
+        "count": 14,
+        "name": "cagr"
+      },
+      {
+        "count": 4,
+        "name": "adoption"
+      }
+    ],
+    "units": [
+      {
+        "count": 8234,
+        "name": "sats"
+      },
+      {
+        "count": 6890,
+        "name": "usd"
+      },
+      {
+        "count": 5133,
+        "name": "btc"
+      },
+      {
+        "count": 356,
+        "name": "cents"
+      },
+      {
+        "count": 4,
+        "name": "phs"
+      },
+      {
+        "count": 4,
+        "name": "ths"
+      }
+    ],
+    "windows": [
+      {
+        "count": 4032,
+        "name": "5sd"
+      },
+      {
+        "count": 3939,
+        "name": "1y"
+      },
+      {
+        "count": 3615,
+        "name": "2y"
+      },
+      {
+        "count": 3606,
+        "name": "4y"
+      },
+      {
+        "count": 2865,
+        "name": "1m"
+      },
+      {
+        "count": 1858,
+        "name": "1w"
+      },
+      {
+        "count": 1830,
+        "name": "30d"
+      },
+      {
+        "count": 1589,
+        "name": "14d"
+      },
+      {
+        "count": 1109,
+        "name": "3y"
+      },
+      {
+        "count": 1107,
+        "name": "3m"
+      },
+      {
+        "count": 1107,
+        "name": "6m"
+      },
+      {
+        "count": 1091,
+        "name": "5y"
+      },
+      {
+        "count": 1090,
+        "name": "6y"
+      },
+      {
+        "count": 1089,
+        "name": "8y"
+      },
+      {
+        "count": 1088,
+        "name": "10y"
+      },
+      {
+        "count": 1087,
+        "name": "2m"
+      },
+      {
+        "count": 1086,
+        "name": "4m"
+      },
+      {
+        "count": 1086,
+        "name": "5m"
+      },
+      {
+        "count": 1066,
+        "name": "12y"
+      },
+      {
+        "count": 1066,
+        "name": "7y"
+      },
+      {
+        "count": 1006,
+        "name": "10m"
+      },
+      {
+        "count": 954,
+        "name": "1d"
+      },
+      {
+        "count": 920,
+        "name": "15y"
+      },
+      {
+        "count": 894,
+        "name": "7d"
+      },
+      {
+        "count": 822,
+        "name": "1h"
+      },
+      {
+        "count": 448,
+        "name": "0sd"
+      },
+      {
+        "count": 378,
+        "name": "200d"
+      },
+      {
+        "count": 374,
+        "name": "13d"
+      },
+      {
+        "count": 374,
+        "name": "144d"
+      },
+      {
+        "count": 374,
+        "name": "200w"
+      },
+      {
+        "count": 374,
+        "name": "21d"
+      },
+      {
+        "count": 374,
+        "name": "34d"
+      },
+      {
+        "count": 374,
+        "name": "55d"
+      },
+      {
+        "count": 374,
+        "name": "89d"
+      },
+      {
+        "count": 374,
+        "name": "8d"
+      },
+      {
+        "count": 317,
+        "name": "24h"
+      },
+      {
+        "count": 189,
+        "name": "350d"
+      },
+      {
+        "count": 187,
+        "name": "111d"
+      },
+      {
+        "count": 187,
+        "name": "12d"
+      },
+      {
+        "count": 187,
+        "name": "26d"
+      },
+      {
+        "count": 6,
+        "name": "2w"
+      },
+      {
+        "count": 1,
+        "name": "365d"
+      }
+    ]
   },
   "namespace_registry": [
     {
@@ -47879,6 +49290,15 @@
       "nullable": false,
       "required": true
     }
+  ],
+  "runtime_critical_metrics": [
+    "market_cap",
+    "supply_btc",
+    "mvrv",
+    "adjusted_sopr",
+    "adjusted_sopr_7d_ema",
+    "realized_cap_growth_rate",
+    "market_cap_growth_rate"
   ],
   "semantic_classes": [
     {

@@ -12,6 +12,13 @@ import polars as pl
 def _write_synthetic_merged_metrics(path: Path) -> None:
     rows = [
         {"day_utc": "2024-01-01", "metric": "price_usd", "value": 42000.0},
+        {"day_utc": "2024-01-01", "metric": "market_cap", "value": 800000000000.0},
+        {"day_utc": "2024-01-01", "metric": "supply_btc", "value": 19000000.0},
+        {"day_utc": "2024-01-01", "metric": "mvrv", "value": 1.5},
+        {"day_utc": "2024-01-01", "metric": "adjusted_sopr", "value": 1.01},
+        {"day_utc": "2024-01-01", "metric": "adjusted_sopr_7d_ema", "value": 1.02},
+        {"day_utc": "2024-01-01", "metric": "realized_cap_growth_rate", "value": 0.05},
+        {"day_utc": "2024-01-01", "metric": "market_cap_growth_rate", "value": 0.07},
         {"day_utc": "2024-01-01", "metric": "realized_cap", "value": 100.0},
         {"day_utc": "2024-01-01", "metric": "1m_dca_stack", "value": 1.0},
         {"day_utc": "2024-01-01", "metric": "year_2024_mvrv", "value": 1.2},
@@ -43,6 +50,8 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     parquet_path = tmp_path / "merged_metrics_test.parquet"
     json_output = tmp_path / "taxonomy.json"
     doc_output = tmp_path / "taxonomy.md"
+    catalog_output = tmp_path / "catalog.json"
+    guide_output = tmp_path / "guide.md"
     _write_synthetic_merged_metrics(parquet_path)
 
     env = os.environ.copy()
@@ -58,6 +67,10 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(json_output),
             "--doc-output",
             str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
         ],
         cwd=repo_root,
         env=env,
@@ -68,15 +81,21 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     assert generate.returncode == 0, generate.stderr or generate.stdout
     assert json_output.exists()
     assert doc_output.exists()
+    assert catalog_output.exists()
+    assert guide_output.exists()
 
     taxonomy = json.loads(json_output.read_text(encoding="utf-8"))
-    assert taxonomy["dataset_snapshot"]["distinct_metrics"] == 17
+    assert taxonomy["dataset_snapshot"]["distinct_metrics"] == 24
     assert taxonomy["dataset_snapshot"]["top_level_family_count"] >= 10
     registry = {item["family"]: item for item in taxonomy["namespace_registry"]}
     assert registry["ckpool"]["semantic_class"] == "mining_pool_metrics"
     assert registry["year"]["semantic_class"] == "vintage_year_cohorts"
     assert registry["epoch"]["semantic_class"] == "halving_epoch_cohorts"
     assert "Merged Metrics Taxonomy" in doc_output.read_text(encoding="utf-8")
+    catalog = json.loads(catalog_output.read_text(encoding="utf-8"))
+    assert catalog["dataset_snapshot"]["distinct_metrics"] == 24
+    assert len(catalog["metrics"]) == 24
+    assert "Merged Metrics Data Guide" in guide_output.read_text(encoding="utf-8")
 
     check = subprocess.run(
         [
@@ -88,6 +107,10 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(json_output),
             "--doc-output",
             str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
             "--check",
         ],
         cwd=repo_root,
@@ -110,6 +133,10 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(json_output),
             "--doc-output",
             str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
             "--check",
         ],
         cwd=repo_root,

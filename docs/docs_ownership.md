@@ -13,6 +13,7 @@ This page defines who updates what and when documentation updates are required.
 - `docs/commands.md` is the canonical command index/routing page.
 - `docs/run/*.md` pages are the canonical flag/reference truth for each lifecycle command.
 - `docs/reference/strategies.md` is the canonical built-in strategy catalog (intent, required columns, tuning defaults, run guidance).
+- `docs/reference/merged-metrics-data-guide.md` is the canonical user-facing answer to what data is available in the long-format BRK parquet.
 - `docs/reference/merged-metrics-parquet-schema.md` is the canonical physical schema page for the long-format BRK parquet.
 - `docs/reference/merged-metrics-taxonomy.md` is the canonical semantic taxonomy page for the merged-metrics namespace.
 - `docs/migration.md` is the canonical old->new compatibility mapping page.
@@ -49,14 +50,14 @@ Update docs in the same PR when any of these change:
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
 - BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
 - BRK data distribution changes (`data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
-- merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.
+- merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `data/brk_merged_metrics_catalog.json`, `docs/reference/merged-metrics-data-guide.md`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.
 - Docs IA changes (`mkdocs.yml`, `docs/commands.md`, `docs/run/*`): update `scripts/check_docs_ux.py` rules in the same PR.
 
 ## Generated artifact policy
 
 - `site/` is generated output from `mkdocs build` and must not be committed.
 - Keep generated notebook exports only under `docs/assets/` when source notebooks change.
-- Do not add generated docs artifacts outside the docs asset folders.
+- Generated merged-metrics reference artifacts are allowed at `data/brk_merged_metrics_*.json` and `docs/reference/merged-metrics-*.md`.
 
 ## CI expectations
 

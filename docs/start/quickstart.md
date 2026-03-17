@@ -31,6 +31,7 @@ Use this page for a 5-minute first run.
 
 Canonical dataset schema and projection workflow:
 
+- [Merged Metrics Data Guide](../reference/merged-metrics-data-guide.md)
 - [BRK Data Source](../data-source.md)
 - [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)
 - [Merged Metrics Taxonomy](../reference/merged-metrics-taxonomy.md)

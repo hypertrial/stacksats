@@ -14,6 +14,7 @@ Canonical file link:
 
 Canonical schema page:
 
+- [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
 - [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
 - [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
 
@@ -37,9 +38,15 @@ The canonical parquet has exactly:
 - `value` (`Float64`)
 
 This is the source-of-truth dataset for StackSats documentation and data workflow.
-The physical long-format schema and the semantic metric taxonomy are documented
-separately so metric grouping can evolve without conflating it with the parquet
-column contract.
+The physical long-format schema, user-facing access guide, and semantic metric
+taxonomy are documented separately so new users can first understand what data
+they can access before diving into naming details and projection mechanics.
+
+Recommended reading order:
+
+1. [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
+2. [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
+3. [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
 
 ## Runtime ingestion contract
 

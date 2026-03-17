@@ -113,6 +113,7 @@ nav:
       - Migration Guide: migration.md
   - Reference:
       - Glossary: glossary.md
+      - Merged Metrics Data Guide: reference/merged-metrics-data-guide.md
       - Merged Metrics Schema: reference/merged-metrics-parquet-schema.md
       - Merged Metrics Taxonomy: reference/merged-metrics-taxonomy.md
       - Runtime Objects Overview: objects.md
