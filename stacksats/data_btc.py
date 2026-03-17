@@ -27,10 +27,10 @@ def _resolve_parquet_path(path_override: str | None) -> Path:
         raise DataLoadError(str(exc)) from exc
 
 
-def _norm_dt(value: dt.datetime) -> dt.datetime:
-    out = value
-    if value.tzinfo is not None:
-        out = value.astimezone(dt.timezone.utc).replace(tzinfo=None)
+def _norm_dt(value: dt.datetime | dt.date) -> dt.datetime:
+    out = value if isinstance(value, dt.datetime) else dt.datetime.combine(value, dt.time())
+    if out.tzinfo is not None:
+        out = out.astimezone(dt.timezone.utc).replace(tzinfo=None)
     return out.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
@@ -105,6 +105,20 @@ def _scan_btc_from_parquet(path: Path) -> pl.LazyFrame:
     return frame.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
 
 
+def _load_btc_from_parquet(path: Path) -> pl.DataFrame:
+    """Return the normalized runtime BTC parquet as an eager frame."""
+    return _scan_btc_from_parquet(path).collect()
+
+
+def _require_runtime_columns(frame: pl.DataFrame | pl.LazyFrame) -> None:
+    schema = frame.schema if isinstance(frame, pl.DataFrame) else frame.collect_schema()
+    names = schema.names()
+    if DATE_COL not in names:
+        raise DataLoadError("Runtime BTC frame must have a 'date' column.")
+    if "price_usd" not in names:
+        raise DataLoadError("Required price_usd series missing from runtime BTC frame.")
+
+
 @dataclass
 class BTCDataProvider:
     """BTC-only provider using BRK-generated local parquet metrics."""
@@ -158,6 +172,7 @@ class BTCDataProvider:
             requested_end = None
 
         frame = _scan_btc_from_parquet(_resolve_parquet_path(self.parquet_path))
+        _require_runtime_columns(frame)
         stats = frame.select(
             pl.len().alias("row_count"),
             pl.when(pl.col("price_usd").is_finite())
@@ -197,7 +212,12 @@ class BTCDataProvider:
                 (pl.col(DATE_COL) >= backtest_start_ts) & (pl.col(DATE_COL) <= target_end)
             )
         validation = window.select(
-            pl.len().filter(pl.col(DATE_COL) >= backtest_start_ts).alias("scored_rows"),
+            pl.when(pl.col(DATE_COL) >= backtest_start_ts)
+            .then(pl.lit(1))
+            .otherwise(pl.lit(0))
+            .sum()
+            .fill_null(0)
+            .alias("scored_rows"),
             pl.when(
                 pl.col("price_usd").is_null() | ~pl.col("price_usd").is_finite()
             )

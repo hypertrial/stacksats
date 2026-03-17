@@ -74,18 +74,20 @@ def precompute_features_lazy(
     """Compute lagged BTC/MVRV features used by model weight scoring."""
     if isinstance(df, pl.DataFrame):
         columns = df.columns
-        if df.filter(pl.col(DATE_COL) >= dt.datetime(2010, 7, 18)).is_empty():
-            return pl.DataFrame(schema={DATE_COL: pl.Datetime("us")}).lazy()
-        lazy_frame = df.lazy()
     else:
         schema = df.collect_schema()
         columns = schema.names()
-        lazy_frame = df
 
     if price_col not in columns:
         raise KeyError(f"'{price_col}' not found. Available: {list(columns)}")
     if DATE_COL not in columns:
         raise KeyError("DataFrame must have 'date' column.")
+    if isinstance(df, pl.DataFrame):
+        if df.filter(pl.col(DATE_COL) >= dt.datetime(2010, 7, 18)).is_empty():
+            return pl.DataFrame(schema={DATE_COL: pl.Datetime("us")}).lazy()
+        lazy_frame = df.lazy()
+    else:
+        lazy_frame = df
     cutoff = dt.datetime(2010, 7, 18)
     base = (
         lazy_frame

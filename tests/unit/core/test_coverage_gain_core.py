@@ -596,8 +596,8 @@ def test_data_btc_helper_edges(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(
         data_btc_module,
-        "_load_btc_from_parquet",
-        lambda _path: pl.DataFrame({"date": _dates(2)}),
+        "_scan_btc_from_parquet",
+        lambda _path: pl.DataFrame({"date": _dates(2)}).lazy(),
     )
     with pytest.raises(data_btc_module.DataLoadError, match="Required price_usd series missing"):
         data_btc_module.BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 2)).load(
@@ -607,10 +607,10 @@ def test_data_btc_helper_edges(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(
         data_btc_module,
-        "_load_btc_from_parquet",
+        "_scan_btc_from_parquet",
         lambda _path: pl.DataFrame(
             {"date": [dt.date(2024, 1, 1), dt.date(2024, 1, 2)], "price_usd": [1.0, 2.0]}
-        ),
+        ).lazy(),
     )
     loaded = data_btc_module.BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 2)).load(
         backtest_start="2024-01-01",
@@ -620,8 +620,8 @@ def test_data_btc_helper_edges(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(
         data_btc_module,
-        "_load_btc_from_parquet",
-        lambda _path: pl.DataFrame({"date": [dt.datetime(2024, 1, 3)], "price_usd": [2.0]}),
+        "_scan_btc_from_parquet",
+        lambda _path: pl.DataFrame({"date": [dt.datetime(2024, 1, 3)], "price_usd": [2.0]}).lazy(),
     )
     with pytest.raises(data_btc_module.DataLoadError, match="No BRK rows available"):
         data_btc_module.BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 3)).load(
