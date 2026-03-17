@@ -287,3 +287,16 @@ def test_main_returns_1_on_manifest_error(tmp_path: Path, capsys: pytest.Capture
     err = capsys.readouterr().err
     assert exit_code == 1
     assert "[fetch_brk_data] ERROR:" in err
+
+
+def test_main_returns_1_on_invalid_manifest_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mod = _load_fetch_module()
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{not-json", encoding="utf-8")
+
+    exit_code = mod.main(["--manifest", str(manifest_path)])
+    err = capsys.readouterr().err
+    assert exit_code == 1
+    assert "[fetch_brk_data] ERROR:" in err

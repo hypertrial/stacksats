@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import datetime as dt
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 import polars as pl
+
+from .data_setup import resolve_runtime_parquet
 
 PARQUET_DEFAULT_PATH = "./bitcoin_analytics.parquet"
 PARQUET_ENV_VAR = "STACKSATS_ANALYTICS_PARQUET"
@@ -20,12 +21,10 @@ class DataLoadError(RuntimeError):
 
 
 def _resolve_parquet_path(path_override: str | None) -> Path:
-    path = Path(os.getenv(PARQUET_ENV_VAR) or path_override or PARQUET_DEFAULT_PATH).expanduser()
-    if not path.exists():
-        raise DataLoadError(
-            f"Parquet file not found at '{path}'. Set {PARQUET_ENV_VAR} or provide parquet_path."
-        )
-    return path
+    try:
+        return resolve_runtime_parquet(path_override).path
+    except FileNotFoundError as exc:
+        raise DataLoadError(str(exc)) from exc
 
 
 def _norm_dt(value: dt.datetime) -> dt.datetime:
@@ -90,7 +89,7 @@ def _load_btc_from_parquet(path: Path) -> pl.DataFrame:
         )
     frame = frame.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
     if "price_usd" not in frame.columns:
-        raise DataLoadError("Parquet must contain a 'price_usd' column.")
+        raise DataLoadError("Runtime parquet must contain a 'price_usd' column.")
     frame = frame.with_columns(pl.col("price_usd").cast(pl.Float64, strict=False))
     if "mvrv" in frame.columns:
         frame = frame.with_columns(pl.col("mvrv").cast(pl.Float64, strict=False))

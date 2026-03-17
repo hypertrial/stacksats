@@ -11,10 +11,23 @@ from pathlib import Path
 import numpy as np
 import requests
 
-from .data_btc import DataLoadError
+from .data_btc import BTCDataProvider, DataLoadError
+from .data_setup import (
+    MANAGED_BRK_DIR,
+    MANAGED_RUNTIME_PARQUET,
+    data_doctor,
+    fetch_assets,
+    latest_fetched_parquet,
+    packaged_demo_parquet_path,
+    prepare_runtime_parquet,
+)
 from .loader import load_strategy
 from .runner import StrategyRunner
 from .strategy_types import BacktestConfig, ExportConfig, RunDailyConfig, ValidationConfig
+
+DEMO_STRATEGY_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
+DEMO_START_DATE = "2018-01-01"
+DEMO_END_DATE = "2025-12-31"
 
 
 class _HelpFormatter(
@@ -31,6 +44,115 @@ def _exit_user_error(message: str, *, hint: str | None = None, code: int = 2) ->
     raise SystemExit(code)
 
 
+def _add_strategy_spec_arguments(command, *, required: bool, default: str | None) -> None:
+    command.add_argument(
+        "--strategy",
+        required=required,
+        default=default,
+        help="module_or_path:ClassName",
+    )
+    command.add_argument(
+        "--strategy-config",
+        default=None,
+        help="JSON config path for feature/signal/daily-intent parameters",
+    )
+
+
+def _add_validate_command(
+    subparsers,
+    *,
+    help_text: str,
+    command_name: str,
+    strategy_required: bool,
+    default_strategy: str | None,
+    default_start: str | None,
+    default_end: str | None,
+    default_min_win_rate: float,
+    default_strict: bool,
+) -> argparse.ArgumentParser:
+    command = subparsers.add_parser(
+        command_name,
+        help=help_text,
+        formatter_class=_HelpFormatter,
+    )
+    _add_strategy_spec_arguments(
+        command,
+        required=strategy_required,
+        default=default_strategy,
+    )
+    command.add_argument("--start-date", default=default_start)
+    command.add_argument("--end-date", default=default_end)
+    command.add_argument("--min-win-rate", type=float, default=default_min_win_rate)
+    strict_group = command.add_mutually_exclusive_group()
+    strict_group.add_argument(
+        "--strict",
+        dest="strict",
+        action="store_true",
+        default=default_strict,
+        help="Run additional robustness gates.",
+    )
+    strict_group.add_argument(
+        "--no-strict",
+        dest="strict",
+        action="store_false",
+        help="Disable strict robustness gates.",
+    )
+    return command
+
+
+def _add_backtest_command(
+    subparsers,
+    *,
+    help_text: str,
+    command_name: str,
+    strategy_required: bool,
+    default_strategy: str | None,
+    default_start: str | None,
+    default_end: str | None,
+) -> argparse.ArgumentParser:
+    command = subparsers.add_parser(
+        command_name,
+        help=help_text,
+        formatter_class=_HelpFormatter,
+    )
+    _add_strategy_spec_arguments(
+        command,
+        required=strategy_required,
+        default=default_strategy,
+    )
+    command.add_argument("--start-date", default=default_start)
+    command.add_argument("--end-date", default=default_end)
+    command.add_argument("--output-dir", default="output")
+    command.add_argument("--strategy-label", default=None)
+    return command
+
+
+def _add_export_command(
+    subparsers,
+    *,
+    help_text: str,
+    command_name: str,
+    strategy_required: bool,
+    default_strategy: str | None,
+    default_start: str | None,
+    default_end: str | None,
+) -> argparse.ArgumentParser:
+    command = subparsers.add_parser(
+        command_name,
+        help=help_text,
+        formatter_class=_HelpFormatter,
+    )
+    _add_strategy_spec_arguments(
+        command,
+        required=strategy_required,
+        default=default_strategy,
+    )
+    command.add_argument("--start-date", default=default_start, required=default_start is None)
+    command.add_argument("--end-date", default=default_end, required=default_end is None)
+    command.add_argument("--output-dir", default="output")
+    return command
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="stacksats",
@@ -38,16 +160,11 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
         epilog=(
             "Examples:\n"
-            "  stacksats strategy validate --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy\n"
+            "  stacksats demo backtest\n"
+            "  stacksats data fetch\n"
+            "  stacksats data prepare\n"
             "  stacksats strategy backtest --strategy "
             "stacksats.strategies.examples:SimpleZScoreStrategy --output-dir output\n"
-            "  stacksats strategy export --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy "
-            "--start-date 2025-12-01 --end-date 2027-12-31\n"
-            "  stacksats strategy run-daily --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy "
-            "--total-window-budget-usd 1000\n"
             "  stacksats strategy animate --backtest-json "
             "output/my_strategy/1.0.0/run-1/backtest_result.json"
         ),
@@ -66,101 +183,42 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     strategy_sub = strategy_parser.add_subparsers(dest="strategy_command", required=True)
-
-    validate_cmd = strategy_sub.add_parser(
-        "validate",
-        help="Validate strategy",
-        formatter_class=_HelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  stacksats strategy validate --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy --strict"
-        ),
+    _add_validate_command(
+        strategy_sub,
+        help_text="Validate strategy",
+        command_name="validate",
+        strategy_required=True,
+        default_strategy=None,
+        default_start=None,
+        default_end=None,
+        default_min_win_rate=50.0,
+        default_strict=True,
     )
-    validate_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
-    validate_cmd.add_argument(
-        "--strategy-config",
-        default=None,
-        help="JSON config path for feature/signal/daily-intent parameters",
+    _add_backtest_command(
+        strategy_sub,
+        help_text="Backtest strategy",
+        command_name="backtest",
+        strategy_required=True,
+        default_strategy=None,
+        default_start=None,
+        default_end=None,
     )
-    validate_cmd.add_argument("--start-date", default=None)
-    validate_cmd.add_argument("--end-date", default=None)
-    validate_cmd.add_argument("--min-win-rate", type=float, default=50.0)
-    validate_strict_group = validate_cmd.add_mutually_exclusive_group()
-    validate_strict_group.add_argument(
-        "--strict",
-        dest="strict",
-        action="store_true",
-        default=True,
-        help="Run additional robustness gates (enabled by default).",
+    _add_export_command(
+        strategy_sub,
+        help_text="Export strategy artifacts",
+        command_name="export",
+        strategy_required=True,
+        default_strategy=None,
+        default_start=None,
+        default_end=None,
     )
-    validate_strict_group.add_argument(
-        "--no-strict",
-        dest="strict",
-        action="store_false",
-        help="Disable strict robustness gates.",
-    )
-
-    backtest_cmd = strategy_sub.add_parser(
-        "backtest",
-        help="Backtest strategy",
-        formatter_class=_HelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  stacksats strategy backtest --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy "
-            "--start-date 2020-01-01 --end-date 2025-01-01"
-        ),
-    )
-    backtest_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
-    backtest_cmd.add_argument(
-        "--strategy-config",
-        default=None,
-        help="JSON config path for feature/signal/daily-intent parameters",
-    )
-    backtest_cmd.add_argument("--start-date", default=None)
-    backtest_cmd.add_argument("--end-date", default=None)
-    backtest_cmd.add_argument("--output-dir", default="output")
-    backtest_cmd.add_argument("--strategy-label", default=None)
-
-    export_cmd = strategy_sub.add_parser(
-        "export",
-        help="Export strategy artifacts",
-        formatter_class=_HelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  stacksats strategy export --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy "
-            "--start-date 2025-12-01 --end-date 2027-12-31"
-        ),
-    )
-    export_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
-    export_cmd.add_argument(
-        "--strategy-config",
-        default=None,
-        help="JSON config path for feature/signal/daily-intent parameters",
-    )
-    export_cmd.add_argument("--start-date", required=True)
-    export_cmd.add_argument("--end-date", required=True)
-    export_cmd.add_argument("--output-dir", default="output")
 
     run_daily_cmd = strategy_sub.add_parser(
         "run-daily",
         help="Run idempotent daily execution",
         formatter_class=_HelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  stacksats strategy run-daily --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy "
-            "--total-window-budget-usd 1000 --mode paper"
-        ),
     )
-    run_daily_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
-    run_daily_cmd.add_argument(
-        "--strategy-config",
-        default=None,
-        help="JSON config path for feature/signal/daily-intent parameters",
-    )
+    _add_strategy_spec_arguments(run_daily_cmd, required=True, default=None)
     run_daily_cmd.add_argument("--run-date", default=None)
     run_daily_cmd.add_argument(
         "--total-window-budget-usd",
@@ -180,12 +238,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Reconcile a stored daily run against current data",
         formatter_class=_HelpFormatter,
     )
-    reconcile_cmd.add_argument("--strategy", required=True, help="module_or_path:ClassName")
-    reconcile_cmd.add_argument(
-        "--strategy-config",
-        default=None,
-        help="JSON config path for strategy parameters",
-    )
+    _add_strategy_spec_arguments(reconcile_cmd, required=True, default=None)
     reconcile_cmd.add_argument("--run-date", required=True)
     reconcile_cmd.add_argument("--mode", choices=("paper", "live"), default="paper")
     reconcile_cmd.add_argument("--state-db-path", default=".stacksats/run_state.sqlite3")
@@ -219,6 +272,64 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("rolling", "non-overlapping"),
         default="rolling",
     )
+
+    demo_parser = root.add_parser(
+        "demo",
+        help="Offline demo workflows backed by packaged sample data",
+        formatter_class=_HelpFormatter,
+    )
+    demo_sub = demo_parser.add_subparsers(dest="demo_command", required=True)
+    _add_validate_command(
+        demo_sub,
+        help_text="Validate the packaged demo strategy and data",
+        command_name="validate",
+        strategy_required=False,
+        default_strategy=DEMO_STRATEGY_SPEC,
+        default_start=DEMO_START_DATE,
+        default_end=DEMO_END_DATE,
+        default_min_win_rate=0.0,
+        default_strict=False,
+    )
+    _add_backtest_command(
+        demo_sub,
+        help_text="Backtest the packaged demo strategy and data",
+        command_name="backtest",
+        strategy_required=False,
+        default_strategy=DEMO_STRATEGY_SPEC,
+        default_start=DEMO_START_DATE,
+        default_end=DEMO_END_DATE,
+    )
+    _add_export_command(
+        demo_sub,
+        help_text="Export demo strategy artifacts",
+        command_name="export",
+        strategy_required=False,
+        default_strategy=DEMO_STRATEGY_SPEC,
+        default_start=DEMO_START_DATE,
+        default_end=DEMO_END_DATE,
+    )
+
+    data_parser = root.add_parser(
+        "data",
+        help="Explicit BRK data setup and diagnostics",
+        formatter_class=_HelpFormatter,
+    )
+    data_sub = data_parser.add_subparsers(dest="data_command", required=True)
+
+    fetch_cmd = data_sub.add_parser("fetch", help="Download canonical BRK source data")
+    fetch_cmd.add_argument("--manifest", default=None, help="Optional manifest override path.")
+    fetch_cmd.add_argument("--target-dir", default=str(MANAGED_BRK_DIR))
+    fetch_cmd.add_argument("--schema-dir", default=None)
+    fetch_cmd.add_argument("--overwrite", action="store_true")
+
+    prepare_cmd = data_sub.add_parser("prepare", help="Prepare runtime bitcoin_analytics.parquet")
+    prepare_cmd.add_argument("--source", default=None)
+    prepare_cmd.add_argument("--output", default=str(MANAGED_RUNTIME_PARQUET))
+    prepare_cmd.add_argument("--overwrite", action="store_true")
+
+    doctor_cmd = data_sub.add_parser("doctor", help="Inspect runtime data resolution and coverage")
+    doctor_cmd.add_argument("--parquet-path", default=None)
+
     return parser
 
 
@@ -259,11 +370,137 @@ def _backtest_result_from_json(path: str | Path):
     )
 
 
+def _run_lifecycle_command(command_name: str, args, runner: StrategyRunner) -> int:
+    strategy = load_strategy(args.strategy, config_path=args.strategy_config)
+
+    if command_name == "validate":
+        result = runner.validate(
+            strategy,
+            ValidationConfig(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                min_win_rate=args.min_win_rate,
+                strict=args.strict,
+            ),
+        )
+        print(result.summary())
+        for msg in result.messages:
+            print(f"- {msg}")
+        if not result.passed:
+            raise SystemExit(1)
+        return 0
+
+    if command_name == "backtest":
+        result = runner.backtest(
+            strategy,
+            BacktestConfig(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                strategy_label=args.strategy_label or strategy.strategy_id,
+                output_dir=args.output_dir,
+            ),
+        )
+        print(result.summary())
+        output_root = (
+            Path(args.output_dir)
+            / result.strategy_id
+            / result.strategy_version
+            / result.run_id
+        )
+        output_root.mkdir(parents=True, exist_ok=True)
+        result.plot(output_dir=str(output_root))
+        output_path = output_root / "backtest_result.json"
+        result.to_json(output_path)
+        print(f"Saved: {output_root}")
+        return 0
+
+    if command_name == "export":
+        batch = runner.export(
+            strategy,
+            ExportConfig(
+                range_start=args.start_date,
+                range_end=args.end_date,
+                output_dir=args.output_dir,
+            ),
+        )
+        output_root = (
+            Path(args.output_dir)
+            / strategy.strategy_id
+            / strategy.version
+            / batch.run_id
+        )
+        meta = {
+            "rows": int(batch.row_count),
+            "windows": int(batch.window_count),
+            "strategy_id": strategy.strategy_id,
+            "version": strategy.version,
+            "schema_version": batch.schema_version,
+            "output_dir": str(output_root),
+        }
+        print(json.dumps(meta, indent=2))
+        print(f"Saved: {output_root}")
+        return 0
+
+    raise ValueError(f"Unsupported lifecycle command: {command_name}")
+
+
 def run(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    command = getattr(args, "command", None)
     strategy_command = getattr(args, "strategy_command", None)
+    demo_command = getattr(args, "demo_command", None)
+    data_command = getattr(args, "data_command", None)
     try:
+        if command == "data":
+            if data_command == "fetch":
+                manifest = Path(args.manifest).expanduser().resolve() if args.manifest else None
+                parquet_path, schema_path = fetch_assets(
+                    manifest_path=manifest,
+                    target_dir=Path(args.target_dir),
+                    schema_dir=Path(args.schema_dir) if args.schema_dir else None,
+                    overwrite=args.overwrite,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "canonical_parquet": str(parquet_path),
+                            "schema_path": str(schema_path),
+                            "next": "stacksats data prepare",
+                        },
+                        indent=2,
+                    )
+                )
+                return 0
+            if data_command == "prepare":
+                source = Path(args.source).expanduser() if args.source else latest_fetched_parquet()
+                output = prepare_runtime_parquet(
+                    source,
+                    output=Path(args.output),
+                    overwrite=args.overwrite,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "source": str(source.resolve()),
+                            "runtime_parquet": str(output),
+                            "next": "stacksats strategy backtest --strategy "
+                            f"{DEMO_STRATEGY_SPEC}",
+                        },
+                        indent=2,
+                    )
+                )
+                return 0
+            if data_command == "doctor":
+                print(json.dumps(data_doctor(args.parquet_path), indent=2))
+                return 0
+            parser.error("Unsupported data command.")
+
+        if command == "demo":
+            with packaged_demo_parquet_path() as demo_path:
+                runner = StrategyRunner(BTCDataProvider(parquet_path=str(demo_path)))
+                return _run_lifecycle_command(demo_command, args, runner)
+
         if strategy_command == "animate":
             result = _backtest_result_from_json(args.backtest_json)
             output_dir = (
@@ -285,76 +522,11 @@ def run(argv: list[str] | None = None) -> int:
             print(f"Saved: {output_dir}")
             return 0
 
+        if strategy_command in {"validate", "backtest", "export"}:
+            return _run_lifecycle_command(strategy_command, args, StrategyRunner())
+
         strategy = load_strategy(args.strategy, config_path=args.strategy_config)
         runner = StrategyRunner()
-        if strategy_command == "validate":
-            result = runner.validate(
-                strategy,
-                ValidationConfig(
-                    start_date=args.start_date,
-                    end_date=args.end_date,
-                    min_win_rate=args.min_win_rate,
-                    strict=args.strict,
-                ),
-            )
-            print(result.summary())
-            for msg in result.messages:
-                print(f"- {msg}")
-            if not result.passed:
-                raise SystemExit(1)
-            return 0
-
-        if strategy_command == "backtest":
-            result = runner.backtest(
-                strategy,
-                BacktestConfig(
-                    start_date=args.start_date,
-                    end_date=args.end_date,
-                    strategy_label=args.strategy_label or strategy.strategy_id,
-                    output_dir=args.output_dir,
-                ),
-            )
-            print(result.summary())
-            output_root = (
-                Path(args.output_dir)
-                / result.strategy_id
-                / result.strategy_version
-                / result.run_id
-            )
-            output_root.mkdir(parents=True, exist_ok=True)
-            result.plot(output_dir=str(output_root))
-            output_path = output_root / "backtest_result.json"
-            result.to_json(output_path)
-            print(f"Saved: {output_root}")
-            return 0
-
-        if strategy_command == "export":
-            batch = runner.export(
-                strategy,
-                ExportConfig(
-                    range_start=args.start_date,
-                    range_end=args.end_date,
-                    output_dir=args.output_dir,
-                ),
-            )
-            output_root = (
-                Path(args.output_dir)
-                / strategy.strategy_id
-                / strategy.version
-                / batch.run_id
-            )
-            meta = {
-                "rows": int(batch.row_count),
-                "windows": int(batch.window_count),
-                "strategy_id": strategy.strategy_id,
-                "version": strategy.version,
-                "schema_version": batch.schema_version,
-                "output_dir": str(output_root),
-            }
-            print(json.dumps(meta, indent=2))
-            print(f"Saved: {output_root}")
-            return 0
-
         if strategy_command == "run-daily":
             result = runner.run_daily(
                 strategy,
@@ -395,7 +567,7 @@ def run(argv: list[str] | None = None) -> int:
             "Invalid JSON in strategy config file.",
             hint=str(exc),
         )
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, FileExistsError) as exc:
         _exit_user_error(str(exc))
     except (ModuleNotFoundError, ImportError) as exc:
         _exit_user_error(

@@ -5,7 +5,7 @@ description: Five-minute setup and first execution path for StackSats.
 
 # Quickstart
 
-Use this page for a 5-minute first run.
+Use this page for a 5-minute first run with the packaged offline demo.
 
 !!! tip "Recommended Path"
     Start with editable install so local examples and docs stay in sync with your checkout.
@@ -27,42 +27,18 @@ Use this page for a 5-minute first run.
     pip install stacksats
     ```
 
-## 2) Make canonical data available
-
-Canonical dataset schema and projection workflow:
-
-- [Merged Metrics Data Guide](../reference/merged-metrics-data-guide.md)
-- [BRK Data Source](../data-source.md)
-- [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)
-- [Merged Metrics Taxonomy](../reference/merged-metrics-taxonomy.md)
-
-Current canonical snapshot scale:
-
-- `236,259,020` rows
-- `41,407` metric keys
-- `284` top-level families
-- daily coverage from `2009-01-03` to `2026-03-13`
-
-If you already have a runtime-compatible BRK parquet:
+## 2) Run the packaged demo
 
 ```bash
-export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
+stacksats demo backtest
 ```
 
-If you start from canonical `merged_metrics*.parquet`, use the projection step in [BRK Data Source](../data-source.md) to derive `bitcoin_analytics.parquet` first, then export `STACKSATS_ANALYTICS_PARQUET`.
-
-## 3) Run an example strategy
+Optional demo lifecycle commands:
 
 ```bash
-stacksats strategy backtest \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --output-dir output
+stacksats demo validate
+stacksats demo export
 ```
-
-Built-in strategy catalog (intent mode, required columns, and tuning parameters):
-[Strategies](../reference/strategies.md).
 
 This runs a packaged example through the canonical lifecycle and writes artifacts under:
 
@@ -70,7 +46,9 @@ This runs a packaged example through the canonical lifecycle and writes artifact
 output/<strategy_id>/<version>/<run_id>/
 ```
 
-## 4) Use the Strategy Lifecycle CLI
+## 3) Use the full strategy lifecycle CLI
+
+After the demo succeeds, move to the full `strategy` and `data` command families.
 
 Run lifecycle commands from the canonical reference:
 
@@ -78,8 +56,9 @@ Run lifecycle commands from the canonical reference:
 - [Run Full Backtest](../run/backtest.md)
 - [Export Strategy Artifacts](../run/export.md)
 - [Animate Backtest Output](../run/animate.md)
+- [Data Command](../run/data.md)
 
-## 5) Inspect outputs
+## 4) Inspect outputs
 
 Primary run artifacts are written under:
 
@@ -93,9 +72,10 @@ Typical files:
 - `metrics.json`
 - plot `.svg` files
 
-## 6) What to read next
+## 5) What to read next
 
 - [Task Hub](../tasks.md)
+- [Full Data Setup](full-data-setup.md)
 - [Notebook Demo](notebook-demo.md)
 - [First Strategy Run](first-strategy-run.md)
 - [Minimal Strategy Examples](minimal-strategy-examples.md)
@@ -116,6 +96,7 @@ A successful quickstart run should produce all of the following:
 ## Troubleshooting
 
 - If command import fails, confirm editable install from repo root.
+- If you want the canonical BRK workflow next, use [Full Data Setup](full-data-setup.md).
 - If dates or outputs look wrong, run explicit lifecycle commands from [CLI Commands](../commands.md).
 - If upgrading and old helper names fail, use [Migration Guide](../migration.md).
 - If you need minimal copy-paste templates, use [Minimal Strategy Examples](minimal-strategy-examples.md).

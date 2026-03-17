@@ -18,7 +18,7 @@ Start with the hosted docs: <https://hypertrial.github.io/stacksats/>.
 Local docs entry points:
 
 - [`docs/index.md`](docs/index.md) for the full map
-- [`docs/start/quickstart.md`](docs/start/quickstart.md) for five-minute setup
+- [`docs/start/quickstart.md`](docs/start/quickstart.md) for the packaged five-minute demo
 - [`docs/tasks.md`](docs/tasks.md) for task-first workflows
 - [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
 - [`docs/start/minimal-strategy-examples.md`](docs/start/minimal-strategy-examples.md) for copyable minimal strategy templates
@@ -61,14 +61,10 @@ pip install "stacksats[deploy]"
 
 ## Quick Start
 
-Run a packaged example strategy:
+Run the packaged offline demo first:
 
 ```bash
-stacksats strategy backtest \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --output-dir output
+stacksats demo backtest
 ```
 
 Artifacts are written under:
@@ -77,8 +73,17 @@ Artifacts are written under:
 output/<strategy_id>/<version>/<run_id>/
 ```
 
+Demo lifecycle commands:
+
+```bash
+stacksats demo validate
+stacksats demo backtest
+stacksats demo export
+```
+
 For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/commands.md`](docs/commands.md).
 For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
+For full BRK data setup, see [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md).
 For upgrades, see [`docs/migration.md`](docs/migration.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 `stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
@@ -92,9 +97,29 @@ stacksats strategy animate \
   --output-name strategy_vs_uniform_hd.gif
 ```
 
-## Data Source (BRK parquet)
+## Full BRK Data Setup
 
 Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
+
+Fetch the canonical long-format source data and prepare the runtime parquet:
+
+```bash
+stacksats data fetch
+stacksats data prepare
+stacksats data doctor
+```
+
+Default locations:
+
+- canonical source download: `~/.stacksats/data/brk/`
+- prepared runtime parquet: `~/.stacksats/data/bitcoin_analytics.parquet`
+
+Runtime resolution precedence:
+
+- `STACKSATS_ANALYTICS_PARQUET`
+- explicit `parquet_path`
+- `~/.stacksats/data/bitcoin_analytics.parquet`
+- `./bitcoin_analytics.parquet`
 
 Current canonical `merged_metrics*.parquet` snapshot in repo-backed docs:
 
@@ -103,33 +128,12 @@ Current canonical `merged_metrics*.parquet` snapshot in repo-backed docs:
 - `41,407` distinct metric keys
 - `284` top-level metric families
 
-What a new user can access through this parquet:
-
-- daily BTC market and valuation metrics such as `price_*`, `market_*`, `realized_*`, `mvrv`, `investor_*`, and `cost_*`
-- supply, issuance, and scarcity metrics such as `supply_*`, `circulating_*`, `subsidy_*`, and `inflation_*`
-- cohort metrics such as `sth_*`, `lth_*`, `utxos_<age_bucket>_*`, `addrs_<balance_bucket>_*`, `year_<yyyy>_*`, and `epoch_<n>_*`
-- mining, script/output-type, block, transaction, and network-activity metrics
-- benchmark and path metrics such as `1m_*`, `1y_*`, `10y_*`, and `dca_*`
-
-The parquet is a long-format daily metric fact table. It does not contain raw transaction rows, raw block rows, or intraday event data.
-
 Detailed references:
 
+- [docs/start/full-data-setup.md](docs/start/full-data-setup.md)
 - [docs/reference/merged-metrics-data-guide.md](docs/reference/merged-metrics-data-guide.md)
 - [docs/reference/merged-metrics-parquet-schema.md](docs/reference/merged-metrics-parquet-schema.md)
 - [docs/reference/merged-metrics-taxonomy.md](docs/reference/merged-metrics-taxonomy.md)
-
-Quick command:
-
-```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
-export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
-```
-
-If manifest file IDs are placeholders, fetch fails by design and you should place the parquet file locally, then export `STACKSATS_ANALYTICS_PARQUET`.
-
-If `STACKSATS_ANALYTICS_PARQUET` is unset, runtime falls back to `./bitcoin_analytics.parquet`.
-StackSats runtime is BRK-only for strategy metrics sourcing.
 
 Run idempotent daily execution (paper mode):
 

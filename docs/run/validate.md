@@ -9,7 +9,7 @@ description: Reference for `stacksats strategy validate`.
 
 - Strategy spec format: `module_or_path:ClassName`
 - Canonical source dataset is `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)).
-- Runtime BRK-wide parquet available (`STACKSATS_ANALYTICS_PARQUET` or `./bitcoin_analytics.parquet`).
+- Runtime BRK-wide parquet available (`STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or `./bitcoin_analytics.parquet`).
 
 ## Command
 

@@ -87,6 +87,7 @@ nav:
   - Start:
       - Welcome: index.md
       - Quickstart: start/quickstart.md
+      - Full Data Setup: start/full-data-setup.md
       - First Strategy Run: start/first-strategy-run.md
       - Minimal Strategy Examples: start/minimal-strategy-examples.md
       - Notebook Demo: start/notebook-demo.md
@@ -95,6 +96,8 @@ nav:
   - Run:
       - Task Hub: tasks.md
       - Command Index: commands.md
+      - Demo Command: run/demo.md
+      - Data Command: run/data.md
       - Validate Command: run/validate.md
       - Backtest Command: run/backtest.md
       - Export Command: run/export.md

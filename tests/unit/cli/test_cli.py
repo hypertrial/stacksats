@@ -5,6 +5,7 @@ import runpy
 import subprocess
 import sys
 import warnings
+from contextlib import contextmanager
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -25,12 +26,16 @@ def test_cli_help() -> None:
     )
     assert proc.returncode == 0
     assert "strategy" in proc.stdout
+    assert "demo" in proc.stdout
+    assert "data" in proc.stdout
 
 
 def test_cli_help_examples_use_stable_packaged_strategy_spec() -> None:
     help_text = cli._build_parser().format_help()
     assert "stacksats.strategies.examples:SimpleZScoreStrategy" in help_text
     assert "stacksats.strategies.model_example:ExampleMVRVStrategy" not in help_text
+    assert "stacksats demo backtest" in help_text
+    assert "stacksats data fetch" in help_text
 
 
 def test_cli_strategy_validate_uses_runner(monkeypatch, capsys) -> None:
@@ -365,3 +370,149 @@ def test_cli_module_dunder_main_executes(monkeypatch) -> None:
         with pytest.raises(SystemExit) as raised:
             runpy.run_module("stacksats.cli", run_name="__main__")
     assert raised.value.code == 0
+
+
+def test_cli_demo_backtest_uses_packaged_demo_data(monkeypatch, tmp_path) -> None:
+    observed = {}
+
+    class FakeResult:
+        strategy_id = "demo-strategy"
+        strategy_version = "1.0.0"
+        run_id = "run-demo"
+
+        def summary(self) -> str:
+            return "Score: 55.00%"
+
+        def plot(self, output_dir: str):
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            return {}
+
+        def to_json(self, path):
+            Path(path).write_text("{}", encoding="utf-8")
+
+    class FakeRunner:
+        def __init__(self, data_provider=None):
+            observed["provider_path"] = getattr(data_provider, "parquet_path", None)
+
+        def backtest(self, strategy, config):
+            del strategy
+            observed["start_date"] = config.start_date
+            observed["end_date"] = config.end_date
+            return FakeResult()
+
+    @contextmanager
+    def fake_demo_path():
+        demo = tmp_path / "demo.parquet"
+        demo.write_bytes(b"demo")
+        yield demo
+
+    monkeypatch.setattr(cli, "StrategyRunner", FakeRunner)
+    monkeypatch.setattr(cli, "packaged_demo_parquet_path", fake_demo_path)
+
+    class FakeStrategy:
+        strategy_id = "demo-strategy"
+
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "demo",
+            "backtest",
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    cli.main()
+    assert observed["provider_path"] == str(tmp_path / "demo.parquet")
+    assert observed["start_date"] == "2018-01-01"
+    assert observed["end_date"] == "2025-12-31"
+
+
+def test_cli_data_fetch_invokes_fetch_assets(monkeypatch, capsys, tmp_path) -> None:
+    observed = {}
+
+    def fake_fetch_assets(**kwargs):
+        observed.update(kwargs)
+        parquet = tmp_path / "brk" / "merged_metrics.parquet"
+        schema = tmp_path / "brk" / "schema.md"
+        parquet.parent.mkdir(parents=True, exist_ok=True)
+        parquet.write_bytes(b"x")
+        schema.write_text("schema", encoding="utf-8")
+        return parquet, schema
+
+    monkeypatch.setattr(cli, "fetch_assets", fake_fetch_assets)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "data",
+            "fetch",
+            "--target-dir",
+            str(tmp_path / "brk"),
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert '"next": "stacksats data prepare"' in out
+    assert str(tmp_path / "brk") in out
+    assert observed["overwrite"] is False
+
+
+def test_cli_data_prepare_uses_latest_fetched_parquet(monkeypatch, capsys, tmp_path) -> None:
+    source = tmp_path / "brk" / "merged_metrics.parquet"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"x")
+    output = tmp_path / "managed" / "bitcoin_analytics.parquet"
+    observed = {}
+
+    monkeypatch.setattr(cli, "latest_fetched_parquet", lambda: source)
+
+    def fake_prepare_runtime_parquet(src, *, output, overwrite):
+        observed["source"] = src
+        observed["output"] = output
+        observed["overwrite"] = overwrite
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_bytes(b"prepared")
+        return Path(output)
+
+    monkeypatch.setattr(cli, "prepare_runtime_parquet", fake_prepare_runtime_parquet)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "data",
+            "prepare",
+            "--output",
+            str(output),
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert str(source) in out
+    assert observed["source"] == source
+    assert observed["output"] == output
+    assert observed["overwrite"] is False
+
+
+def test_cli_data_doctor_prints_json(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli,
+        "data_doctor",
+        lambda path_override=None: {
+            "status": "missing",
+            "resolved_path": None,
+            "path_override": path_override,
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["stacksats", "data", "doctor"])
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert '"status": "missing"' in out

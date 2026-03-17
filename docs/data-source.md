@@ -53,7 +53,8 @@ Recommended reading order:
 Runtime APIs are strict and deterministic:
 
 - runtime env var: `STACKSATS_ANALYTICS_PARQUET`
-- local fallback path when env var is unset: `./bitcoin_analytics.parquet`
+- managed default path when env var is unset: `~/.stacksats/data/bitcoin_analytics.parquet`
+- legacy local fallback path: `./bitcoin_analytics.parquet`
 - runtime does not auto-download data
 - framework loaders retain pre-start history by default for feature warmup; scoring windows still respect requested start/end bounds
 
@@ -126,7 +127,8 @@ export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ## Canonical Source of Truth
 
 - Google Drive parquet: <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>
-- Manifest in repo: `data/brk_data_manifest.json`
+- Packaged manifest used by `stacksats data fetch`: `stacksats/assets/brk_data_manifest.json`
+- Repo mirror for docs and legacy script usage: `data/brk_data_manifest.json`
 
 The manifest defines, for both parquet and schema artifacts:
 
@@ -143,34 +145,36 @@ It also tracks:
 
 ## Fetch + Verify Workflow
 
-From repo root:
+Recommended commands:
 
 ```bash
-venv/bin/python scripts/fetch_brk_data.py --target-dir .
+stacksats data fetch
+stacksats data prepare
+stacksats data doctor
 ```
 
 Default behavior:
 
-- downloads parquet to `./bitcoin_analytics.parquet`
-- downloads schema markdown path from manifest metadata
+- downloads canonical source parquet to `~/.stacksats/data/brk/`
+- writes the packaged schema markdown beside it
+- `stacksats data prepare` writes runtime `bitcoin_analytics.parquet` at `~/.stacksats/data/bitcoin_analytics.parquet`
 - verifies `sha256` and exact file size from manifest
 - fails closed on missing metadata, hash mismatch, size mismatch, or partial download
 
-If `data/brk_data_manifest.json` still contains placeholder file IDs (for example `REPLACE_WITH_*`), the fetch command will fail by design. In that case, download the parquet manually from the Drive folder and place it at repo root before exporting `STACKSATS_ANALYTICS_PARQUET`.
-
-Then export the runtime path:
+Legacy script wrapper remains available:
 
 ```bash
-export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
+venv/bin/python scripts/fetch_brk_data.py --target-dir ~/.stacksats/data/brk
 ```
 
 ## Refreshing Data Metadata (Maintainers)
 
 When Drive artifacts are refreshed:
 
-1. update `file_id`, `sha256`, `size_bytes`, `version`, `updated_at_utc` in `data/brk_data_manifest.json`
-2. run `venv/bin/python scripts/fetch_brk_data.py --target-dir . --overwrite`
-3. update [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) when canonical schema/profile changes
-4. verify docs/tests pass
+1. update `file_id`, `sha256`, `size_bytes`, `version`, `updated_at_utc` in `stacksats/assets/brk_data_manifest.json`
+2. mirror the same manifest payload to `data/brk_data_manifest.json`
+3. run `venv/bin/python scripts/fetch_brk_data.py --target-dir . --overwrite`
+4. update [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) when canonical schema/profile changes
+5. verify docs/tests pass
 
 Do not add network fetches to runtime providers. Keep downloads script-only to preserve deterministic runtime behavior.

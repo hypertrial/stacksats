@@ -9,7 +9,7 @@ Use this page to jump directly to the workflow you need.
 
 Global source contract:
 - Canonical dataset is long-format `merged_metrics*.parquet`; schema is documented in [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
-- Strategy runtime and validation read a runtime BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET` (or `./bitcoin_analytics.parquet` fallback).
+- Strategy runtime and validation read a runtime BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
 - Use [BRK Data Source](data-source.md) for canonical source, projection, and checksum workflow.
 
 ## I want to validate a strategy

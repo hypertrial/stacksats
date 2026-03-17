@@ -14,6 +14,20 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
   </p>
 </div>
 
+## Start Here
+
+Fastest first run:
+
+1. `pip install stacksats`
+2. `stacksats demo backtest`
+3. Inspect `output/<strategy_id>/<version>/<run_id>/`
+
+Then choose your next path:
+
+- [Quickstart](start/quickstart.md) for the offline packaged demo
+- [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
+- [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
+
 ## Canonical Dataset
 
 StackSats is anchored on the canonical BRK `merged_metrics*.parquet` dataset.
@@ -47,7 +61,7 @@ StackSats is built around three fundamental runtime objects:
 
     ---
 
-    Start with install, first run, and expected outputs.
+    Start with the offline packaged demo and expected outputs.
 
     [Quickstart](start/quickstart.md)
 
@@ -83,6 +97,14 @@ StackSats is built around three fundamental runtime objects:
 
     [Task Hub](tasks.md)
 
+-   :material-database: __I Need Full BRK Data__
+
+    ---
+
+    Fetch canonical source data and prepare the managed runtime parquet.
+
+    [Full Data Setup](start/full-data-setup.md)
+
 -   :material-progress-wrench: __I'm Upgrading Versions__
 
     ---
@@ -111,7 +133,7 @@ StackSats is built around three fundamental runtime objects:
 
 ## Start in 2 Clicks
 
-1. New user path: [Quickstart](start/quickstart.md) -> [First Strategy Run](start/first-strategy-run.md)
+1. New user path: [Quickstart](start/quickstart.md) -> [Full Data Setup](start/full-data-setup.md)
 2. Runner path: [Task Hub](tasks.md) -> [Command Index](commands.md)
 3. Builder path: [Create a Strategy](recipes/create-strategy.md) -> [Framework Boundary](framework.md)
 4. Maintainer path: [Release Guide](release.md) -> [Docs Ownership](docs_ownership.md)

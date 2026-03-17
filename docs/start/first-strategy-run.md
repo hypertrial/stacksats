@@ -55,10 +55,12 @@ class MyStrategy(BaseStrategy):
 Use [BRK Data Source](../data-source.md) and [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md) before validation/backtest.
 
 ```bash
-export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
+stacksats data fetch
+stacksats data prepare
 ```
 
-If you start from canonical `merged_metrics*.parquet`, derive `bitcoin_analytics.parquet` using the projection workflow in [BRK Data Source](../data-source.md), then export `STACKSATS_ANALYTICS_PARQUET`.
+This prepares the managed runtime parquet at `~/.stacksats/data/bitcoin_analytics.parquet`.
+If you already have a runtime-compatible parquet elsewhere, you can still export `STACKSATS_ANALYTICS_PARQUET` explicitly.
 
 ## 3) Validate your strategy
 

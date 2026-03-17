@@ -94,7 +94,7 @@ def test_load_can_disable_warmup_history(
 def test_load_missing_parquet_file_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", "/tmp/does-not-exist.parquet")
     provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
-    with pytest.raises(DataLoadError, match="Parquet file not found"):
+    with pytest.raises(DataLoadError, match="No runtime parquet could be resolved"):
         provider.load(backtest_start="2024-01-01")
 
 

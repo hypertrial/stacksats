@@ -93,7 +93,13 @@ where = ["."]
 include = ["stacksats", "stacksats.*"]
 
 [tool.setuptools.package-data]
-stacksats = ["py.typed", "strategies/*.json"]
+stacksats = [
+  "py.typed",
+  "strategies/*.json",
+  "assets/*.json",
+  "assets/*.md",
+  "assets/*.parquet",
+]
 
 [tool.setuptools_scm]
 tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"

@@ -9,7 +9,7 @@ description: Reference for `stacksats strategy backtest`.
 
 - Strategy validates successfully on target date bounds.
 - Canonical source dataset is `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)).
-- Runtime BRK-wide parquet covers the requested window.
+- Runtime BRK-wide parquet covers the requested window and can resolve from `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or `./bitcoin_analytics.parquet`.
 
 ## Command
 

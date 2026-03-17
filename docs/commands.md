@@ -11,6 +11,10 @@ For built-in strategy behavior and parameter defaults, see [Strategies](referenc
 ## Most Common Commands (copy/paste)
 
 ```bash
+stacksats demo backtest
+stacksats data fetch
+stacksats data prepare
+stacksats data doctor
 stacksats strategy validate --strategy stacksats.strategies.examples:SimpleZScoreStrategy
 stacksats strategy backtest --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy export --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
@@ -23,13 +27,16 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - [Validate Command](run/validate.md)
 - [Backtest Command](run/backtest.md)
 - [Export Command](run/export.md)
+- [Demo Command](run/demo.md)
+- [Data Command](run/data.md)
 - [Run Daily Command](run/run-daily.md)
 - [Animate Command](run/animate.md)
 
 ## Prerequisites
 
+- The fastest first run is `stacksats demo backtest`.
 - Canonical dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
-- Runtime commands read a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET` (or `./bitcoin_analytics.parquet` fallback).
+- Runtime commands resolve a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
 - Use editable install for local command consistency:
 
 ```bash

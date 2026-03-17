@@ -85,6 +85,16 @@ def main() -> int:
 
         steps: list[tuple[str, list[str]]] = [
             (
+                "Offline demo backtest",
+                [
+                    *cli_prefix,
+                    "demo",
+                    "backtest",
+                    "--output-dir",
+                    "output",
+                ],
+            ),
+            (
                 "Quick run (validate)",
                 [
                     *cli_prefix,

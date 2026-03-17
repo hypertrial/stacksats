@@ -43,7 +43,7 @@ Data shape contract:
 Dataset flow:
 
 - Canonical source dataset is long-format `merged_metrics*.parquet` (`day_utc`, `metric`, `value`)
-- Runtime commands consume a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`
+- Runtime commands consume a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`
 - Canonical schema: [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md)
 - Projection workflow: [BRK Data Source](../data-source.md)
 
@@ -72,10 +72,11 @@ Built-in intent is explicit by implementation shape:
 
 ## How to Run (Parquet-First)
 
-Set runtime parquet path:
+Fetch and prepare the managed runtime parquet:
 
 ```bash
-export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
+stacksats data fetch
+stacksats data prepare
 ```
 
 Validate a built-in strategy on fixed comparison bounds:

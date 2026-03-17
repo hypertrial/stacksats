@@ -116,7 +116,7 @@ Canonical built-in strategy documentation (behavior, required columns, intent mo
 |--------|-------------|
 | `StrategyRunner` | Orchestrates backtest, export, run, and validation. |
 | `load_strategy` | Load a strategy (e.g. from JSON). |
-| `load_data` | Load runtime BRK-wide parquet (prelude helper). Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
+| `load_data` | Load runtime BRK-wide parquet (prelude helper). Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
 | `precompute_features` | Precompute features for a strategy. |
 
 ### Removed aliases

@@ -9,6 +9,7 @@ description: Reference for `stacksats strategy export`.
 
 - Explicit date bounds are required.
 - Strategy loads successfully.
+- Runtime BRK-wide parquet available (`STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or `./bitcoin_analytics.parquet`).
 
 ## Command
 
@@ -35,6 +36,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 ## Troubleshooting
 
 - If export fails, verify `--start-date` and `--end-date` are both present and ordered.
+- If runtime data is missing, run `stacksats data doctor` or follow [Full Data Setup](../start/full-data-setup.md).
 - If schema checks fail, run `venv/bin/python scripts/sync_objects_schema_docs.py --check`.
 
 ## Next step

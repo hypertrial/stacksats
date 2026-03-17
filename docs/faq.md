@@ -78,7 +78,7 @@ Yes. `stacksats.load_data(...)` now follows strict `BTCDataProvider` source-only
 - no MVRV fallback substitution
 - feature warmup history is retained by default (rows before `backtest_start` are included for feature computation)
 
-The canonical source dataset is long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) and [BRK Data Source](data-source.md)). Runtime commands read a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`; for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Use `end_date=...` when you need an explicit end bound.
+The canonical source dataset is long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) and [BRK Data Source](data-source.md)). Runtime commands read a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, the managed default under `~/.stacksats/data/bitcoin_analytics.parquet`, or the legacy local fallback `./bitcoin_analytics.parquet`; for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Treat the DataFrame path as an advanced integration option, not the default first-run workflow. Use `end_date=...` when you need an explicit end bound.
 
 ### Which modules are stable public API?
 

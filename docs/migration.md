@@ -119,7 +119,7 @@ df = load_data(parquet_path="./bitcoin_analytics.parquet")
 
 # new (strict source-only and optional explicit end bound)
 df = load_data(
-    parquet_path="./bitcoin_analytics.parquet",
+    parquet_path="~/.stacksats/data/bitcoin_analytics.parquet",
     max_staleness_days=3,
     end_date="2025-12-31",
 )
@@ -129,7 +129,7 @@ df = load_data(
 - no synthetic "today" row creation
 - no historical date gap filling
 - no MVRV fallback substitution
-- canonical source dataset is `merged_metrics*.parquet` (long-format), and runtime consumes a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`
+- canonical source dataset is `merged_metrics*.parquet` (long-format), and runtime consumes a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`
 
 ### 7) Strategy contract hardening
 
