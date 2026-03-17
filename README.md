@@ -165,15 +165,17 @@ If you need to reload an export later, use `WeightTimeSeriesBatch.from_artifact_
 
 Top-level exports:
 
+- `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
 - `BacktestConfig`, `ValidationConfig`, `ExportConfig`
 - `RunDailyConfig`
-- `StrategyMetadata`, `StrategySpec`, `StrategyContractWarning`
-- `StrategyArtifactSet`
-- `WeightTimeSeries`, `WeightTimeSeriesBatch`
+- `StrategyMetadata`, `StrategySpec`, `StrategyArtifactSet`, `StrategyRunResult`
+- `StrategySeriesMetadata`, `ColumnSpec`
 - `BacktestResult`, `ValidationResult`, `DailyRunResult`
-- `load_strategy()`, `load_data()`, `precompute_features()`
-- `MVRVStrategy`
+- `DailyOrderRequest`, `DailyOrderReceipt`
+- `ColumnMapDataProvider`, `ColumnMapError`
+- `StrategyRunner`, `load_strategy()`, `load_data()`, `precompute_features()`
+- `MVRVStrategy`, `ExampleMVRVStrategy`, `MVRVPlusStrategy`
 
 `load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
 
