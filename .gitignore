@@ -214,3 +214,4 @@ __marimo__/
 *.parquet
 merged_metrics*.parquet
 bitcoin_analytics*.parquet
+!stacksats/assets/bitcoin_analytics_demo.parquet
