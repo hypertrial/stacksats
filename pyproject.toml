@@ -49,6 +49,7 @@ deploy = [
   "python-dotenv==1.2.1",
 ]
 dev = [
+  "build>=1.2.0",
   "pytest==9.0.2",
   "pytest-bdd==8.1.0",
   "pytest-cov==7.0.0",
