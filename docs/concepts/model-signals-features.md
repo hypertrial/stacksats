@@ -12,8 +12,8 @@ This page covers model-side feature engineering and signal composition before fr
 The framework now owns raw feature sourcing.
 
 - Strategies declare `required_feature_sets()`.
-- Registered feature providers materialize data as-of `current_date`.
-- Strategy hooks receive `ctx.features_df` only for `start_date..current_date`.
+- Registered feature providers build lazy, as-of-filtered feature pipelines and the registry collects once after joining the observed feature set.
+- Strategy hooks still receive an eager `ctx.features_df` only for `start_date..current_date`.
 - Strategy methods must not load external files or make network/database calls directly.
 
 ## Primary signals

@@ -75,6 +75,7 @@ class ColumnMapDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.DataFrame:
+        """Return an eager canonical BTC frame for the requested window."""
         return self.load_lazy(
             backtest_start=backtest_start,
             end_date=end_date,
@@ -88,10 +89,10 @@ class ColumnMapDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.LazyFrame:
-        """Return the canonical BTC DataFrame for the requested window.
+        """Return the canonical BTC LazyFrame for the requested window.
 
         Applies the column map, enforces a daily date column, and slices
-        to ``[backtest_start, end_date]`` for scoring.
+        to ``[backtest_start, end_date]`` for scoring without collecting.
         When ``include_warmup`` is True (default), rows before
         ``backtest_start`` are retained for feature warmup.
         """

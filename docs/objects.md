@@ -101,7 +101,7 @@ All public types and functions below are exported from the top-level `stacksats`
 
 | Object | Description |
 |--------|-------------|
-| `ColumnMapDataProvider` | Data provider that wraps a DataFrame and column map. |
+| `ColumnMapDataProvider` | Data provider that wraps a DataFrame and column map. Use `.load()` for an eager `pl.DataFrame` or `.load_lazy()` for a `pl.LazyFrame` before the final execution boundary. |
 | `ColumnMapError` | Error raised when column mapping fails. |
 
 ### Example strategies
@@ -116,8 +116,8 @@ Canonical built-in strategy documentation (behavior, required columns, intent mo
 |--------|-------------|
 | `StrategyRunner` | Orchestrates backtest, export, run, and validation. |
 | `load_strategy` | Load a strategy (e.g. from JSON). |
-| `load_data` | Load runtime BRK-wide parquet (prelude helper). Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
-| `precompute_features` | Precompute features for a strategy. |
+| `load_data` | Load an eager runtime BRK-wide parquet frame (prelude helper). Runtime ingestion is lazy-first internally, but this helper returns a collected `pl.DataFrame`. Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
+| `precompute_features` | Precompute the built-in model feature set as an eager `pl.DataFrame`. Framework-owned providers use an internal lazy path and collect once before eager strategy execution. |
 
 ### Removed aliases
 

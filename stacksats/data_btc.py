@@ -121,6 +121,7 @@ class BTCDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.DataFrame:
+        """Return an eager runtime BTC frame with strict source validation."""
         window = self.load_lazy(
             backtest_start=backtest_start,
             end_date=end_date,
@@ -143,6 +144,7 @@ class BTCDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.LazyFrame:
+        """Return a lazy runtime BTC frame with strict source validation."""
         now = _norm_dt(self.clock())
         backtest_start_ts = _norm_dt(dt.datetime.strptime(backtest_start[:10], "%Y-%m-%d"))
         if end_date is not None:

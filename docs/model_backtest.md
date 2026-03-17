@@ -38,11 +38,12 @@ Backtesting is orchestrated through these modules:
    - `StrategyRunner.backtest(...)` is the canonical entry point.
    - Validates strategy contract, builds `StrategyContext`, computes per-window weights, and enforces weight constraints.
 2. `stacksats/prelude.py`
-   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only runtime BRK parquet validation (no synthetic fill behavior). Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset remains long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)).
+   - `load_data(...)` delegates to `BTCDataProvider` with strict source-only runtime BRK parquet validation (no synthetic fill behavior). Runtime ingestion is lazy-first (`scan_parquet`) but `load_data(...)` collects and returns an eager `pl.DataFrame`. Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset remains long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)).
    - `compute_cycle_spd(...)` builds rolling windows and computes sats-per-dollar metrics.
    - `backtest_dynamic_dca(...)` aggregates window-level results and computes the exponential-decay percentile.
 3. `stacksats/model_development.py`
-   - `precompute_features(...)` computes lagged model features used by strategy hooks.
+   - `precompute_features(...)` computes the built-in lagged model feature set as an eager `pl.DataFrame`.
+   - Framework-owned feature providers compose lazy feature pipelines internally, join them in the registry, and collect once before strategy hooks receive `ctx.features_df`.
 4. `stacksats/api.py`
    - `BacktestResult` exposes summaries, JSON export, and plotting helpers.
 

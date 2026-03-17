@@ -41,6 +41,7 @@ Reports:
 ## Notes
 
 - Runtime commands never auto-download data.
+- Runtime readers load parquet lazily first and collect only when an eager frame is required.
 - `data prepare` may also normalize an already-wide runtime parquet if you pass one
   explicitly via `--source`.
 - Use [BRK Data Source](../data-source.md) for the full source contract.

@@ -80,6 +80,8 @@ Yes. `stacksats.load_data(...)` now follows strict `BTCDataProvider` source-only
 
 The canonical source dataset is long-format `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md) and [BRK Data Source](data-source.md)). Runtime commands read a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, the managed default under `~/.stacksats/data/bitcoin_analytics.parquet`, or the legacy local fallback `./bitcoin_analytics.parquet`; for custom DataFrames use `StrategyRunner.from_dataframe(df, column_map=...)` or `ColumnMapDataProvider`. Treat the DataFrame path as an advanced integration option, not the default first-run workflow. Use `end_date=...` when you need an explicit end bound.
 
+If you need a lazy integration point before the final execution boundary, use `BTCDataProvider.load_lazy(...)` or `ColumnMapDataProvider.load_lazy(...)`. Strategy hooks themselves still receive eager `pl.DataFrame` inputs.
+
 ### Which modules are stable public API?
 
 Use top-level `stacksats` exports and documented API modules. Lower-level modules (`stacksats.backtest`, `stacksats.prelude`, `stacksats.export_weights`) are implementation details and may change.
