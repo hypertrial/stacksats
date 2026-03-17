@@ -7,14 +7,14 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 0.8.1 highlights
+## 0.8.2 highlights
 
 - Added an offline packaged first-run flow via `stacksats demo backtest`.
 - Added explicit BRK setup commands: `stacksats data fetch`, `stacksats data prepare`, and `stacksats data doctor`.
-- Fixed default backtest/validation scoring horizon to `2018-01-01` -> `2025-12-31` for stable comparisons (while clamping to available data coverage).
-- Enabled feature warmup history by default in loader-backed runtime paths so rolling features can use pre-start context.
-- Added canonical merged-metrics parquet schema docs and aligned data-source guidance around long-format source + BRK-wide runtime projection.
-- Hardened loader/export edge behavior and added targeted regression coverage for warmup and short-lookback runtime paths.
+- Added a release wheel-install smoke test to protect packaged CLI/runtime flows.
+- Increased repository coverage gating to 100% with expanded branch-path regression coverage.
+- Improved Polars backtest/runtime hot paths with lazy loading safeguards and batch-flow hardening.
+- Restored loader/backtest edge-case handling for out-of-coverage windows and aligned docs/README command references.
 
 ## Upgrade notes
 

@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-03-17
+
+### Added
+- Added packaged first-run onboarding commands: `stacksats demo backtest`, `stacksats data fetch`, `stacksats data prepare`, and `stacksats data doctor`.
+- Added a wheel-install smoke test to the release test suite to verify packaged CLI/runtime flows.
+
+### Changed
+- Increased repository coverage gating to 100% and expanded targeted branch-path coverage across runner, export, and loader edges.
+- Improved Polars runtime/backtest hot paths with lazy guards and batch-oriented execution flow hardening.
+- Included `wheel` in development extras to keep local release tooling aligned with package build requirements.
+
+### Fixed
+- Restored loader/backtest edge-case behavior for out-of-coverage windows and corresponding regression tests.
+- Synced README/docs command references and export guidance for the current onboarding/runtime paths.
+
 ## [0.8.1] - 2026-03-16
 
 ### Changed
