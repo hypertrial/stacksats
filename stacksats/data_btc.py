@@ -70,30 +70,39 @@ def _require_daily_index(
         )
 
 
-def _load_btc_from_parquet(path: Path) -> pl.DataFrame:
-    frame = pl.read_parquet(path)
-    if frame.is_empty():
-        raise DataLoadError("Parquet file is empty.")
-    if DATE_COL not in frame.columns:
-        # Try first column as date or index
-        cols = frame.columns
-        if len(cols) >= 1 and cols[0].lower() in ("date", "index", "timestamp"):
-            frame = frame.rename({cols[0]: DATE_COL})
+def _daily_date_expr(dtype: pl.DataType, *, column: str = DATE_COL) -> pl.Expr:
+    if dtype == pl.Utf8:
+        base = pl.col(column).str.to_datetime(strict=False)
+    elif dtype == pl.Date:
+        base = pl.col(column).cast(pl.Datetime)
+    else:
+        base = pl.col(column).cast(pl.Datetime, strict=False)
+    return base.dt.replace_time_zone(None).dt.truncate("1d")
+
+
+def _scan_btc_from_parquet(path: Path) -> pl.LazyFrame:
+    frame = pl.scan_parquet(path)
+    schema = frame.collect_schema()
+    names = schema.names()
+    if DATE_COL not in names:
+        if names and names[0].lower() in ("date", "index", "timestamp"):
+            frame = frame.rename({names[0]: DATE_COL})
+            schema = frame.collect_schema()
+            names = schema.names()
         else:
             raise DataLoadError("Parquet must have a 'date' column.")
-    if frame[DATE_COL].dtype == pl.Utf8:
-        frame = frame.with_columns(pl.col(DATE_COL).str.to_datetime())
-    if "Datetime" in str(frame[DATE_COL].dtype):
-        frame = frame.with_columns(
-            pl.col(DATE_COL).dt.replace_time_zone(None).dt.truncate("1d")
-        )
-    frame = frame.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
-    if "price_usd" not in frame.columns:
+    if "price_usd" not in names:
         raise DataLoadError("Runtime parquet must contain a 'price_usd' column.")
-    frame = frame.with_columns(pl.col("price_usd").cast(pl.Float64, strict=False))
-    if "mvrv" in frame.columns:
-        frame = frame.with_columns(pl.col("mvrv").cast(pl.Float64, strict=False))
-    return frame
+    frame = frame.with_columns(
+        _daily_date_expr(schema[DATE_COL]).alias(DATE_COL),
+        pl.col("price_usd").cast(pl.Float64, strict=False).alias("price_usd"),
+        *(
+            [pl.col("mvrv").cast(pl.Float64, strict=False).alias("mvrv")]
+            if "mvrv" in names
+            else []
+        ),
+    )
+    return frame.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
 
 
 @dataclass
@@ -112,6 +121,28 @@ class BTCDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.DataFrame:
+        window = self.load_lazy(
+            backtest_start=backtest_start,
+            end_date=end_date,
+            include_warmup=include_warmup,
+        ).collect()
+        target_end = window[DATE_COL].max()
+        if target_end is None:
+            raise DataLoadError("No BRK rows available in requested backtest window.")
+        _require_daily_index(
+            window,
+            backtest_start_ts=_norm_dt(dt.datetime.strptime(backtest_start[:10], "%Y-%m-%d")),
+            target_end=_norm_dt(target_end),
+        )
+        return window
+
+    def load_lazy(
+        self,
+        *,
+        backtest_start: str = "2018-01-01",
+        end_date: str | None = None,
+        include_warmup: bool = True,
+    ) -> pl.LazyFrame:
         now = _norm_dt(self.clock())
         backtest_start_ts = _norm_dt(dt.datetime.strptime(backtest_start[:10], "%Y-%m-%d"))
         if end_date is not None:
@@ -124,14 +155,20 @@ class BTCDataProvider:
         else:
             requested_end = None
 
-        frame = _load_btc_from_parquet(_resolve_parquet_path(self.parquet_path))
-        if "price_usd" not in frame.columns:
-            raise DataLoadError("Required price_usd series missing from BRK data.")
-
-        valid_price = frame.filter(pl.col("price_usd").is_finite())
-        if valid_price.is_empty():
+        frame = _scan_btc_from_parquet(_resolve_parquet_path(self.parquet_path))
+        stats = frame.select(
+            pl.len().alias("row_count"),
+            pl.when(pl.col("price_usd").is_finite())
+            .then(pl.col(DATE_COL))
+            .otherwise(None)
+            .max()
+            .alias("latest_valid_price_date"),
+        ).collect().row(0, named=True)
+        if int(stats["row_count"]) == 0:
+            raise DataLoadError("Parquet file is empty.")
+        latest_price_date = stats["latest_valid_price_date"]
+        if latest_price_date is None:
             raise DataLoadError("BRK data contains no valid price_usd values.")
-        latest_price_date = valid_price[DATE_COL].max()
         if isinstance(latest_price_date, dt.datetime):
             latest_dt = latest_price_date
         else:
@@ -153,30 +190,27 @@ class BTCDataProvider:
 
         if include_warmup:
             window = frame.filter(pl.col(DATE_COL) <= target_end)
-            scored_window = window.filter(pl.col(DATE_COL) >= backtest_start_ts)
         else:
             window = frame.filter(
                 (pl.col(DATE_COL) >= backtest_start_ts) & (pl.col(DATE_COL) <= target_end)
             )
-            scored_window = window
-
-        if scored_window.is_empty():
+        validation = window.select(
+            pl.len().filter(pl.col(DATE_COL) >= backtest_start_ts).alias("scored_rows"),
+            pl.when(
+                pl.col("price_usd").is_null() | ~pl.col("price_usd").is_finite()
+            )
+            .then(pl.col(DATE_COL))
+            .otherwise(None)
+            .min()
+            .alias("first_invalid_price_date"),
+        ).collect().row(0, named=True)
+        if int(validation["scored_rows"]) == 0:
             raise DataLoadError("No BRK rows available in requested backtest window.")
-
-        invalid_price = pl.col("price_usd").is_null()
-        if window["price_usd"].dtype in (pl.Float32, pl.Float64):
-            invalid_price = invalid_price | ~pl.col("price_usd").is_finite()
-        invalid_rows = window.filter(invalid_price)
-        if invalid_rows.height > 0:
-            first_null = invalid_rows[DATE_COL][0]
-            first_str = str(first_null)[:10] if first_null is not None else "unknown"
+        first_invalid = validation["first_invalid_price_date"]
+        if first_invalid is not None:
+            first_str = str(first_invalid)[:10]
             raise DataLoadError(
                 "BRK data has missing price_usd values in requested window. "
                 f"First missing date: {first_str}."
             )
-        _require_daily_index(
-            window,
-            backtest_start_ts=backtest_start_ts,
-            target_end=target_end,
-        )
         return window

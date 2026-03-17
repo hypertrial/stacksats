@@ -75,6 +75,19 @@ class ColumnMapDataProvider:
         end_date: str | None = None,
         include_warmup: bool = True,
     ) -> pl.DataFrame:
+        return self.load_lazy(
+            backtest_start=backtest_start,
+            end_date=end_date,
+            include_warmup=include_warmup,
+        ).collect()
+
+    def load_lazy(
+        self,
+        *,
+        backtest_start: str = "2018-01-01",
+        end_date: str | None = None,
+        include_warmup: bool = True,
+    ) -> pl.LazyFrame:
         """Return the canonical BTC DataFrame for the requested window.
 
         Applies the column map, enforces a daily date column, and slices
@@ -82,9 +95,9 @@ class ColumnMapDataProvider:
         When ``include_warmup`` is True (default), rows before
         ``backtest_start`` are retained for feature warmup.
         """
-        frame = self._apply_column_map(self.df)
-        frame = self._to_daily_date(frame)
-        self._validate_required_columns(frame)
+        frame = self._apply_column_map(self.df).lazy()
+        frame = self._to_daily_date_lazy(frame)
+        self._validate_required_columns_lazy(frame)
 
         start_ts = dt.datetime.strptime(backtest_start[:10], "%Y-%m-%d")
         if end_date is not None:
@@ -106,29 +119,31 @@ class ColumnMapDataProvider:
 
         if include_warmup:
             window = frame.filter(pl.col(DATE_COL) <= end_ts)
-            scored_window = window.filter(pl.col(DATE_COL) >= start_ts)
         else:
             window = frame.filter(
                 (pl.col(DATE_COL) >= start_ts) & (pl.col(DATE_COL) <= end_ts)
             )
-            scored_window = window
-
-        if scored_window.is_empty():
+        stats = window.select(
+            pl.col(DATE_COL).filter(pl.col(DATE_COL) >= start_ts).len().alias("scored_rows"),
+            pl.when(
+                pl.col("price_usd").is_null() | ~pl.col("price_usd").is_finite()
+            )
+            .then(pl.col(DATE_COL))
+            .otherwise(None)
+            .min()
+            .alias("first_invalid_price_date"),
+        ).collect().row(0, named=True)
+        if int(stats["scored_rows"]) == 0:
             raise ColumnMapError(
                 "No rows available in the requested backtest window "
                 f"[{start_ts.date()}, {end_ts.date()}]."
             )
-
-        invalid_price = pl.col("price_usd").is_null()
-        if window["price_usd"].dtype in (pl.Float32, pl.Float64):
-            invalid_price = invalid_price | ~pl.col("price_usd").is_finite()
-        invalid_rows = window.filter(invalid_price)
-        if invalid_rows.height > 0:
-            first_missing = str(invalid_rows[DATE_COL][0])[:10]
+        first_invalid = stats["first_invalid_price_date"]
+        if first_invalid is not None:
+            first_missing = str(first_invalid)[:10]
             raise ColumnMapError(
                 f"Missing price_usd values in window. First missing date: {first_missing}."
             )
-
         return window
 
     # ------------------------------------------------------------------ #
@@ -170,6 +185,28 @@ class ColumnMapDataProvider:
         df = df.unique(subset=[DATE_COL], keep="last").sort(DATE_COL)
         return df
 
+    @classmethod
+    def _to_daily_date_lazy(cls, df: pl.LazyFrame) -> pl.LazyFrame:
+        """Ensure df has a normalised daily date column."""
+        schema = df.collect_schema()
+        if DATE_COL not in schema:
+            raise ColumnMapError(
+                f"DataFrame must have a '{DATE_COL}' column. "
+                "Rename your date column to 'date' or add it via with_columns."
+            )
+        dtype = schema[DATE_COL]
+        if dtype == pl.Utf8:
+            date_expr = pl.col(DATE_COL).str.to_datetime(strict=False)
+        elif dtype == pl.Date:
+            date_expr = pl.col(DATE_COL).cast(pl.Datetime)
+        else:
+            date_expr = pl.col(DATE_COL).cast(pl.Datetime, strict=False)
+        return (
+            df.with_columns(date_expr.dt.replace_time_zone(None).dt.truncate("1d").alias(DATE_COL))
+            .unique(subset=[DATE_COL], keep="last")
+            .sort(DATE_COL)
+        )
+
     @staticmethod
     def _validate_required_columns(df: pl.DataFrame) -> None:
         missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
@@ -177,6 +214,16 @@ class ColumnMapDataProvider:
             raise ColumnMapError(
                 f"Required library columns are missing after applying column_map: {missing}. "
                 "Use column_map={{\"price_usd\": \"<your price column>\"}} to map them."
+            )
+
+    @staticmethod
+    def _validate_required_columns_lazy(df: pl.LazyFrame) -> None:
+        schema = df.collect_schema()
+        missing = [c for c in _REQUIRED_COLUMNS if c not in schema]
+        if missing:
+            raise ColumnMapError(
+                f"Required library columns are missing after applying column_map: {missing}. "
+                "Use column_map={\"price_usd\": \"<your price column>\"} to map them."
             )
 
     def __repr__(self) -> str:  # pragma: no cover

@@ -6,6 +6,7 @@ import datetime as dt
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from stacksats.column_map_provider import ColumnMapDataProvider, ColumnMapError
 from stacksats.runner import StrategyRunner
@@ -70,6 +71,16 @@ class TestColumnMapProviderHappyPath:
         result = provider.load(backtest_start="2018-01-01", end_date="2020-01-01")
         assert "price_usd" in result.columns
         assert "mvrv" in result.columns
+
+    def test_load_lazy_matches_eager(self) -> None:
+        df = _make_df(start="2015-01-01", periods=3000, extra_cols={"mvrv": 1.5})
+        provider = ColumnMapDataProvider(df=df)
+
+        eager = provider.load(backtest_start="2018-06-01", end_date="2018-06-10")
+        lazy = provider.load_lazy(backtest_start="2018-06-01", end_date="2018-06-10")
+
+        assert isinstance(lazy, pl.LazyFrame)
+        assert_frame_equal(eager, lazy.collect(), check_dtypes=False)
 
     def test_load_includes_pre_start_history_for_warmup_by_default(self) -> None:
         """load() retains pre-start rows so feature warmup is available."""

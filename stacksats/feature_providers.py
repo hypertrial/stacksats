@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 
 from .feature_materialization import build_observed_frame, hash_dataframe
-from .model_development import precompute_features
+from .model_development_features import precompute_features_lazy
 
 DATE_COL = "date"
 BRK_OPTIONAL_SOURCE_COLUMNS = (
@@ -64,12 +64,9 @@ def _ensure_columns(
 
 
 def _rolling_zscore_pl(s: pl.Series, window: int) -> pl.Series:
-    min_periods = max(30, window // 3)
-    mean = s.rolling_mean(window_size=window, min_samples=min_periods)
-    std = s.rolling_std(window_size=window, min_samples=min_periods)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        z = (s - mean) / std
-    return z.fill_null(0).replace([np.inf, -np.inf], 0.0)
+    return pl.DataFrame({"_s": s}).select(
+        _rolling_zscore_expr(pl.col("_s"), window).alias("_s")
+    )["_s"]
 
 
 def _rolling_zscore_expr(expr: pl.Expr, window: int) -> pl.Expr:
@@ -89,6 +86,17 @@ def _btc_frame_cache_key(
         return (0, "")
     selected_columns = [DATE_COL, *[c for c in source_columns if c in btc_df.columns]]
     return (btc_df.height, hash_dataframe(btc_df.select(selected_columns)))
+
+
+def _observed_lazy(
+    frame: pl.LazyFrame,
+    *,
+    start_date: dt.datetime,
+    as_of_date: dt.datetime,
+) -> pl.LazyFrame:
+    return frame.filter(
+        (pl.col(DATE_COL) >= start_date) & (pl.col(DATE_COL) <= as_of_date)
+    ).sort(DATE_COL)
 
 
 @dataclass(slots=True)
@@ -130,7 +138,12 @@ class CoreModelFeatureProvider:
                 start_date=start_date,
                 current_date=as_of_date,
             )
-        features = precompute_features(btc_df)
+        features = self.materialize_lazy(
+            btc_df,
+            start_date=btc_df[DATE_COL][0],
+            end_date=btc_df[DATE_COL][-1],
+            as_of_date=btc_df[DATE_COL][-1],
+        ).collect()
         self._cache_key = cache_key
         self._cache_features = features
         return build_observed_frame(
@@ -147,14 +160,43 @@ class CoreModelFeatureProvider:
         end_date: dt.datetime,
         as_of_date: dt.datetime,
     ) -> pl.LazyFrame:
+        del end_date
         if btc_df.is_empty():
             return pl.DataFrame(schema={DATE_COL: pl.Datetime("us")}).lazy()
-        return self.materialize(
+        _ensure_columns(
             btc_df,
+            self.required_source_columns(),
+            provider_id=self.provider_id,
+        )
+        cache_key = _btc_frame_cache_key(
+            btc_df,
+            source_columns=self.required_source_columns(),
+        )
+        if self._cache_key == cache_key and self._cache_features is not None:
+            return _observed_lazy(
+                self._cache_features.lazy(),
+                start_date=start_date,
+                as_of_date=as_of_date,
+            )
+        return _observed_lazy(
+            precompute_features_lazy(
+                btc_df,
+                price_col="price_usd",
+                mvrv_col="mvrv",
+                ma_window=200,
+                mvrv_rolling_window=365,
+                mvrv_cycle_window=1461,
+                mvrv_gradient_window=30,
+                mvrv_accel_window=14,
+                mvrv_zone_deep_value=-2.0,
+                mvrv_zone_value=-1.0,
+                mvrv_zone_caution=1.5,
+                mvrv_zone_danger=2.5,
+                mvrv_volatility_window=90,
+            ),
             start_date=start_date,
-            end_date=end_date,
             as_of_date=as_of_date,
-        ).lazy()
+        )
 
 
 @dataclass(slots=True)
@@ -218,9 +260,24 @@ class BRKOverlayFeatureProvider:
         end_date: dt.datetime,
         as_of_date: dt.datetime,
     ) -> pl.LazyFrame:
-        del start_date, end_date, as_of_date
+        del end_date
         if btc_df.is_empty():
             return pl.DataFrame(schema={DATE_COL: pl.Datetime("us")}).lazy()
+        _ensure_columns(
+            btc_df,
+            self.required_source_columns(),
+            provider_id=self.provider_id,
+        )
+        cache_key = _btc_frame_cache_key(
+            btc_df,
+            source_columns=self.required_source_columns() + BRK_OPTIONAL_SOURCE_COLUMNS,
+        )
+        if self._cache_key == cache_key and self._cache_features is not None:
+            return _observed_lazy(
+                self._cache_features.lazy(),
+                start_date=start_date,
+                as_of_date=as_of_date,
+            )
         base = btc_df.lazy().select(
             pl.col(DATE_COL),
             pl.col("price_usd").cast(pl.Float64, strict=False).alias("price_usd"),
@@ -324,4 +381,8 @@ class BRKOverlayFeatureProvider:
         ).with_columns(
             [pl.col(c).clip(-6.0, 6.0).alias(c) for c in lagged_cols]
         ).fill_null(0.0)
-        return features.select([DATE_COL, *lagged_cols])
+        return _observed_lazy(
+            features.select([DATE_COL, *lagged_cols]),
+            start_date=start_date,
+            as_of_date=as_of_date,
+        )

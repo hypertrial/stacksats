@@ -20,6 +20,13 @@ def zscore(series: pl.Series, window: int) -> pl.Series:
     return out.fill_null(0)
 
 
+def zscore_expr(expr: pl.Expr, window: int) -> pl.Expr:
+    """Compute rolling z-score as a Polars expression."""
+    mean = expr.rolling_mean(window_size=window, min_samples=window // 2)
+    std = expr.rolling_std(window_size=window, min_samples=window // 2)
+    return (expr - mean) / std
+
+
 def rolling_percentile(series: pl.Series, window: int) -> pl.Series:
     """Compute rolling percentile rank (0 to 1)."""
 
@@ -37,6 +44,22 @@ def rolling_percentile(series: pl.Series, window: int) -> pl.Series:
         window_slice = arr[start : i + 1]
         out[i] = pct_rank(window_slice)
     return pl.Series("pct", out)
+
+
+def rolling_percentile_expr(expr: pl.Expr, window: int) -> pl.Expr:
+    """Compute rolling percentile rank (0 to 1) as a Polars expression."""
+
+    def pct_rank(window_series: pl.Series) -> float:
+        values = window_series.to_numpy()
+        if len(values) < 2:
+            return 0.5
+        return float((values[-1] > values[:-1]).sum() / (len(values) - 1))
+
+    return expr.rolling_map(
+        pct_rank,
+        window_size=window,
+        min_samples=window // 4,
+    )
 
 
 def classify_mvrv_zone(
@@ -74,6 +97,26 @@ def compute_mvrv_volatility(mvrv_zscore: pl.Series, window: int) -> pl.Series:
     return pl.Series("vol", np.where(np.isnan(out), 0.5, out))
 
 
+def compute_mvrv_volatility_expr(expr: pl.Expr, window: int) -> pl.Expr:
+    """Compute rolling volatility of MVRV Z-score as a Polars expression."""
+
+    def vol_rank(window_series: pl.Series) -> float:
+        values = window_series.to_numpy()
+        if len(values) <= 1:
+            return 0.5
+        rank = (values[-1] > values[:-1]).sum() / (len(values) - 1)
+        return float(rank)
+
+    vol_expr = expr.rolling_std(window_size=window, min_samples=window // 4).fill_null(
+        float("nan")
+    )
+    return vol_expr.rolling_map(
+        vol_rank,
+        window_size=window * 4,
+        min_samples=window,
+    )
+
+
 def compute_signal_confidence(
     mvrv_zscore: np.ndarray,
     mvrv_percentile: np.ndarray,
@@ -96,6 +139,31 @@ def compute_signal_confidence(
     agreement = 1.0 - np.clip(signal_std / 1.0, 0, 1)
     confidence = agreement * 0.7 + gradient_alignment * 0.3
     return np.clip(confidence, 0, 1)
+
+
+def compute_signal_confidence_expr(
+    mvrv_zscore: pl.Expr,
+    mvrv_percentile: pl.Expr,
+    mvrv_gradient: pl.Expr,
+    price_vs_ma: pl.Expr,
+) -> pl.Expr:
+    """Compute confidence score based on signal agreement as a Polars expression."""
+    z_signal = -mvrv_zscore / 4.0
+    pct_signal = (0.5 - mvrv_percentile) * 2.0
+    ma_signal = -price_vs_ma
+    gradient_alignment = (
+        pl.when(z_signal < 0.0)
+        .then(pl.when(mvrv_gradient > 0.0).then(1.0).otherwise(0.5))
+        .otherwise(pl.when(mvrv_gradient < 0.0).then(1.0).otherwise(0.5))
+    )
+    signal_mean = (z_signal + pct_signal + ma_signal) / 3.0
+    variance = (
+        ((z_signal - signal_mean) ** 2)
+        + ((pct_signal - signal_mean) ** 2)
+        + ((ma_signal - signal_mean) ** 2)
+    ) / 3.0
+    agreement = 1.0 - variance.sqrt().clip(0.0, 1.0)
+    return (agreement * 0.7 + gradient_alignment * 0.3).clip(0.0, 1.0)
 
 
 def compute_asymmetric_extreme_boost(

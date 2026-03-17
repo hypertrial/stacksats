@@ -129,6 +129,7 @@ df = load_data(
 - no synthetic "today" row creation
 - no historical date gap filling
 - no MVRV fallback substitution
+- runtime parquet scans are lazy-first; use `BTCDataProvider.load_lazy(...)` or `ColumnMapDataProvider.load_lazy(...)` if you need a `pl.LazyFrame` before the final eager collection boundary
 - canonical source dataset is `merged_metrics*.parquet` (long-format), and runtime consumes a derived BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`
 
 ### 7) Strategy contract hardening

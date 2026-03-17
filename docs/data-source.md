@@ -56,10 +56,15 @@ Runtime APIs are strict and deterministic:
 - managed default path when env var is unset: `~/.stacksats/data/bitcoin_analytics.parquet`
 - legacy local fallback path: `./bitcoin_analytics.parquet`
 - runtime does not auto-download data
+- runtime parquet ingestion is lazy-first (`scan_parquet`) and only collects once the eager execution boundary needs a concrete frame
 - framework loaders retain pre-start history by default for feature warmup; scoring windows still respect requested start/end bounds
 
 Runtime expects a BRK-wide parquet (for example columns like `date`, `price_usd`,
 `mvrv`, and optional overlay features).
+
+Framework-owned feature materialization is also lazy-first. Providers compose
+Polars `LazyFrame` pipelines and the runner/registry collect once after joining
+the observed feature set for eager strategy execution.
 
 That BRK-wide parquet is a derived artifact from canonical `merged_metrics`.
 

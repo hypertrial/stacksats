@@ -5,6 +5,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from stacksats.data_btc import BTCDataProvider, DataLoadError
 
@@ -55,6 +56,22 @@ def test_load_success_from_parquet(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert str(df["date"].max())[:10] == "2024-01-05"
     last_row = df.sort("date").tail(1)
     assert last_row.height == 1 and float(last_row["price_usd"][0]) > 0.0
+
+
+def test_load_lazy_matches_eager_from_parquet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pq_path = tmp_path / "bitcoin_analytics.parquet"
+    _create_parquet_fixture(pq_path, start="2023-12-29", days=8)
+    monkeypatch.setenv("STACKSATS_ANALYTICS_PARQUET", str(pq_path))
+    provider = BTCDataProvider(clock=lambda: dt.datetime(2024, 1, 5))
+
+    eager = provider.load(backtest_start="2024-01-01", end_date="2024-01-05")
+    lazy = provider.load_lazy(backtest_start="2024-01-01", end_date="2024-01-05")
+
+    assert isinstance(lazy, pl.LazyFrame)
+    assert_frame_equal(eager, lazy.collect(), check_dtypes=False)
 
 
 def test_load_includes_pre_start_history_for_warmup_by_default(

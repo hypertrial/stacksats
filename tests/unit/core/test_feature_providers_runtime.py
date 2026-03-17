@@ -3,6 +3,8 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import polars as pl
+from polars.testing import assert_frame_equal
 
 from stacksats.feature_providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
 from tests.test_helpers import btc_frame
@@ -96,6 +98,28 @@ def test_core_provider_materialize_respects_observed_window() -> None:
     assert features["date"][-1] == dates[30]
 
 
+def test_core_provider_materialize_lazy_matches_eager() -> None:
+    provider = CoreModelFeatureProvider()
+    btc_df = _btc_frame()
+    dates = btc_df["date"].to_list()
+
+    eager = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[60],
+    )
+    lazy = provider.materialize_lazy(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[60],
+    )
+
+    assert isinstance(lazy, pl.LazyFrame)
+    assert_frame_equal(eager, lazy.collect(), check_dtypes=False)
+
+
 def test_overlay_provider_cache_invalidates_after_optional_source_change() -> None:
     provider = BRKOverlayFeatureProvider()
     btc_df = _btc_frame().with_columns(
@@ -143,3 +167,25 @@ def test_overlay_provider_materialize_respects_observed_window() -> None:
 
     assert features["date"][0] == dates[20]
     assert features["date"][-1] == dates[30]
+
+
+def test_overlay_provider_materialize_lazy_matches_eager() -> None:
+    provider = BRKOverlayFeatureProvider()
+    btc_df = _btc_frame()
+    dates = btc_df["date"].to_list()
+
+    eager = provider.materialize(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[60],
+    )
+    lazy = provider.materialize_lazy(
+        btc_df,
+        start_date=dates[20],
+        end_date=dates[-1],
+        as_of_date=dates[60],
+    )
+
+    assert isinstance(lazy, pl.LazyFrame)
+    assert_frame_equal(eager, lazy.collect(), check_dtypes=False)
