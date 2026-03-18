@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 from stacksats import cli
 
@@ -69,3 +70,35 @@ def test_cli_reconcile_daily_path_prints_payload(monkeypatch, capsys) -> None:
     assert code == 0
     out = capsys.readouterr().out
     assert json.loads(out) == {"status": "ok", "reconciled": True}
+
+
+def test_run_lifecycle_command_unsupported_raises() -> None:
+    """_run_lifecycle_command with unsupported command raises ValueError."""
+    from stacksats.runner import StrategyRunner
+
+    parser = cli._build_parser()
+    args = parser.parse_args(
+        ["strategy", "validate", "--strategy", "stacksats.strategies.examples:SimpleZScoreStrategy"]
+    )
+    with pytest.raises(ValueError, match="Unsupported lifecycle command"):
+        cli._run_lifecycle_command("unsupported", args, StrategyRunner())
+
+
+def test_cli_data_unsupported_command_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """data command with unsupported subcommand triggers parser.error."""
+    original_build = cli._build_parser
+
+    def _build_parser_with_unsupported():
+        parser = original_build()
+        for action in parser._actions:
+            if hasattr(action, "choices") and action.choices and "data" in action.choices:
+                data_parser = action.choices["data"]
+                for sub in data_parser._actions:
+                    if hasattr(sub, "choices") and sub.choices is not None:
+                        sub.add_parser("unsupported", help="hidden")
+                        break
+                break
+        return parser
+    monkeypatch.setattr(cli, "_build_parser", _build_parser_with_unsupported)
+    with pytest.raises(SystemExit):
+        cli.run(["data", "unsupported"])

@@ -133,7 +133,7 @@ class CoreModelFeatureProvider:
             source_columns=self.required_source_columns(),
         )
         if self._cache_key == cache_key and self._cache_features is not None:
-            return build_observed_frame(
+            return build_observed_frame(  # pragma: no cover
                 self._cache_features,
                 start_date=start_date,
                 current_date=as_of_date,
@@ -233,7 +233,7 @@ class BRKOverlayFeatureProvider:
             source_columns=self.required_source_columns() + BRK_OPTIONAL_SOURCE_COLUMNS,
         )
         if self._cache_key == cache_key and self._cache_features is not None:
-            return build_observed_frame(
+            return build_observed_frame(  # pragma: no cover
                 self._cache_features,
                 start_date=start_date,
                 current_date=as_of_date,

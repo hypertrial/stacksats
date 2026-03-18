@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Added
+- `ValidationResult.strategy_id` for identification of the validated strategy.
+
+### Fixed
+- Added `*,cover` to `.gitignore` so coverage annotate output (`module.py,cover`) is ignored.
+
 ## [0.8.2] - 2026-03-17
 
 ### Added

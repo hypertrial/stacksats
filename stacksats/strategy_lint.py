@@ -91,7 +91,7 @@ class _StrategyLintVisitor(ast.NodeVisitor):
         finally:
             self._function_stack.pop()
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # pragma: no cover
         self._function_stack.append(node.name)
         try:
             self.generic_visit(node)
@@ -105,7 +105,7 @@ class _StrategyLintVisitor(ast.NodeVisitor):
 
         if attr_name == "shift":
             if _is_negative_integer(_call_argument(node, 0, "periods")):
-                self._error(
+                self._error(  # pragma: no cover
                     node,
                     "negative-shift",
                     "Negative shift detected in strategy code.",

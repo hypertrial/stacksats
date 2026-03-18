@@ -36,6 +36,7 @@ def _span_end(start_date):
         start_date = dt.datetime.strptime(start_date[:10], "%Y-%m-%d")
     return start_date + dt.timedelta(days=ALLOCATION_SPAN_DAYS - 1)
 
+
 # Check if pytest-benchmark is available
 try:
     import pytest_benchmark  # noqa: F401
@@ -60,19 +61,20 @@ requires_benchmark = pytest.mark.skipif(
 def benchmark_btc_df():
     """Create BTC price data for benchmarking."""
     dates = pl.datetime_range(
-        dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
-        interval="1d", eager=True
+        dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31), interval="1d", eager=True
     ).to_list()
     np.random.seed(42)
     base_price = 10000
     returns = np.random.normal(0.001, 0.03, len(dates))
     prices = base_price * np.exp(np.cumsum(returns))
 
-    df = pl.DataFrame({
-        "date": dates,
-        "price_usd": prices,
-        "PriceUSD": prices,
-    })
+    df = pl.DataFrame(
+        {
+            "date": dates,
+            "price_usd": prices,
+            "PriceUSD": prices,
+        }
+    )
     return df
 
 
@@ -269,6 +271,7 @@ class TestBatchProcessingBenchmark:
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.performance
 class TestPerformanceThresholds:
     """Tests that verify performance meets minimum thresholds.
 
@@ -279,18 +282,22 @@ class TestPerformanceThresholds:
     def perf_btc_df(self):
         """Create BTC price data for performance tests."""
         dates = pl.datetime_range(
-            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
-            interval="1d", eager=True
+            dt.datetime(2020, 1, 1),
+            dt.datetime(2025, 12, 31),
+            interval="1d",
+            eager=True,
         ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-        return pl.DataFrame({
-            "date": dates,
-            "price_usd": prices,
-            "PriceUSD": prices,
-        })
+        return pl.DataFrame(
+            {
+                "date": dates,
+                "price_usd": prices,
+                "PriceUSD": prices,
+            }
+        )
 
     @pytest.fixture
     def perf_features_df(self, perf_btc_df):
@@ -374,18 +381,22 @@ class TestMemoryUsage:
     def mem_btc_df(self):
         """Create BTC price data for memory tests."""
         dates = pl.datetime_range(
-            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
-            interval="1d", eager=True
+            dt.datetime(2020, 1, 1),
+            dt.datetime(2025, 12, 31),
+            interval="1d",
+            eager=True,
         ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-        return pl.DataFrame({
-            "date": dates,
-            "price_usd": prices,
-            "PriceUSD": prices,
-        })
+        return pl.DataFrame(
+            {
+                "date": dates,
+                "price_usd": prices,
+                "PriceUSD": prices,
+            }
+        )
 
     @pytest.fixture
     def mem_features_df(self, mem_btc_df):
@@ -413,7 +424,9 @@ class TestMemoryUsage:
         memory_kb = weights.estimated_size() / 1024
 
         # Should be less than 10KB for 1 year
-        assert memory_kb < 10, f"Weights DataFrame uses {memory_kb:.1f}KB, expected < 10KB"
+        assert memory_kb < 10, (
+            f"Weights DataFrame uses {memory_kb:.1f}KB, expected < 10KB"
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -429,18 +442,22 @@ class TestScaling:
     def scale_btc_df(self):
         """Create BTC price data for scaling tests."""
         dates = pl.datetime_range(
-            dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31),
-            interval="1d", eager=True
+            dt.datetime(2020, 1, 1),
+            dt.datetime(2025, 12, 31),
+            interval="1d",
+            eager=True,
         ).to_list()
         np.random.seed(42)
         base_price = 10000
         returns = np.random.normal(0.001, 0.03, len(dates))
         prices = base_price * np.exp(np.cumsum(returns))
-        return pl.DataFrame({
-            "date": dates,
-            "price_usd": prices,
-            "PriceUSD": prices,
-        })
+        return pl.DataFrame(
+            {
+                "date": dates,
+                "price_usd": prices,
+                "PriceUSD": prices,
+            }
+        )
 
     @pytest.fixture
     def scale_features_df(self, scale_btc_df):

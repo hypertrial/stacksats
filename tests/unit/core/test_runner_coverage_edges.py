@@ -37,6 +37,114 @@ def _uniform_weights(ctx: StrategyContext) -> pl.DataFrame:
     return pl.DataFrame({"date": dates, "weight": np.full(len(dates), 1.0 / len(dates), dtype=float)})
 
 
+def test_framework_backtest_adapter_empty_window_returns_empty_weights() -> None:
+    """Adapter returns empty weights when df_window is empty."""
+    from stacksats.runner import _FrameworkBacktestAdapter
+
+    runner = StrategyRunner()
+    strategy = _UniformStrategy()
+    btc = _btc_df(days=400)
+    adapter = _FrameworkBacktestAdapter(runner, strategy, btc_df=btc)
+    empty = pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+    result = adapter(pl.DataFrame())
+    assert result.equals(empty)
+
+
+def test_framework_backtest_adapter_batch_all_windows_skipped_returns_empty_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch returns empty schema when all windows hit continue (height mismatch or empty weights)."""
+    from stacksats.runner import _FrameworkBacktestAdapter
+    from stacksats.runner_helpers import build_window_bounds, build_window_index
+
+    runner = StrategyRunner()
+    strategy = _UniformStrategy()
+    btc = _btc_df(days=400)
+    adapter = _FrameworkBacktestAdapter(runner, strategy, btc_df=btc)
+
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 20),
+        interval="1d",
+        eager=True,
+    )
+    full_feat = pl.DataFrame({"date": dates, "price_usd": [10000.0] * len(dates)})
+    _, feature_plan = build_window_index(full_feat)
+
+    windows_df = pl.DataFrame({
+        "window_start": [dates[0], dates[5], dates[0]],
+        "window_end": [dates[3], dates[8], dates[4]],
+    })
+    windows = build_window_bounds(
+        feature_plan,
+        windows_df,
+        expected_days=5,
+        prefix="feature",
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_compute_window_weights",
+        lambda *args, **kwargs: pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
+    )
+    result = adapter._compute_window_weights_batch(
+        full_feat,
+        feature_plan=feature_plan,
+        windows=windows,
+        expected_days=5,
+    )
+    assert result.is_empty()
+    assert result.schema == {
+        "window_start": pl.Datetime("us"),
+        "window_end": pl.Datetime("us"),
+        "date": pl.Datetime("us"),
+        "weight": pl.Float64,
+    }
+
+
+def test_framework_backtest_adapter_batch_uses_slice_window_or_filter_when_can_slice_false() -> None:
+    """Batch calls slice_window_or_filter when feature_can_slice is False.
+
+    Use frame with date gaps so the slice length mismatches expected_days (can_slice=False),
+    but the filter returns exactly expected_days rows.
+    """
+    from stacksats.runner import _FrameworkBacktestAdapter
+    from stacksats.runner_helpers import build_window_bounds, build_window_index
+
+    runner = StrategyRunner()
+    strategy = _UniformStrategy()
+    btc = _btc_df(days=400)
+    adapter = _FrameworkBacktestAdapter(runner, strategy, btc_df=btc)
+
+    dates = pl.datetime_range(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 1, 10),
+        interval="1d",
+        eager=True,
+    )
+    full_feat = pl.DataFrame({"date": dates, "price_usd": [10000.0] * len(dates)})
+    _, feature_plan = build_window_index(full_feat)
+
+    windows_df = pl.DataFrame({
+        "window_start": [dates[1]],
+        "window_end": [dates[5]],
+    })
+    windows = build_window_bounds(
+        feature_plan,
+        windows_df,
+        expected_days=3,
+        prefix="feature",
+    )
+    assert windows["feature_can_slice"][0] is False
+    result = adapter._compute_window_weights_batch(
+        full_feat,
+        feature_plan=feature_plan,
+        windows=windows,
+        expected_days=5,
+    )
+    assert result.height == 5
+    assert result["weight"].sum() == pytest.approx(1.0)
+
+
 def test_weights_match_returns_false_when_dates_differ() -> None:
     lhs = pl.DataFrame(
         {

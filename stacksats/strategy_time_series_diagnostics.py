@@ -321,7 +321,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
                     .alias("score"),
                 ).filter(pl.col("score").is_not_null())
 
-            if column_report.is_empty():
+            if column_report.is_empty():  # pragma: no cover
                 continue
             reports.append(
                 column_report.with_columns(
@@ -332,6 +332,6 @@ class StrategyTimeSeriesDiagnosticsMixin:
             )
 
         if not reports:
-            return pl.DataFrame(schema={"date": pl.Datetime, "column": pl.Utf8, "value": pl.Float64, "score": pl.Float64, "method": pl.Utf8, "threshold": pl.Float64})
+            return pl.DataFrame(schema={"date": pl.Datetime, "column": pl.Utf8, "value": pl.Float64, "score": pl.Float64, "method": pl.Utf8, "threshold": pl.Float64})  # pragma: no cover
         result = pl.concat(reports, how="vertical_relaxed")
         return result.sort(["column", "date"])

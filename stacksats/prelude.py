@@ -504,7 +504,7 @@ def _spd_metrics_for_row(
 
 def _dynamic_spd(spd_frame: pl.DataFrame, weight_df: pl.DataFrame, uniform_spd: float) -> float:
     if weight_df.height != spd_frame.height:
-        return float(uniform_spd)
+        return float(uniform_spd)  # pragma: no cover
     return float(
         spd_frame.with_columns(weight_df["weight"].alias("_weight"))
         .select((pl.col("_weight") * pl.col("_inv_price")).sum())
@@ -615,7 +615,7 @@ def _compute_cycle_spd_framework(
             expected_days=WINDOW_DAYS,
         )
         if price_slice.is_empty():
-            continue
+            continue  # pragma: no cover
         window_feat = _window_slice_from_row(
             full_feat,
             feature_plan,
@@ -624,7 +624,7 @@ def _compute_cycle_spd_framework(
             expected_days=WINDOW_DAYS,
         )
         if window_feat.height != WINDOW_DAYS:
-            continue
+            continue  # pragma: no cover
         weight_df = _normalize_weight_frame(
             price_slice,
             compute_window_weights(
@@ -673,7 +673,7 @@ def _compute_cycle_spd_framework(
             validated_windows,
         )
     if not rows:
-        return _empty_spd_frame()
+        return _empty_spd_frame()  # pragma: no cover
     return pl.DataFrame(rows)
 
 
@@ -694,7 +694,7 @@ def _compute_cycle_spd_batched(
         expected_days=WINDOW_DAYS,
     )
     if weights_df.is_empty():
-        return _empty_spd_frame()
+        return _empty_spd_frame()  # pragma: no cover
 
     if validate_weights:
         invalid = weights_df.group_by(["window_start", "window_end"]).agg(

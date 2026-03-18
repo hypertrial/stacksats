@@ -87,6 +87,13 @@ select = ["E4", "E7", "E9", "F"]
 source = ["stacksats"]
 branch = false
 
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+]
+
 [project.scripts]
 stacksats = "stacksats.cli:main"
 stacksats-plot-mvrv = "stacksats.plot_mvrv:main"

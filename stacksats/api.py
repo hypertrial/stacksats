@@ -186,6 +186,7 @@ class ValidationResult:
     win_rate: float
     win_rate_ok: bool
     messages: list[str]
+    strategy_id: str = ""
     min_win_rate: float = 50.0
     diagnostics: dict[str, object] = field(default_factory=dict)
 

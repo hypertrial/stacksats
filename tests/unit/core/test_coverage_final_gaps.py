@@ -197,6 +197,75 @@ def test_compute_cycle_spd_skips_when_generated_window_start_is_past_end(
     assert skipped.is_empty()
 
 
+def test_prelude_make_window_label() -> None:
+    """_make_window_label formats window label."""
+    from stacksats.prelude import _make_window_label
+
+    label = _make_window_label(
+        dt.datetime(2024, 1, 1),
+        dt.datetime(2024, 12, 31),
+    )
+    assert label == "2024-01-01 → 2024-12-31"
+
+
+def test_compute_cycle_spd_price_can_slice_false_with_duplicate_dates() -> None:
+    """When price_plan.has_unique_dates is False, we hit the else branch (price_can_slice=False)."""
+    base_dates = [dt.datetime(2024, 1, 1) + dt.timedelta(days=i) for i in range(400)]
+    dates = base_dates + [base_dates[0], base_dates[1]]
+    btc = pl.DataFrame(
+        {
+            "date": dates,
+            "price_usd": np.linspace(100.0, 200.0, len(dates)),
+            "mvrv": np.linspace(1.0, 2.0, len(dates)),
+        }
+    )
+    result = prelude_module.compute_cycle_spd(
+        btc,
+        _uniform_window_weights,
+        start_date="2024-01-01",
+        end_date="2025-01-05",
+        validate_weights=True,
+    )
+    assert result.height >= 1
+
+
+def test_compute_cycle_spd_batched_validation_failure() -> None:
+    """Batched strategy returning invalid weight sums raises ValueError."""
+    btc = _sample_cycle_btc_frame()
+
+    class BadBatchStrategy:
+        def _compute_window_weights_batch(
+            self, full_feat, *, feature_plan, windows, expected_days
+        ):
+            rows = []
+            for i in range(min(2, windows.height)):
+                w_start = windows["window_start"][i]
+                w_end = windows["window_end"][i]
+                dates = pl.datetime_range(w_start, w_end, interval="1d", eager=True)
+                n = len(dates)
+                weights = [2.0] + [0.0] * (n - 1)
+                rows.append(
+                    pl.DataFrame(
+                        {
+                            "window_start": [w_start] * n,
+                            "window_end": [w_end] * n,
+                            "date": dates,
+                            "weight": weights,
+                        }
+                    )
+                )
+            return pl.concat(rows, how="vertical_relaxed") if rows else pl.DataFrame()
+
+    with pytest.raises(ValueError, match="Batched framework weights failed sum validation"):
+        prelude_module.compute_cycle_spd(
+            btc,
+            BadBatchStrategy(),
+            start_date="2024-01-01",
+            end_date="2025-01-05",
+            validate_weights=True,
+        )
+
+
 def test_compute_cycle_spd_falls_back_to_uniform_when_weights_are_misaligned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

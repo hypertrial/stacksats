@@ -484,6 +484,9 @@ def test_animation_data_edges(tmp_path: Path) -> None:
         _extract_window_bounds("2024-01-01")
     with pytest.raises(ValueError, match="Invalid window label"):
         _extract_window_bounds("2024-01-01 → ")
+    start, end = _extract_window_bounds("2024-01-01 → 2024-12-31")
+    assert start == dt.datetime(2024, 1, 1)
+    assert end == dt.datetime(2024, 12, 31)
     with pytest.raises(ValueError, match="window' or 'index'"):
         _normalize_spd_frame(pl.DataFrame({"x": [1.0]}))
     with pytest.raises(ValueError, match="no valid numeric values"):

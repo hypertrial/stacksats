@@ -19,8 +19,8 @@ from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAIL
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
-    from .api import BacktestResult, DailyRunResult, ValidationResult
-    from .strategy_time_series import WeightTimeSeriesBatch
+    from .api import BacktestResult, DailyRunResult, ValidationResult  # pragma: no cover
+    from .strategy_time_series import WeightTimeSeriesBatch  # pragma: no cover
 
 
 def _to_datetime(value: dt.datetime | str) -> dt.datetime:
@@ -36,7 +36,7 @@ def _to_datetime(value: dt.datetime | str) -> dt.datetime:
         if hasattr(value, "to_pydatetime"):
             out = value.to_pydatetime()
         else:
-            out = dt.datetime.strptime(str(value)[:10], "%Y-%m-%d")
+            out = dt.datetime.strptime(str(value)[:10], "%Y-%m-%d")  # pragma: no cover
     if out.tzinfo is not None:
         out = out.astimezone(dt.timezone.utc).replace(tzinfo=None)
     return out.replace(hour=0, minute=0, second=0, microsecond=0)

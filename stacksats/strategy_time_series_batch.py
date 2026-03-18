@@ -18,7 +18,7 @@ from .strategy_time_series_metadata import (
 from .strategy_time_series_schema import ColumnSpec, validate_schema_specs
 
 if TYPE_CHECKING:
-    from .strategy_time_series import WeightTimeSeries
+    from .strategy_time_series import WeightTimeSeries  # pragma: no cover
 
 
 def _norm_window_dt(value: dt.datetime | str | object) -> dt.datetime:

@@ -202,6 +202,40 @@ class TestColumnMapProviderErrors:
 # ---------------------------------------------------------------------------
 
 
+class TestColumnMapProviderCoverageEdges:
+    def test_validate_required_columns_raises_when_missing(self) -> None:
+        """_validate_required_columns raises when required columns are missing."""
+        df = pl.DataFrame({"date": [dt.datetime(2024, 1, 1)], "x": [1.0]})
+        with pytest.raises(ColumnMapError, match="Required library columns are missing"):
+            ColumnMapDataProvider._validate_required_columns(df)
+
+    def test_validate_required_columns_lazy_raises_when_missing(self) -> None:
+        """_validate_required_columns_lazy raises when required columns are missing."""
+        df_lazy = pl.DataFrame({"date": [dt.datetime(2024, 1, 1)], "x": [1.0]}).lazy()
+        with pytest.raises(ColumnMapError, match="Required library columns are missing"):
+            ColumnMapDataProvider._validate_required_columns_lazy(df_lazy)
+
+    def test_to_daily_date_lazy_with_utf8_dtype(self) -> None:
+        """_to_daily_date_lazy handles pl.Utf8 date column."""
+        df = pl.DataFrame({
+            "date": ["2024-01-01", "2024-01-02"],
+            "price_usd": [100.0, 101.0],
+            "mvrv": [1.0, 1.0],
+        })
+        result = ColumnMapDataProvider._to_daily_date_lazy(df.lazy())
+        assert result.collect().height == 2
+
+    def test_to_daily_date_lazy_with_date_dtype(self) -> None:
+        """_to_daily_date_lazy handles pl.Date column."""
+        df = pl.DataFrame({
+            "date": pl.Series([dt.date(2024, 1, 1), dt.date(2024, 1, 2)]).cast(pl.Date),
+            "price_usd": [100.0, 101.0],
+            "mvrv": [1.0, 1.0],
+        })
+        result = ColumnMapDataProvider._to_daily_date_lazy(df.lazy())
+        assert result.collect().height == 2
+
+
 class TestStrategyRunnerFromDataframe:
     def test_from_dataframe_returns_strategy_runner_instance(self) -> None:
         """from_dataframe returns a StrategyRunner configured with ColumnMapDataProvider."""

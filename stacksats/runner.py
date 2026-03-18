@@ -680,6 +680,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 win_rate=0.0,
                 win_rate_ok=False,
                 messages=[str(exc)],
+                strategy_id=strategy.strategy_id,
                 min_win_rate=float(config.min_win_rate),
                 diagnostics={},
             )
@@ -718,6 +719,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 win_rate=0.0,
                 win_rate_ok=False,
                 messages=["No data available in the requested date range."],
+                strategy_id=strategy.strategy_id,
                 min_win_rate=float(config.min_win_rate),
                 diagnostics={},
             )
@@ -840,6 +842,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             state.diagnostics = dict(state.diagnostics or {})
             state.diagnostics["hot_path_profile"] = cache.profile.to_dict()
 
+            metadata = strategy.metadata()
             return ValidationResult(
                 passed=state.forward_leakage_ok
                 and state.weight_constraints_ok
@@ -850,6 +853,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 win_rate=float(backtest_result.win_rate),
                 win_rate_ok=win_rate_ok,
                 messages=state.messages,
+                strategy_id=metadata.strategy_id,
                 min_win_rate=float(config.min_win_rate),
                 diagnostics=state.diagnostics or {},
             )

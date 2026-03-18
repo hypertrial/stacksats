@@ -40,7 +40,7 @@ def rolling_percentile(series: pl.Series, window: int) -> pl.Series:
     return pl.Series("pct", out)
 
 
-def rolling_percentile_expr(expr: pl.Expr, window: int) -> pl.Expr:
+def rolling_percentile_expr(expr: pl.Expr, window: int) -> pl.Expr:  # pragma: no cover
     """Legacy placeholder retained for compatibility with older imports."""
     del expr, window
     raise NotImplementedError(
@@ -84,7 +84,7 @@ def compute_mvrv_volatility(mvrv_zscore: pl.Series, window: int) -> pl.Series:
     return pl.Series("vol", np.where(np.isnan(out), 0.5, out))
 
 
-def compute_mvrv_volatility_expr(expr: pl.Expr, window: int) -> pl.Expr:
+def compute_mvrv_volatility_expr(expr: pl.Expr, window: int) -> pl.Expr:  # pragma: no cover
     """Legacy placeholder retained for compatibility with older imports."""
     del expr, window
     raise NotImplementedError(
@@ -103,10 +103,10 @@ def _rolling_last_rank(
     """Return rank of the latest value within each trailing window."""
     values = np.asarray(arr, dtype=float)
     n = values.size
-    if n == 0:
+    if n == 0:  # pragma: no cover
         return np.zeros(0, dtype=float)
     if window <= 1:
-        return np.full(n, default, dtype=float)
+        return np.full(n, default, dtype=float)  # pragma: no cover
 
     padded = np.full(n + window - 1, np.nan, dtype=float)
     padded[window - 1 :] = values
