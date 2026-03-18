@@ -43,6 +43,19 @@ class UniformBaseStrategy(BaseStrategy):
         )
 
 
+class LazyUniformBaseStrategy(BaseStrategy):
+    strategy_id = "test-uniform-lazy"
+    version = "1.0.0"
+
+    def build_target_profile_lazy(
+        self,
+        ctx,
+        features_lf: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        del ctx
+        return features_lf.select("date", pl.lit(1.0).alias("value"))
+
+
 class BadStrategy(BaseStrategy):
     strategy_id = "bad"
     version = "1.0.0"
@@ -96,6 +109,41 @@ def test_runner_raises_profile_validation_error() -> None:
             BacktestConfig(start_date="2022-01-01", end_date="2024-01-01"),
             btc_df=_btc_df(),
         )
+
+
+@pytest.mark.slow
+def test_runner_backtest_lazy_profile_matches_eager_uniform() -> None:
+    runner = StrategyRunner()
+    btc_df = _btc_df()
+    eager = runner.backtest(
+        UniformBaseStrategy(),
+        BacktestConfig(start_date="2022-01-01", end_date="2024-01-01"),
+        btc_df=btc_df,
+    )
+    lazy = runner.backtest(
+        LazyUniformBaseStrategy(),
+        BacktestConfig(start_date="2022-01-01", end_date="2024-01-01"),
+        btc_df=btc_df,
+    )
+
+    assert eager.spd_table.equals(lazy.spd_table)
+
+
+@pytest.mark.slow
+def test_runner_validate_supports_lazy_profile_strategies() -> None:
+    runner = StrategyRunner()
+    result = runner.validate(
+        LazyUniformBaseStrategy(),
+        ValidationConfig(
+            start_date="2022-01-01",
+            end_date="2024-01-01",
+            min_win_rate=0.0,
+        ),
+        btc_df=_btc_df(),
+    )
+
+    assert result.passed is True
+    assert result.strategy_id == "test-uniform-lazy"
 
 
 def test_runner_validate_empty_range_returns_failure_result() -> None:

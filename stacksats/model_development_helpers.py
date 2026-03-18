@@ -29,36 +29,23 @@ def zscore_expr(expr: pl.Expr, window: int) -> pl.Expr:
 
 def rolling_percentile(series: pl.Series, window: int) -> pl.Series:
     """Compute rolling percentile rank (0 to 1)."""
-
-    def pct_rank(x: np.ndarray) -> float:
-        if len(x) < 2:
-            return 0.5
-        rank = (x[-1] > x[:-1]).sum() / (len(x) - 1)
-        return float(rank)
-
     arr = series.to_numpy()
-    out = np.full(len(arr), 0.5)
-    min_periods = window // 4
-    for i in range(min_periods - 1, len(arr)):
-        start = max(0, i - window + 1)
-        window_slice = arr[start : i + 1]
-        out[i] = pct_rank(window_slice)
+    min_periods = max(1, window // 4)
+    out = _rolling_last_rank(
+        arr,
+        window=window,
+        min_periods=min_periods,
+        default=0.5,
+    )
     return pl.Series("pct", out)
 
 
 def rolling_percentile_expr(expr: pl.Expr, window: int) -> pl.Expr:
-    """Compute rolling percentile rank (0 to 1) as a Polars expression."""
-
-    def pct_rank(window_series: pl.Series) -> float:
-        values = window_series.to_numpy()
-        if len(values) < 2:
-            return 0.5
-        return float((values[-1] > values[:-1]).sum() / (len(values) - 1))
-
-    return expr.rolling_map(
-        pct_rank,
-        window_size=window,
-        min_samples=window // 4,
+    """Legacy placeholder retained for compatibility with older imports."""
+    del expr, window
+    raise NotImplementedError(
+        "rolling_percentile_expr is no longer supported in hot paths; "
+        "materialize the series and call rolling_percentile(...) instead."
     )
 
 
@@ -87,34 +74,52 @@ def compute_mvrv_volatility(mvrv_zscore: pl.Series, window: int) -> pl.Series:
     """Compute rolling volatility of MVRV Z-score."""
     vol = mvrv_zscore.rolling_std(window_size=window, min_samples=window // 4)
     arr = vol.to_numpy()
-    rank_window = window * 4
-    out = np.full(len(arr), 0.5)
-    for i in range(window - 1, len(arr)):
-        start = max(0, i - rank_window + 1)
-        window_slice = arr[start : i + 1]
-        if len(window_slice) > 1:
-            out[i] = (window_slice[-1] > window_slice[:-1]).sum() / (len(window_slice) - 1)
+    rank_window = max(1, window * 4)
+    out = _rolling_last_rank(
+        arr,
+        window=rank_window,
+        min_periods=max(1, window),
+        default=0.5,
+    )
     return pl.Series("vol", np.where(np.isnan(out), 0.5, out))
 
 
 def compute_mvrv_volatility_expr(expr: pl.Expr, window: int) -> pl.Expr:
-    """Compute rolling volatility of MVRV Z-score as a Polars expression."""
-
-    def vol_rank(window_series: pl.Series) -> float:
-        values = window_series.to_numpy()
-        if len(values) <= 1:
-            return 0.5
-        rank = (values[-1] > values[:-1]).sum() / (len(values) - 1)
-        return float(rank)
-
-    vol_expr = expr.rolling_std(window_size=window, min_samples=window // 4).fill_null(
-        float("nan")
+    """Legacy placeholder retained for compatibility with older imports."""
+    del expr, window
+    raise NotImplementedError(
+        "compute_mvrv_volatility_expr is no longer supported in hot paths; "
+        "materialize the series and call compute_mvrv_volatility(...) instead."
     )
-    return vol_expr.rolling_map(
-        vol_rank,
-        window_size=window * 4,
-        min_samples=window,
-    )
+
+
+def _rolling_last_rank(
+    arr: np.ndarray,
+    *,
+    window: int,
+    min_periods: int,
+    default: float,
+) -> np.ndarray:
+    """Return rank of the latest value within each trailing window."""
+    values = np.asarray(arr, dtype=float)
+    n = values.size
+    if n == 0:
+        return np.zeros(0, dtype=float)
+    if window <= 1:
+        return np.full(n, default, dtype=float)
+
+    padded = np.full(n + window - 1, np.nan, dtype=float)
+    padded[window - 1 :] = values
+    windows = np.lib.stride_tricks.sliding_window_view(padded, window)
+    current = windows[:, -1]
+    prior = windows[:, :-1]
+    valid_prior = np.isfinite(prior)
+    denom = valid_prior.sum(axis=1)
+    wins = ((current[:, None] > prior) & valid_prior).sum(axis=1)
+    out = np.full(n, float(default), dtype=float)
+    eligible = (np.arange(n) >= (max(min_periods, 1) - 1)) & (denom > 0) & np.isfinite(current)
+    out[eligible] = wins[eligible] / denom[eligible]
+    return out
 
 
 def compute_signal_confidence(

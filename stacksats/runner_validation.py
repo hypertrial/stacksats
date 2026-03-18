@@ -39,6 +39,7 @@ from .strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,
+    StrategyLazyContext,
     TargetProfile,
     ValidationConfig,
     strategy_context_from_features_df,
@@ -257,11 +258,29 @@ class StrategyRunnerValidationMixin:
                 cache.feature_frames[cache_key] = frame.clone()
         return frame
 
+    def _materialize_strategy_features_lazy(
+        self,
+        strategy: BaseStrategy,
+        btc_df: pl.DataFrame,
+        *,
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> pl.LazyFrame:
+        return self.FEATURE_REGISTRY.materialize_for_strategy_lazy(
+            strategy,
+            btc_df,
+            start_date=start_date,
+            end_date=end_date,
+            current_date=current_date,
+        )
+
     def _compute_strategy_weights(
         self,
         strategy: BaseStrategy,
         *,
         features_df: pl.DataFrame,
+        btc_df: pl.DataFrame | None = None,
         start_date: dt.datetime,
         end_date: dt.datetime,
         current_date: dt.datetime,
@@ -281,6 +300,43 @@ class StrategyRunnerValidationMixin:
             if cached is not None:
                 cache.profile.compute_weights_cache_hits += 1
                 return cached.clone(), False
+
+        if (
+            btc_df is not None
+            and strategy.intent_mode() == "profile"
+            and strategy.__class__.build_target_profile_lazy
+            is not BaseStrategy.build_target_profile_lazy
+        ):
+            observed_end = current_date if current_date <= end_date else end_date
+            date_range = pl.datetime_range(
+                start_date,
+                observed_end,
+                interval="1d",
+                eager=True,
+            )
+            lazy_ctx = StrategyLazyContext(
+                start_date=start_date,
+                end_date=end_date,
+                current_date=current_date,
+                locked_weights=None,
+            )
+            features_lf = self._materialize_strategy_features_lazy(
+                strategy,
+                btc_df,
+                start_date=start_date,
+                end_date=end_date,
+                current_date=current_date,
+            )
+            weights = strategy._compute_weights_lazy_profile_from_features_lf(
+                lazy_ctx,
+                features_lf,
+                date_range=date_range,
+            )
+            if cache is not None:
+                cache.profile.compute_weights_calls += 1
+                if cache_key is not None:
+                    cache.weight_frames[cache_key] = weights.clone()
+            return weights, False
 
         ctx = strategy_context_from_features_df(
             features_df,
@@ -508,9 +564,19 @@ class StrategyRunnerValidationMixin:
     ) -> tuple[pl.DataFrame, bool]:
         # Use ctx.features_df so mutation during profile build is detected.
         before = self._frame_signature(ctx.features_df) if strict_mode else ()
-        profile_features = strategy.transform_features(ctx)
-        profile_signals = strategy.build_signals(ctx, profile_features)
-        profile = strategy.build_target_profile(ctx, profile_features, profile_signals)
+        if (
+            strategy.intent_mode() == "profile"
+            and strategy.__class__.build_target_profile_lazy
+            is not BaseStrategy.build_target_profile_lazy
+        ):
+            _, profile = strategy._resolve_lazy_target_profile(
+                StrategyLazyContext.from_strategy_context(ctx),
+                ctx.features_df.lazy(),
+            )
+        else:
+            profile_features = strategy.transform_features(ctx)
+            profile_signals = strategy.build_signals(ctx, profile_features)
+            profile = strategy.build_target_profile(ctx, profile_features, profile_signals)
         after = self._frame_signature(ctx.features_df) if strict_mode else before
         return self._profile_values(profile), before != after
 
@@ -650,6 +716,7 @@ class StrategyRunnerValidationMixin:
                 full_weights, full_mutated = self._compute_strategy_weights(
                     strategy,
                     features_df=window_feat,
+                    btc_df=btc_df,
                     start_date=window_start,
                     end_date=probe_ts,
                     current_date=probe_ts,
@@ -686,6 +753,7 @@ class StrategyRunnerValidationMixin:
                 masked_weights, masked_mutated = self._compute_strategy_weights(
                     strategy,
                     features_df=masked_ctx.features.data,
+                    btc_df=masked_source,
                     start_date=window_start,
                     end_date=probe_ts,
                     current_date=probe_ts,
@@ -711,6 +779,7 @@ class StrategyRunnerValidationMixin:
                 perturbed_weights, perturbed_mutated = self._compute_strategy_weights(
                     strategy,
                     features_df=perturbed_ctx.features.data,
+                    btc_df=perturbed_source,
                     start_date=window_start,
                     end_date=probe_ts,
                     current_date=probe_ts,
@@ -879,7 +948,6 @@ class StrategyRunnerValidationMixin:
         max_window_start = end_ts - window_offset
         boundary_hits = 0
         boundary_total = 0
-        del btc_df
         try:
             if start_ts <= max_window_start:
                 features_df, feature_index = build_window_index(features_df)
@@ -902,6 +970,7 @@ class StrategyRunnerValidationMixin:
                     weights, mutated = self._compute_strategy_weights(
                         strategy,
                         features_df=window_features,
+                        btc_df=btc_df,
                         start_date=window_start,
                         end_date=window_end,
                         current_date=window_end,

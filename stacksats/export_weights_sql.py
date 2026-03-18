@@ -33,19 +33,31 @@ def prepare_copy_dataframe(df: pl.DataFrame) -> pl.DataFrame:
 
 def build_insert_rows(df: pl.DataFrame) -> list[tuple[int, object, object, object, float | None, float | None]]:
     """Build execute_values rows for INSERT fallback path."""
-    rows = []
-    for row in df.iter_rows(named=True):
-        price = row["price_usd"]
-        weight = row["weight"]
-        rows.append((
-            int(row["day_index"]),
-            row["start_date"],
-            row["end_date"],
-            row["date"],
-            float(price) if price is not None and (isinstance(price, (int, float)) or str(price) != "nan") else None,
-            float(weight) if weight is not None and (isinstance(weight, (int, float)) or str(weight) != "nan") else None,
-        ))
-    return rows
+    normalized = df.select(
+        pl.col("day_index").cast(pl.Int64).alias("day_index"),
+        "start_date",
+        "end_date",
+        "date",
+        pl.when(pl.col("price_usd").is_null() | ~pl.col("price_usd").is_finite())
+        .then(None)
+        .otherwise(pl.col("price_usd").cast(pl.Float64, strict=False))
+        .alias("price_usd"),
+        pl.when(pl.col("weight").is_null() | ~pl.col("weight").is_finite())
+        .then(None)
+        .otherwise(pl.col("weight").cast(pl.Float64, strict=False))
+        .alias("weight"),
+    )
+    return list(
+        zip(
+            normalized["day_index"].to_list(),
+            normalized["start_date"].to_list(),
+            normalized["end_date"].to_list(),
+            normalized["date"].to_list(),
+            normalized["price_usd"].to_list(),
+            normalized["weight"].to_list(),
+            strict=True,
+        )
+    )
 
 
 def build_update_rows(
@@ -54,28 +66,29 @@ def build_update_rows(
     current_btc_price: float | None,
 ) -> list[tuple]:
     """Build rows for bulk UPDATE statements."""
-    rows = []
-    for row in today_df.iter_rows(named=True):
-        weight = row["weight"]
-        weight_val = float(weight) if weight is not None and (isinstance(weight, (int, float)) or str(weight) != "nan") else None
-        if current_btc_price is not None:
-            rows.append((
-                int(row["day_index"]),
-                row["start_date"],
-                row["end_date"],
-                row["date"],
-                weight_val,
-                current_btc_price,
-            ))
-        else:
-            rows.append((
-                int(row["day_index"]),
-                row["start_date"],
-                row["end_date"],
-                row["date"],
-                weight_val,
-            ))
-    return rows
+    normalized = today_df.select(
+        pl.col("day_index").cast(pl.Int64).alias("day_index"),
+        "start_date",
+        "end_date",
+        "date",
+        pl.when(pl.col("weight").is_null() | ~pl.col("weight").is_finite())
+        .then(None)
+        .otherwise(pl.col("weight").cast(pl.Float64, strict=False))
+        .alias("weight"),
+    )
+    base_rows = list(
+        zip(
+            normalized["day_index"].to_list(),
+            normalized["start_date"].to_list(),
+            normalized["end_date"].to_list(),
+            normalized["date"].to_list(),
+            normalized["weight"].to_list(),
+            strict=True,
+        )
+    )
+    if current_btc_price is None:
+        return base_rows
+    return [row + (current_btc_price,) for row in base_rows]
 
 
 def build_values_sql(

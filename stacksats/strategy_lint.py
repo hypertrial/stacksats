@@ -27,6 +27,12 @@ _FORBIDDEN_IO_CALLS = {
     "httpx.request",
     "urllib.request.urlopen",
 }
+_LAZY_HOOK_NAMES = {
+    "transform_features_lazy",
+    "build_signal_exprs",
+    "build_target_profile_lazy",
+}
+_FORBIDDEN_LAZY_ESCAPES = {"collect", "to_numpy", "to_list", "iter_rows"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,10 +82,26 @@ def summarize_lint_findings(findings: list[StrategyLintFinding]) -> tuple[list[s
 class _StrategyLintVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.findings: list[StrategyLintFinding] = []
+        self._function_stack: list[str] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._function_stack.append(node.name)
+        try:
+            self.generic_visit(node)
+        finally:
+            self._function_stack.pop()
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._function_stack.append(node.name)
+        try:
+            self.generic_visit(node)
+        finally:
+            self._function_stack.pop()
 
     def visit_Call(self, node: ast.Call) -> None:
         attr_name = node.func.attr if isinstance(node.func, ast.Attribute) else None
         dotted_name = _attribute_name(node.func)
+        current_function = self._function_stack[-1] if self._function_stack else ""
 
         if attr_name == "shift":
             if _is_negative_integer(_call_argument(node, 0, "periods")):
@@ -110,6 +132,13 @@ class _StrategyLintVisitor(ast.NodeVisitor):
                 node,
                 "path-io",
                 f"Path-based file I/O is not allowed in strategy code: {dotted_name}.",
+            )
+
+        if current_function in _LAZY_HOOK_NAMES and attr_name in _FORBIDDEN_LAZY_ESCAPES:
+            self._error(
+                node,
+                "lazy-eager-escape",
+                f"{attr_name}(...) is not allowed inside lazy strategy hooks.",
             )
 
         if attr_name == "tail":

@@ -26,6 +26,7 @@ from .runner_validation import (
     WeightValidationError,
     _ValidationState,
 )
+from .runner_helpers import slice_window_or_filter
 from .strategy_time_series import WeightTimeSeriesBatch
 from .strategy_types import (
     BacktestConfig,
@@ -46,9 +47,16 @@ class _FrameworkBacktestAdapter:
 
     _stacksats_framework_fast_path = True
 
-    def __init__(self, runner: "StrategyRunner", strategy: BaseStrategy):
+    def __init__(
+        self,
+        runner: "StrategyRunner",
+        strategy: BaseStrategy,
+        *,
+        btc_df: pl.DataFrame | None = None,
+    ):
         self._runner = runner
         self._strategy = strategy
+        self._btc_df = btc_df
 
     @staticmethod
     def _empty_weights() -> pl.DataFrame:
@@ -69,6 +77,7 @@ class _FrameworkBacktestAdapter:
         weights, _ = self._runner._compute_strategy_weights(
             self._strategy,
             features_df=df_window,
+            btc_df=self._btc_df,
             start_date=resolved_start,
             end_date=resolved_end,
             current_date=resolved_end,
@@ -89,6 +98,72 @@ class _FrameworkBacktestAdapter:
 
     def __call__(self, df_window: pl.DataFrame) -> pl.DataFrame:
         return self._compute_window_weights(df_window)
+
+    def _compute_window_weights_batch(
+        self,
+        full_feat: pl.DataFrame,
+        *,
+        feature_plan,
+        windows: pl.DataFrame,
+        expected_days: int,
+    ) -> pl.DataFrame:
+        window_starts: list[dt.datetime] = []
+        window_ends: list[dt.datetime] = []
+        dates: list[dt.datetime] = []
+        weights_out: list[float] = []
+
+        for idx in range(windows.height):
+            row = windows.row(idx, named=True)
+            start_idx = row.get("feature_start_idx")
+            end_idx = row.get("feature_end_idx")
+            can_slice = bool(row.get("feature_can_slice", False))
+            if can_slice and start_idx is not None and end_idx is not None:
+                window_feat = full_feat.slice(
+                    int(start_idx),
+                    int(end_idx) - int(start_idx) + 1,
+                )
+            else:
+                window_feat = slice_window_or_filter(
+                    full_feat,
+                    feature_plan,
+                    row["window_start"],
+                    row["window_end"],
+                    expected_days=expected_days,
+                )
+            if window_feat.height != expected_days:
+                continue
+            weights = self._compute_window_weights(
+                window_feat,
+                window_start=row["window_start"],
+                window_end=row["window_end"],
+            )
+            if weights.is_empty():
+                continue
+            count = weights.height
+            window_starts.extend([row["window_start"]] * count)
+            window_ends.extend([row["window_end"]] * count)
+            dates.extend(weights["date"].to_list())
+            weights_out.extend(
+                weights["weight"].cast(pl.Float64, strict=False).to_list()
+            )
+
+        if not dates:
+            return pl.DataFrame(
+                schema={
+                    "window_start": pl.Datetime("us"),
+                    "window_end": pl.Datetime("us"),
+                    "date": pl.Datetime("us"),
+                    "weight": pl.Float64,
+                }
+            )
+        return pl.DataFrame(
+            {
+                "window_start": window_starts,
+                "window_end": window_ends,
+                "date": dates,
+                "weight": weights_out,
+            }
+        )
 
 
 class StrategyRunner(StrategyRunnerValidationMixin):
@@ -517,7 +592,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 cache_namespace="base-full",
             )
             if strategy.intent_mode() == "profile":
-                strategy_fn = _FrameworkBacktestAdapter(self, strategy)
+                strategy_fn = _FrameworkBacktestAdapter(self, strategy, btc_df=btc_df)
             else:
                 def strategy_fn(df_window: pl.DataFrame) -> pl.DataFrame:
                     if df_window.is_empty():
@@ -530,6 +605,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                     weights, _ = self._compute_strategy_weights(
                         strategy,
                         features_df=df_window,
+                        btc_df=btc_df,
                         start_date=window_start,
                         end_date=window_end,
                         current_date=window_end,

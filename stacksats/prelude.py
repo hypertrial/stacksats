@@ -438,6 +438,15 @@ def compute_cycle_spd(
         windows["window_end"][-1],
         windows.height,
     )
+    if hasattr(strategy_function, "_compute_window_weights_batch"):
+        return _compute_cycle_spd_batched(
+            full_feat,
+            feature_plan,
+            inv_price_frame,
+            windows,
+            strategy_function,
+            validate_weights=validate_weights,
+        )
     if getattr(strategy_function, "_stacksats_framework_fast_path", False):
         return _compute_cycle_spd_framework(
             dataframe,
@@ -666,6 +675,91 @@ def _compute_cycle_spd_framework(
     if not rows:
         return _empty_spd_frame()
     return pl.DataFrame(rows)
+
+
+def _compute_cycle_spd_batched(
+    full_feat: pl.DataFrame,
+    feature_plan,
+    inv_price_frame: pl.DataFrame,
+    windows: pl.DataFrame,
+    strategy_function,
+    *,
+    validate_weights: bool,
+) -> pl.DataFrame:
+    batch_fn = getattr(strategy_function, "_compute_window_weights_batch")
+    weights_df = batch_fn(
+        full_feat,
+        feature_plan=feature_plan,
+        windows=windows,
+        expected_days=WINDOW_DAYS,
+    )
+    if weights_df.is_empty():
+        return _empty_spd_frame()
+
+    if validate_weights:
+        invalid = weights_df.group_by(["window_start", "window_end"]).agg(
+            pl.col("weight").sum().alias("_weight_sum"),
+        ).filter((pl.col("_weight_sum") - 1.0).abs() > WEIGHT_SUM_TOLERANCE)
+        if not invalid.is_empty():
+            row = invalid.row(0, named=True)
+            raise ValueError(
+                "Batched framework weights failed sum validation for range "
+                f"{row['window_start'].date()} to {row['window_end'].date()} "
+                f"(sum={float(row['_weight_sum']):.10f})."
+            )
+
+    dynamic = (
+        weights_df.join(inv_price_frame, on=DATE_COL, how="left")
+        .with_columns((pl.col("weight") * pl.col("_inv_price")).alias("_dynamic_spd"))
+        .group_by(["window_start", "window_end"])
+        .agg(pl.col("_dynamic_spd").sum().alias("dynamic_sats_per_dollar"))
+    )
+    result = windows.select(
+        "window_start",
+        "window_end",
+        "window",
+        "min_sats_per_dollar",
+        "max_sats_per_dollar",
+        "uniform_sats_per_dollar",
+    ).join(
+        dynamic,
+        on=["window_start", "window_end"],
+        how="inner",
+    )
+    result = result.with_columns(
+        pl.when((pl.col("max_sats_per_dollar") - pl.col("min_sats_per_dollar")) > 0.0)
+        .then(
+            (
+                (pl.col("uniform_sats_per_dollar") - pl.col("min_sats_per_dollar"))
+                / (pl.col("max_sats_per_dollar") - pl.col("min_sats_per_dollar"))
+            )
+            * 100.0
+        )
+        .otherwise(float("nan"))
+        .alias("uniform_percentile"),
+        pl.when((pl.col("max_sats_per_dollar") - pl.col("min_sats_per_dollar")) > 0.0)
+        .then(
+            (
+                (pl.col("dynamic_sats_per_dollar") - pl.col("min_sats_per_dollar"))
+                / (pl.col("max_sats_per_dollar") - pl.col("min_sats_per_dollar"))
+            )
+            * 100.0
+        )
+        .otherwise(float("nan"))
+        .alias("dynamic_percentile"),
+    ).with_columns(
+        (pl.col("dynamic_percentile") - pl.col("uniform_percentile")).alias("excess_percentile")
+    )
+    return result.select(
+        "window",
+        "min_sats_per_dollar",
+        "max_sats_per_dollar",
+        "uniform_sats_per_dollar",
+        "dynamic_sats_per_dollar",
+        "uniform_percentile",
+        "dynamic_percentile",
+        "excess_percentile",
+    ).sort("window")
 
 
 def backtest_dynamic_dca(

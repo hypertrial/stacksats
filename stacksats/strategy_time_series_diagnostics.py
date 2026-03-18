@@ -85,10 +85,17 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 "top_weights": [],
             }
 
-        arr = non_null.to_numpy()
-        hhi = float(np.sum(np.square(arr)))
-        positive = arr[arr > 0]
-        entropy = float(-np.sum(positive * np.log(positive))) if positive.size > 0 else 0.0
+        stats = pl.DataFrame({"weight": non_null}).select(
+            (pl.col("weight") ** 2).sum().alias("hhi"),
+            (
+                -pl.when(pl.col("weight") > 0.0)
+                .then(pl.col("weight") * pl.col("weight").log())
+                .otherwise(0.0)
+                .sum()
+            ).alias("entropy"),
+        ).row(0, named=True)
+        hhi = float(stats["hhi"] or 0.0)
+        entropy = float(stats["entropy"] or 0.0)
 
         top_count = max(int(top_k), 0)
         top_df = (
@@ -102,7 +109,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 "date": self._native_timestamp(row["date"]),
                 "weight": self._native_float(row["_weight"]),
             }
-            for row in top_df.iter_rows(named=True)
+            for row in top_df.to_dicts()
         ]
 
         return {
@@ -123,25 +130,12 @@ class StrategyTimeSeriesDiagnosticsMixin:
 
     def returns_diagnostics(self) -> dict[str, Any]:
         """Return basic return/risk diagnostics derived from `price_usd`."""
-        prices = self._data["price_usd"].cast(pl.Float64, strict=False)
-        p_arr = prices.to_numpy()
-        prev_arr = np.roll(p_arr, 1)
-        prev_arr[0] = np.nan
-
-        valid_step = np.isfinite(p_arr) & np.isfinite(prev_arr) & (prev_arr != 0)
-        simple_returns = np.full(len(p_arr), np.nan)
-        simple_returns[valid_step] = (p_arr[valid_step] / prev_arr[valid_step]) - 1.0
-
-        positive_step = valid_step & (p_arr > 0) & (prev_arr > 0)
-        log_returns = np.full(len(p_arr), np.nan)
-        log_returns[positive_step] = np.log(p_arr[positive_step] / prev_arr[positive_step])
-
-        valid_simple = simple_returns[np.isfinite(simple_returns)]
-        valid_log = log_returns[np.isfinite(log_returns)]
-        price_valid_mask = np.isfinite(p_arr)
-        price_valid = p_arr[price_valid_mask]
-
-        if len(price_valid) == 0:
+        price_frame = self._data.select(
+            pl.col("date"),
+            pl.col("price_usd").cast(pl.Float64, strict=False).alias("price_usd"),
+        )
+        valid_prices = price_frame.filter(pl.col("price_usd").is_finite())
+        if valid_prices.is_empty():
             return {
                 "price_observations": 0,
                 "return_observations": 0,
@@ -159,67 +153,94 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 "worst_day_return": None,
                 "worst_day_date": None,
             }
-
-        running_max = np.maximum.accumulate(price_valid)
-        drawdown = (p_arr / running_max) - 1.0
-        dd_idx = int(np.argmin(drawdown))
-
-        cumulative_return = (
-            self._native_float(float(np.prod(1.0 + valid_simple) - 1.0))
-            if len(valid_simple) > 0
+        returns_frame = valid_prices.with_columns(
+            pl.col("price_usd").shift(1).alias("_prev_price"),
+        ).with_columns(
+            pl.when(pl.col("_prev_price").is_finite() & (pl.col("_prev_price") != 0.0))
+            .then((pl.col("price_usd") / pl.col("_prev_price")) - 1.0)
+            .otherwise(None)
+            .alias("simple_return"),
+            pl.when(
+                pl.col("_prev_price").is_finite()
+                & (pl.col("_prev_price") > 0.0)
+                & (pl.col("price_usd") > 0.0)
+            )
+            .then((pl.col("price_usd") / pl.col("_prev_price")).log())
+            .otherwise(None)
+            .alias("log_return"),
+        )
+        drawdown_frame = valid_prices.with_columns(
+            pl.col("price_usd").cum_max().alias("_running_max"),
+        ).with_columns(
+            ((pl.col("price_usd") / pl.col("_running_max")) - 1.0).alias("drawdown")
+        )
+        valid_simple = returns_frame.filter(pl.col("simple_return").is_finite())
+        valid_log = returns_frame.filter(pl.col("log_return").is_finite())
+        dd_row = drawdown_frame.sort("drawdown").row(0, named=True)
+        best_row = (
+            valid_simple.sort("simple_return", descending=True).row(0, named=True)
+            if not valid_simple.is_empty()
             else None
         )
+        worst_row = (
+            valid_simple.sort("simple_return").row(0, named=True)
+            if not valid_simple.is_empty()
+            else None
+        )
+        cumulative_return = None
+        if not valid_simple.is_empty():
+            cumulative_return = self._native_float(
+                float(
+                    valid_simple.select(
+                        ((pl.col("simple_return") + 1.0).product() - 1.0).alias("cumulative")
+                    ).item()
+                )
+            )
         annualized_vol = (
-            self._native_float(float(np.std(valid_simple) * np.sqrt(365.0)))
-            if len(valid_simple) >= 2
+            self._native_float(float(valid_simple["simple_return"].std() * np.sqrt(365.0)))
+            if valid_simple.height >= 2
             else None
         )
-
-        best_idx = int(np.argmax(valid_simple)) if len(valid_simple) > 0 else None
-        worst_idx = int(np.argmin(valid_simple)) if len(valid_simple) > 0 else None
-
-        price_valid_indices = np.where(price_valid_mask)[0]
-        dd_row_idx = price_valid_indices[dd_idx] if dd_idx < len(price_valid_indices) else 0
-
-        simple_valid_indices = np.where(valid_step)[0]
-        best_row_idx = simple_valid_indices[best_idx] if best_idx is not None and best_idx < len(simple_valid_indices) else None
-        worst_row_idx = simple_valid_indices[worst_idx] if worst_idx is not None and worst_idx < len(simple_valid_indices) else None
 
         return {
-            "price_observations": int(len(price_valid)),
-            "return_observations": int(len(valid_simple)),
+            "price_observations": int(valid_prices.height),
+            "return_observations": int(valid_simple.height),
             "periods": self._data.height,
             "cumulative_return": cumulative_return,
             "mean_simple_return": (
-                self._native_float(float(np.mean(valid_simple))) if len(valid_simple) > 0 else None
+                self._native_float(float(valid_simple["simple_return"].mean()))
+                if not valid_simple.is_empty()
+                else None
             ),
             "std_simple_return": (
-                self._native_float(float(np.std(valid_simple)))
-                if len(valid_simple) >= 2
+                self._native_float(float(valid_simple["simple_return"].std()))
+                if valid_simple.height >= 2
                 else None
             ),
             "annualized_volatility": annualized_vol,
-            "mean_log_return": self._native_float(float(np.mean(valid_log))) if len(valid_log) > 0 else None,
-            "std_log_return": (
-                self._native_float(float(np.std(valid_log))) if len(valid_log) >= 2 else None
+            "mean_log_return": (
+                self._native_float(float(valid_log["log_return"].mean()))
+                if not valid_log.is_empty()
+                else None
             ),
-            "max_drawdown": self._native_float(float(drawdown.min())),
-            "max_drawdown_date": self._native_timestamp(self._data["date"][int(dd_row_idx)]),
+            "std_log_return": (
+                self._native_float(float(valid_log["log_return"].std()))
+                if valid_log.height >= 2
+                else None
+            ),
+            "max_drawdown": self._native_float(float(dd_row["drawdown"])),
+            "max_drawdown_date": self._native_timestamp(dd_row["date"]),
             "best_day_return": (
-                self._native_float(float(valid_simple[best_idx])) if best_idx is not None and len(valid_simple) > 0 else None
+                self._native_float(float(best_row["simple_return"])) if best_row is not None else None
             ),
             "best_day_date": (
-                self._native_timestamp(self._data["date"][int(best_row_idx)])
-                if best_row_idx is not None
-                else None
+                self._native_timestamp(best_row["date"]) if best_row is not None else None
             ),
             "worst_day_return": (
-                self._native_float(float(valid_simple[worst_idx])) if worst_idx is not None and len(valid_simple) > 0 else None
+                self._native_float(float(worst_row["simple_return"])) if worst_row is not None else None
             ),
             "worst_day_date": (
-                self._native_timestamp(self._data["date"][int(worst_row_idx)])
-                if worst_row_idx is not None
-                else None
+                self._native_timestamp(worst_row["date"]) if worst_row is not None else None
             ),
         }
 
@@ -251,7 +272,7 @@ class StrategyTimeSeriesDiagnosticsMixin:
         if unknown:
             raise ValueError("Unknown columns for outlier detection: " + ", ".join(unknown))
 
-        rows: list[dict[str, Any]] = []
+        reports: list[pl.DataFrame] = []
         for column in selected_columns:
             numeric = self._data[column].cast(pl.Float64, strict=False)
             valid = numeric.drop_nulls()
@@ -263,15 +284,23 @@ class StrategyTimeSeriesDiagnosticsMixin:
                 mad = float((valid - median).abs().median())
                 if mad == 0:
                     continue
-                scores = pl.Series("s", (0.6745 * (numeric.to_numpy() - median) / mad))
-                mask = np.abs(scores.to_numpy()) > effective_threshold
+                column_report = self._data.select(
+                    "date",
+                    numeric.alias("value"),
+                ).with_columns(
+                    ((pl.col("value") - median) * (0.6745 / mad)).alias("score"),
+                ).filter(pl.col("score").abs() > effective_threshold)
             elif outlier_method == "zscore":
                 mean = float(valid.mean())
                 std = float(valid.std())
                 if std == 0:
                     continue
-                scores = pl.Series("s", (numeric.to_numpy() - mean) / std)
-                mask = np.abs(scores.to_numpy()) > effective_threshold
+                column_report = self._data.select(
+                    "date",
+                    numeric.alias("value"),
+                ).with_columns(
+                    ((pl.col("value") - mean) / std).alias("score"),
+                ).filter(pl.col("score").abs() > effective_threshold)
             else:
                 q1 = float(valid.quantile(0.25))
                 q3 = float(valid.quantile(0.75))
@@ -280,34 +309,29 @@ class StrategyTimeSeriesDiagnosticsMixin:
                     continue
                 lower = q1 - (effective_threshold * iqr)
                 upper = q3 + (effective_threshold * iqr)
-                num_arr = numeric.to_numpy()
-                below = num_arr < lower
-                above = num_arr > upper
-                scores_arr = np.zeros(len(num_arr))
-                scores_arr[below] = (num_arr[below] - lower) / iqr
-                scores_arr[above] = (num_arr[above] - upper) / iqr
-                scores = pl.Series("scores", scores_arr)
-                mask = below | above
+                column_report = self._data.select(
+                    "date",
+                    numeric.alias("value"),
+                ).with_columns(
+                    pl.when(pl.col("value") < lower)
+                    .then((pl.col("value") - lower) / iqr)
+                    .when(pl.col("value") > upper)
+                    .then((pl.col("value") - upper) / iqr)
+                    .otherwise(None)
+                    .alias("score"),
+                ).filter(pl.col("score").is_not_null())
 
-            mask_arr = mask if isinstance(mask, np.ndarray) else np.asarray(mask)
-            mask_arr = np.where(np.isnan(mask_arr), False, mask_arr)
-            flagged_indices = np.where(mask_arr)[0]
-            scores_arr = scores.to_numpy()
-            for idx in flagged_indices:
-                idx_int = int(idx)
-                sc = scores_arr[idx_int] if idx_int < len(scores_arr) else None
-                rows.append(
-                    {
-                        "date": self._data["date"][idx_int],
-                        "column": str(column),
-                        "value": self._native_float(numeric[idx_int]),
-                        "score": self._native_float(sc),
-                        "method": outlier_method,
-                        "threshold": float(effective_threshold),
-                    }
-                )
+            if column_report.is_empty():
+                continue
+            reports.append(
+                column_report.with_columns(
+                    pl.lit(str(column)).alias("column"),
+                    pl.lit(outlier_method).alias("method"),
+                    pl.lit(float(effective_threshold)).alias("threshold"),
+                ).select(["date", "column", "value", "score", "method", "threshold"])
+            )
 
-        if not rows:
+        if not reports:
             return pl.DataFrame(schema={"date": pl.Datetime, "column": pl.Utf8, "value": pl.Float64, "score": pl.Float64, "method": pl.Utf8, "threshold": pl.Float64})
-        result = pl.DataFrame(rows)
+        result = pl.concat(reports, how="vertical_relaxed")
         return result.sort(["column", "date"])

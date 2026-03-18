@@ -296,17 +296,20 @@ class SQLiteExecutionStateStore:
         normalized_run_date = _normalize_date_str(run_date)
         normalized_snapshot_date = _normalize_date_str(snapshot_date)
         ordered = weights.sort("date")
-        rows = [
-            (
-                strategy_id,
-                strategy_version,
-                mode,
-                normalized_snapshot_date,
-                _norm_dt_str(row["date"]),
-                float(row["weight"]),
+        date_strs = (
+            ordered["date"].cast(pl.Datetime, strict=False).dt.strftime("%Y-%m-%d").to_list()
+        )
+        rows = list(
+            zip(
+                [strategy_id] * ordered.height,
+                [strategy_version] * ordered.height,
+                [mode] * ordered.height,
+                [normalized_snapshot_date] * ordered.height,
+                date_strs,
+                ordered["weight"].cast(pl.Float64, strict=False).to_list(),
+                strict=True,
             )
-            for row in ordered.iter_rows(named=True)
-        ]
+        )
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
@@ -452,17 +455,20 @@ class SQLiteExecutionStateStore:
     ) -> None:
         normalized_snapshot_date = _normalize_date_str(snapshot_date)
         ordered = weights.sort("date")
-        rows = [
-            (
-                strategy_id,
-                strategy_version,
-                mode,
-                normalized_snapshot_date,
-                _norm_dt_str(row["date"]),
-                float(row["weight"]),
+        date_strs = (
+            ordered["date"].cast(pl.Datetime, strict=False).dt.strftime("%Y-%m-%d").to_list()
+        )
+        rows = list(
+            zip(
+                [strategy_id] * ordered.height,
+                [strategy_version] * ordered.height,
+                [mode] * ordered.height,
+                [normalized_snapshot_date] * ordered.height,
+                date_strs,
+                ordered["weight"].cast(pl.Float64, strict=False).to_list(),
+                strict=True,
             )
-            for row in ordered.iter_rows(named=True)
-        ]
+        )
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(

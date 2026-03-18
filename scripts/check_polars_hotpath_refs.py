@@ -21,7 +21,9 @@ HOTPATH_FILES = (
     "stacksats/runner_helpers.py",
 )
 
-PATTERN = re.compile(r"\bto_numpy\s*\(|\bto_list\s*\(|\biter_rows\s*\(|\bpl\.read_parquet\s*\(")
+PATTERN = re.compile(
+    r"\bto_numpy\s*\(|\bto_list\s*\(|\biter_rows\s*\(|\bpl\.read_parquet\s*\(|\brolling_map\s*\("
+)
 
 ALLOWLIST: dict[str, tuple[str, ...]] = {
     "stacksats/model_development_allocation.py": (

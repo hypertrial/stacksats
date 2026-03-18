@@ -110,17 +110,9 @@ def _normalize_spd_frame(spd_table: pl.DataFrame) -> pl.DataFrame:
 
     frame = frame.select(REQUIRED_SPD_COLUMNS)
 
-    window_col = frame["window"]
-    starts = []
-    ends = []
-    for label in window_col:
-        start, end = _extract_window_bounds(str(label))
-        starts.append(start)
-        ends.append(end)
-
     frame = frame.with_columns(
-        pl.Series("window_start", starts),
-        pl.Series("window_end", ends),
+        pl.col("window").str.split_exact("→", 1).struct.field("field_0").str.strip_chars().str.to_datetime(strict=False).alias("window_start"),
+        pl.col("window").str.split_exact("→", 1).struct.field("field_1").str.strip_chars().str.to_datetime(strict=False).alias("window_end"),
     )
 
     for col in _NUMERIC_SPD_COLUMNS:

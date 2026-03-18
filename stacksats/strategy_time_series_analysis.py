@@ -36,22 +36,26 @@ class StrategyTimeSeriesAnalysisMixin:
             return self._eda_price_series(price_col=price_col)
         if key in {"returns", "simple_returns"}:
             prices = self._eda_price_series(price_col=price_col)
-            prev = prices.shift(1)
-            p_arr = prices.to_numpy()
-            pr_arr = prev.to_numpy()
-            out = np.full(len(prices), float("nan"))
-            valid = np.isfinite(p_arr) & np.isfinite(pr_arr) & (pr_arr != 0)
-            out[valid] = (p_arr[valid] / pr_arr[valid]) - 1.0
-            return pl.Series("returns", out)
+            return pl.DataFrame({"price": prices}).select(
+                pl.when(
+                    pl.col("price").shift(1).is_finite() & (pl.col("price").shift(1) != 0.0)
+                )
+                .then((pl.col("price") / pl.col("price").shift(1)) - 1.0)
+                .otherwise(None)
+                .alias("returns")
+            )["returns"]
         if key == "log_returns":
             prices = self._eda_price_series(price_col=price_col)
-            prev = prices.shift(1)
-            p_arr = prices.to_numpy()
-            pr_arr = prev.to_numpy()
-            out = np.full(len(prices), float("nan"))
-            positive = np.isfinite(p_arr) & np.isfinite(pr_arr) & (p_arr > 0) & (pr_arr > 0)
-            out[positive] = np.log(p_arr[positive] / pr_arr[positive])
-            return pl.Series("log_returns", out)
+            return pl.DataFrame({"price": prices}).select(
+                pl.when(
+                    pl.col("price").shift(1).is_finite()
+                    & (pl.col("price").shift(1) > 0.0)
+                    & (pl.col("price") > 0.0)
+                )
+                .then((pl.col("price") / pl.col("price").shift(1)).log())
+                .otherwise(None)
+                .alias("log_returns")
+            )["log_returns"]
         if key == "weight":
             return self._data["weight"].cast(pl.Float64, strict=False)
         raise ValueError("series must be one of: price, returns, simple_returns, log_returns, weight")

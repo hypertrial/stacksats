@@ -63,7 +63,7 @@ class FeatureRegistry:
             raise KeyError(f"Unknown feature provider '{provider_id}'.")
         return self._providers[provider_id]
 
-    def materialize_for_strategy(
+    def materialize_for_strategy_lazy(
         self,
         strategy,
         btc_df: pl.DataFrame,
@@ -71,13 +71,13 @@ class FeatureRegistry:
         start_date: dt.datetime,
         end_date: dt.datetime,
         current_date: dt.datetime,
-    ) -> pl.DataFrame:
+    ) -> pl.LazyFrame:
         observed_end = min(normalize_timestamp(current_date), normalize_timestamp(end_date))
         start_ts = normalize_timestamp(start_date)
         dates = pl.datetime_range(start_ts, observed_end, interval="1d", eager=True)
         provider_ids = tuple(strategy.required_feature_sets())
         if not provider_ids:
-            return pl.DataFrame({DATE_COL: dates})
+            return pl.DataFrame({DATE_COL: dates}).lazy()
 
         merged_lazy = pl.DataFrame({DATE_COL: dates}).lazy()
         merged_columns = {DATE_COL}
@@ -114,7 +114,24 @@ class FeatureRegistry:
                 )
             merged_columns.update(name for name in observed_schema.names() if name != DATE_COL)
             merged_lazy = merged_lazy.join(observed, on=DATE_COL, how="left")
-        return merged_lazy.sort(DATE_COL).collect()
+        return merged_lazy.sort(DATE_COL)
+
+    def materialize_for_strategy(
+        self,
+        strategy,
+        btc_df: pl.DataFrame,
+        *,
+        start_date: dt.datetime,
+        end_date: dt.datetime,
+        current_date: dt.datetime,
+    ) -> pl.DataFrame:
+        return self.materialize_for_strategy_lazy(
+            strategy,
+            btc_df,
+            start_date=start_date,
+            end_date=end_date,
+            current_date=current_date,
+        ).collect()
 
     def provider_fingerprint(self, strategy) -> str:
         payload = {"provider_ids": list(strategy.required_feature_sets())}

@@ -78,6 +78,27 @@ def test_default_registry_materializes_strategy_features() -> None:
     assert "brk_netflow_fast" in frame.columns
 
 
+def test_default_registry_lazy_materialization_matches_eager() -> None:
+    strategy = _ProviderStrategy()
+    btc_df = _btc_df()
+    eager = DEFAULT_FEATURE_REGISTRY.materialize_for_strategy(
+        strategy,
+        btc_df,
+        start_date=datetime(2024, 6, 1),
+        end_date=datetime(2024, 12, 31),
+        current_date=datetime(2024, 7, 1),
+    )
+    lazy = DEFAULT_FEATURE_REGISTRY.materialize_for_strategy_lazy(
+        strategy,
+        btc_df,
+        start_date=datetime(2024, 6, 1),
+        end_date=datetime(2024, 12, 31),
+        current_date=datetime(2024, 7, 1),
+    ).collect()
+
+    assert eager.equals(lazy)
+
+
 def test_materialization_fingerprint_is_stable() -> None:
     strategy = _ProviderStrategy()
     btc_df = _btc_df()

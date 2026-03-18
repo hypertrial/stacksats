@@ -11,6 +11,7 @@ A strategy subclasses `BaseStrategy` (`stacksats/strategy_types.py`) and defines
 - canonical contract surface: `metadata()`, `params()`, `spec()`
 - hooks: `transform_features`, `build_signals`
 - intent path: `propose_weight(...)` or `build_target_profile(...)`
+- optional lazy profile path: `transform_features_lazy(...)`, `build_signal_exprs(...)`, `build_target_profile_lazy(...)`
 - lifecycle helpers: `validate(...)`, `backtest(...)`, `export(...)`, `run(...)`
 
 Built-in strategy behavior, required columns, and tuning defaults are maintained in
@@ -68,6 +69,13 @@ class MyStrategy(BaseStrategy):
         signals: dict[str, pl.Series],
     ) -> TargetProfile:
         ...
+
+    def build_target_profile_lazy(
+        self,
+        ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        ...
 ```
 
 Optional contract helpers:
@@ -81,6 +89,8 @@ Optional contract helpers:
 ```
 
 `ctx.features_df` is always observed-only. Strategy hooks do not receive rows after `current_date`, and strict contract validation rejects direct file, DB, or network access inside strategy methods.
+
+`build_target_profile_lazy(...)` is opt-in and only used for profile-mode strategies. `propose_weight(...)` remains eager because it depends on per-day state.
 
 ## Intent Selection
 

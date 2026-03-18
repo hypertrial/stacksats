@@ -94,6 +94,14 @@ class _IlocWarningStrategy(BaseStrategy):
         return state.uniform_weight
 
 
+class _LazyEscapeStrategy(BaseStrategy):
+    strategy_id = "lint-lazy-escape"
+
+    def build_target_profile_lazy(self, ctx, features_lf):
+        del ctx
+        return features_lf.collect().lazy()
+
+
 def test_lint_strategy_class_finds_hard_errors() -> None:
     findings = lint_strategy_class(_NegativeShiftStrategy)
     errors, _ = summarize_lint_findings(findings)
@@ -124,6 +132,12 @@ def test_lint_strategy_class_finds_path_io() -> None:
     findings = lint_strategy_class(_PathIOStrategy)
     errors, _ = summarize_lint_findings(findings)
     assert any("path-io" in error for error in errors)
+
+
+def test_lint_strategy_class_rejects_lazy_eager_escape() -> None:
+    findings = lint_strategy_class(_LazyEscapeStrategy)
+    errors, _ = summarize_lint_findings(findings)
+    assert any("lazy-eager-escape" in error for error in errors)
 
 
 def test_lint_strategy_class_handles_uninspectable_source() -> None:

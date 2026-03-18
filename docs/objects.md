@@ -117,7 +117,9 @@ Canonical built-in strategy documentation (behavior, required columns, intent mo
 | `StrategyRunner` | Orchestrates backtest, export, run, and validation. |
 | `load_strategy` | Load a strategy (e.g. from JSON). |
 | `load_data` | Load an eager runtime BRK-wide parquet frame (prelude helper). Runtime ingestion is lazy-first internally, but this helper returns a collected `pl.DataFrame`. Runtime resolution follows `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, then legacy local fallback `./bitcoin_analytics.parquet`. Canonical source dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md). Use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe` for custom DataFrames. |
-| `precompute_features` | Precompute the built-in model feature set as an eager `pl.DataFrame`. Framework-owned providers use an internal lazy path and collect once before eager strategy execution. |
+| `precompute_features` | Precompute the built-in model feature set as an eager `pl.DataFrame`. Framework-owned providers keep a lazy-first path internally, then use a single vectorized enrichment boundary for rolling-rank features before final collection. |
+
+Profile-mode strategies may also opt into lazy execution with `StrategyLazyContext`, `transform_features_lazy(...)`, `build_signal_exprs(...)`, and `build_target_profile_lazy(...)`. Eager hooks remain the default and `propose_weight(...)` stays eager-only.
 
 ### Removed aliases
 

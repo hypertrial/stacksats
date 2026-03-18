@@ -122,6 +122,29 @@ class StrategyContext:
 
 
 @dataclass(frozen=True)
+class StrategyLazyContext:
+    """Lightweight context for opt-in lazy profile execution."""
+
+    start_date: dt.datetime
+    end_date: dt.datetime
+    current_date: dt.datetime
+    locked_weights: np.ndarray | None = None
+    btc_price_col: str = "price_usd"
+    mvrv_col: str = "mvrv"
+
+    @classmethod
+    def from_strategy_context(cls, ctx: StrategyContext) -> "StrategyLazyContext":
+        return cls(
+            start_date=ctx.start_date,
+            end_date=ctx.end_date,
+            current_date=ctx.current_date,
+            locked_weights=ctx.locked_weights,
+            btc_price_col=ctx.btc_price_col,
+            mvrv_col=ctx.mvrv_col,
+        )
+
+
+@dataclass(frozen=True)
 class BacktestConfig:
     start_date: str | None = None
     end_date: str | None = None
@@ -315,14 +338,21 @@ def _validate_required_feature_columns(
     strategy: "BaseStrategy",
     features_df: pl.DataFrame,
 ) -> None:
+    _validate_required_feature_column_names(strategy, tuple(features_df.columns))
+
+
+def _validate_required_feature_column_names(
+    strategy: "BaseStrategy",
+    available_columns: tuple[str, ...],
+) -> None:
     required_columns = tuple(strategy.required_feature_columns())
     if not required_columns:
         return
-    missing = [column for column in required_columns if column not in features_df.columns]
+    missing = [column for column in required_columns if column not in available_columns]
     if not missing:
         return
     metadata = strategy.metadata()
-    available = list(features_df.columns)
+    available = list(available_columns)
     preview = ", ".join(available[:10])
     if len(available) > 10:
         preview = f"{preview}, ..."
@@ -415,6 +445,15 @@ class BaseStrategy(ABC):
         """Hook for user-defined feature transforms on the active window."""
         return ctx.features.data.clone()
 
+    def transform_features_lazy(
+        self,
+        ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Optional lazy transform hook for profile-mode strategies."""
+        del ctx
+        return features_lf
+
     def build_signals(
         self,
         ctx: StrategyContext,
@@ -422,6 +461,15 @@ class BaseStrategy(ABC):
     ) -> dict[str, pl.Series]:
         """Hook for user-defined signal formulas."""
         del ctx, features_df
+        return {}
+
+    def build_signal_exprs(
+        self,
+        ctx: StrategyLazyContext,
+        schema: pl.Schema,
+    ) -> dict[str, pl.Expr]:
+        """Optional lazy signal expressions for profile-mode strategies."""
+        del ctx, schema
         return {}
 
     def propose_weight(self, state: DayState) -> float:
@@ -449,6 +497,17 @@ class BaseStrategy(ABC):
                 mode="absolute",
             )
         return TargetProfile(values=self._collect_proposals(features_df), mode="absolute")
+
+    def build_target_profile_lazy(
+        self,
+        ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+    ) -> TargetProfile | pl.LazyFrame:
+        """Optional lazy target-profile hook for profile-mode strategies."""
+        del ctx, features_lf
+        raise NotImplementedError(
+            "Override build_target_profile_lazy(...) to opt into lazy profile execution."
+        )
 
     def _validate_target_df(
         self,
@@ -510,6 +569,11 @@ class BaseStrategy(ABC):
         date_range = pl.datetime_range(
             ctx.start_date, observed_end, interval="1d", eager=True
         )
+        if self.intent_mode() == "profile" and (
+            self.__class__.build_target_profile_lazy
+            is not BaseStrategy.build_target_profile_lazy
+        ):
+            return self._compute_weights_lazy_profile(ctx, date_range)
         features_df = self.transform_features(ctx)
         if not isinstance(features_df, pl.DataFrame):
             raise TypeError("transform_features must return a polars DataFrame.")
@@ -573,6 +637,102 @@ class BaseStrategy(ABC):
             mode=mode,
             n_past=n_past,
             locked_weights=ctx.locked_weights,
+        )
+
+    def _compute_weights_lazy_profile(
+        self,
+        ctx: StrategyContext,
+        date_range: pl.Series,
+    ) -> pl.DataFrame:
+        full_dates_lf = pl.DataFrame({"date": date_range}).lazy()
+        base_features_lf = full_dates_lf.join(
+            ctx.features_df.lazy(),
+            on="date",
+            how="left",
+        ).sort("date").fill_null(0.0)
+        return self._compute_weights_lazy_profile_from_features_lf(
+            StrategyLazyContext.from_strategy_context(ctx),
+            base_features_lf,
+            date_range=date_range,
+        )
+
+    def _prepare_lazy_profile_features(
+        self,
+        lazy_ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        features_lf = self.transform_features_lazy(lazy_ctx, features_lf)
+        if not isinstance(features_lf, pl.LazyFrame):
+            raise TypeError("transform_features_lazy must return a polars LazyFrame.")
+
+        schema = features_lf.collect_schema()
+        _validate_required_feature_column_names(self, tuple(schema.names()))
+
+        signal_exprs = self.build_signal_exprs(lazy_ctx, schema)
+        if not isinstance(signal_exprs, dict):
+            raise TypeError("build_signal_exprs must return a dict[str, pl.Expr].")
+        if not signal_exprs:
+            return features_lf
+
+        aliased_exprs: list[pl.Expr] = []
+        for key, expr in signal_exprs.items():
+            if not isinstance(key, str) or not key:
+                raise ValueError("Signal expression names must be non-empty strings.")
+            if not isinstance(expr, pl.Expr):
+                raise TypeError(f"signal '{key}' must be a polars expression.")
+            aliased_exprs.append(expr.alias(key))
+        return features_lf.with_columns(aliased_exprs)
+
+    def _resolve_lazy_target_profile(
+        self,
+        lazy_ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+    ) -> tuple[str, pl.DataFrame]:
+        features_lf = self._prepare_lazy_profile_features(lazy_ctx, features_lf)
+        profile = self.build_target_profile_lazy(lazy_ctx, features_lf)
+        if isinstance(profile, pl.LazyFrame):
+            return "preference", profile.collect()
+        if isinstance(profile, TargetProfile):
+            return profile.mode, profile.values
+        raise TypeError(
+            "build_target_profile_lazy must return a Polars LazyFrame or TargetProfile."
+        )
+
+    def _compute_weights_lazy_profile_from_features_lf(
+        self,
+        lazy_ctx: StrategyLazyContext,
+        features_lf: pl.LazyFrame,
+        *,
+        date_range: pl.Series,
+    ) -> pl.DataFrame:
+        from .framework_contract import compute_n_past
+        from .model_development import compute_weights_from_target_profile
+
+        if date_range.len() == 0:
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+
+        full_dates_lf = pl.DataFrame({"date": date_range}).lazy()
+        features_lf = (
+            full_dates_lf.join(features_lf, on="date", how="left").sort("date").fill_null(0.0)
+        )
+        mode, target_df = self._resolve_lazy_target_profile(lazy_ctx, features_lf)
+
+        if not isinstance(target_df, pl.DataFrame):
+            raise TypeError("target profile must be a Polars DataFrame.")
+        if target_df.is_empty():
+            return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
+        self._validate_target_df(target_df, name="target profile", date_col=date_range)
+
+        n_past = compute_n_past(date_range.to_list(), lazy_ctx.current_date)
+        return compute_weights_from_target_profile(
+            features_df=pl.DataFrame({"date": date_range}),
+            start_date=lazy_ctx.start_date,
+            end_date=lazy_ctx.end_date,
+            current_date=lazy_ctx.current_date,
+            target_profile=target_df,
+            mode=mode,
+            n_past=n_past,
+            locked_weights=lazy_ctx.locked_weights,
         )
 
     def default_backtest_config(self) -> BacktestConfig:
@@ -721,6 +881,7 @@ def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:
     has_propose_hook = strategy_cls.propose_weight is not BaseStrategy.propose_weight
     has_profile_hook = (
         strategy_cls.build_target_profile is not BaseStrategy.build_target_profile
+        or strategy_cls.build_target_profile_lazy is not BaseStrategy.build_target_profile_lazy
     )
     return has_propose_hook, has_profile_hook
 

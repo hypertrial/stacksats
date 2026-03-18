@@ -8,7 +8,6 @@ from datetime import datetime
 import polars as pl
 
 from .model_development import compute_window_weights
-from .prelude import parse_window_dates
 
 
 def compute_weights_with_features(
@@ -38,19 +37,26 @@ def export_metrics_json(
         "window_level_data": [],
     }
 
-    for row in df_spd.iter_rows(named=True):
-        window_label = row.get("window", "")
-        json_data["window_level_data"].append({
-            "window": window_label,
-            "start_date": parse_window_dates(str(window_label)).isoformat(),
-            "dynamic_percentile": float(row.get("dynamic_percentile", 0)),
-            "uniform_percentile": float(row.get("uniform_percentile", 0)),
-            "excess_percentile": float(row.get("excess_percentile", 0)),
-            "dynamic_sats_per_dollar": float(row.get("dynamic_sats_per_dollar", 0)),
-            "uniform_sats_per_dollar": float(row.get("uniform_sats_per_dollar", 0)),
-            "min_sats_per_dollar": float(row.get("min_sats_per_dollar", 0)),
-            "max_sats_per_dollar": float(row.get("max_sats_per_dollar", 0)),
-        })
+    artifact_df = df_spd.with_columns(
+        pl.col("window")
+        .str.split_exact(" → ", 1)
+        .struct.field("field_0")
+        .str.strip_chars()
+        .str.to_datetime(strict=False)
+        .dt.strftime("%Y-%m-%dT%H:%M:%S")
+        .alias("start_date")
+    ).select(
+        "window",
+        "start_date",
+        pl.col("dynamic_percentile").cast(pl.Float64, strict=False),
+        pl.col("uniform_percentile").cast(pl.Float64, strict=False),
+        pl.col("excess_percentile").cast(pl.Float64, strict=False),
+        pl.col("dynamic_sats_per_dollar").cast(pl.Float64, strict=False),
+        pl.col("uniform_sats_per_dollar").cast(pl.Float64, strict=False),
+        pl.col("min_sats_per_dollar").cast(pl.Float64, strict=False),
+        pl.col("max_sats_per_dollar").cast(pl.Float64, strict=False),
+    )
+    json_data["window_level_data"] = artifact_df.to_dicts()
 
     output_path = os.path.join(output_dir, "metrics.json")
     with open(output_path, "w") as f:

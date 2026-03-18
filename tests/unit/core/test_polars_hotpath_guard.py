@@ -46,6 +46,22 @@ def test_find_hotpath_refs_reports_non_allowlisted_escape(tmp_path: Path) -> Non
     ]
 
 
+def test_find_hotpath_refs_reports_rolling_map(tmp_path: Path) -> None:
+    target = tmp_path / "stacksats"
+    target.mkdir()
+    hotpath = target / "model_development_helpers.py"
+    hotpath.write_text(
+        "expr.rolling_map(func, window_size=10)\n",
+        encoding="utf-8",
+    )
+
+    matches = guard.find_hotpath_refs(tmp_path)
+
+    assert [(match.path, match.line) for match in matches] == [
+        ("stacksats/model_development_helpers.py", 1),
+    ]
+
+
 def test_find_hotpath_refs_allows_explicit_allowlisted_lines(tmp_path: Path) -> None:
     target = tmp_path / "stacksats"
     target.mkdir()

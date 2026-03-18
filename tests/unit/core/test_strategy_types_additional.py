@@ -13,6 +13,7 @@ from stacksats.strategy_types import (
     BaseStrategy,
     DayState,
     StrategyContext,
+    StrategyLazyContext,
     _to_datetime,
     strategy_context_from_features_df,
 )
@@ -103,6 +104,46 @@ def test_compute_weights_rejects_invalid_target_profile_type() -> None:
 
     with pytest.raises(TypeError, match="target profile"):
         BadProfileTypeStrategy().compute_weights(_context())
+
+
+def test_lazy_profile_strategy_computes_weights() -> None:
+    class LazyProfileStrategy(BaseStrategy):
+        strategy_id = "lazy-profile"
+
+        def build_target_profile_lazy(
+            self,
+            ctx: StrategyLazyContext,
+            features_lf: pl.LazyFrame,
+        ) -> pl.LazyFrame:
+            del ctx
+            return features_lf.select("date", pl.lit(1.0).alias("value"))
+
+    weights = LazyProfileStrategy().compute_weights(_context())
+
+    assert weights.height == 3
+    assert np.isclose(float(weights["weight"].sum()), 1.0)
+
+
+def test_lazy_signal_exprs_are_applied_to_profile_frame() -> None:
+    class LazySignalsStrategy(BaseStrategy):
+        strategy_id = "lazy-signals"
+
+        def build_signal_exprs(self, ctx: StrategyLazyContext, schema: pl.Schema):
+            del ctx, schema
+            return {"signal_value": pl.col("price_usd") * 0.0 + 2.0}
+
+        def build_target_profile_lazy(
+            self,
+            ctx: StrategyLazyContext,
+            features_lf: pl.LazyFrame,
+        ) -> pl.LazyFrame:
+            del ctx
+            return features_lf.select("date", pl.col("signal_value").alias("value"))
+
+    weights = LazySignalsStrategy().compute_weights(_context())
+
+    assert weights.height == 3
+    assert np.isclose(float(weights["weight"].sum()), 1.0)
 
 
 def test_validate_weights_rejects_negative_values() -> None:

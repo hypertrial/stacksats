@@ -11,10 +11,10 @@ from .model_development_helpers import (
     compute_acceleration_modifier,
     compute_adaptive_trend_modifier,
     compute_asymmetric_extreme_boost,
-    compute_mvrv_volatility_expr,
+    compute_mvrv_volatility,
     compute_percentile_signal,
     compute_signal_confidence_expr,
-    rolling_percentile_expr,
+    rolling_percentile,
     zscore_expr,
 )
 
@@ -114,7 +114,7 @@ def precompute_features_lazy(
         .fill_nan(0.0)
     )
 
-    features = base.with_columns(
+    features_lf = base.with_columns(
         price_ma_expr.alias("price_ma"),
         price_vs_ma_expr.alias("price_vs_ma"),
     )
@@ -122,7 +122,7 @@ def precompute_features_lazy(
     if mvrv_col in columns:
         alpha_gradient = 2.0 / (mvrv_gradient_window + 1)
         alpha_accel = 2.0 / (mvrv_accel_window + 1)
-        features = features.with_columns(
+        features_lf = features_lf.with_columns(
             pl.col(mvrv_col).cast(pl.Float64, strict=False).alias("mvrv"),
         ).with_columns(
             zscore_expr(pl.col("mvrv"), mvrv_rolling_window)
@@ -130,10 +130,6 @@ def precompute_features_lazy(
             .replace([np.inf, -np.inf], 0.0)
             .fill_null(0.0)
             .alias("mvrv_zscore"),
-            rolling_percentile_expr(pl.col("mvrv"), mvrv_cycle_window)
-            .replace([np.inf, -np.inf], 0.5)
-            .fill_null(0.5)
-            .alias("mvrv_percentile"),
         ).with_columns(
             (
                 (pl.col("mvrv_zscore") - pl.col("mvrv_zscore").shift(mvrv_gradient_window))
@@ -167,18 +163,35 @@ def precompute_features_lazy(
             .replace([np.inf, -np.inf], 0.0)
             .fill_null(0.0)
             .alias("mvrv_acceleration"),
-            compute_mvrv_volatility_expr(pl.col("mvrv_zscore"), mvrv_volatility_window)
-            .replace([np.inf, -np.inf], 0.5)
-            .fill_null(0.5)
-            .alias("mvrv_volatility"),
         )
     else:
-        features = features.with_columns(
+        features_lf = features_lf.with_columns(
             pl.lit(0.0).alias("mvrv_zscore"),
             pl.lit(0.5).alias("mvrv_percentile"),
             pl.lit(0.0).alias("mvrv_gradient"),
             pl.lit(0.0).alias("mvrv_acceleration"),
             pl.lit(0.5).alias("mvrv_volatility"),
+        )
+
+    features = features_lf.collect()
+    if features.is_empty():
+        return features.lazy()
+
+    if mvrv_col in columns and "mvrv" in features.columns:
+        percentile = rolling_percentile(features["mvrv"], mvrv_cycle_window)
+        volatility = compute_mvrv_volatility(
+            features["mvrv_zscore"].cast(pl.Float64, strict=False),
+            mvrv_volatility_window,
+        )
+        features = features.with_columns(
+            percentile.cast(pl.Float64, strict=False)
+            .replace([np.inf, -np.inf], 0.5)
+            .fill_null(0.5)
+            .alias("mvrv_percentile"),
+            volatility.cast(pl.Float64, strict=False)
+            .replace([np.inf, -np.inf], 0.5)
+            .fill_null(0.5)
+            .alias("mvrv_volatility"),
         )
 
     features = features.with_columns(
@@ -232,7 +245,7 @@ def precompute_features_lazy(
         "mvrv_zone",
         "mvrv_volatility",
         "signal_confidence",
-    )
+    ).lazy()
 
 
 def compute_dynamic_multiplier(
