@@ -33,6 +33,16 @@ def test_core_docs_cross_link_to_new_merged_metrics_data_guide() -> None:
     assert "(../data-source.md)" in eda_quickstart_text
     assert "(../reference/merged-metrics-data-guide.md)" in eda_quickstart_text
     assert "(../reference/api/eda.md)" in eda_quickstart_text
+    for token in [
+        "dataset.head(5)",
+        "dataset.sample(5, seed=0)",
+        "catalog.suggest_metrics(\"mvr\")",
+        "catalog.describe_metric(\"adjusted_sopr\")",
+        ".filter_search(\"sopr\")",
+        "error_if_empty=True",
+        "Global catalog metadata",
+    ]:
+        assert token in eda_quickstart_text
 
 
 def test_data_guide_states_available_and_excluded_data() -> None:

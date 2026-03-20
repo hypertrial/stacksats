@@ -7,6 +7,7 @@ import datetime as dt
 from functools import lru_cache
 import json
 from pathlib import Path
+import random
 import re
 from typing import Sequence
 
@@ -21,6 +22,19 @@ CATALOG_SEARCH_COLUMNS = (
     "display_label",
     "family",
     "access_category",
+    "notes",
+)
+METRIC_DESCRIPTION_FIELDS = (
+    "metric",
+    "display_label",
+    "family",
+    "access_category",
+    "coverage_rows",
+    "first_day",
+    "last_day",
+    "semantic_class",
+    "transform",
+    "unit",
     "notes",
 )
 
@@ -107,7 +121,8 @@ def _validate_known_values(
 ) -> None:
     if not provided:
         return
-    missing = sorted({item for item in provided if item not in set(known)})
+    known_set = set(known)
+    missing = sorted({item for item in provided if item not in known_set})
     if missing:
         raise ValueError(f"Unknown {label}: {', '.join(missing)}")
 
@@ -138,6 +153,76 @@ def _normalize_catalog_frame(frame: pl.DataFrame) -> pl.DataFrame:
         pl.col("first_day").str.to_date(strict=False).alias("first_day"),
         pl.col("last_day").str.to_date(strict=False).alias("last_day"),
     ).sort("metric")
+
+
+def _search_blob_expr() -> pl.Expr:
+    return pl.concat_str(
+        [
+            pl.col(column).cast(pl.Utf8, strict=False).fill_null("")
+            for column in CATALOG_SEARCH_COLUMNS
+        ],
+        separator=" ",
+    ).str.to_lowercase()
+
+
+def _known_metric_row(catalog: "MetricCatalog", metric: str) -> dict[str, object]:
+    _validate_known_values(provided=[metric], known=catalog.metrics(), label="metric")
+    return catalog.frame().filter(pl.col("metric") == metric).row(0, named=True)
+
+
+def _available_metric_rows(frame: pl.LazyFrame) -> pl.DataFrame:
+    return (
+        frame.group_by("metric")
+        .agg(
+            pl.len().alias("coverage_rows"),
+            pl.col("day_utc").min().alias("first_day"),
+            pl.col("day_utc").max().alias("last_day"),
+        )
+        .sort("metric")
+        .collect()
+    )
+
+
+def _ranked_suggestion_matches(frame: pl.DataFrame, query: str) -> pl.DataFrame:
+    normalized = query.strip().lower()
+    if not normalized:
+        return frame.head(0)
+    escaped = re.escape(normalized)
+    lower_metric = pl.col("metric").str.to_lowercase()
+    lower_label = pl.col("display_label").str.to_lowercase()
+    search_blob = _search_blob_expr()
+    ranked = frame.with_columns(
+        pl.when(lower_metric == normalized)
+        .then(pl.lit(0))
+        .when(lower_label == normalized)
+        .then(pl.lit(1))
+        .when(lower_metric.str.starts_with(normalized))
+        .then(pl.lit(2))
+        .when(lower_label.str.starts_with(normalized))
+        .then(pl.lit(3))
+        .when(search_blob.str.contains(escaped, literal=False))
+        .then(pl.lit(4))
+        .otherwise(pl.lit(99))
+        .alias("_rank")
+    ).filter(pl.col("_rank") < 99)
+    return ranked.sort(
+        by=["_rank", "coverage_rows", "metric"],
+        descending=[False, True, False],
+    )
+
+
+def _with_row_index(frame: pl.LazyFrame, name: str) -> pl.LazyFrame:
+    if hasattr(frame, "with_row_index"):
+        return frame.with_row_index(name)
+    return frame.with_row_count(name)
+
+
+def _sample_row_indexes(total_rows: int, sample_size: int, seed: int | None) -> list[int]:
+    if sample_size <= 0 or total_rows <= 0:
+        return []
+    if sample_size >= total_rows:
+        return list(range(total_rows))
+    return sorted(random.Random(seed).sample(range(total_rows), sample_size))
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,17 +267,7 @@ class MetricCatalog:
         if not query:
             return self.frame()
 
-        frame = self._frame.with_columns(
-            pl.concat_str(
-                [
-                    pl.col(column).cast(pl.Utf8, strict=False).fill_null("")
-                    for column in CATALOG_SEARCH_COLUMNS
-                ],
-                separator=" ",
-            )
-            .str.to_lowercase()
-            .alias("_search_blob")
-        )
+        frame = self._frame.with_columns(_search_blob_expr().alias("_search_blob"))
         return (
             frame.filter(pl.col("_search_blob").str.contains(re.escape(query), literal=False))
             .drop("_search_blob")
@@ -263,6 +338,17 @@ class MetricCatalog:
             "last_day",
         ).sort("metric")
 
+    def describe_metric(self, metric: str) -> dict[str, object]:
+        """Return one metric's metadata as a structured dictionary."""
+        row = _known_metric_row(self, metric)
+        return {field: row[field] for field in METRIC_DESCRIPTION_FIELDS}
+
+    def suggest_metrics(self, query: str, *, limit: int = 10) -> pl.DataFrame:
+        """Return ranked metric suggestions for a likely intended query."""
+        if limit <= 0:
+            return self._frame.head(0)
+        return _ranked_suggestion_matches(self._frame, query).drop("_rank").head(limit)
+
 
 @dataclass(frozen=True, slots=True)
 class MergedMetricsDataset:
@@ -279,6 +365,44 @@ class MergedMetricsDataset:
     def collect(self) -> pl.DataFrame:
         """Collect the current lazy dataset into an eager frame."""
         return self._lazyframe.collect()
+
+    def _with_lazyframe(self, frame: pl.LazyFrame) -> MergedMetricsDataset:
+        return MergedMetricsDataset(
+            parquet_path=self.parquet_path,
+            _lazyframe=frame,
+            catalog=self.catalog,
+        )
+
+    def _filter_to_metrics(self, metrics: Sequence[str]) -> MergedMetricsDataset:
+        if not metrics:
+            return self._with_lazyframe(self._lazyframe.filter(pl.lit(False)))
+        return self._with_lazyframe(self._lazyframe.filter(pl.col("metric").is_in(list(metrics))))
+
+    def head(self, n: int = 10) -> pl.DataFrame:
+        """Collect the first ``n`` rows from the current filtered dataset."""
+        return self._lazyframe.limit(max(int(n), 0)).collect()
+
+    def sample(self, n: int = 10, *, seed: int | None = 0) -> pl.DataFrame:
+        """Collect a small sample from the current filtered dataset.
+
+        This samples by row index so only the selected rows are materialized.
+        """
+        size = max(int(n), 0)
+        if size == 0:
+            return self.head(0)
+        total_rows = int(self._lazyframe.select(pl.len()).collect().item())
+        row_indexes = _sample_row_indexes(total_rows, size, seed)
+        if not row_indexes:
+            return self.head(0)
+        if len(row_indexes) == total_rows:
+            return self.collect()
+        return (
+            _with_row_index(self._lazyframe, "__sample_row")
+            .filter(pl.col("__sample_row").is_in(row_indexes))
+            .sort("__sample_row")
+            .drop("__sample_row")
+            .collect()
+        )
 
     def summary(self) -> dict[str, object]:
         """Return high-level dataset summary values."""
@@ -320,11 +444,7 @@ class MergedMetricsDataset:
             frame = frame.filter(pl.col("day_utc") >= pl.lit(start_day))
         if end_day is not None:
             frame = frame.filter(pl.col("day_utc") <= pl.lit(end_day))
-        return MergedMetricsDataset(
-            parquet_path=self.parquet_path,
-            _lazyframe=frame,
-            catalog=self.catalog,
-        )
+        return self._with_lazyframe(frame)
 
     def filter_metrics(
         self,
@@ -346,24 +466,40 @@ class MergedMetricsDataset:
             families=families,
             categories=categories,
         )
-        if filtered_catalog.is_empty():
-            frame = self._lazyframe.filter(pl.lit(False))
-        else:
-            frame = self._lazyframe.filter(pl.col("metric").is_in(filtered_catalog["metric"].to_list()))
-        return MergedMetricsDataset(
-            parquet_path=self.parquet_path,
-            _lazyframe=frame,
-            catalog=self.catalog,
+        return self._filter_to_metrics(filtered_catalog["metric"].to_list())
+
+    def filter_search(self, query: str) -> MergedMetricsDataset:
+        """Filter the dataset using catalog text search."""
+        if not query.strip():
+            return self
+        matched = self.catalog.search(query)
+        return self._filter_to_metrics(matched["metric"].to_list())
+
+    def available_metrics(self) -> list[str]:
+        """Return sorted metric names present in the current filtered dataset."""
+        return _available_metric_rows(self._lazyframe)["metric"].to_list()
+
+    def metric_counts(self) -> pl.DataFrame:
+        """Return per-metric row counts for the current filtered dataset."""
+        return _available_metric_rows(self._lazyframe).sort(
+            by=["coverage_rows", "metric"],
+            descending=[True, False],
         )
 
-    def metric_series(self, metric: str) -> pl.DataFrame:
+    def metric_series(self, metric: str, *, error_if_empty: bool = False) -> pl.DataFrame:
         """Return one metric as a sorted long-format eager frame."""
-        _validate_known_values(provided=[metric], known=self.catalog.metrics(), label="metric")
-        return (
+        _known_metric_row(self.catalog, metric)
+        frame = (
             self._lazyframe.filter(pl.col("metric") == metric)
             .sort("day_utc")
             .collect()
         )
+        if error_if_empty and frame.is_empty():
+            raise ValueError(
+                "Current filtered dataset has no rows for metric "
+                f"{metric!r}. Adjust your filters or set error_if_empty=False."
+            )
+        return frame
 
     def metric_coverage(self, metrics: Sequence[str] | None = None) -> pl.DataFrame:
         """Return observed coverage within the current dataset window."""

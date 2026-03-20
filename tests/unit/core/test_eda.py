@@ -124,6 +124,36 @@ def test_dataset_summary_and_collect_shape(tmp_path: Path) -> None:
     assert frame.height == 9
 
 
+def test_head_and_sample_use_current_filtered_slice(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+    filtered = dataset.filter_dates(start="2024-01-02")
+
+    head = filtered.head(2)
+    sample_a = filtered.sample(2, seed=123)
+    sample_b = filtered.sample(2, seed=123)
+
+    assert head.height == 2
+    assert head["day_utc"].to_list() == [dt.date(2024, 1, 2), dt.date(2024, 1, 2)]
+    assert sample_a.equals(sample_b)
+    assert set(sample_a["day_utc"].to_list()).issubset({dt.date(2024, 1, 2), dt.date(2024, 1, 3)})
+
+
+def test_sample_small_preview_does_not_use_full_collect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+
+    def _raise_if_collect(*args: object, **kwargs: object) -> pl.DataFrame:
+        raise AssertionError("sample() should not call collect() for bounded previews")
+
+    monkeypatch.setattr(type(dataset), "collect", _raise_if_collect)
+
+    sample = dataset.sample(2, seed=7)
+
+    assert sample.height == 2
+
+
 def test_filter_dates_is_inclusive_and_chainable(tmp_path: Path) -> None:
     dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
 
@@ -165,6 +195,19 @@ def test_filter_metrics_validates_unknown_family_and_category(tmp_path: Path) ->
         dataset.filter_metrics(categories=["bogus"])
 
 
+def test_available_metrics_and_metric_counts_reflect_current_slice(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+    filtered = dataset.filter_dates(start="2024-01-02", end="2024-01-03")
+
+    assert filtered.available_metrics() == ["10y_cagr", "adjusted_sopr", "market_cap", "mvrv", "supply_btc"]
+
+    counts = filtered.metric_counts()
+    rows = counts.to_dicts()
+    assert rows[0]["metric"] == "market_cap"
+    assert rows[0]["coverage_rows"] == 2
+    assert rows[-1]["metric"] == "supply_btc"
+
+
 def test_metric_series_sorts_and_validates_metric(tmp_path: Path) -> None:
     dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
 
@@ -179,6 +222,19 @@ def test_metric_series_sorts_and_validates_metric(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unknown metric: not_real"):
         dataset.metric_series("not_real")
+
+
+def test_metric_series_empty_slice_behavior_is_opt_in(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+    filtered = dataset.filter_dates(start="2024-01-02", end="2024-01-03")
+
+    empty = filtered.metric_series("adjusted_sopr", error_if_empty=False)
+    assert empty.height == 1
+
+    later = dataset.filter_dates(start="2024-01-03", end="2024-01-03")
+    assert later.metric_series("adjusted_sopr", error_if_empty=False).is_empty()
+    with pytest.raises(ValueError, match="Current filtered dataset has no rows for metric 'adjusted_sopr'"):
+        later.metric_series("adjusted_sopr", error_if_empty=True)
 
 
 def test_metric_coverage_uses_current_dataset_window(tmp_path: Path) -> None:
@@ -203,6 +259,19 @@ def test_pivot_wide_supports_metric_subset_and_fill_null(tmp_path: Path) -> None
     assert wide.filter(pl.col("day_utc") == dt.date(2024, 1, 2))["market_cap"][0] == 105.0
 
 
+def test_filter_search_uses_catalog_search_and_empty_query_is_noop(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+
+    assert dataset.filter_search("") is dataset
+
+    searched = dataset.filter_search("sopr")
+    assert searched.available_metrics() == ["adjusted_sopr"]
+    assert searched.summary()["row_count"] == 2
+
+    empty = dataset.filter_search("not a real search query")
+    assert empty.summary()["row_count"] == 0
+
+
 def test_load_metric_catalog_summary_and_lists() -> None:
     catalog = load_metric_catalog()
 
@@ -215,7 +284,7 @@ def test_load_metric_catalog_summary_and_lists() -> None:
     assert "Market and valuation" in catalog.categories()
 
 
-def test_metric_catalog_search_filter_and_coverage() -> None:
+def test_metric_catalog_search_filter_coverage_describe_and_suggest() -> None:
     catalog = load_metric_catalog()
 
     search = catalog.search("sopr")
@@ -227,6 +296,9 @@ def test_metric_catalog_search_filter_and_coverage() -> None:
         categories=["Supply, issuance, and scarcity"],
     )
     coverage = catalog.coverage(["market_cap"])
+    describe = catalog.describe_metric("adjusted_sopr")
+    suggest_exact = catalog.suggest_metrics("market_cap", limit=3)
+    suggest_prefix = catalog.suggest_metrics("adjusted sop", limit=5)
 
     assert "adjusted_sopr" in search["metric"].to_list()
     filtered_metrics = set(filtered["metric"].to_list())
@@ -234,6 +306,30 @@ def test_metric_catalog_search_filter_and_coverage() -> None:
         filtered_metrics
     )
     assert coverage.to_dicts()[0]["metric"] == "market_cap"
+    assert describe["metric"] == "adjusted_sopr"
+    assert describe["access_category"] == "Profitability and SOPR"
+    assert suggest_exact.to_dicts()[0]["metric"] == "market_cap"
+    assert any(row["metric"] == "adjusted_sopr" for row in suggest_prefix.to_dicts())
+
+
+def test_metric_catalog_suggest_ranking_prefers_exact_then_prefix_then_substring() -> None:
+    catalog = load_metric_catalog()
+
+    exact = catalog.suggest_metrics("market_cap", limit=5)
+    prefix = catalog.suggest_metrics("market", limit=10)
+    substring = catalog.suggest_metrics("sopr", limit=10)
+
+    assert exact.to_dicts()[0]["metric"] == "market_cap"
+    assert prefix.to_dicts()[0]["metric"].startswith("market")
+    assert substring.height > 0
+    assert substring["metric"].to_list()[:3] == ["sopr", "sopr_30d_ema", "sopr_7d_ema"]
+
+
+def test_metric_catalog_describe_metric_rejects_unknown_metric() -> None:
+    catalog = load_metric_catalog()
+
+    with pytest.raises(ValueError, match="Unknown metric: not_real"):
+        catalog.describe_metric("not_real")
 
 
 def test_metric_catalog_and_dataset_reject_unknown_explicit_metrics(

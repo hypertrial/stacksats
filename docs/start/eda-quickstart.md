@@ -24,11 +24,15 @@ from stacksats import open_merged_metrics
 
 dataset = open_merged_metrics()
 print(dataset.summary())
+print(dataset.head(5))
+print(dataset.sample(5, seed=0))
 ```
 
 By default, `open_merged_metrics()` resolves the newest fetched canonical parquet under `~/.stacksats/data/brk/`. You can also pass an explicit path.
 
-## Search the metric catalog
+Use `head(...)` and `sample(...)` before larger collects or pivots so you can inspect the current slice safely.
+
+## Discover metrics with the catalog
 
 ```python
 from stacksats import load_metric_catalog
@@ -36,9 +40,13 @@ from stacksats import load_metric_catalog
 catalog = load_metric_catalog()
 print(catalog.summary())
 print(catalog.search("sopr").select("metric", "family", "access_category").head(5))
+print(catalog.suggest_metrics("mvr"))
+print(catalog.describe_metric("adjusted_sopr"))
 ```
 
 Use the catalog to discover metric names, families, access categories, and coverage metadata before narrowing the dataset.
+
+Global catalog metadata tells you which metrics exist in the canonical dataset overall. It does not guarantee those metrics are present in your current filtered slice.
 
 ## Filter by date, metric, family, or category
 
@@ -56,9 +64,26 @@ filtered = (
 
 print(filtered.summary())
 print(filtered.metric_coverage())
+print(filtered.available_metrics())
+print(filtered.metric_counts())
 ```
 
 Selector filters use union semantics across the provided selectors.
+
+## Bridge search directly into data filtering
+
+```python
+searched = (
+    dataset
+    .filter_search("sopr")
+    .filter_dates(start="2020-01-01", end="2024-12-31")
+)
+
+print(searched.available_metrics())
+print(searched.metric_series("adjusted_sopr", error_if_empty=True).head())
+```
+
+`filter_search(...)` uses the same broad text matching as the catalog search. If a metric exists globally but is absent from your current filtered slice, `metric_series(..., error_if_empty=True)` raises a clear error instead of returning an empty frame silently.
 
 ## Pivot wide for downstream analysis
 
