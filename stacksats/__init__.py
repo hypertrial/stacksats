@@ -8,6 +8,7 @@ from .api import (
     ValidationResult,
 )
 from .column_map_provider import ColumnMapDataProvider, ColumnMapError
+from .eda import MergedMetricsDataset, MetricCatalog, load_metric_catalog, open_merged_metrics
 from .feature_time_series import FeatureTimeSeries
 from .loader import load_strategy
 from .model_development import precompute_features
@@ -42,6 +43,7 @@ from .strategy_types import (
 __all__ = [
     # Primary objects
     "FeatureTimeSeries",
+    "MergedMetricsDataset",
     "WeightTimeSeries",
     "WeightTimeSeriesBatch",
     "BaseStrategy",
@@ -58,6 +60,7 @@ __all__ = [
     "ColumnMapDataProvider",
     "ColumnMapError",
     "ColumnSpec",
+    "MetricCatalog",
     "DailyOrderReceipt",
     "DailyOrderRequest",
     "DayState",
@@ -74,7 +77,9 @@ __all__ = [
     "StrategySpec",
     "TargetProfile",
     "load_strategy",
+    "load_metric_catalog",
     "load_data",
+    "open_merged_metrics",
     "precompute_features",
     "strategy_context_from_features_df",
 ]

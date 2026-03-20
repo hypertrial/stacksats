@@ -9,6 +9,7 @@ This section is generated from source code docstrings and signatures.
 
 ## Core modules
 
+- [eda](eda.md)
 - [strategy_types](strategy-types.md)
 - [runner](runner.md)
 - [api module](api-module.md)

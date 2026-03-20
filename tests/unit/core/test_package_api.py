@@ -8,7 +8,16 @@ import stacksats
 import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
 import stacksats.strategy_time_series as strategy_time_series
-from stacksats import BacktestConfig, MVRVStrategy, WeightTimeSeries, WeightTimeSeriesBatch
+from stacksats import (
+    BacktestConfig,
+    MVRVStrategy,
+    MergedMetricsDataset,
+    MetricCatalog,
+    WeightTimeSeries,
+    WeightTimeSeriesBatch,
+    load_metric_catalog,
+    open_merged_metrics,
+)
 from stacksats.strategies.examples import UniformStrategy
 from tests.test_helpers import btc_frame
 
@@ -69,3 +78,10 @@ def test_removed_timeseries_aliases_are_not_exported() -> None:
     assert not hasattr(strategy_time_series, "TimeSeriesBatch")
     assert not hasattr(strategy_time_series, "StrategyTimeSeries")
     assert not hasattr(strategy_time_series, "StrategyTimeSeriesBatch")
+
+
+def test_eda_api_is_exported() -> None:
+    assert MergedMetricsDataset is stacksats.MergedMetricsDataset
+    assert MetricCatalog is stacksats.MetricCatalog
+    assert open_merged_metrics is stacksats.open_merged_metrics
+    assert load_metric_catalog is stacksats.load_metric_catalog

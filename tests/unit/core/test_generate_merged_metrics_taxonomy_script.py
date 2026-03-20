@@ -52,11 +52,11 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     doc_output = tmp_path / "taxonomy.md"
     catalog_output = tmp_path / "catalog.json"
     guide_output = tmp_path / "guide.md"
+    packaged_catalog_output = tmp_path / "packaged_catalog.json"
     _write_synthetic_merged_metrics(parquet_path)
 
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
-
     generate = subprocess.run(
         [
             sys.executable,
@@ -71,6 +71,8 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(catalog_output),
             "--guide-output",
             str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
         ],
         cwd=repo_root,
         env=env,
@@ -83,6 +85,7 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     assert doc_output.exists()
     assert catalog_output.exists()
     assert guide_output.exists()
+    assert packaged_catalog_output.exists()
 
     taxonomy = json.loads(json_output.read_text(encoding="utf-8"))
     assert taxonomy["dataset_snapshot"]["distinct_metrics"] == 24
@@ -95,6 +98,8 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     catalog = json.loads(catalog_output.read_text(encoding="utf-8"))
     assert catalog["dataset_snapshot"]["distinct_metrics"] == 24
     assert len(catalog["metrics"]) == 24
+    packaged_catalog = json.loads(packaged_catalog_output.read_text(encoding="utf-8"))
+    assert packaged_catalog == catalog
     assert "Merged Metrics Data Guide" in guide_output.read_text(encoding="utf-8")
 
     check = subprocess.run(
@@ -111,6 +116,8 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(catalog_output),
             "--guide-output",
             str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
             "--check",
         ],
         cwd=repo_root,
@@ -121,8 +128,12 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     )
     assert check.returncode == 0, check.stderr or check.stdout
     assert "outputs are up to date" in check.stdout
+    assert str(packaged_catalog_output) in check.stdout
 
-    doc_output.write_text(doc_output.read_text(encoding="utf-8") + "\n<!-- stale -->\n", encoding="utf-8")
+    doc_output.write_text(
+        doc_output.read_text(encoding="utf-8") + "\n<!-- stale -->\n",
+        encoding="utf-8",
+    )
     stale = subprocess.run(
         [
             sys.executable,
@@ -137,6 +148,8 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
             str(catalog_output),
             "--guide-output",
             str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
             "--check",
         ],
         cwd=repo_root,

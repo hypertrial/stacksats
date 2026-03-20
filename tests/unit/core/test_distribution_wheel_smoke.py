@@ -99,13 +99,26 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
                 [
                     "from pathlib import Path",
                     "import stacksats",
-                    "from stacksats.data_setup import packaged_demo_parquet_path",
+                    "from stacksats.data_setup import packaged_demo_parquet_path, packaged_text",
+                    "from stacksats.eda import load_metric_catalog, open_merged_metrics",
                     "import polars as pl",
                     "print(Path(stacksats.__file__).resolve())",
                     "with packaged_demo_parquet_path() as path:",
                     "    print(path.resolve())",
                     "    print(path.exists())",
                     "    print(pl.read_parquet(path).height)",
+                    "catalog = load_metric_catalog()",
+                    "print(catalog.summary()['metric_count'])",
+                    "payload = packaged_text('brk_merged_metrics_catalog.json')",
+                    "print('market_cap' in payload)",
+                    "canonical = Path('synthetic_merged_metrics.parquet')",
+                    "pl.DataFrame([",
+                    "    {'day_utc': '2024-01-01', 'metric': 'market_cap', 'value': 100.0},",
+                    "    {'day_utc': '2024-01-01', 'metric': 'adjusted_sopr', 'value': 1.1},",
+                    "    {'day_utc': '2024-01-02', 'metric': 'market_cap', 'value': 101.0},",
+                    "]).with_columns(pl.col('day_utc').str.to_date()).write_parquet(canonical)",
+                    "dataset = open_merged_metrics(canonical)",
+                    "print(dataset.summary()['row_count'])",
                 ]
             ),
         ],
@@ -113,13 +126,16 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
         env=runtime_env,
     )
     asset_lines = [line.strip() for line in asset_check.stdout.splitlines() if line.strip()]
-    assert len(asset_lines) >= 4, f"Unexpected asset probe output: {asset_check.stdout}"
+    assert len(asset_lines) >= 7, f"Unexpected asset probe output: {asset_check.stdout}"
     module_path = Path(asset_lines[0])
     asset_path = Path(asset_lines[1])
     assert str(module_path).startswith(str(venv_dir.resolve()))
     assert str(asset_path).startswith(str(venv_dir.resolve()))
     assert asset_lines[2] == "True"
     assert int(asset_lines[3]) > 3000
+    assert int(asset_lines[4]) > 40_000
+    assert asset_lines[5] == "True"
+    assert asset_lines[6] == "3"
 
     result = _run_checked(
         [str(cli_path), "demo", "backtest", "--output-dir", str(output_dir)],

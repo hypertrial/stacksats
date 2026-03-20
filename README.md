@@ -174,10 +174,13 @@ Top-level exports:
 - `BacktestResult`, `ValidationResult`, `DailyRunResult`
 - `DailyOrderRequest`, `DailyOrderReceipt`
 - `ColumnMapDataProvider`, `ColumnMapError`
-- `StrategyRunner`, `load_strategy()`, `load_data()`, `precompute_features()`
+- `MergedMetricsDataset`, `MetricCatalog`
+- `StrategyRunner`, `load_strategy()`, `load_data()`, `open_merged_metrics()`, `load_metric_catalog()`, `precompute_features()`
 - `MVRVStrategy`, `ExampleMVRVStrategy`, `MVRVPlusStrategy`
 
 `load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
+
+For canonical `merged_metrics*.parquet` exploration, use `open_merged_metrics()` and `load_metric_catalog()`. See [docs/start/eda-quickstart.md](docs/start/eda-quickstart.md).
 
 ## Development
 

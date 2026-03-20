@@ -88,6 +88,7 @@ nav:
       - Welcome: index.md
       - Quickstart: start/quickstart.md
       - Full Data Setup: start/full-data-setup.md
+      - EDA Quickstart: start/eda-quickstart.md
       - First Strategy Run: start/first-strategy-run.md
       - Minimal Strategy Examples: start/minimal-strategy-examples.md
       - Notebook Demo: start/notebook-demo.md
@@ -127,6 +128,7 @@ nav:
       - WeightTimeSeries Schema: reference/strategy-timeseries-schema.md
       - API Reference:
           - API Index: reference/api/index.md
+          - eda: reference/api/eda.md
           - strategy_types: reference/api/strategy-types.md
           - runner: reference/api/runner.md
           - api module: reference/api/api-module.md

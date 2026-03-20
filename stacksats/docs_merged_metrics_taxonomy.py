@@ -288,6 +288,11 @@ def catalog_json_path(root_dir: Path | None = None) -> Path:
     return base / "data" / "brk_merged_metrics_catalog.json"
 
 
+def packaged_catalog_json_path(root_dir: Path | None = None) -> Path:
+    base = root_dir or Path(__file__).resolve().parents[1]
+    return base / "stacksats" / "assets" / "brk_merged_metrics_catalog.json"
+
+
 def data_guide_docs_path(root_dir: Path | None = None) -> Path:
     base = root_dir or Path(__file__).resolve().parents[1]
     return base / "docs" / "reference" / "merged-metrics-data-guide.md"

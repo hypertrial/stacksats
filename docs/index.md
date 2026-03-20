@@ -26,6 +26,7 @@ Then choose your next path:
 
 - [Quickstart](start/quickstart.md) for the offline packaged demo
 - [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
+- [EDA Quickstart](start/eda-quickstart.md) for notebook/script exploration of canonical `merged_metrics`
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
 
 ## Canonical Dataset
@@ -40,6 +41,7 @@ Start here:
 
 - [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
 - [BRK Data Source](data-source.md)
+- [EDA Quickstart](start/eda-quickstart.md)
 - [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
 - [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
 

@@ -14,6 +14,7 @@ Canonical file link:
 
 Canonical schema page:
 
+- [EDA Quickstart](start/eda-quickstart.md)
 - [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
 - [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md)
 - [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md)
@@ -67,6 +68,8 @@ Polars `LazyFrame` pipelines and the runner/registry collect once after joining
 the observed feature set for eager strategy execution.
 
 That BRK-wide parquet is a derived artifact from canonical `merged_metrics`.
+For direct exploration of the canonical long-format parquet, use the public
+[`stacksats.eda`](reference/api/eda.md) API instead of the runtime loader path.
 
 Current minimal projection for built-in strategy audit tooling:
 

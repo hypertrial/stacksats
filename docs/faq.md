@@ -86,6 +86,9 @@ If you need a lazy integration point before the final execution boundary, use `B
 
 Use top-level `stacksats` exports and documented API modules. Lower-level modules (`stacksats.backtest`, `stacksats.prelude`, `stacksats.export_weights`) are implementation details and may change.
 
+For canonical `merged_metrics*.parquet` exploration, use the stable public
+`stacksats.eda` module and [EDA Quickstart](start/eda-quickstart.md).
+
 See: [API Reference](reference/api/index.md).
 
 ## Docs feedback workflow

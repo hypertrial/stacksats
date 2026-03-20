@@ -63,9 +63,12 @@ stacksats strategy backtest \
 - `data prepare` accepts canonical long-format `merged_metrics*.parquet` and produces the
   runtime `bitcoin_analytics.parquet`.
 - `data doctor` is the fastest way to debug missing-path and coverage problems.
+- For notebook/script exploration of the canonical long-format parquet, use
+  [EDA Quickstart](eda-quickstart.md) and `stacksats.eda`.
 
 ## Next Steps
 
+- [EDA Quickstart](eda-quickstart.md)
 - [Quickstart](quickstart.md)
 - [BRK Data Source](../data-source.md)
 - [Data Command](../run/data.md)

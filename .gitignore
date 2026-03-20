@@ -191,6 +191,7 @@ cython_debug/
 
 # Ruff stuff:
 .ruff_cache/
+.benchmarks/
 
 # PyPI configuration file
 .pypirc
@@ -210,6 +211,7 @@ __marimo__/
 .DS_Store
 :memory:
 *.duckdb
+.stacksats/
 
 /output
 *.parquet
