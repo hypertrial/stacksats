@@ -189,6 +189,7 @@ Example `artifacts.json` (shape):
 
 ```json
 {
+  "schema_version": "1.0.0",
   "strategy_id": "simple-zscore",
   "version": "1.0.0",
   "config_hash": "abc123",

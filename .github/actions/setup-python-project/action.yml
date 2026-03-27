@@ -9,6 +9,10 @@ inputs:
     description: Extras spec passed to pip install -e.
     required: false
     default: ".[dev]"
+  constraints-file:
+    description: Optional constraints file passed to pip install with -c.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -24,4 +28,8 @@ runs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install -e "${{ inputs.extras }}"
+        if [ -n "${{ inputs.constraints-file }}" ]; then
+          pip install -c "${{ inputs.constraints-file }}" -e "${{ inputs.extras }}"
+        else
+          pip install -e "${{ inputs.extras }}"
+        fi

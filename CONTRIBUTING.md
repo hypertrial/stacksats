@@ -10,14 +10,16 @@ From the repository root:
 python -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e ".[dev]"
+pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
 pip install pre-commit
 venv/bin/python -m pre_commit install -t pre-commit
 ```
 
-Optional deploy extras:
+Optional targeted extras:
 
 ```bash
+pip install -e ".[viz]"
+pip install -e ".[network]"
 pip install -e ".[deploy]"
 ```
 
@@ -75,6 +77,7 @@ Current source contract is BRK parquet–only; keep runtime, docs, and tests ali
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 - If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.
+- If you change the stable contract or support policy, update `docs/stability.md`, `README.md`, and migration notes in the same PR.
 
 ## Release notes policy
 

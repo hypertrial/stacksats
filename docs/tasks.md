@@ -17,7 +17,7 @@ Global source contract:
 ### Prerequisites
 
 - Strategy file exists and can be loaded (`module_or_path:ClassName`).
-- Local install is complete (`venv/bin/python -m pip install -e ".[dev]"`).
+- Local install is complete (`venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"`).
 
 ### Command
 
@@ -82,6 +82,7 @@ stacksats strategy backtest \
 
 - You already have a backtest artifact (`backtest_result.json`).
 - The run directory has write access for GIF/manifest output.
+- Visual extras are installed: `pip install "stacksats[viz]"`.
 
 ### Command
 
@@ -100,7 +101,7 @@ stacksats strategy animate \
 ### Expected output
 
 - `strategy_vs_uniform_hd.gif`
-- `animation_manifest.json` with `frames`, `fps`, `window_mode`, and `source_backtest_json`.
+- `animation_manifest.json` with `schema_version`, render settings, and source/provenance fields.
 
 ### Troubleshooting
 

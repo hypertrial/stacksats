@@ -88,7 +88,8 @@ Optional contract helpers:
         return ("price_vs_ma", "mvrv_zscore", "mvrv_gradient")
 ```
 
-`ctx.features_df` is always observed-only. Strategy hooks do not receive rows after `current_date`, and strict contract validation rejects direct file, DB, or network access inside strategy methods.
+`ctx.features_df` is always observed-only. Strategy hooks do not receive rows after `current_date`.
+StackSats also runs best-effort static causal lint checks for patterns such as direct file/network I/O, negative shifts, and centered rolling windows. These checks are heuristic and source-dependent; they are not a security sandbox or a complete leakage proof.
 
 `build_target_profile_lazy(...)` is opt-in and only used for profile-mode strategies. `propose_weight(...)` remains eager because it depends on per-day state.
 

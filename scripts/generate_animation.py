@@ -92,7 +92,9 @@ def main() -> int:
         pass
     print(f"Date range: {start_date} to {end_date} ({btc_df.height} rows)")
 
-    strategy = load_strategy("stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy")
+    strategy = load_strategy(
+        "stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy"
+    )
     runner = StrategyRunner()
 
     print("Running backtest...")

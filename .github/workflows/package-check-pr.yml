@@ -34,7 +34,8 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.11"
-          extras: ".[dev]"
+          extras: ".[dev,all]"
+          constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Run lint
         run: ruff check .
@@ -73,12 +74,12 @@ jobs:
             python_version: "3.11"
             test_target: tests/unit tests/bdd/scenarios
             marker: "not slow and not integration and not performance"
-            extras: ".[dev,deploy]"
+            extras: ".[dev,all]"
           - name: py312-smoke
             python_version: "3.12"
             test_target: tests/unit tests/bdd/scenarios
             marker: "not slow and not integration and not performance"
-            extras: ".[dev,deploy]"
+            extras: ".[dev,all]"
 
     steps:
       - name: Check out code
@@ -92,6 +93,7 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
           extras: "${{ matrix.extras }}"
+          constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Run tests
         run: pytest ${{ matrix.test_target }} -v -m "${{ matrix.marker }}" \
@@ -175,7 +177,7 @@ jobs:
       - name: Install packaging tools
         run: |
           python -m pip install --upgrade pip
-          pip install build twine setuptools-scm
+          pip install -c requirements/constraints-maintainer.txt build twine setuptools-scm
 
       - name: Build package
         run: python -m build

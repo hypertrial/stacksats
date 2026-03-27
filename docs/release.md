@@ -32,8 +32,8 @@ Use Python 3.11+ and install packaging tools:
 python -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e ".[dev]"
-venv/bin/python -m pip install --upgrade build twine
+pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
+venv/bin/python -m pip install -c requirements/constraints-maintainer.txt --upgrade build twine
 ```
 
 ### Local token handling (default)
@@ -118,9 +118,10 @@ bash scripts/publish_pypi_manual.sh
 
 ## CI Workflow Notes
 
-- Pull requests run fast packaging checks (`package-check-pr.yml`) and docs checks.
-- Pushes to `main` that match workflow scope run packaging and docs checks (`package-check.yml`) without the heavy coverage gate.
-- Full non-performance coverage runs in the scheduled/manual `coverage-report.yml` workflow.
+- `release-gate.yml` is the release-grade blocking workflow for `release/*` branches and `v*` tags.
+- Pull requests run fast confidence checks (`package-check-pr.yml`) and docs checks. They are intentionally faster than the release gate and are not release sign-off.
+- Pushes to `main` run `package-check.yml` for ongoing confidence, not release approval.
+- Full non-performance coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
 - Coverage fail-under is `100%` line coverage for `stacksats/` and should not be lowered in routine maintenance PRs.
 - CLI docs examples are smoke-tested in scheduled/manual `example-commands-smoke.yml`.
 - PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
@@ -132,6 +133,7 @@ bash scripts/publish_pypi_manual.sh
   - docs reference checks
   - docs UX structure checks
   - strict docs build
+- Both `docs-check.yml` and `docs-pages.yml` install with `requirements/constraints-maintainer.txt` and `.[dev,all]` so docs environments stay aligned with release-grade installs.
 - Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
 
 ## GitHub Pages Source
@@ -144,11 +146,13 @@ Use this sequence after workflows are merged:
 
 1. Open a PR with release notes/changelog updates and verify `package-check-pr.yml` passes.
 2. Run `bash scripts/release_check.sh` on the release candidate commit.
-3. Create and push annotated tag `vX.Y.Z`.
-4. Rebuild from the tagged commit context and run `twine check dist/*`.
-5. Run `bash scripts/publish_pypi_manual.sh`.
-6. Verify package page on PyPI.
-7. Install from PyPI in a fresh virtual environment and run command smoke tests.
+3. Push the release candidate to a `release/*` branch and verify `release-gate.yml` passes.
+4. Create and push annotated tag `vX.Y.Z`.
+5. Verify the tag-triggered `release-gate.yml` run passes.
+6. Rebuild from the tagged commit context and run `twine check dist/*`.
+7. Run `bash scripts/publish_pypi_manual.sh`.
+8. Verify package page on PyPI.
+9. Install from PyPI in a fresh virtual environment and run command smoke tests.
 
 Expected results:
 

@@ -14,6 +14,7 @@ import sys
 from types import ModuleType
 from typing import Tuple
 
+from ._optional import missing_dependency_error
 from .matplotlib_setup import configure_matplotlib_env
 from .plot_weights_data import (
     fetch_weights_for_date_range as _fetch_weights_for_date_range,
@@ -24,9 +25,22 @@ from .plot_weights_data import get_oldest_date_range as _get_oldest_date_range
 from .plot_weights_data import validate_date_range as _validate_date_range
 from .plot_weights_render import plot_dca_weights as _plot_dca_weights
 
-import matplotlib.dates as mdates  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
-import seaborn as sns  # noqa: E402
+_VIZ_IMPORT_ERROR: ImportError | None = None
+
+try:
+    import matplotlib.dates as mdates  # noqa: E402
+    import matplotlib.pyplot as plt  # noqa: E402
+    import seaborn as sns  # noqa: E402
+except ImportError:
+    _VIZ_IMPORT_ERROR = missing_dependency_error(
+        dependency="matplotlib/seaborn",
+        extra="viz",
+        feature="plotting commands",
+    )
+    mdates = ModuleType("matplotlib.dates")
+    plt = ModuleType("matplotlib.pyplot")
+    plt.rcParams = {}
+    sns = ModuleType("seaborn")
 
 try:
     import psycopg2  # noqa: E402
@@ -53,6 +67,7 @@ def _load_dotenv_if_available() -> None:
 
 
 def _init_plot_env() -> None:
+    _ensure_viz_available()
     configure_matplotlib_env()
     try:
         plt.switch_backend("Agg")
@@ -61,6 +76,11 @@ def _init_plot_env() -> None:
     sns.set_style("whitegrid")
     plt.rcParams["figure.dpi"] = 100
     plt.rcParams["savefig.dpi"] = 300
+
+
+def _ensure_viz_available() -> None:
+    if _VIZ_IMPORT_ERROR is not None:
+        raise _VIZ_IMPORT_ERROR
 
 
 def get_db_connection():
@@ -99,6 +119,7 @@ def plot_dca_weights(
     output_path: str = "oldest_weights_plot.svg",
 ):
     """Create and save a plot of DCA weights over time."""
+    _ensure_viz_available()
     return _plot_dca_weights(
         df,
         start_date,
@@ -112,7 +133,6 @@ def plot_dca_weights(
 
 def main():
     """Main function to plot DCA weights for specified or oldest date range."""
-    _init_plot_env()
     parser = argparse.ArgumentParser(
         description="Plot DCA weights for a specified start_date and end_date pair from NeonDB",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -182,6 +202,7 @@ Examples:
         df = fetch_weights_for_date_range(conn, start_date, end_date)
 
         output_path = args.output
+        _init_plot_env()
         plot_dca_weights(df, start_date, end_date, output_path)
 
         print("\n✓ Successfully created DCA weights plot")

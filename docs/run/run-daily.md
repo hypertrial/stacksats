@@ -44,7 +44,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Next step
 
-- Reconcile previous run state: `stacksats strategy reconcile-daily ...`.
+- Inspect the structured JSON result and the persisted state DB for the executed run. `reconcile-daily` remains an internal maintenance command and is not part of the stable CLI contract.
 
 ## Feedback
 

@@ -24,7 +24,8 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.11"
-          extras: ".[dev]"
+          extras: ".[dev,all]"
+          constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Collect tracked markdown files
         run: |

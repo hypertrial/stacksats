@@ -46,6 +46,7 @@ def test_config_defaults() -> None:
 
 def test_strategy_artifact_set_fields() -> None:
     artifacts = StrategyArtifactSet(
+        schema_version="1.0.0",
         strategy_id="my-strategy",
         version="1.0.0",
         config_hash="abc123",
@@ -53,6 +54,7 @@ def test_strategy_artifact_set_fields() -> None:
         output_dir="output/my-strategy/1.0.0/run-1",
         files={"weights_csv": "weights.csv"},
     )
+    assert artifacts.schema_version == "1.0.0"
     assert artifacts.files["weights_csv"] == "weights.csv"
 
 

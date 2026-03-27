@@ -29,8 +29,8 @@ STRATEGY_SPECS = [
     "stacksats.strategies.examples:SimpleZScoreStrategy",
     "stacksats.strategies.examples:MomentumStrategy",
     "stacksats.strategies.mvrv:MVRVStrategy",
-    "stacksats.strategies.model_example:ExampleMVRVStrategy",
-    "stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy",
+    "stacksats.strategies.experimental.model_example:ExampleMVRVStrategy",
+    "stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy",
 ]
 
 MERGED_METRICS = (

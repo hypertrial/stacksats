@@ -155,13 +155,27 @@ Includes:
 
 ## Artifact Previews
 
-Example `metrics.json` (shape):
+Example `metrics.json` (truncated shape):
 
 ```json
 {
-  "win_rate": 62.4,
-  "exp_decay_percentile": 58.1,
-  "score": 60.25
+  "schema_version": "1.0.0",
+  "timestamp": "2026-03-27T09:30:00.000000",
+  "summary_metrics": {
+    "win_rate": 62.4,
+    "exp_decay_percentile": 58.1,
+    "score": 60.25,
+    "exp_decay_multiple_vs_uniform": 1.043
+  },
+  "window_level_data": [
+    {
+      "window": "2024-01-01 → 2024-12-31",
+      "start_date": "2024-01-01T00:00:00",
+      "dynamic_percentile": 58.7,
+      "uniform_percentile": 56.1,
+      "excess_percentile": 2.6
+    }
+  ]
 }
 ```
 
@@ -172,15 +186,50 @@ start_date,end_date,day_index,date,price_usd,weight
 2025-12-01,2026-11-30,0,2025-12-01,96250.12,0.0027397260
 ```
 
-Example `backtest_result.json` (shape):
+Example `backtest_result.json` (truncated shape):
 
 ```json
 {
-  "summary": {
-    "win_rate": 62.4,
-    "exp_decay_percentile": 58.1
+  "schema_version": "1.0.0",
+  "provenance": {
+    "strategy_id": "simple-zscore",
+    "version": "1.0.0",
+    "config_hash": "abc123",
+    "run_id": "run-001"
   },
-  "run_id": "..."
+  "summary_metrics": {
+    "score": 60.25,
+    "win_rate": 62.4,
+    "exp_decay_percentile": 58.1,
+    "uniform_exp_decay_percentile": 55.8,
+    "exp_decay_multiple_vs_uniform": 1.041,
+    "windows": 12
+  },
+  "window_level_data": [
+    {
+      "window": "2024-01-01 → 2024-12-31",
+      "dynamic_percentile": 58.7,
+      "uniform_percentile": 56.1,
+      "excess_percentile": 2.6
+    }
+  ]
+}
+```
+
+Example `artifacts.json` (truncated shape):
+
+```json
+{
+  "schema_version": "1.0.0",
+  "strategy_id": "simple-zscore",
+  "version": "1.0.0",
+  "config_hash": "abc123",
+  "run_id": "run-001",
+  "output_dir": "/abs/path/output/simple-zscore/1.0.0/run-001",
+  "files": {
+    "weights_csv": "weights.csv",
+    "timeseries_schema_md": "timeseries_schema.md"
+  }
 }
 ```
 

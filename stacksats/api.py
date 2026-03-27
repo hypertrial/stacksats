@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+
 WIN_RATE_TOLERANCE = 1e-10
 
 
@@ -59,6 +61,7 @@ class BacktestResult:
     def to_json(self, path: str | Path | None = None) -> dict:
         """Serialize result to a JSON-compatible dictionary."""
         payload = {
+            "schema_version": PUBLIC_ARTIFACT_SCHEMA_VERSION,
             "provenance": {
                 "strategy_id": self.strategy_id,
                 "version": self.strategy_version,
@@ -154,6 +157,7 @@ class BacktestResult:
             source_json_path = str(Path(source_backtest_json).expanduser().resolve())
 
         manifest_payload = {
+            "schema_version": PUBLIC_ARTIFACT_SCHEMA_VERSION,
             "frames": int(render_meta["frames"]),
             "fps": int(render_meta["fps"]),
             "width": int(render_meta["width"]),

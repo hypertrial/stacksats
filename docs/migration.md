@@ -22,6 +22,7 @@ This page covers migration for:
 - compatibility API removals
 - strict source-only loader behavior
 - strategy contract hardening for metadata, params, and intent selection
+- v1 public-API narrowing and experimental strategy namespace moves
 
 ## Old -> New Mapping
 
@@ -43,6 +44,9 @@ This page covers migration for:
 | `StrategyTimeSeriesBatch` | Removed. Use `WeightTimeSeriesBatch` |
 | `TimeSeries` | Removed. Use `WeightTimeSeries` |
 | `TimeSeriesBatch` | Removed. Use `WeightTimeSeriesBatch` |
+| `stacksats.strategies.model_example:ExampleMVRVStrategy` | `stacksats.strategies.experimental.model_example:ExampleMVRVStrategy` |
+| `stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy` | `stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy` |
+| importing advanced BRK overlay models from top-level `stacksats` | use the experimental namespace directly |
 
 ## Polars migration (core objects)
 
@@ -165,13 +169,14 @@ Notes:
 5. Validate `load_data(...)` consumers against strict source-only behavior.
 6. If your strategy implements both intent hooks, set `intent_preference` explicitly.
 7. Move runtime caches to private attrs and override `params()` if you expose non-serializable public config.
-8. Re-run fast tests:
+8. Update imports for experimental built-ins if you used the old pre-v1 paths.
+9. Re-run fast tests:
 
 ```bash
 venv/bin/python -m pytest -q
 ```
 
-9. Rebuild docs:
+10. Rebuild docs:
 
 ```bash
 venv/bin/python -m mkdocs build --strict

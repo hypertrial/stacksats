@@ -26,6 +26,7 @@ Local docs entry points:
 - [`docs/migration.md`](docs/migration.md) for old-to-new breaking-change mappings
 - [`docs/faq.md`](docs/faq.md) for recurring docs and integration questions
 - [`docs/framework.md`](docs/framework.md) for the framework contract
+- [`docs/stability.md`](docs/stability.md) for the supported `1.x` contract
 
 ## Framework Principles
 
@@ -43,20 +44,24 @@ See [`docs/framework.md`](docs/framework.md) for the canonical contract.
 pip install stacksats
 ```
 
+Optional extras:
+
+```bash
+pip install "stacksats[viz]"
+pip install "stacksats[network]"
+pip install "stacksats[deploy]"
+```
+
+Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
+
 For local development:
 
 ```bash
 python -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e ".[dev]"
+pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
 pip install pre-commit
-```
-
-Optional deploy extras:
-
-```bash
-pip install "stacksats[deploy]"
 ```
 
 ## Quick Start
@@ -91,6 +96,7 @@ For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/st
 Create a high-definition strategy-vs-uniform animation from an existing backtest:
 
 ```bash
+pip install "stacksats[viz]"
 stacksats strategy animate \
   --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
   --output-dir output/<strategy_id>/<version>/<run_id> \
@@ -163,7 +169,7 @@ If you need to reload an export later, use `WeightTimeSeriesBatch.from_artifact_
 
 ## Public API
 
-Top-level exports:
+Stable `1.x` contract:
 
 - `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
@@ -176,11 +182,14 @@ Top-level exports:
 - `ColumnMapDataProvider`, `ColumnMapError`
 - `MergedMetricsDataset`, `MetricCatalog`
 - `StrategyRunner`, `load_strategy()`, `load_data()`, `open_merged_metrics()`, `load_metric_catalog()`, `precompute_features()`
-- `MVRVStrategy`, `ExampleMVRVStrategy`, `MVRVPlusStrategy`
+- `UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
+
+Experimental/reference strategies now live under `stacksats.strategies.experimental.*` and are outside the stable `1.x` API boundary.
 
 `load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
 
 For canonical `merged_metrics*.parquet` exploration, use `open_merged_metrics()` and `load_metric_catalog()`. See [docs/start/eda-quickstart.md](docs/start/eda-quickstart.md).
+See [docs/stability.md](docs/stability.md) for the support matrix, deprecation policy, and CLI/artifact stability boundary.
 
 ## Development
 

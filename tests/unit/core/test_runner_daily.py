@@ -9,8 +9,8 @@ import pytest
 from stacksats.api import ValidationResult
 from stacksats.execution_state import IdempotencyConflictError
 from stacksats.runner import StrategyRunner
-from stacksats.strategies.model_example import ExampleMVRVStrategy
-from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy
+from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy
+from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy
 from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext
 
 

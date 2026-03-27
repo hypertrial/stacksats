@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from stacksats.strategies.model_example import ExampleMVRVStrategy, main
+from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy, main
 from stacksats.strategy_types import (
     BaseStrategy,
     validate_strategy_contract,
@@ -142,7 +142,7 @@ def test_main_executes_and_writes_outputs(monkeypatch, tmp_path: Path) -> None:
 
     class _FakeBacktest:
         strategy_id = "example-mvrv"
-        strategy_version = "4.2.0"
+        strategy_version = "0.1.0"
         run_id = "run-main"
 
         @staticmethod
@@ -173,7 +173,7 @@ def test_main_executes_and_writes_outputs(monkeypatch, tmp_path: Path) -> None:
         ],
     )
     main()
-    out = tmp_path / "example-mvrv" / "4.2.0" / "run-main" / "backtest_result.json"
+    out = tmp_path / "example-mvrv" / "0.1.0" / "run-main" / "backtest_result.json"
     assert out.exists()
 
 
@@ -187,7 +187,7 @@ def test_module_dunder_main_executes(monkeypatch, tmp_path: Path) -> None:
 
     class _FakeBacktest:
         strategy_id = "example-mvrv"
-        strategy_version = "4.2.0"
+        strategy_version = "0.1.0"
         run_id = "run-dunder"
 
         @staticmethod
@@ -219,4 +219,4 @@ def test_module_dunder_main_executes(monkeypatch, tmp_path: Path) -> None:
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.strategies.model_example", run_name="__main__")
+        runpy.run_module("stacksats.strategies.experimental.model_example", run_name="__main__")

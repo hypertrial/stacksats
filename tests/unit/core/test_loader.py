@@ -442,12 +442,19 @@ class SpeclessStrategy(BaseStrategy):
 
 
 def test_load_strategy_supports_packaged_example_mvrv_strategy() -> None:
-    strategy = load_strategy("stacksats.strategies.model_example:ExampleMVRVStrategy")
+    strategy = load_strategy("stacksats.strategies.experimental.model_example:ExampleMVRVStrategy")
     assert isinstance(strategy, BaseStrategy)
     assert strategy.strategy_id == "example-mvrv"
 
 
 def test_load_strategy_supports_packaged_mvrv_plus_strategy() -> None:
-    strategy = load_strategy("stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy")
+    strategy = load_strategy("stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy")
     assert isinstance(strategy, BaseStrategy)
     assert strategy.strategy_id == "mvrv-plus"
+
+
+def test_load_strategy_rejects_removed_pre_v1_experimental_paths() -> None:
+    with pytest.raises(ImportError):
+        load_strategy("stacksats.strategies.model_example:ExampleMVRVStrategy")
+    with pytest.raises(ImportError):
+        load_strategy("stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy")

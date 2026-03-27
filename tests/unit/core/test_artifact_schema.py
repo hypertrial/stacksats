@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from pathlib import Path
 
 import polars as pl
 
 from stacksats.api import BacktestResult
+from stacksats.backtest import export_metrics_json
 from stacksats.strategy_types import StrategyArtifactSet
 
 
@@ -32,6 +34,7 @@ def test_backtest_payload_includes_provenance() -> None:
         config_hash="abc123",
         run_id="run-001",
     ).to_json()
+    assert payload["schema_version"] == "1.0.0"
     assert payload["provenance"]["strategy_id"] == "my-strategy"
     assert payload["provenance"]["version"] == "1.2.3"
     assert payload["provenance"]["config_hash"] == "abc123"
@@ -40,6 +43,7 @@ def test_backtest_payload_includes_provenance() -> None:
 
 def test_strategy_artifact_set_json_contract() -> None:
     artifact = StrategyArtifactSet(
+        schema_version="1.0.0",
         strategy_id="my-strategy",
         version="1.0.0",
         config_hash="abc123",
@@ -48,5 +52,31 @@ def test_strategy_artifact_set_json_contract() -> None:
         files={"weights_csv": "weights.csv"},
     )
     payload = json.loads(json.dumps(asdict(artifact)))
-    required = {"strategy_id", "version", "config_hash", "run_id", "output_dir", "files"}
+    required = {
+        "schema_version",
+        "strategy_id",
+        "version",
+        "config_hash",
+        "run_id",
+        "output_dir",
+        "files",
+    }
     assert required.issubset(payload.keys())
+
+
+def test_metrics_payload_includes_schema_version(tmp_path) -> None:
+    spd = pl.DataFrame(
+        {
+            "window": ["2024-01-01 → 2025-01-01"],
+            "uniform_percentile": [50.0],
+            "dynamic_percentile": [55.0],
+            "dynamic_sats_per_dollar": [5000.0],
+            "uniform_sats_per_dollar": [4800.0],
+            "min_sats_per_dollar": [4000.0],
+            "max_sats_per_dollar": [6000.0],
+            "excess_percentile": [5.0],
+        }
+    )
+    path = export_metrics_json(spd, {"score": 77.5}, str(tmp_path))
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "1.0.0"

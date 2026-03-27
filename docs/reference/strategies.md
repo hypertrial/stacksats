@@ -14,6 +14,7 @@ Use this page for:
 - exposed tuning parameters and defaults
 - canonical validate/backtest/audit commands
 - reasonableness expectations when interpreting model results
+- support tier for built-in versus experimental reference strategies
 
 ## Purpose and Scope
 
@@ -53,7 +54,9 @@ Scoring defaults used by runtime and strategy audits:
 - default backtest end: `2025-12-31` (or earlier if data coverage ends sooner)
 - feature warmup history is included by default; scored windows still begin at the requested `start_date`
 
-## Built-in Strategy Catalog
+## Stable supported built-ins
+
+These strategies are part of the stable `1.x` contract.
 
 | Strategy | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Expected behavior | Common failure modes | Use when |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -61,8 +64,15 @@ Scoring defaults used by runtime and strategy audits:
 | `SimpleZScoreStrategy` | `stacksats.strategies.examples:SimpleZScoreStrategy` | `profile` | `core_model_features_v1` | none | none | Preference tilts toward lower `mvrv_zscore`; intended as a simple toy comparator. | Missing `mvrv_zscore` can collapse behavior near uniform-like outputs. | Quick toy benchmark for profile-hook flow and contract checks. |
 | `MomentumStrategy` | `stacksats.strategies.examples:MomentumStrategy` | `profile` | `core_model_features_v1` | `price_usd` | none | Contrarian tilt from 30-day momentum (`pct_change(30)`), clipped and converted to preference scores. | Missing `price_usd`, sparse data windows, or very short ranges produce weak/flat signals. | Toy momentum baseline and sensitivity checks. |
 | `MVRVStrategy` | `stacksats.strategies.mvrv:MVRVStrategy` | `profile` | `core_model_features_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence` | none | Core package MVRV/MA preference model via `compute_preference_scores(...)`. | Missing transformed feature columns from provider/materialization path. | Canonical production-style baseline model. |
-| `ExampleMVRVStrategy` | `stacksats.strategies.model_example:ExampleMVRVStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | core MVRV feature set + BRK overlays (`brk_netflow_*`, activity/liquidity/exchange/miner/ROI columns) | `base_temperature=0.58`, `overlay_scale=0.75`, plus overlay component weights (`netflow_weight`, `activity_weight`, `liquidity_weight`, etc.) | Score-focused MVRV model with multi-horizon BRK overlays and interaction terms. | Missing overlay columns, non-finite upstream data, or horizon drift causing recency-weighted score swings. | Rich overlay experimentation and advanced profile-shape tuning. |
-| `MVRVPlusStrategy` | `stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_usd` + core MVRV feature set + overlay columns (`brk_netflow`, `brk_exchange_share`, `brk_activity_div`, `brk_roi_context`, etc.) | `deep_value_boost=1.18`, `overheat_dampen=0.62`, `overlay_scale=0.20`, `smooth_alpha=0.10`, `risk_budget_base/min/max=1.02/0.72/1.22`, overlay weights for miner/hash components | MVRV baseline with regime/risk/disagreement gating and adaptive smoothing. | Missing overlay inputs, insufficient history for derived vol/drawdown features, recency-heavy end-range sensitivity. | Primary advanced built-in model for BRK-aware runtime behavior. |
+
+## Experimental reference strategies
+
+These strategies live under `stacksats.strategies.experimental.*` and are not part of the stable `1.x` contract.
+
+| Strategy | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Expected behavior | Common failure modes | Use when |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `ExampleMVRVStrategy` | `stacksats.strategies.experimental.model_example:ExampleMVRVStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | core MVRV feature set + BRK overlays (`brk_netflow_*`, activity/liquidity/exchange/miner/ROI columns) | `base_temperature=0.58`, `overlay_scale=0.75`, plus overlay component weights (`netflow_weight`, `activity_weight`, `liquidity_weight`, etc.) | Score-focused MVRV model with multi-horizon BRK overlays and interaction terms. | Missing overlay columns, non-finite upstream data, or horizon drift causing recency-weighted score swings. | Rich overlay experimentation and advanced profile-shape tuning. |
+| `MVRVPlusStrategy` | `stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_usd` + core MVRV feature set + overlay columns (`brk_netflow`, `brk_exchange_share`, `brk_activity_div`, `brk_roi_context`, etc.) | `deep_value_boost=1.18`, `overheat_dampen=0.62`, `overlay_scale=0.20`, `smooth_alpha=0.10`, `risk_budget_base/min/max=1.02/0.72/1.22`, overlay weights for miner/hash components | MVRV baseline with regime/risk/disagreement gating and adaptive smoothing. | Missing overlay inputs, insufficient history for derived vol/drawdown features, recency-heavy end-range sensitivity. | Advanced BRK-aware experimentation and reference comparisons. |
 
 Built-in intent is explicit by implementation shape:
 
@@ -83,7 +93,7 @@ Validate a built-in strategy on fixed comparison bounds:
 
 ```bash
 stacksats strategy validate \
-  --strategy stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy \
+  --strategy stacksats.strategies.mvrv:MVRVStrategy \
   --start-date 2018-01-01 \
   --end-date 2025-12-31
 ```
@@ -92,7 +102,7 @@ Run a backtest on the same canonical window:
 
 ```bash
 stacksats strategy backtest \
-  --strategy stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy \
+  --strategy stacksats.strategies.mvrv:MVRVStrategy \
   --start-date 2018-01-01 \
   --end-date 2025-12-31 \
   --output-dir output
@@ -124,7 +134,8 @@ Reasonableness expectations by strategy family:
 
 - `UniformStrategy`: baseline multiple should stay near `1.0`; material drift indicates a bug.
 - `SimpleZScoreStrategy`, `MomentumStrategy`: acceptable if finite/stable and non-pathological, even when close to baseline.
-- `MVRVStrategy`, `ExampleMVRVStrategy`, `MVRVPlusStrategy`: should produce distinct, non-baseline behavior on representative windows; near-identical baseline metrics require investigation.
+- `MVRVStrategy`: stable baseline model; should produce distinct, non-baseline behavior on representative windows.
+- experimental overlay models: treat outputs as reference or research signals, not as stable benchmark promises.
 
 Comparability discipline:
 
@@ -150,7 +161,8 @@ Comparability discipline:
 ### Forward leakage failures
 
 - Ensure strategy logic uses observed-only inputs.
-- Remove any dependence on future rows, file I/O, DB/network access, or centered/forward-looking transforms.
+- Remove any dependence on future rows, centered/forward-looking transforms, or direct external I/O inside strategy hooks.
+- Remember that causal lint is best-effort static analysis, not a runtime sandbox.
 - Re-run strict validation to inspect leakage diagnostics.
 
 ### Warmup and horizon drift

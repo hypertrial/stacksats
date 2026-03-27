@@ -16,8 +16,8 @@ import datetime as dt
 import numpy as np
 import polars as pl
 
-from .. import model_development as model_lib
-from ..strategy_types import (
+from ... import model_development as model_lib
+from ...strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,
@@ -30,8 +30,8 @@ class ExampleMVRVStrategy(BaseStrategy):
     """MVRV strategy with score-focused framework-provided overlays."""
 
     strategy_id = "example-mvrv"
-    version = "4.2.0"
-    description = "Score-focused MVRV + multi-horizon BRK overlays."
+    version = "0.1.0"
+    description = "Experimental MVRV + multi-horizon BRK overlays."
 
     # Dynamic temperature controls how aggressively baseline preference is used.
     base_temperature: float = 0.58

@@ -1,11 +1,11 @@
 ---
 title: EDA Quickstart
-description: Explore the canonical merged_metrics parquet with the public stacksats.eda API.
+description: Explore the canonical merged_metrics parquet with the stable top-level EDA helpers.
 ---
 
 # EDA Quickstart
 
-Use `stacksats.eda` when you want notebook/script-style exploration of the canonical long-format `merged_metrics*.parquet` dataset.
+Use the top-level `open_merged_metrics()` and `load_metric_catalog()` helpers when you want notebook/script-style exploration of the canonical long-format `merged_metrics*.parquet` dataset.
 
 ## Prerequisite
 
@@ -15,7 +15,7 @@ Fetch the canonical source parquet first:
 stacksats data fetch
 ```
 
-`stacksats.eda` does not auto-download data and does not read the reduced runtime `bitcoin_analytics.parquet`.
+These helpers do not auto-download data and do not read the reduced runtime `bitcoin_analytics.parquet`.
 
 ## Open the canonical parquet
 

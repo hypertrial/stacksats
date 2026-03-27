@@ -75,7 +75,7 @@ Files written by lifecycle commands under:
 Common artifacts include `backtest_result.json`, `metrics.json`, `weights.csv`, `timeseries_schema.md`, and `artifacts.json`.
 
 ### Public API
-Stable interfaces documented in top-level `stacksats` exports and API reference pages (for example `stacksats.runner`, `stacksats.strategy_types`, `stacksats.api`).
+Stable interfaces documented in top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset.
 
 ### Internal Modules
-Lower-level implementation modules that may change between releases (for example `stacksats.backtest`, `stacksats.prelude`, and `stacksats.export_weights`). Prefer public API surfaces for long-term integrations.
+Lower-level implementation modules that may change between releases (for example `stacksats.runner`, `stacksats.strategy_types`, `stacksats.backtest`, `stacksats.prelude`, and `stacksats.export_weights`). Prefer top-level public API surfaces for long-term integrations.

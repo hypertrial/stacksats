@@ -11,15 +11,30 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
+from types import ModuleType
 from typing import Optional
 
+from ._optional import missing_dependency_error
 from .data_btc import BTCDataProvider
 from .matplotlib_setup import configure_matplotlib_env
 from .plot_mvrv_render import plot_mvrv_metrics as _plot_mvrv_metrics
 
-import matplotlib.dates as mdates  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
-import seaborn as sns  # noqa: E402
+_VIZ_IMPORT_ERROR: ImportError | None = None
+
+try:
+    import matplotlib.dates as mdates  # noqa: E402
+    import matplotlib.pyplot as plt  # noqa: E402
+    import seaborn as sns  # noqa: E402
+except ImportError:
+    _VIZ_IMPORT_ERROR = missing_dependency_error(
+        dependency="matplotlib/seaborn",
+        extra="viz",
+        feature="plotting commands",
+    )
+    mdates = ModuleType("matplotlib.dates")
+    plt = ModuleType("matplotlib.pyplot")
+    plt.rcParams = {}
+    sns = ModuleType("seaborn")
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -29,6 +44,7 @@ logging.basicConfig(
 
 
 def _init_plot_env() -> None:
+    _ensure_viz_available()
     configure_matplotlib_env()
     try:
         plt.switch_backend("Agg")
@@ -39,6 +55,11 @@ def _init_plot_env() -> None:
     plt.rcParams["savefig.dpi"] = 300
 
 
+def _ensure_viz_available() -> None:
+    if _VIZ_IMPORT_ERROR is not None:
+        raise _VIZ_IMPORT_ERROR
+
+
 def plot_mvrv_metrics(
     df,
     start_date: Optional[str] = None,
@@ -46,6 +67,7 @@ def plot_mvrv_metrics(
     output_path: str = "mvrv_metrics.svg",
 ) -> None:
     """Plot mvrv and CapMVRVZ metrics over time."""
+    _ensure_viz_available()
     return _plot_mvrv_metrics(
         df,
         start_date,
@@ -61,7 +83,6 @@ def plot_mvrv_metrics(
 
 def main() -> None:
     """Main function to fetch data and create MVRV plots."""
-    _init_plot_env()
     parser = argparse.ArgumentParser(
         description="Plot BRK MVRV metrics (mvrv and CapMVRVZ) over time",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -95,6 +116,7 @@ Examples:
     try:
         logging.info("Loading BRK BTC data...")
         df = BTCDataProvider().load()
+        _init_plot_env()
 
         plot_mvrv_metrics(
             df,

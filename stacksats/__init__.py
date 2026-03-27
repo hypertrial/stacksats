@@ -20,8 +20,7 @@ from .strategy_time_series import (
     WeightTimeSeries,
     WeightTimeSeriesBatch,
 )
-from .strategies.model_example import ExampleMVRVStrategy
-from .strategies.model_mvrv_plus import MVRVPlusStrategy
+from .strategies.examples import MomentumStrategy, SimpleZScoreStrategy, UniformStrategy
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     BacktestConfig,
@@ -64,9 +63,9 @@ __all__ = [
     "DailyOrderReceipt",
     "DailyOrderRequest",
     "DayState",
-    "ExampleMVRVStrategy",
+    "MomentumStrategy",
     "MVRVStrategy",
-    "MVRVPlusStrategy",
+    "SimpleZScoreStrategy",
     "StrategyRunner",
     "StrategySeriesMetadata",
     "StrategyArtifactSet",
@@ -76,6 +75,7 @@ __all__ = [
     "StrategyRunResult",
     "StrategySpec",
     "TargetProfile",
+    "UniformStrategy",
     "load_strategy",
     "load_metric_catalog",
     "load_data",

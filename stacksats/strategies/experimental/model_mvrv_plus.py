@@ -13,8 +13,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from ..model_development import FEATS, compute_preference_scores
-from ..strategy_types import (
+from ...model_development import FEATS, compute_preference_scores
+from ...strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,
@@ -34,7 +34,7 @@ class MVRVPlusStrategy(BaseStrategy):
 
     strategy_id = "mvrv-plus"
     version = "0.1.0"
-    description = "MVRV baseline with BRK-aware regime and risk overlays."
+    description = "Experimental MVRV baseline with BRK-aware regime and risk overlays."
     overlay_features: tuple[str, ...] = (
         "brk_netflow",
         "brk_exchange_share",

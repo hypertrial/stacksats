@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
 import stacksats
@@ -13,13 +16,17 @@ from stacksats import (
     MVRVStrategy,
     MergedMetricsDataset,
     MetricCatalog,
+    MomentumStrategy,
+    SimpleZScoreStrategy,
+    UniformStrategy,
     WeightTimeSeries,
     WeightTimeSeriesBatch,
     load_metric_catalog,
     open_merged_metrics,
 )
-from stacksats.strategies.examples import UniformStrategy
 from tests.test_helpers import btc_frame
+
+SNAPSHOT_PATH = Path(__file__).resolve().parents[2] / "snapshots" / "public_contract_snapshots.json"
 
 
 def _sample_btc_df():
@@ -85,3 +92,20 @@ def test_eda_api_is_exported() -> None:
     assert MetricCatalog is stacksats.MetricCatalog
     assert open_merged_metrics is stacksats.open_merged_metrics
     assert load_metric_catalog is stacksats.load_metric_catalog
+
+
+def test_public_api_snapshot_matches_contract() -> None:
+    snapshot = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    assert sorted(stacksats.__all__) == snapshot["public_api_all"]
+
+
+def test_stable_strategies_are_top_level_exports() -> None:
+    assert UniformStrategy is stacksats.UniformStrategy
+    assert SimpleZScoreStrategy is stacksats.SimpleZScoreStrategy
+    assert MomentumStrategy is stacksats.MomentumStrategy
+    assert MVRVStrategy is stacksats.MVRVStrategy
+
+
+def test_experimental_strategies_are_not_top_level_exports() -> None:
+    assert not hasattr(stacksats, "ExampleMVRVStrategy")
+    assert not hasattr(stacksats, "MVRVPlusStrategy")

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import polars as pl
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 from .feature_registry import DEFAULT_FEATURE_REGISTRY
 from .feature_time_series import FeatureTimeSeries
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
@@ -241,6 +242,7 @@ class StrategyArtifactSet:
     run_id: str
     output_dir: str
     files: dict[str, str] = field(default_factory=dict)
+    schema_version: str = PUBLIC_ARTIFACT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True)
@@ -918,6 +920,6 @@ def validate_strategy_contract(strategy: BaseStrategy) -> tuple[bool, bool]:
     lint_errors, _ = summarize_lint_findings(lint_strategy_class(strategy.__class__))
     if lint_errors:
         raise TypeError(
-            "Strategy failed causal lint checks: " + " | ".join(lint_errors)
+            "Strategy failed best-effort causal lint checks: " + " | ".join(lint_errors)
         )
     return has_propose_hook, has_profile_hook

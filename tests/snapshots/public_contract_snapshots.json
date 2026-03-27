@@ -1,0 +1,141 @@
+{
+  "public_api_all": [
+    "BacktestConfig",
+    "BacktestResult",
+    "BaseStrategy",
+    "ColumnMapDataProvider",
+    "ColumnMapError",
+    "ColumnSpec",
+    "DailyOrderReceipt",
+    "DailyOrderRequest",
+    "DailyRunResult",
+    "DayState",
+    "ExportConfig",
+    "FeatureTimeSeries",
+    "MVRVStrategy",
+    "MergedMetricsDataset",
+    "MetricCatalog",
+    "MomentumStrategy",
+    "RunDailyConfig",
+    "SimpleZScoreStrategy",
+    "StrategyArtifactSet",
+    "StrategyContext",
+    "StrategyLazyContext",
+    "StrategyMetadata",
+    "StrategyRunResult",
+    "StrategyRunner",
+    "StrategySeriesMetadata",
+    "StrategySpec",
+    "TargetProfile",
+    "UniformStrategy",
+    "ValidationConfig",
+    "ValidationResult",
+    "WeightTimeSeries",
+    "WeightTimeSeriesBatch",
+    "load_data",
+    "load_metric_catalog",
+    "load_strategy",
+    "open_merged_metrics",
+    "precompute_features",
+    "strategy_context_from_features_df"
+  ],
+  "artifacts": {
+    "backtest_result": {
+      "top_level": [
+        "provenance",
+        "schema_version",
+        "summary_metrics",
+        "window_level_data"
+      ],
+      "provenance": [
+        "config_hash",
+        "run_id",
+        "strategy_id",
+        "version"
+      ],
+      "summary_metrics": [
+        "exp_decay_multiple_vs_uniform",
+        "exp_decay_percentile",
+        "score",
+        "uniform_exp_decay_percentile",
+        "win_rate",
+        "windows"
+      ],
+      "window_level_row": [
+        "dynamic_percentile",
+        "dynamic_sats_per_dollar",
+        "excess_percentile",
+        "max_sats_per_dollar",
+        "min_sats_per_dollar",
+        "uniform_percentile",
+        "uniform_sats_per_dollar",
+        "window"
+      ]
+    },
+    "metrics": {
+      "top_level": [
+        "schema_version",
+        "summary_metrics",
+        "timestamp",
+        "window_level_data"
+      ],
+      "summary_metrics": [
+        "exp_decay_multiple_vs_uniform",
+        "exp_decay_percentile",
+        "losses",
+        "mean_excess",
+        "mean_ratio",
+        "median_excess",
+        "median_ratio",
+        "relative_improvement_pct_mean",
+        "relative_improvement_pct_median",
+        "score",
+        "total_windows",
+        "uniform_exp_decay_percentile",
+        "win_rate",
+        "wins"
+      ],
+      "window_level_row": [
+        "dynamic_percentile",
+        "dynamic_sats_per_dollar",
+        "excess_percentile",
+        "max_sats_per_dollar",
+        "min_sats_per_dollar",
+        "start_date",
+        "uniform_percentile",
+        "uniform_sats_per_dollar",
+        "window"
+      ]
+    },
+    "animation_manifest": {
+      "top_level": [
+        "fps",
+        "frames",
+        "height",
+        "output_gif",
+        "run_id",
+        "schema_version",
+        "source_backtest_json",
+        "strategy_id",
+        "strategy_version",
+        "width",
+        "window_mode"
+      ]
+    },
+    "export_artifacts": {
+      "top_level": [
+        "config_hash",
+        "files",
+        "output_dir",
+        "run_id",
+        "schema_version",
+        "strategy_id",
+        "version"
+      ],
+      "files": [
+        "timeseries_schema_md",
+        "weights_csv"
+      ]
+    }
+  }
+}

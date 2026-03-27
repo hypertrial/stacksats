@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import polars as pl
 
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 from .column_map_provider import ColumnMapDataProvider
 from .data_btc import BTCDataProvider
 from .feature_materialization import hash_dataframe
@@ -1226,6 +1227,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         schema_path = output_root / "timeseries_schema.md"
         schema_path.write_text(series_batch.schema_markdown(), encoding="utf-8")
         artifact_metadata = StrategyArtifactSet(
+            schema_version=PUBLIC_ARTIFACT_SCHEMA_VERSION,
             strategy_id=provenance["strategy_id"],
             version=provenance["version"],
             config_hash=provenance["config_hash"],

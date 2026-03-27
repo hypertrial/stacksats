@@ -18,7 +18,7 @@ Use this page for a 5-minute first run with the packaged offline demo.
     python -m venv venv
     source venv/bin/activate
     venv/bin/python -m pip install --upgrade pip
-    venv/bin/python -m pip install -e ".[dev]"
+    venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
     ```
 
 === "Package only"
@@ -26,6 +26,12 @@ Use this page for a 5-minute first run with the packaged offline demo.
     ```bash
     pip install stacksats
     ```
+
+For plotting or animation commands later, install visual extras:
+
+```bash
+pip install "stacksats[viz]"
+```
 
 ## 2) Run the packaged demo
 

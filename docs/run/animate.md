@@ -9,6 +9,7 @@ description: Reference for `stacksats strategy animate`.
 
 - A valid `backtest_result.json` artifact already exists.
 - Output directory is writable.
+- Install visual extras first: `pip install "stacksats[viz]"`.
 
 ## Command
 
@@ -27,7 +28,7 @@ stacksats strategy animate \
 ## Expected output
 
 - GIF file (default `strategy_vs_uniform_hd.gif`).
-- `animation_manifest.json` with render metadata and source path.
+- `animation_manifest.json` with `schema_version`, render metadata, source path, and strategy provenance.
 
 ## Key options
 
@@ -37,7 +38,7 @@ stacksats strategy animate \
 
 ## Troubleshooting
 
-- If JSON parse fails, verify artifact shape includes `window_level_data`.
+- If JSON parse fails, verify `backtest_result.json` includes `schema_version`, `provenance`, `summary_metrics`, and `window_level_data`.
 - If render is slow, lower `--fps`, `--max-frames`, or output dimensions.
 
 ## Next step

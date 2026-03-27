@@ -7,6 +7,7 @@ from datetime import datetime
 
 import polars as pl
 
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 from .model_development import compute_window_weights
 
 
@@ -32,6 +33,7 @@ def export_metrics_json(
     os.makedirs(output_dir, exist_ok=True)
 
     json_data = {
+        "schema_version": PUBLIC_ARTIFACT_SCHEMA_VERSION,
         "timestamp": datetime.now().isoformat(),
         "summary_metrics": metrics,
         "window_level_data": [],

@@ -10,12 +10,19 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-import requests
 from tenacity import (
     Retrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
+)
+
+from ._optional import import_optional
+
+requests = import_optional(
+    "requests",
+    extra="network",
+    feature="BTC price fetching helpers",
 )
 
 logger = logging.getLogger(__name__)

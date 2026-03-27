@@ -7,10 +7,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## [Unreleased]
 
 ### Added
-- `ValidationResult.strategy_id` for identification of the validated strategy.
+- Added a published stability policy covering supported platforms, stable public API boundaries, experimental surfaces, and deprecation rules.
+- Added `schema_version` to stable JSON artifact payloads (`backtest_result.json`, `metrics.json`, `animation_manifest.json`, `artifacts.json`).
+- Added release-grade `release-gate.yml` CI for `release/*` branches and `v*` tags.
 
-### Fixed
-- Added `*,cover` to `.gitignore` so coverage annotate output (`module.py,cover`) is ignored.
+### Changed
+- Narrowed the stable `1.x` contract to top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset.
+- Promoted `UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, and `MVRVStrategy` as stable built-ins.
+- Moved advanced BRK overlay strategies to `stacksats.strategies.experimental.*` and removed their old pre-v1 import paths.
+- Split optional dependencies into `viz`, `network`, `deploy`, and `all` extras and added maintainer constraints for reproducible release environments.
+- Updated docs to describe causal lint as best-effort static analysis rather than a runtime sandbox.
+- Promoted package metadata from alpha to production/stable.
 
 ## [0.8.2] - 2026-03-17
 

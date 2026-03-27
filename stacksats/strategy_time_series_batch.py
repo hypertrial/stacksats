@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Iterable
 
 import polars as pl
 
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 from .strategy_time_series_metadata import (
     StrategySeriesMetadata,
     _normalize_generated_at,
@@ -37,7 +38,7 @@ class WeightTimeSeriesBatch:
     run_id: str
     config_hash: str
     windows: tuple["WeightTimeSeries", ...]
-    schema_version: str = "1.0.0"
+    schema_version: str = PUBLIC_ARTIFACT_SCHEMA_VERSION
     generated_at: dt.datetime = field(default_factory=_utc_now)
     extra_schema: tuple[ColumnSpec, ...] = ()
     _window_index: dict[tuple[dt.datetime, dt.datetime], "WeightTimeSeries"] = field(
@@ -87,7 +88,7 @@ class WeightTimeSeriesBatch:
         strategy_version: str,
         run_id: str,
         config_hash: str,
-        schema_version: str = "1.0.0",
+        schema_version: str = PUBLIC_ARTIFACT_SCHEMA_VERSION,
         generated_at: dt.datetime | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> "WeightTimeSeriesBatch":
@@ -177,7 +178,7 @@ class WeightTimeSeriesBatch:
         strategy_version: str,
         run_id: str,
         config_hash: str,
-        schema_version: str = "1.0.0",
+        schema_version: str = PUBLIC_ARTIFACT_SCHEMA_VERSION,
         generated_at: dt.datetime | None = None,
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> "WeightTimeSeriesBatch":
@@ -246,7 +247,12 @@ class WeightTimeSeriesBatch:
             strategy_version=str(artifact_payload["version"]),
             run_id=str(artifact_payload["run_id"]),
             config_hash=str(artifact_payload["config_hash"]),
-            schema_version=str(artifact_payload.get("schema_version", "1.0.0")),
+            schema_version=str(
+                artifact_payload.get(
+                    "schema_version",
+                    PUBLIC_ARTIFACT_SCHEMA_VERSION,
+                )
+            ),
             generated_at=artifact_payload.get("generated_at"),
             extra_schema=extra_schema,
         )

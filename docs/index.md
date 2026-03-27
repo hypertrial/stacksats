@@ -28,6 +28,7 @@ Then choose your next path:
 - [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
 - [EDA Quickstart](start/eda-quickstart.md) for notebook/script exploration of canonical `merged_metrics`
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
+- [Stability Policy](stability.md) for the supported `1.x` contract
 
 ## Canonical Dataset
 

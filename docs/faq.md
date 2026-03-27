@@ -84,12 +84,12 @@ If you need a lazy integration point before the final execution boundary, use `B
 
 ### Which modules are stable public API?
 
-Use top-level `stacksats` exports and documented API modules. Lower-level modules (`stacksats.backtest`, `stacksats.prelude`, `stacksats.export_weights`) are implementation details and may change.
+Use top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset. Generated module pages are reference material, not a promise that the module import path is stable.
 
 For canonical `merged_metrics*.parquet` exploration, use the stable public
-`stacksats.eda` module and [EDA Quickstart](start/eda-quickstart.md).
+top-level exports `open_merged_metrics()` and `load_metric_catalog()` plus [EDA Quickstart](start/eda-quickstart.md).
 
-See: [API Reference](reference/api/index.md).
+See: [API Reference](reference/api/index.md) and [Stability Policy](stability.md).
 
 ## Docs feedback workflow
 

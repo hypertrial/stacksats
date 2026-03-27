@@ -37,13 +37,15 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - The fastest first run is `stacksats demo backtest`.
 - Canonical dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
 - Runtime commands resolve a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
+- Visual commands (`stacksats strategy animate`, `stacksats-plot-mvrv`, `stacksats-plot-weights`) require `stacksats[viz]`.
+- `stacksats-plot-weights` also needs `stacksats[deploy]` plus `DATABASE_URL` because it reads stored weight windows from Postgres before rendering.
 - Use editable install for local command consistency:
 
 ```bash
 python -m venv venv
 source venv/bin/activate
 venv/bin/python -m pip install --upgrade pip
-venv/bin/python -m pip install -e ".[dev]"
+venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
 ```
 
 ## Compatibility Anchors

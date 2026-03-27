@@ -467,7 +467,7 @@ def test_brk_overlay_provider_matches_reference_without_optional_columns() -> No
 
 
 def test_brk_overlay_materialization_preserves_columns_for_single_row_prefix() -> None:
-    strategy = load_strategy("stacksats.strategies.model_example:ExampleMVRVStrategy")
+    strategy = load_strategy("stacksats.strategies.experimental.model_example:ExampleMVRVStrategy")
     btc_df = pl.DataFrame(
         {
             "date": [dt.datetime(2024, 1, 1)],

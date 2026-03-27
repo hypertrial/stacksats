@@ -23,7 +23,8 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.11"
-          extras: ".[dev,deploy]"
+          extras: ".[dev,all]"
+          constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Run wheel-install smoke test
         run: pytest tests/unit/core/test_distribution_wheel_smoke.py -q

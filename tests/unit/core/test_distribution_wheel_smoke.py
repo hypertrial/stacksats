@@ -37,10 +37,12 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     home_dir = tmp_path / "home"
     output_dir = tmp_path / "wheel-output"
     runtime_dir = tmp_path / "runtime"
+    no_viz_runtime_dir = tmp_path / "runtime-no-viz"
     mpl_config_dir = home_dir / ".mplconfig"
 
     home_dir.mkdir(parents=True, exist_ok=True)
     runtime_dir.mkdir(parents=True, exist_ok=True)
+    no_viz_runtime_dir.mkdir(parents=True, exist_ok=True)
     mpl_config_dir.mkdir(parents=True, exist_ok=True)
 
     build_env = os.environ.copy()
@@ -71,6 +73,7 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     bin_dir = _venv_bin_dir(venv_dir)
     pip_path = bin_dir / ("pip.exe" if os.name == "nt" else "pip")
     cli_path = bin_dir / ("stacksats.exe" if os.name == "nt" else "stacksats")
+    plot_cli_path = bin_dir / ("stacksats-plot-mvrv.exe" if os.name == "nt" else "stacksats-plot-mvrv")
     python_path = bin_dir / ("python.exe" if os.name == "nt" else "python")
 
     assert pip_path.exists(), f"Missing venv pip at {pip_path}"
@@ -83,6 +86,7 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     )
 
     assert cli_path.exists(), f"Missing installed console script at {cli_path}"
+    assert plot_cli_path.exists(), f"Missing installed plot console script at {plot_cli_path}"
 
     runtime_env = os.environ.copy()
     runtime_env["HOME"] = str(home_dir)
@@ -136,6 +140,7 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     assert int(asset_lines[4]) > 40_000
     assert asset_lines[5] == "True"
     assert asset_lines[6] == "3"
+    runtime_env["STACKSATS_ANALYTICS_PARQUET"] = str(asset_path)
 
     result = _run_checked(
         [str(cli_path), "demo", "backtest", "--output-dir", str(output_dir)],
@@ -147,3 +152,34 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     assert "Saved:" in result.stdout
     backtest_results = sorted(output_dir.glob("**/backtest_result.json"))
     assert backtest_results, f"No backtest_result.json found under {output_dir}"
+
+    plot_output = runtime_dir / "mvrv_metrics.svg"
+    _run_checked(
+        [str(plot_cli_path), "--output", str(plot_output)],
+        cwd=runtime_dir,
+        env=runtime_env,
+    )
+    assert plot_output.exists(), f"Missing plot output at {plot_output}"
+
+    # Simulate a base install without viz extras by shadowing matplotlib/seaborn.
+    (no_viz_runtime_dir / "matplotlib.py").write_text(
+        "raise ModuleNotFoundError(\"No module named 'matplotlib'\")\n",
+        encoding="utf-8",
+    )
+    (no_viz_runtime_dir / "seaborn.py").write_text(
+        "raise ModuleNotFoundError(\"No module named 'seaborn'\")\n",
+        encoding="utf-8",
+    )
+    no_viz_env = dict(runtime_env)
+    no_viz_env["PYTHONPATH"] = str(no_viz_runtime_dir)
+    no_viz_result = subprocess.run(
+        [str(plot_cli_path), "--output", str(no_viz_runtime_dir / "unused.svg")],
+        cwd=str(no_viz_runtime_dir),
+        env=no_viz_env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert no_viz_result.returncode != 0
+    combined_output = f"{no_viz_result.stdout}\n{no_viz_result.stderr}"
+    assert 'stacksats[viz]' in combined_output

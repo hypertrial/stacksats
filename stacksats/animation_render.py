@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from ._optional import import_optional
 from .matplotlib_setup import configure_matplotlib_env
 
 REQUIRED_ANIMATION_COLUMNS = (
@@ -87,12 +88,29 @@ def render_strategy_vs_uniform_gif(
         raise ValueError("width and height must be > 0.")
 
     configure_matplotlib_env()
-    import matplotlib
-
+    matplotlib = import_optional(
+        "matplotlib",
+        extra="viz",
+        feature="strategy animation rendering",
+    )
     matplotlib.use("Agg")
-    import matplotlib.dates as mdates
-    import matplotlib.pyplot as plt
-    from matplotlib.animation import FuncAnimation, PillowWriter
+    mdates = import_optional(
+        "matplotlib.dates",
+        extra="viz",
+        feature="strategy animation rendering",
+    )
+    plt = import_optional(
+        "matplotlib.pyplot",
+        extra="viz",
+        feature="strategy animation rendering",
+    )
+    animation_mod = import_optional(
+        "matplotlib.animation",
+        extra="viz",
+        feature="strategy animation rendering",
+    )
+    FuncAnimation = animation_mod.FuncAnimation
+    PillowWriter = animation_mod.PillowWriter
 
     output_file = Path(output_path).expanduser().resolve()
     output_file.parent.mkdir(parents=True, exist_ok=True)

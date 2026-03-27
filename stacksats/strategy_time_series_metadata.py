@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 
+from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+
 
 def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
@@ -45,7 +47,7 @@ class StrategySeriesMetadata:
     strategy_version: str
     run_id: str
     config_hash: str
-    schema_version: str = "1.0.0"
+    schema_version: str = PUBLIC_ARTIFACT_SCHEMA_VERSION
     generated_at: dt.datetime = field(default_factory=_utc_now)
     window_start: dt.datetime | None = None
     window_end: dt.datetime | None = None

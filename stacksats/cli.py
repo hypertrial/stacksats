@@ -9,7 +9,6 @@ from json import JSONDecodeError
 from pathlib import Path
 
 import numpy as np
-import requests
 
 from .data_btc import BTCDataProvider, DataLoadError
 from .data_setup import (
@@ -29,12 +28,21 @@ DEMO_STRATEGY_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 DEMO_START_DATE = "2018-01-01"
 DEMO_END_DATE = "2025-12-31"
 
+try:
+    import requests as _requests
+except ImportError:  # pragma: no cover - exercised only without network extras
+    _requests = None
+
 
 class _HelpFormatter(
     argparse.ArgumentDefaultsHelpFormatter,
     argparse.RawDescriptionHelpFormatter,
 ):
     """Show defaults and preserve example formatting."""
+
+
+def _is_requests_exception(exc: Exception) -> bool:
+    return _requests is not None and isinstance(exc, _requests.RequestException)
 
 
 def _exit_user_error(message: str, *, hint: str | None = None, code: int = 2) -> None:
@@ -576,15 +584,17 @@ def run(argv: list[str] | None = None) -> int:
         )
     except AttributeError as exc:
         _exit_user_error(str(exc))
-    except requests.RequestException as exc:
-        _exit_user_error(
-            "Failed to fetch required network data.",
-            hint=str(exc),
-        )
     except DataLoadError as exc:
         _exit_user_error(str(exc))
     except ValueError as exc:
         _exit_user_error(str(exc))
+    except Exception as exc:
+        if _is_requests_exception(exc):
+            _exit_user_error(
+                "Failed to fetch required network data.",
+                hint=str(exc),
+            )
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:

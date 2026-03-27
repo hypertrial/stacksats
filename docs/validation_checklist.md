@@ -33,10 +33,10 @@ flowchart LR
 
 4. [ ] **Strategy feature sets must be registry-backed**
    - `required_feature_sets()` must resolve to registered framework-owned feature providers.
-   - Strategy classes must not source external files, databases, or network data directly.
+   - Strategy classes should avoid sourcing external files, databases, or network data directly.
 
 5. [ ] **AST lint blockers are not present**
-   - Hard failures include negative `.shift(...)`, centered `.rolling(..., center=True)`, direct file I/O, direct DB access, and direct network access inside strategy methods.
+   - Best-effort static lint hard-fails on patterns such as negative `.shift(...)`, centered `.rolling(..., center=True)`, direct file I/O, direct DB access, and direct network access inside strategy methods.
 
 6. [ ] **`transform_features` output type is valid**
    - Must return a Polars `DataFrame`.

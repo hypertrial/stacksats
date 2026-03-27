@@ -25,7 +25,7 @@ Create a custom strategy file and run it end-to-end.
 ## Contract reminders
 
 - `ctx.features_df` is already an observed-only, as-of-materialized frame. Do not assume rows after `current_date` exist.
-- Strategy classes must not read files, call databases, or make network requests directly. Use provider-backed feature sets instead.
+- Strategy classes should avoid direct file, database, or network access. StackSats applies best-effort static lint checks for these patterns, but the lint is heuristic rather than a runtime sandbox. Use provider-backed feature sets instead.
 - Strict validation is the default CLI path and the same strict checks gate `run_daily` paper/live execution.
 
 ## Expected output

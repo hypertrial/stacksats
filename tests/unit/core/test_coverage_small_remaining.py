@@ -20,8 +20,8 @@ from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSer
 from stacksats.strategy_time_series_schema import ColumnSpec
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, RunDailyConfig
 from stacksats.strategies.examples import SimpleZScoreStrategy
-from stacksats.strategies.model_example import ExampleMVRVStrategy
-from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy
+from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy
+from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy
 
 
 def _meta() -> StrategySeriesMetadata:

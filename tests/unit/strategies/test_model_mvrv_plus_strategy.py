@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from stacksats.strategies import model_mvrv_plus
-from stacksats.strategies.model_mvrv_plus import MVRVPlusStrategy, main
+from stacksats.strategies.experimental import model_mvrv_plus
+from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy, main
 from stacksats.strategy_types import (
     BaseStrategy,
     validate_strategy_contract,
@@ -221,4 +221,4 @@ def test_module_dunder_main_executes(monkeypatch, tmp_path: Path) -> None:
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.strategies.model_mvrv_plus", run_name="__main__")
+        runpy.run_module("stacksats.strategies.experimental.model_mvrv_plus", run_name="__main__")

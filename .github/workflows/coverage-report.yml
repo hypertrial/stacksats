@@ -15,7 +15,6 @@ concurrency:
 jobs:
   coverage:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -24,7 +23,8 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.11"
-          extras: ".[dev,deploy]"
+          extras: ".[dev,all]"
+          constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Run full non-performance coverage gate
         run: |
