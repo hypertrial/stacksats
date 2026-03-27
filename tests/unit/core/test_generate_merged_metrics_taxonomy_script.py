@@ -160,3 +160,100 @@ def test_generate_merged_metrics_taxonomy_script_generates_and_checks(tmp_path: 
     )
     assert stale.returncode == 1
     assert "out of date" in stale.stdout
+
+
+def test_generate_merged_metrics_taxonomy_check_falls_back_to_committed_json_when_parquet_missing(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    script = repo_root / "scripts" / "generate_merged_metrics_taxonomy.py"
+    parquet_path = tmp_path / "merged_metrics_test.parquet"
+    json_output = tmp_path / "taxonomy.json"
+    doc_output = tmp_path / "taxonomy.md"
+    catalog_output = tmp_path / "catalog.json"
+    guide_output = tmp_path / "guide.md"
+    packaged_catalog_output = tmp_path / "packaged_catalog.json"
+    _write_synthetic_merged_metrics(parquet_path)
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    generate = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--parquet-path",
+            str(parquet_path),
+            "--json-output",
+            str(json_output),
+            "--doc-output",
+            str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert generate.returncode == 0, generate.stderr or generate.stdout
+
+    parquet_path.unlink()
+
+    check = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--json-output",
+            str(json_output),
+            "--doc-output",
+            str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
+            "--check",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert check.returncode == 0, check.stderr or check.stdout
+    assert "outputs are up to date" in check.stdout
+
+    guide_output.write_text(
+        guide_output.read_text(encoding="utf-8") + "\n<!-- stale -->\n",
+        encoding="utf-8",
+    )
+    stale = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--json-output",
+            str(json_output),
+            "--doc-output",
+            str(doc_output),
+            "--catalog-output",
+            str(catalog_output),
+            "--guide-output",
+            str(guide_output),
+            "--packaged-catalog-output",
+            str(packaged_catalog_output),
+            "--check",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert stale.returncode == 1
+    assert str(guide_output) in stale.stdout

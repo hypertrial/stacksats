@@ -4,12 +4,28 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _load_render_inputs_from_committed_artifacts(
+    *,
+    taxonomy_json_path: Path,
+    catalog_json_path: Path,
+) -> tuple[dict[str, object], dict[str, object]]:
+    if not taxonomy_json_path.exists() or not catalog_json_path.exists():
+        raise FileNotFoundError(
+            "Cannot run merged-metrics taxonomy --check without a canonical parquet "
+            "unless the committed taxonomy and catalog JSON artifacts already exist."
+        )
+    taxonomy = json.loads(taxonomy_json_path.read_text(encoding="utf-8"))
+    catalog = json.loads(catalog_json_path.read_text(encoding="utf-8"))
+    return taxonomy, catalog
 
 
 def main() -> int:
@@ -82,11 +98,6 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    parquet_path = (
-        args.parquet_path.expanduser().resolve()
-        if args.parquet_path is not None
-        else resolve_default_parquet_path(repo_root).resolve()
-    )
     json_output = (
         args.json_output.expanduser().resolve()
         if args.json_output is not None
@@ -113,9 +124,22 @@ def main() -> int:
         else data_guide_docs_path(repo_root).resolve()
     )
 
-    artifacts = build_artifacts_from_parquet(parquet_path)
-    taxonomy = artifacts["taxonomy"]
-    catalog = artifacts["catalog"]
+    parquet_path: Path | None = None
+    if args.parquet_path is not None:
+        parquet_path = args.parquet_path.expanduser().resolve()
+    elif not args.check:
+        parquet_path = resolve_default_parquet_path(repo_root).resolve()
+
+    if parquet_path is not None:
+        artifacts = build_artifacts_from_parquet(parquet_path)
+        taxonomy = artifacts["taxonomy"]
+        catalog = artifacts["catalog"]
+    else:
+        taxonomy, catalog = _load_render_inputs_from_committed_artifacts(
+            taxonomy_json_path=json_output,
+            catalog_json_path=catalog_output,
+        )
+
     rendered_json = render_taxonomy_json(taxonomy)
     rendered_docs = render_taxonomy_docs(taxonomy)
     rendered_catalog = render_metric_catalog_json(catalog)
