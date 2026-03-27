@@ -12,6 +12,8 @@ def _run_collect(marker_expr: str, nodeid: str) -> subprocess.CompletedProcess[s
             sys.executable,
             "-m",
             "pytest",
+            "-o",
+            "addopts=",
             "--collect-only",
             "-q",
             "-m",
@@ -43,3 +45,12 @@ def test_heavy_tier_includes_slow_marked_runner_test() -> None:
     )
     assert proc.returncode == 0
     assert "test_runner_backtest_with_uniform_strategy" in proc.stdout
+
+
+def test_non_performance_selector_excludes_entire_performance_tree() -> None:
+    proc = _run_collect("not performance", "tests/performance")
+    assert proc.returncode in {0, 5}
+    assert "tests/performance/" not in proc.stdout
+    assert "collected 0 items" in f"{proc.stdout}\n{proc.stderr}" or "no tests collected" in (
+        f"{proc.stdout}\n{proc.stderr}"
+    )

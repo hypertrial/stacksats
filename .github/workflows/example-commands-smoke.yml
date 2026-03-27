@@ -26,7 +26,7 @@ jobs:
           extras: ".[dev,all]"
           constraints-file: "requirements/constraints-maintainer.txt"
 
-      - name: Run wheel-install smoke test
+      - name: Run inherited-environment wheel regression smoke
         run: pytest tests/unit/core/test_distribution_wheel_smoke.py -q
 
       - name: Run docs example command smoke checks

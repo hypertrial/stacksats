@@ -11,6 +11,7 @@ StackSats uses SemVer for its documented stable surface.
 
 - Python: `3.11` and `3.12`
 - Operating systems: Linux and macOS
+  - `release-gate.yml` enforces Linux full-suite validation and a macOS supported-platform smoke lane before release tags are publishable.
 - Windows: best-effort only until dedicated CI coverage is added
 
 ## Stable public API
@@ -23,6 +24,7 @@ The stable `1.x` contract is intentionally narrow:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
   - `stacksats strategy validate|backtest|export|run-daily|animate`
+- Optional helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience tools, but they are outside the frozen stable CLI subset.
 
 Lower-level modules are allowed to change between releases unless they are re-exported from top-level `stacksats`.
 
@@ -60,6 +62,7 @@ After `1.0.0`, any incompatible change to the stable surface requires:
 - `viz`: plotting and animation commands.
 - `network`: HTTP-backed helper modules such as BTC price fetching helpers.
 - `deploy`: database/export integrations.
-- `stacksats-plot-weights` spans both `deploy` (DB access) and `viz` (rendering).
+- `stacksats-plot-mvrv` is an optional helper script that requires `viz`.
+- `stacksats-plot-weights` is an optional helper script that spans both `deploy` (DB access) and `viz` (rendering).
 
 Install only the extras needed for your workflow.

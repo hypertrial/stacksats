@@ -143,12 +143,54 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Set up Python project
-        uses: ./.github/actions/setup-python-project
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          extras: ".[dev,all]"
-          constraints-file: "requirements/constraints-maintainer.txt"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements/constraints-maintainer.txt
 
-      - name: Run wheel-install smoke tests
-        run: pytest tests/unit/core/test_distribution_wheel_smoke.py -q
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Run isolated wheel smoke tests
+        run: |
+          python scripts/release_wheel_smoke.py \
+            --wheel dist/*.whl \
+            --constraints-file requirements/constraints-maintainer.txt \
+            --mode all
+
+  macos_smoke:
+    runs-on: macos-latest
+    needs:
+      - package
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements/constraints-maintainer.txt
+
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Run macOS base smoke
+        run: |
+          python scripts/release_wheel_smoke.py \
+            --wheel dist/*.whl \
+            --constraints-file requirements/constraints-maintainer.txt \
+            --mode base

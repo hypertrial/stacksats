@@ -65,6 +65,9 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
     wheel_path = wheel_paths[0]
 
     _run_checked(
+        # This regression helper intentionally inherits site-packages so it can run
+        # in offline/local environments. The release gate uses a separate isolated
+        # workflow smoke script for clean-install validation.
         [sys.executable, "-m", "venv", "--system-site-packages", str(venv_dir)],
         cwd=tmp_path,
         env=build_env,

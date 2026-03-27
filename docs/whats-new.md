@@ -21,6 +21,7 @@ Use this page as the current-release landing pointer.
 - The main CLI onboarding path is now `stacksats demo backtest`, not a manually prepared runtime parquet.
 - Source-contract posture remains strict: canonical source dataset is `merged_metrics*.parquet`, while runtime workflows consume a derived BRK-wide parquet (or user-supplied Polars DataFrame).
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.
+- Unreleased `1.0.0` contract-hardening work is tracked in `CHANGELOG.md` under `Unreleased`; use [Stability Policy](stability.md) and [Release Guide](release.md) for the current support and release process.
 - For behavior and compatibility notes, use [Migration Guide](migration.md) and [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 
 ## Release details

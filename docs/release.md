@@ -7,6 +7,8 @@ description: Manual-first release process for StackSats package and documentatio
 
 This guide is manual-first. It covers token-based PyPI releases.
 
+For `1.0.0` and later, treat `release-gate.yml` as the only release-signoff workflow. Fast PR and `main` workflows are confidence lanes, not approval lanes.
+
 ## Release Policy
 
 - Use SemVer: `MAJOR.MINOR.PATCH`.
@@ -62,8 +64,19 @@ export TWINE_PASSWORD="${PYPI_API_KEY}"
    - Add user-visible changes under `## [Unreleased]`.
    - Before tagging, move unreleased entries into the new `vX.Y.Z` section with the release date.
    - Start a fresh `## [Unreleased]` section for follow-up work.
-2. Ensure CI/tests are green.
-3. Merge to `main`.
+2. Update `docs/whats-new.md` so the latest released section still matches the newest changelog release.
+3. Ensure CI/tests are green.
+4. Merge to `main`.
+5. Create a release branch such as `release/1.0.0` for final pre-tag verification.
+
+### 1a) Verify GitHub protections
+
+Before cutting a `1.x` release, verify repository settings are aligned with the release process:
+
+- `main` requires pull requests.
+- `release/*` branches require the `release-gate` workflow.
+- Release tags require the `release-gate` workflow before publish.
+- Normal maintainer bypass is disabled unless there is an explicit emergency policy exception.
 
 ### 2) Local preflight checks
 
@@ -73,7 +86,7 @@ From repository root:
 bash scripts/release_check.sh
 ```
 
-This is a release-preflight command. It runs lint, docs checks, generated-doc sync checks, the full non-performance test suite, a preflight package build, and `twine check`.
+This is a release-preflight command. It runs lint, docs checks, generated-doc sync checks, the full non-performance release suite, a preflight package build, and `twine check`.
 It also runs the BRK source-contract guard (`scripts/check_no_coinmetrics_refs.py`).
 The preflight build only verifies buildability; rebuild release artifacts after the release tag is created.
 
@@ -82,7 +95,21 @@ If your environment has constrained SSL trust roots, `scripts/release_check.sh` 
 - Retry package build with `python -m build --no-isolation` only when isolated-build failure looks SSL-related.
 - Still fail normally for non-SSL build errors.
 
-### 3) Build artifacts
+### 3) Push release branch and verify release gate
+
+Push the release candidate to a release branch and wait for `release-gate.yml` to pass:
+
+```bash
+git push origin release/X.Y.Z
+```
+
+The release gate must pass on the release branch before you create the annotated tag. It enforces:
+
+- Linux quality checks, strict docs build, full non-performance tests, package build, and metadata validation
+- isolated built-wheel smoke validation
+- macOS Python 3.11 supported-platform smoke validation
+
+### 4) Build artifacts
 
 Create and push the release tag before building the publishable artifacts:
 
@@ -101,24 +128,29 @@ venv/bin/python -m build
 venv/bin/python -m twine check dist/*
 ```
 
-### 4) Publish to PyPI (default)
+### 5) Publish to PyPI (default)
 
 ```bash
 bash scripts/publish_pypi_manual.sh
 ```
 
-### 5) Post-release verification
+### 6) Post-release verification
 
 - Verify package page on PyPI.
 - Install from PyPI in a fresh virtual environment.
-- Verify entry points:
+- Verify the stable CLI entry point:
   - `stacksats`
-  - `stacksats-plot-mvrv`
-  - `stacksats-plot-weights`
+- Confirm the required fresh-install smoke covers:
+  - `stacksats demo backtest`
+  - `stacksats-plot-mvrv` in an environment with `viz` installed
+- Optional manual helper verification when relevant:
+  - `stacksats-plot-weights` in an environment with both `viz` and `deploy` installed plus a valid `DATABASE_URL`
 
 ## CI Workflow Notes
 
 - `release-gate.yml` is the release-grade blocking workflow for `release/*` branches and `v*` tags.
+- `release-gate.yml` now validates the built wheel in isolated virtual environments. It does not rely on inherited site-packages.
+- `release-gate.yml` covers the stable `stacksats` CLI path plus the optional `stacksats-plot-mvrv` helper; it does not attempt database-backed `stacksats-plot-weights` smoke in CI.
 - Pull requests run fast confidence checks (`package-check-pr.yml`) and docs checks. They are intentionally faster than the release gate and are not release sign-off.
 - Pushes to `main` run `package-check.yml` for ongoing confidence, not release approval.
 - Full non-performance coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
@@ -135,6 +167,7 @@ bash scripts/publish_pypi_manual.sh
   - strict docs build
 - Both `docs-check.yml` and `docs-pages.yml` install with `requirements/constraints-maintainer.txt` and `.[dev,all]` so docs environments stay aligned with release-grade installs.
 - Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
+- `example-commands-smoke.yml` keeps a lighter inherited-environment wheel regression test for maintainers, but it is not the release artifact gate.
 
 ## GitHub Pages Source
 
@@ -158,6 +191,7 @@ Expected results:
 
 - Manual publish succeeds with local `PYPI_API_KEY`.
 - Tagged build and `twine check` pass before upload.
+- Release branch and tagged release both pass `release-gate.yml` before publish.
 
 ## Operational Notes
 
@@ -165,6 +199,7 @@ Expected results:
 - Keep `scripts/publish_pypi_manual.sh` as the default release path.
 - If a release fails after version/tag creation, bump to the next version and retry; do not overwrite versions.
 - If `scripts/release_check.sh` changes, update this page and `CONTRIBUTING.md` in the same PR.
+- If GitHub branch/tag protection settings change, update this page in the same PR that changes the policy.
 - Keep contributor and policy docs current:
   - `CONTRIBUTING.md`
   - `SECURITY.md`

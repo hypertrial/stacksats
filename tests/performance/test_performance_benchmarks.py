@@ -374,6 +374,7 @@ class TestPerformanceThresholds:
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.performance
 class TestMemoryUsage:
     """Tests that verify reasonable memory usage."""
 
@@ -435,6 +436,7 @@ class TestMemoryUsage:
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.performance
 class TestScaling:
     """Tests that verify computation scales reasonably with input size."""
 

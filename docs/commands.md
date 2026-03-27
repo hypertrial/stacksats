@@ -7,6 +7,8 @@ description: Canonical index for StackSats strategy lifecycle commands.
 
 Use this page to find the canonical command reference for each lifecycle action.
 For built-in strategy behavior and parameter defaults, see [Strategies](reference/strategies.md).
+The frozen stable CLI contract covers the `stacksats demo`, `stacksats data`, and `stacksats strategy` command groups documented here.
+Optional helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are useful companion tools, but they are outside the stable `1.x` CLI subset.
 
 ## Most Common Commands (copy/paste)
 
@@ -39,6 +41,7 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - Runtime commands resolve a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
 - Visual commands (`stacksats strategy animate`, `stacksats-plot-mvrv`, `stacksats-plot-weights`) require `stacksats[viz]`.
 - `stacksats-plot-weights` also needs `stacksats[deploy]` plus `DATABASE_URL` because it reads stored weight windows from Postgres before rendering.
+- `stacksats-plot-mvrv` and `stacksats-plot-weights` are helper scripts, not part of the stable CLI contract frozen in [Stability Policy](stability.md).
 - Use editable install for local command consistency:
 
 ```bash

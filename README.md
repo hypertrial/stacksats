@@ -53,6 +53,7 @@ pip install "stacksats[deploy]"
 ```
 
 Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
+Helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are convenience tools, not part of the frozen stable `1.x` CLI subset.
 
 For local development:
 
@@ -184,7 +185,14 @@ Stable `1.x` contract:
 - `StrategyRunner`, `load_strategy()`, `load_data()`, `open_merged_metrics()`, `load_metric_catalog()`, `precompute_features()`
 - `UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
 
+Stable CLI contract:
+
+- `stacksats demo validate|backtest|export`
+- `stacksats data fetch|prepare|doctor`
+- `stacksats strategy validate|backtest|export|run-daily|animate`
+
 Experimental/reference strategies now live under `stacksats.strategies.experimental.*` and are outside the stable `1.x` API boundary.
+Optional helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points, but they are outside the stable `1.x` CLI contract.
 
 `load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
 

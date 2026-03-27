@@ -58,6 +58,7 @@ Hook behavior:
 
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
 Current source contract is BRK parquet–only; keep runtime, docs, and tests aligned with canonical BRK parquet naming and providers.
+The release-grade GitHub workflow is `release-gate.yml`; fast PR/main workflows are confidence lanes and do not replace release-branch and tag validation.
 
 ## Contribution workflow
 
@@ -77,6 +78,7 @@ Current source contract is BRK parquet–only; keep runtime, docs, and tests ali
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 - If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.
+- If you change supported-platform claims or release-gate behavior, update `docs/stability.md`, `docs/release.md`, and the relevant workflow files in the same PR.
 - If you change the stable contract or support policy, update `docs/stability.md`, `README.md`, and migration notes in the same PR.
 
 ## Release notes policy

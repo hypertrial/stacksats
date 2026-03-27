@@ -91,6 +91,15 @@ top-level exports `open_merged_metrics()` and `load_metric_catalog()` plus [EDA 
 
 See: [API Reference](reference/api/index.md) and [Stability Policy](stability.md).
 
+### Are `stacksats-plot-mvrv` and `stacksats-plot-weights` part of the stable CLI?
+
+No. They are documented helper console scripts for plotting workflows, but the frozen stable `1.x` CLI contract is the `stacksats demo`, `stacksats data`, and `stacksats strategy` subtree documented in the stability policy.
+
+Treat the helper scripts as convenience entry points with optional extras:
+
+- `stacksats-plot-mvrv` requires `stacksats[viz]`
+- `stacksats-plot-weights` requires both `stacksats[viz]` and `stacksats[deploy]`
+
 ## Docs feedback workflow
 
 ### How is this FAQ updated?

@@ -10,6 +10,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Added a published stability policy covering supported platforms, stable public API boundaries, experimental surfaces, and deprecation rules.
 - Added `schema_version` to stable JSON artifact payloads (`backtest_result.json`, `metrics.json`, `animation_manifest.json`, `artifacts.json`).
 - Added release-grade `release-gate.yml` CI for `release/*` branches and `v*` tags.
+- Added a dedicated isolated release wheel smoke script to validate base and `viz` installs from the built wheel artifact.
+- Added pytest marker-contract coverage that proves `-m "not performance"` excludes the entire `tests/performance/` tree.
 
 ### Changed
 - Narrowed the stable `1.x` contract to top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset.
@@ -18,6 +20,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Split optional dependencies into `viz`, `network`, `deploy`, and `all` extras and added maintainer constraints for reproducible release environments.
 - Updated docs to describe causal lint as best-effort static analysis rather than a runtime sandbox.
 - Promoted package metadata from alpha to production/stable.
+- Expanded the release gate with a macOS Python 3.11 smoke lane so the documented Linux/macOS support policy is backed by CI.
+- Marked every benchmark, memory, and scaling test under `tests/performance/` as `performance` so release lanes and local selectors now match their names.
 
 ## [0.8.2] - 2026-03-17
 
