@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import types
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 import pytest
 
+import stacksats.prelude as prelude_module
 from stacksats.animation_data import _parse_window_date, prepare_animation_frame_data
 from stacksats.animation_render import _axis_limits, _validate_animation_frame_data
 from stacksats.column_map_provider import ColumnMapDataProvider, ColumnMapError
@@ -163,7 +165,10 @@ def test_runner_and_prelude_edge_branches(monkeypatch) -> None:
         def now(cls, tz=None):
             return cls(2024, 1, 5, 12, 0, tzinfo=tz)
 
-    monkeypatch.setattr("stacksats.runner.dt.datetime", _FixedDateTime)
+    monkeypatch.setattr(
+        "stacksats.runner.dt",
+        types.SimpleNamespace(datetime=_FixedDateTime, timezone=dt.timezone),
+    )
     _, _, run_ts, run_date = runner._parse_run_daily_config(_Uniform(), RunDailyConfig())
     assert run_ts.date().isoformat() == "2024-01-05"
     assert run_ts.tzinfo == dt.timezone.utc
@@ -196,6 +201,17 @@ def test_runner_and_prelude_edge_branches(monkeypatch) -> None:
             ),
         )
 
+    assert len(prelude_module.date_range_series(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2))) == 2
+    assert len(prelude_module.date_range_series("2024-01-01", dt.datetime(2024, 1, 2))) == 2
+    assert len(prelude_module.date_range_series(dt.datetime(2024, 1, 1), "2024-01-02")) == 2
+    grouped = prelude_module.group_ranges_by_start_date(
+        [
+            (dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)),
+            (dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3)),
+        ]
+    )
+    assert len(grouped[dt.datetime(2024, 1, 1)]) == 2
+
 
 def test_misc_runtime_branches_and_strategy_edge_defaults() -> None:
     assert weights_match(
@@ -221,6 +237,23 @@ def test_misc_runtime_branches_and_strategy_edge_defaults() -> None:
     profile = series.profile()
     assert profile["columns_profile"]["decision_time"]["datetime_min"] is None
     assert profile["columns_profile"]["decision_time"]["datetime_max"] is None
+
+    labeled = WeightTimeSeries(
+        metadata=_meta(),
+        data=_series_frame().with_columns(pl.Series("label", ["a", "b", "c"])),
+        extra_schema=(
+            ColumnSpec(
+                name="label",
+                dtype="object",
+                required=False,
+                description="label",
+                source="strategy",
+            ),
+        ),
+    )
+    label_profile = labeled.profile()
+    assert label_profile["columns_profile"]["label"]["dtype"] == "String"
+    assert "datetime_min" not in label_profile["columns_profile"]["label"]
 
     assert build_fold_ranges(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 1)) == []
 

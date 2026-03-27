@@ -159,6 +159,46 @@ def test_insert_all_data_missing_execute_values_raises_import_error() -> None:
         )
 
 
+def test_insert_all_data_fallback_covers_nonlogging_commit_branch() -> None:
+    from unittest.mock import MagicMock
+
+    class _Rows:
+        def __len__(self) -> int:
+            return 250001
+
+        def __getitem__(self, item):
+            if isinstance(item, slice):
+                start, stop, step = item.indices(len(self))
+                return [
+                    (1, "2024-01-01", "2024-12-31", "2024-01-01", 50000.0, 0.5)
+                    for _ in range(len(range(start, stop, step)))
+                ]
+            raise TypeError("Rows are slice-only in this test")
+
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.copy_from.side_effect = RuntimeError("copy failed")
+    cursor.fetchone.side_effect = [(0,), (250001,)]
+
+    executed_batches: list[int] = []
+
+    def _execute_values(cur, query, batch, page_size=None):
+        del cur, query
+        executed_batches.append(page_size or len(batch))
+
+    inserted = insert_all_data(
+        conn=conn,
+        df=pl.DataFrame({"x": [1]}),
+        execute_values=_execute_values,
+        prepare_copy_dataframe_fn=lambda df: df,
+        build_insert_rows_fn=lambda df: _Rows(),
+    )
+
+    assert inserted == 250001
+    assert len(executed_batches) == 6
+    assert conn.commit.call_count >= 3
+
+
 def test_execution_state_error_branches(tmp_path: Path) -> None:
     store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
 

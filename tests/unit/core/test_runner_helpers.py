@@ -5,8 +5,14 @@ from __future__ import annotations
 import datetime as dt
 
 import polars as pl
+import pytest
 
-from stacksats.runner_helpers import slice_window_or_filter
+from stacksats.runner_helpers import (
+    build_fold_ranges,
+    perturb_future_features,
+    perturb_future_source_data,
+    slice_window_or_filter,
+)
 
 
 def test_slice_window_or_filter_dict_path_exact_match() -> None:
@@ -152,3 +158,57 @@ def test_slice_window_or_filter_dict_path_end_missing_falls_to_filter() -> None:
     assert result.height == 7
     assert result["date"][0] == start
     assert result["date"][-1] == end
+
+
+def test_runner_helper_remaining_branch_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    dates = pl.datetime_range(
+        dt.datetime(2020, 1, 1),
+        dt.datetime(2025, 12, 31),
+        interval="1d",
+        eager=True,
+    ).to_list()
+    probe = dates[1]
+
+    labels = pl.DataFrame({"date": dates[:4], "label": ["a", "b", "c", "d"]})
+    perturbed = perturb_future_features(labels, probe)
+    assert perturbed["label"].to_list() == ["a", "b", "d", "c"]
+
+    single_future = perturb_future_source_data(
+        pl.DataFrame({"date": dates[:3], "label": ["a", "b", "c"]}),
+        probe,
+    )
+    assert single_future["label"].to_list() == ["a", "b", "c"]
+
+    numeric_only = perturb_future_features(
+        pl.DataFrame({"date": dates[:4], "value": [1.0, 2.0, 3.0, 4.0]}),
+        probe,
+    )
+    assert numeric_only["value"].to_list()[:2] == [1.0, 2.0]
+
+    assert build_fold_ranges(dates[0], dates[-1])
+
+    monkeypatch.setattr(
+        "stacksats.runner_helpers.np.linspace",
+        lambda *args, **kwargs: [0, 1, 366, 732, 1096],
+    )
+    assert build_fold_ranges(dates[0], dates[-1])
+
+    monkeypatch.setattr(
+        "stacksats.runner_helpers.np.linspace",
+        lambda *args, **kwargs: [0, 100, 500, 800, 1096],
+    )
+    sparse = build_fold_ranges(dates[0], dates[-1])
+    assert sparse
+
+    monkeypatch.setattr(
+        "stacksats.runner_helpers.np.linspace",
+        lambda *args, **kwargs: [0, 1, 2, 3, 1096],
+    )
+    assert build_fold_ranges(dates[0], dates[-1])
+
+    shorter_end = dt.datetime(2022, 12, 31)
+    monkeypatch.setattr(
+        "stacksats.runner_helpers.np.linspace",
+        lambda *args, **kwargs: [0, 1, 101, 1096],
+    )
+    assert build_fold_ranges(dates[0], shorter_end)

@@ -50,11 +50,9 @@ class WeightTimeSeriesBatch:
     def __post_init__(self) -> None:
         if len(self.windows) == 0:
             raise ValueError("WeightTimeSeriesBatch.windows must not be empty.")
-        normalized_generated_at = _normalize_generated_at(self.generated_at)
-        if self.windows:
-            normalized_generated_at = self.windows[0].metadata.generated_at
+        normalized_generated_at = self.windows[0].metadata.generated_at
         batch_extra_schema = self.extra_schema
-        if not batch_extra_schema and self.windows:
+        if not batch_extra_schema:
             batch_extra_schema = self.windows[0].extra_schema
         normalized_extra_schema = validate_schema_specs(
             batch_extra_schema,

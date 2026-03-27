@@ -72,9 +72,10 @@ The release-grade GitHub workflow is `release-gate.yml`; fast PR/main workflows 
 - Keep behavior changes explicit and documented.
 - Prefer small, reviewable PRs over large mixed changes.
 - Include test coverage for fixes/features when practical.
-- Full non-performance coverage (`bash scripts/check_coverage.sh`) runs in the scheduled/manual
-  `coverage-report.yml` workflow and remains recommended before release cuts.
-- Coverage fail-under is now `100%` line coverage for `stacksats/`; do not lower the floor in routine cleanup PRs.
+- Full non-performance coverage (`bash scripts/check_coverage.sh`) is release-grade. It now runs in
+  `release-gate.yml`, while `coverage-report.yml` remains scheduled/manual maintenance visibility.
+- Coverage fail-under is `100%` line and branch coverage for `stacksats/`; do not lower the floor in
+  routine cleanup PRs.
 - Avoid committing secrets or environment files.
 - Follow docs ownership and update-trigger rules in `docs/docs_ownership.md`.
 - If you change release tooling, docs test tiers, or markdown workflow scope, update `docs/release.md`, `README.md`, and `docs/docs_ownership.md` in the same PR.

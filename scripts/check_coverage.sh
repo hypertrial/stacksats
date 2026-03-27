@@ -10,6 +10,7 @@ COVERAGE_FAIL_UNDER="${COVERAGE_FAIL_UNDER:-100}"
 
 python -m pytest \
   --cov=stacksats \
+  --cov-branch \
   --cov-report=term-missing \
   --cov-report=xml \
   --cov-fail-under="${COVERAGE_FAIL_UNDER}" \

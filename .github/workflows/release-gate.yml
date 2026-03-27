@@ -95,6 +95,22 @@ jobs:
       - name: Run smoke test tier
         run: pytest tests/unit tests/bdd/scenarios -v -m "not slow and not integration and not performance" --durations=25 --durations-min=1.0 --dist=loadscope
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python project
+        uses: ./.github/actions/setup-python-project
+        with:
+          python-version: "3.11"
+          extras: ".[dev,all]"
+          constraints-file: "requirements/constraints-maintainer.txt"
+
+      - name: Run branch-aware coverage gate
+        run: bash scripts/check_coverage.sh
+
   package:
     runs-on: ubuntu-latest
     needs:
@@ -102,6 +118,7 @@ jobs:
       - docs
       - tests_py311
       - tests_py312
+      - coverage
     steps:
       - name: Check out code
         uses: actions/checkout@v4

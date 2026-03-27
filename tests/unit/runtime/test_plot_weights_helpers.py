@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import builtins
 import importlib
 import runpy
@@ -195,3 +196,33 @@ def test_plot_weights_module_dunder_main_executes(
         runpy.run_module("stacksats.plot_weights", run_name="__main__")
 
     assert conn.close.called
+
+
+def test_plot_weights_main_handles_connection_failure_before_conn_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("stacksats.plot_weights.get_db_connection", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(sys, "argv", ["plot_weights.py"])
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        with pytest.raises(SystemExit) as excinfo:
+            runpy.run_module("stacksats.plot_weights", run_name="__main__")
+
+    assert excinfo.value.code == 1
+
+
+def test_get_date_range_options_leaves_datetime_columns_unchanged() -> None:
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchall.return_value = [
+        (dt.datetime(2024, 1, 1), dt.datetime(2024, 12, 31), 366),
+    ]
+
+    df = get_date_range_options(conn)
+
+    assert "Datetime" in str(df["start_date"].dtype)

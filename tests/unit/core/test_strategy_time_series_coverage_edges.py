@@ -375,3 +375,32 @@ def test_outlier_and_returns_diagnostics_validation_paths() -> None:
     assert diagnostics["cumulative_return"] is None
     assert diagnostics["std_simple_return"] is None
     assert diagnostics["annualized_volatility"] is None
+
+
+def test_strategy_time_series_covers_optional_column_absence_and_empty_validations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    weight_only = WeightTimeSeries._coerce_validated_columns(pl.DataFrame({"weight": [1.0]}))
+    assert "price_usd" not in weight_only.columns
+
+    coerced = WeightTimeSeries._coerce_validated_columns(
+        pl.DataFrame({"price_usd": [100.0], "day_index": [0]})
+    )
+    assert "weight" not in coerced.columns
+    assert coerced["day_index"].dtype == pl.Float64
+
+    empty_series = _window()
+    object.__setattr__(
+        empty_series,
+        "_data",
+        pl.DataFrame(
+            schema={
+                "date": pl.Datetime("us"),
+                "weight": pl.Float64,
+                "price_usd": pl.Float64,
+                "day_index": pl.Float64,
+            }
+        ),
+    )
+    monkeypatch.setattr(WeightTimeSeries, "_validate_date_contract", lambda self, dates: None)
+    empty_series.validate()

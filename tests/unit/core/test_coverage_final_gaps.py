@@ -20,7 +20,7 @@ from stacksats.runner_validation import _ValidationState
 from stacksats.strategy_lint import _is_negative_integer
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
 from stacksats.strategy_time_series_batch import WeightTimeSeriesBatch
-from stacksats.strategy_types import BaseStrategy, ExportConfig, ValidationConfig
+from stacksats.strategy_types import BacktestConfig, BaseStrategy, ExportConfig, ValidationConfig
 from tests.unit.core.runner_validation_testkit import (
     ProfileOffsetLeakStrategy,
     UniformProposeStrategy,
@@ -615,3 +615,313 @@ def test_artifact_dir_prefers_existing_cwd_relative_weights_csv(
     batch = WeightTimeSeriesBatch.from_artifact_dir(artifact_dir)
 
     assert batch.windows[0].data["weight"].to_list() == [1.0]
+
+
+def test_compute_cycle_spd_covers_empty_source_and_batched_success_paths() -> None:
+    empty = pl.DataFrame(
+        schema={
+            "date": pl.Datetime("us"),
+            "price_usd": pl.Float64,
+            "price_usd_source_exists": pl.Boolean,
+        }
+    )
+    empty_features = pl.DataFrame(schema={"date": pl.Datetime("us"), "price_usd": pl.Float64})
+    assert prelude_module.compute_cycle_spd(
+        empty,
+        _uniform_window_weights,
+        features_df=empty_features,
+        start_date="2024-01-01",
+        end_date="2024-01-05",
+        validate_weights=True,
+    ).is_empty()
+
+    invalid_source = pl.DataFrame(
+        {
+            "date": pl.Series("date", [None], dtype=pl.Utf8),
+            "price_usd": [100.0],
+            "price_usd_source_exists": [True],
+        }
+    )
+    assert prelude_module.compute_cycle_spd(
+        invalid_source,
+        _uniform_window_weights,
+        features_df=pl.DataFrame({"date": pl.Series("date", [None], dtype=pl.Utf8), "price_usd": [100.0]}),
+        start_date="2024-01-01",
+        end_date="2024-01-05",
+        validate_weights=True,
+    ).is_empty()
+
+    masked_source = _sample_cycle_btc_frame().with_columns(pl.lit(False).alias("price_usd_source_exists"))
+    unvalidated = prelude_module.compute_cycle_spd(
+        masked_source,
+        _uniform_window_weights,
+        start_date="2024-01-01",
+        end_date="2025-01-05",
+        validate_weights=False,
+    )
+    assert unvalidated.height >= 1
+
+    class GoodBatchStrategy:
+        def _compute_window_weights_batch(
+            self, full_feat, *, feature_plan, windows, expected_days
+        ):
+            del full_feat, feature_plan, expected_days
+            rows = []
+            for i in range(min(2, windows.height)):
+                w_start = windows["window_start"][i]
+                w_end = windows["window_end"][i]
+                dates = pl.datetime_range(w_start, w_end, interval="1d", eager=True)
+                n = len(dates)
+                rows.append(
+                    pl.DataFrame(
+                        {
+                            "window_start": [w_start] * n,
+                            "window_end": [w_end] * n,
+                            "date": dates,
+                            "weight": [1.0 / n] * n,
+                        }
+                    )
+                )
+            return pl.concat(rows, how="vertical_relaxed") if rows else pl.DataFrame()
+
+    validated = prelude_module.compute_cycle_spd(
+        _sample_cycle_btc_frame(),
+        GoodBatchStrategy(),
+        start_date="2024-01-01",
+        end_date="2025-01-05",
+        validate_weights=True,
+    )
+    assert validated.height >= 1
+
+
+def test_runner_and_validation_cover_remaining_cache_and_noop_branches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    runner._release_runtime_cache(clear=False)
+
+    metadata = UniformProposeStrategy().metadata()
+    noop = runner._build_noop_daily_result(
+        metadata=metadata,
+        config=type("Cfg", (), {"mode": "paper", "total_window_budget_usd": 100.0})(),
+        run_date="2024-01-01",
+        state_store=type("StateStore", (), {"db_path": Path("state.sqlite3")})(),
+        existing_run=type(
+            "ExistingRun",
+            (),
+            {
+                "payload": {"status": "noop"},
+                "order_summary": None,
+                "validation_receipt_id": None,
+                "data_hash": "",
+                "feature_snapshot_hash": "",
+                "artifact_path": None,
+                "run_key": "run-1",
+                "idempotency_hit": True,
+                "force_flag": False,
+                "message": "noop",
+            },
+        )(),
+        daily_order_receipt_cls=lambda **kwargs: kwargs,
+        daily_run_result_cls=lambda **kwargs: kwargs,
+    )
+    assert noop["order_receipt"] is None
+
+    dates = [dt.datetime(2024, 1, 1) + dt.timedelta(days=i) for i in range(400)]
+    btc = pl.DataFrame({"date": dates, "price_usd": np.linspace(100.0, 500.0, len(dates))})
+    state = _ValidationState(messages=[])
+    runner._run_weight_constraint_checks(
+        strategy=UniformProposeStrategy(),
+        btc_df=btc,
+        features_df=btc,
+        start_ts=dates[-1],
+        end_ts=dates[-1],
+        strict_mode=True,
+        config=ValidationConfig(strict=True),
+        state=state,
+    )
+    assert state.strict_checks_ok is True
+
+    class _LazyProfileStrategy(BaseStrategy):
+        strategy_id = "lazy-profile"
+        intent_preference = "profile"
+
+        def build_target_profile_lazy(self, ctx, features_lf):
+            del ctx
+            return features_lf.select("date", pl.lit(1.0).alias("value"))
+
+        def propose_weight(self, state):
+            return state.uniform_weight
+
+    cache, _ = runner._ensure_runtime_cache(_LazyProfileStrategy(), btc)
+    monkeypatch.setattr(runner, "_materialize_strategy_features_lazy", lambda *args, **kwargs: btc.lazy())
+    weights, mutated = runner._compute_strategy_weights(
+        _LazyProfileStrategy(),
+        btc_df=btc,
+        features_df=btc,
+        start_date=dates[0],
+        end_date=dates[-1],
+        current_date=dates[-1],
+        strict_mode=True,
+        cache_namespace="base",
+    )
+    assert mutated is False
+    assert cache.profile.compute_weights_calls == 1
+    assert cache.weight_frames == {}
+
+    runner_no_cache = StrategyRunner()
+    monkeypatch.setattr(
+        runner_no_cache,
+        "_materialize_strategy_features_lazy",
+        lambda *args, **kwargs: btc.lazy(),
+    )
+    runner_no_cache._compute_strategy_weights(
+        _LazyProfileStrategy(),
+        btc_df=btc,
+        features_df=btc,
+        start_date=dates[0],
+        end_date=dates[-1],
+        current_date=dates[-1],
+        strict_mode=True,
+        cache_namespace="base",
+    )
+
+    runner = StrategyRunner()
+    monkeypatch.setattr(
+        runner,
+        "_compute_strategy_weights",
+        lambda *args, **kwargs: (
+            pl.DataFrame({"date": dates[:365], "weight": [1.0 / 365.0] * 365}),
+            False,
+        ),
+    )
+    state = _ValidationState(messages=[])
+    runner._run_weight_constraint_checks(
+        strategy=UniformProposeStrategy(),
+        btc_df=btc,
+        features_df=btc,
+        start_ts=dates[0],
+        end_ts=dates[-1],
+        strict_mode=True,
+        config=ValidationConfig(strict=True, max_boundary_hit_rate=1.0),
+        state=state,
+    )
+    assert state.strict_checks_ok is True
+    assert any("Strict boundary diagnostics" in message for message in state.messages)
+
+    runner = StrategyRunner()
+    monkeypatch.setattr(
+        runner,
+        "_materialize_strategy_features",
+        lambda *args, **kwargs: btc.filter(pl.col("date") <= kwargs["current_date"]),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_compute_with_mutation_guard",
+        lambda strategy, ctx, strict_mode: (
+            pl.DataFrame({"date": [ctx.current_date + dt.timedelta(days=1)], "weight": [1.0]}),
+            False,
+        ),
+    )
+    state = _ValidationState(messages=[])
+    runner._run_locked_prefix_check(
+        strategy=UniformProposeStrategy(),
+        btc_df=btc,
+        features_df=btc,
+        start_ts=dates[0],
+        max_window_start=dates[0],
+        strict_mode=True,
+        state=state,
+    )
+    assert state.strict_checks_ok is True
+
+    runner = StrategyRunner()
+    monkeypatch.setattr("stacksats.runner_validation.block_bootstrap_confidence_interval", lambda *args, **kwargs: type("B", (), {"lower": 1.0, "upper": 2.0})())
+    monkeypatch.setattr("stacksats.runner_validation.paired_block_permutation_pvalue", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr("stacksats.runner_validation.build_purged_walk_forward_folds", lambda *args, **kwargs: [])
+    state = _ValidationState(messages=[], diagnostics={})
+    runner._strict_statistical_checks(
+        strategy=UniformProposeStrategy(),
+        btc_df=btc_df(days=800),
+        features_df=btc_df(days=800),
+        start_ts=dt.datetime(2024, 1, 1),
+        end_ts=dt.datetime(2026, 12, 31),
+        config=ValidationConfig(strict=True),
+        state=state,
+        backtest_result=type("Result", (), {"spd_table": pl.DataFrame({"dynamic_percentile": [1.0], "uniform_percentile": [1.0], "excess_percentile": [0.0]})})(),
+    )
+    assert state.strict_checks_ok is True
+
+    backtest_runner = StrategyRunner()
+    monkeypatch.setattr(backtest_runner, "_runtime_profile", lambda: None)
+    monkeypatch.setattr(backtest_runner, "_release_runtime_cache", lambda clear: None)
+    result = backtest_runner.backtest(
+        UniformProposeStrategy(),
+        BacktestConfig(start_date="2024-01-01", end_date="2025-01-05"),
+        btc_df=_sample_cycle_btc_frame(),
+    )
+    assert result is not None
+
+
+def test_prelude_internal_spd_helpers_cover_unvalidated_and_batched_fast_paths() -> None:
+    btc = _sample_cycle_btc_frame()
+    start_ts = dt.datetime(2024, 1, 1)
+    end = dt.datetime(2025, 1, 5)
+    (
+        dataframe,
+        price_plan,
+        full_feat,
+        feature_plan,
+        inv_price_frame,
+        windows,
+    ) = prelude_module._batched_spd_windows(
+        btc,
+        prelude_module.precompute_features(btc),
+        start_ts=start_ts,
+        end=end,
+    )
+
+    single = prelude_module._compute_cycle_spd_framework(
+        dataframe,
+        price_plan,
+        full_feat,
+        feature_plan,
+        inv_price_frame,
+        windows.head(1),
+        lambda frame, **kwargs: _uniform_window_weights(frame),
+        validate_weights=False,
+    )
+    assert single.height == 1
+
+    class GoodBatchStrategy:
+        def _compute_window_weights_batch(
+            self, full_feat, *, feature_plan, windows, expected_days
+        ):
+            del full_feat, feature_plan, expected_days
+            rows = []
+            for i in range(min(1, windows.height)):
+                w_start = windows["window_start"][i]
+                w_end = windows["window_end"][i]
+                dates = pl.datetime_range(w_start, w_end, interval="1d", eager=True)
+                n = len(dates)
+                rows.append(
+                    pl.DataFrame(
+                        {
+                            "window_start": [w_start] * n,
+                            "window_end": [w_end] * n,
+                            "date": dates,
+                            "weight": [1.0 / n] * n,
+                        }
+                    )
+                )
+            return pl.concat(rows, how="vertical_relaxed")
+
+    batched = prelude_module._compute_cycle_spd_batched(
+        full_feat,
+        feature_plan,
+        inv_price_frame,
+        windows.head(1),
+        GoodBatchStrategy(),
+        validate_weights=False,
+    )
+    assert batched.height == 1

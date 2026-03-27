@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.api import BacktestResult, ValidationResult
+from stacksats.api import BacktestResult, DailyRunResult, ValidationResult
 from stacksats.strategy_types import (
     BaseStrategy,
     StrategyContext,
@@ -158,6 +158,37 @@ def test_backtest_result_animate_writes_manifest_and_returns_paths(
     assert manifest["strategy_id"] == "example"
     assert manifest["strategy_version"] == "1.2.3"
     assert manifest["run_id"] == "run-123"
+
+
+def test_backtest_result_animate_records_null_source_backtest_json(
+    tmp_path: Path,
+    mocker,
+) -> None:
+    result = BacktestResult(
+        spd_table=_sample_spd_df(),
+        exp_decay_percentile=44.2,
+        win_rate=66.6,
+        score=55.4,
+        uniform_exp_decay_percentile=35.0,
+    )
+
+    def _fake_render(frame_data, output_path, *, fps, width, height, **kwargs):
+        del frame_data, fps, width, height, kwargs
+        Path(output_path).write_bytes(b"GIF89a")
+        return {
+            "gif_path": str(output_path),
+            "frames": 1,
+            "fps": 6,
+            "width": 900,
+            "height": 600,
+        }
+
+    mocker.patch("stacksats.animation_render.render_strategy_vs_uniform_gif", _fake_render)
+
+    paths = result.animate(output_dir=str(tmp_path))
+    manifest = json.loads(Path(paths["manifest_json"]).read_text(encoding="utf-8"))
+
+    assert manifest["source_backtest_json"] is None
 
 
 def test_backtest_result_exp_decay_multiple_none_when_uniform_zero() -> None:
@@ -340,3 +371,31 @@ def test_example_profile_strategies_return_empty_profile_for_empty_window():
 
     assert simple_profile.is_empty()
     assert momentum_profile.is_empty()
+
+
+def test_daily_run_result_to_json_supports_optional_output_path(tmp_path) -> None:
+    result = DailyRunResult(
+        status="executed",
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_date="2024-01-01",
+        run_key="rk",
+        mode="paper",
+        idempotency_hit=False,
+        forced_rerun=False,
+        weight_today=0.1,
+        order_notional_usd=100.0,
+        btc_quantity=0.001,
+        price_usd=50000.0,
+        adapter_name="paper",
+        state_db_path="state.sqlite3",
+        artifact_path=None,
+        message="ok",
+    )
+
+    payload = result.to_json()
+    assert payload["strategy_id"] == "s"
+
+    output_path = tmp_path / "nested" / "daily.json"
+    persisted = result.to_json(output_path)
+    assert json.loads(output_path.read_text(encoding="utf-8")) == persisted

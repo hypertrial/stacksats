@@ -110,8 +110,7 @@ def generate_date_ranges(
     current = start
     while current <= max_start_date:
         end_date = _window_end(current)
-        if end_date <= end:
-            date_ranges.append((current, end_date))
+        date_ranges.append((current, end_date))
         current += dt.timedelta(days=1)
 
     return date_ranges

@@ -153,8 +153,8 @@ bash scripts/publish_pypi_manual.sh
 - `release-gate.yml` covers the stable `stacksats` CLI path plus the optional `stacksats-plot-mvrv` helper; it does not attempt database-backed `stacksats-plot-weights` smoke in CI.
 - Pull requests run fast confidence checks (`package-check-pr.yml`) and docs checks. They are intentionally faster than the release gate and are not release sign-off.
 - Pushes to `main` run `package-check.yml` for ongoing confidence, not release approval.
-- Full non-performance coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
-- Coverage fail-under is `100%` line coverage for `stacksats/` and should not be lowered in routine maintenance PRs.
+- Full non-performance branch-aware coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
+- Coverage fail-under is `100%` line and branch coverage for `stacksats/` and should not be lowered in routine maintenance PRs.
 - CLI docs examples are smoke-tested in scheduled/manual `example-commands-smoke.yml`.
 - PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
 - Pull requests also run docs quality checks (`docs-check.yml`):

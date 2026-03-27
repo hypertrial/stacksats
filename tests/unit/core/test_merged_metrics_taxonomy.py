@@ -8,6 +8,8 @@ import pytest
 
 from stacksats.docs_merged_metrics_taxonomy import (
     _is_mining_pool_family,
+    _build_dimension_registry,
+    _detect_entity_scope,
     build_artifacts_from_parquet,
     build_metric_catalog_from_metrics,
     build_metric_catalog_from_parquet,
@@ -16,6 +18,7 @@ from stacksats.docs_merged_metrics_taxonomy import (
     catalog_json_path,
     classify_family,
     data_guide_docs_path,
+    packaged_catalog_json_path,
     render_data_guide_docs,
     render_metric_catalog_json,
     render_taxonomy_docs,
@@ -290,6 +293,34 @@ def test_resolve_default_parquet_path_raises_when_missing(tmp_path: Path) -> Non
         resolve_default_parquet_path(tmp_path)
 
 
+def test_path_helpers_default_to_repo_root() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+
+    assert catalog_json_path() == repo_root / "data" / "brk_merged_metrics_catalog.json"
+    assert packaged_catalog_json_path() == (
+        repo_root / "stacksats" / "assets" / "brk_merged_metrics_catalog.json"
+    )
+    assert data_guide_docs_path() == repo_root / "docs" / "reference" / "merged-metrics-data-guide.md"
+
+
+def test_detect_entity_scope_covers_long_term_holder_and_dimension_registry_ignores_empty_parts() -> None:
+    assert (
+        _detect_entity_scope(
+            metric_name="lth_adjusted_sopr",
+            family="lth",
+            semantic_class="holder_cohorts",
+            access_category_key="holder_cohorts",
+        )
+        == "holder_long_term"
+    )
+
+    registry = _build_dimension_registry(
+        [{"tags": "alpha, , beta"}, {"tags": None}, {"tags": "beta"}],
+        field="tags",
+    )
+    assert registry == [{"name": "beta", "count": 2}, {"name": "alpha", "count": 1}]
+
+
 def test_classify_family_fallback_and_core_market_cases() -> None:
     assert classify_family("price", ["price_usd"]) == "core_market_metrics"
     assert classify_family("mystery", ["mystery_metric"]) == "other_standalone_metrics"
@@ -400,3 +431,15 @@ def test_build_metric_catalog_from_parquet_success_path(tmp_path: Path) -> None:
     catalog = build_metric_catalog_from_parquet(parquet_path)
     assert catalog["dataset_snapshot"]["distinct_metrics"] == 2
     assert len(catalog["metrics"]) == 2
+
+
+def test_detect_entity_scope_falls_back_for_nonstandard_holder_family() -> None:
+    assert (
+        _detect_entity_scope(
+            "holder_custom_metric",
+            "holder_custom",
+            "holder_cohorts",
+            "holder_cohorts",
+        )
+        == "network_wide"
+    )

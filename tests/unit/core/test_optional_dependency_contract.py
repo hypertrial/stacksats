@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import builtins
 import importlib
 import sys
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import polars as pl
@@ -11,6 +13,55 @@ import stacksats._optional as optional
 import stacksats.btc_price_fetcher as btc_price_fetcher
 import stacksats.plot_mvrv as plot_mvrv
 import stacksats.plot_weights as plot_weights
+
+
+def test_import_optional_raises_helpful_error_for_missing_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(_module_name: str):
+        exc = ModuleNotFoundError("No module named 'requests'")
+        exc.name = "requests"
+        raise exc
+
+    monkeypatch.setattr(optional.importlib, "import_module", _missing)
+
+    with pytest.raises(ImportError, match=r"stacksats\[network\]"):
+        optional.import_optional(
+            "requests",
+            extra="network",
+            feature="BTC price fetching helpers",
+        )
+
+
+def test_import_optional_reraises_nested_module_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _nested_missing(_module_name: str):
+        exc = ModuleNotFoundError("No module named 'charset_normalizer'")
+        exc.name = "charset_normalizer"
+        raise exc
+
+    monkeypatch.setattr(optional.importlib, "import_module", _nested_missing)
+
+    with pytest.raises(ModuleNotFoundError, match="charset_normalizer"):
+        optional.import_optional(
+            "requests",
+            extra="network",
+            feature="BTC price fetching helpers",
+        )
+
+
+def test_missing_dependency_error_builds_consistent_message() -> None:
+    error = optional.missing_dependency_error(
+        dependency="requests",
+        extra="network",
+        feature="BTC price fetching helpers",
+    )
+
+    assert isinstance(error, ImportError)
+    assert "requests" in str(error)
+    assert 'stacksats[network]' in str(error)
+    assert "BTC price fetching helpers" in str(error)
 
 
 def test_plot_mvrv_requires_viz_extra(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -114,3 +165,53 @@ def test_plot_weights_list_does_not_require_viz_extra(
     plot_weights.main()
 
     assert mock_conn.close.called
+
+
+def test_plot_mvrv_import_fallback_creates_placeholder_modules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {"matplotlib.dates", "matplotlib.pyplot", "seaborn"}:
+            raise ImportError(f"{name} unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    reloaded = importlib.reload(plot_mvrv)
+
+    assert reloaded is plot_mvrv
+    assert isinstance(plot_mvrv.mdates, ModuleType)
+    assert isinstance(plot_mvrv.plt, ModuleType)
+    assert isinstance(plot_mvrv.sns, ModuleType)
+    assert plot_mvrv.plt.rcParams == {}
+    with pytest.raises(ImportError, match=r"stacksats\[viz\]"):
+        plot_mvrv._ensure_viz_available()
+
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    importlib.reload(plot_mvrv)
+
+
+def test_plot_weights_import_fallback_creates_placeholder_modules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {"matplotlib.dates", "matplotlib.pyplot", "seaborn"}:
+            raise ImportError(f"{name} unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    reloaded = importlib.reload(plot_weights)
+
+    assert reloaded is plot_weights
+    assert isinstance(plot_weights.mdates, ModuleType)
+    assert isinstance(plot_weights.plt, ModuleType)
+    assert isinstance(plot_weights.sns, ModuleType)
+    assert plot_weights.plt.rcParams == {}
+    with pytest.raises(ImportError, match=r"stacksats\[viz\]"):
+        plot_weights._ensure_viz_available()
+
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    importlib.reload(plot_weights)

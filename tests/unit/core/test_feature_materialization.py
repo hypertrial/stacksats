@@ -84,6 +84,20 @@ def test_materialize_versioned_observations_rejects_missing_columns() -> None:
         )
 
 
+def test_materialize_versioned_observations_without_revision_column() -> None:
+    observations = pl.DataFrame(
+        {
+            "effective_date": ["2024-01-01", "2024-01-02"],
+            "available_at": ["2024-01-01", "2024-01-02"],
+            "signal": [1.0, 2.0],
+        }
+    )
+
+    observed = materialize_versioned_observations(observations, as_of_date="2024-01-02")
+
+    assert observed.height == 2
+
+
 def test_hash_dataframe_is_stable_for_equal_content() -> None:
     dates = pl.datetime_range(
         dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2),
@@ -112,3 +126,12 @@ def test_hash_dataframe_changes_when_row_order_changes() -> None:
     reversed_frame = frame.reverse()
 
     assert hash_dataframe(frame) != hash_dataframe(reversed_frame)
+
+
+def test_hash_dataframe_handles_empty_non_date_frame() -> None:
+    frame = pl.DataFrame(schema={"x": pl.Float64})
+
+    digest = hash_dataframe(frame)
+
+    assert isinstance(digest, str)
+    assert digest

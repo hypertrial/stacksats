@@ -269,8 +269,64 @@ def test_execution_state_datetime_normalizers_handle_datetime_inputs() -> None:
     aware = dt.datetime(2024, 1, 3, 12, 30, tzinfo=dt.timezone.utc)
     parsed = _parse_date_like(aware)
     assert parsed == dt.datetime(2024, 1, 3, 12, 30)
+    assert _parse_date_like(dt.datetime(2024, 1, 3, 12, 30)) == dt.datetime(2024, 1, 3)
     assert _norm_dt_str(aware) == "2024-01-03"
     assert _norm_dt_str("2024-01-04T15:30:00") == "2024-01-04"
+
+
+def test_write_weight_snapshot_allows_empty_rows(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+
+    store.write_weight_snapshot(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        mode="paper",
+        snapshot_date="2024-01-02",
+        weights=pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
+    )
+
+    loaded = store.load_locked_prefix(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        mode="paper",
+        run_date="2024-01-03",
+        window_start=dt.datetime(2024, 1, 1),
+    )
+    assert loaded is None
+
+
+def test_mark_run_success_with_snapshot_allows_empty_rows_after_claim(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    store.claim_run(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_date="2024-01-03",
+        mode="paper",
+        run_key="run-1",
+        fingerprint="fp-1",
+        force=False,
+    )
+
+    store.mark_run_success_with_snapshot(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_date="2024-01-03",
+        mode="paper",
+        payload={"status": "executed"},
+        order_summary=None,
+        force_flag=False,
+        snapshot_date="2024-01-03",
+        weights=pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64}),
+    )
+
+    loaded = store.load_locked_prefix(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        mode="paper",
+        run_date="2024-01-04",
+        window_start=dt.datetime(2024, 1, 1),
+    )
+    assert loaded is None
 
 
 def test_ensure_column_adds_missing_column(tmp_path: Path) -> None:

@@ -203,11 +203,24 @@ class TestColumnMapProviderErrors:
 
 
 class TestColumnMapProviderCoverageEdges:
+    def test_apply_column_map_allows_identity_mapping(self) -> None:
+        df = pl.DataFrame({"date": [dt.datetime(2024, 1, 1)], "price_usd": [100.0]})
+        provider = ColumnMapDataProvider(df=df, column_map={"price_usd": "price_usd"})
+
+        result = provider._apply_column_map(df)
+
+        assert result.equals(df)
+
     def test_validate_required_columns_raises_when_missing(self) -> None:
         """_validate_required_columns raises when required columns are missing."""
         df = pl.DataFrame({"date": [dt.datetime(2024, 1, 1)], "x": [1.0]})
         with pytest.raises(ColumnMapError, match="Required library columns are missing"):
             ColumnMapDataProvider._validate_required_columns(df)
+
+    def test_validate_required_columns_allows_required_columns(self) -> None:
+        df = pl.DataFrame({"date": [dt.datetime(2024, 1, 1)], "price_usd": [100.0]})
+
+        ColumnMapDataProvider._validate_required_columns(df)
 
     def test_validate_required_columns_lazy_raises_when_missing(self) -> None:
         """_validate_required_columns_lazy raises when required columns are missing."""
@@ -234,6 +247,18 @@ class TestColumnMapProviderCoverageEdges:
         })
         result = ColumnMapDataProvider._to_daily_date_lazy(df.lazy())
         assert result.collect().height == 2
+
+    def test_to_daily_date_with_date_dtype(self) -> None:
+        df = pl.DataFrame(
+            {
+                "date": pl.Series([dt.date(2024, 1, 2), dt.date(2024, 1, 1)]).cast(pl.Date),
+                "price_usd": [101.0, 100.0],
+            }
+        )
+
+        result = ColumnMapDataProvider._to_daily_date(df)
+
+        assert list(result["date"].dt.strftime("%Y-%m-%d")) == ["2024-01-01", "2024-01-02"]
 
 
 class TestStrategyRunnerFromDataframe:

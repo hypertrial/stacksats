@@ -37,6 +37,17 @@ def test_open_merged_metrics_uses_explicit_path(tmp_path: Path) -> None:
     assert dataset.summary()["row_count"] == 9
 
 
+def test_normalize_bound_handles_timezone_aware_datetime_and_date_passthrough() -> None:
+    aware = dt.datetime(2024, 1, 2, 1, 30, tzinfo=dt.timezone(dt.timedelta(hours=2)))
+    naive = dt.datetime(2024, 1, 2, 1, 30)
+    direct_date = dt.date(2024, 1, 5)
+
+    assert eda._normalize_bound(None) is None
+    assert eda._normalize_bound(aware) == dt.date(2024, 1, 1)
+    assert eda._normalize_bound(naive) == dt.date(2024, 1, 2)
+    assert eda._normalize_bound(direct_date) is direct_date
+
+
 def test_open_merged_metrics_uses_latest_managed_fetch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -78,6 +89,11 @@ def test_open_merged_metrics_raises_when_no_canonical_parquet(
         open_merged_metrics()
 
 
+def test_resolve_canonical_parquet_rejects_missing_explicit_path(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Canonical parquet not found"):
+        eda._resolve_canonical_parquet(tmp_path / "missing.parquet")
+
+
 def test_open_merged_metrics_ignores_unrelated_parquet_when_none_are_canonical(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -104,6 +120,21 @@ def test_open_merged_metrics_rejects_unsupported_schema(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Expected canonical merged_metrics columns"):
         open_merged_metrics(bad_path)
+
+
+def test_canonical_lazy_frame_parses_utf8_dates(tmp_path: Path) -> None:
+    parquet_path = tmp_path / "merged_metrics_utf8.parquet"
+    pl.DataFrame(
+        {
+            "day_utc": ["2024-01-01", "2024-01-02"],
+            "metric": ["market_cap", "mvrv"],
+            "value": [1.0, 2.0],
+        }
+    ).write_parquet(parquet_path)
+
+    frame = eda._canonical_lazy_frame(parquet_path).collect()
+
+    assert frame["day_utc"].to_list() == [dt.date(2024, 1, 1), dt.date(2024, 1, 2)]
 
 
 def test_dataset_summary_and_collect_shape(tmp_path: Path) -> None:
@@ -272,6 +303,29 @@ def test_filter_search_uses_catalog_search_and_empty_query_is_noop(tmp_path: Pat
     assert empty.summary()["row_count"] == 0
 
 
+def test_ranked_suggestion_matches_returns_empty_for_blank_query() -> None:
+    catalog = load_metric_catalog()
+
+    ranked = eda._ranked_suggestion_matches(catalog.frame(), "   ")
+
+    assert ranked.is_empty()
+
+
+def test_metric_catalog_filter_returns_empty_when_valid_selectors_match_nothing() -> None:
+    catalog = load_metric_catalog()
+
+    filtered = catalog.filter(prefixes=["definitely_not_a_real_metric_prefix_"])
+
+    assert filtered.is_empty()
+
+
+def test_metric_catalog_search_and_filter_return_frame_for_noop_inputs() -> None:
+    catalog = load_metric_catalog()
+
+    assert catalog.search("   ").equals(catalog.frame())
+    assert catalog.filter().equals(catalog.frame())
+
+
 def test_load_metric_catalog_summary_and_lists() -> None:
     catalog = load_metric_catalog()
 
@@ -312,6 +366,12 @@ def test_metric_catalog_search_filter_coverage_describe_and_suggest() -> None:
     assert any(row["metric"] == "adjusted_sopr" for row in suggest_prefix.to_dicts())
 
 
+def test_metric_catalog_suggest_metrics_returns_empty_when_limit_is_non_positive() -> None:
+    catalog = load_metric_catalog()
+
+    assert catalog.suggest_metrics("market", limit=0).is_empty()
+
+
 def test_metric_catalog_suggest_ranking_prefers_exact_then_prefix_then_substring() -> None:
     catalog = load_metric_catalog()
 
@@ -348,6 +408,67 @@ def test_metric_catalog_and_dataset_reject_unknown_explicit_metrics(
         dataset.metric_coverage(["not_real"])
     with pytest.raises(ValueError, match="Unknown metrics: not_real"):
         dataset.pivot_wide(metrics=["not_real"])
+
+
+def test_dataset_sample_handles_zero_empty_and_full_slice_cases(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+
+    assert dataset.sample(0).is_empty()
+    assert dataset.filter_search("definitely not real").sample(2).is_empty()
+
+    full_sample = dataset.sample(100, seed=123)
+    assert full_sample.equals(dataset.collect())
+
+
+def test_with_row_index_falls_back_to_row_count() -> None:
+    sentinel = object()
+
+    class LegacyLazyFrame:
+        def with_row_count(self, name: str):
+            assert name == "__sample_row"
+            return sentinel
+
+    assert eda._with_row_index(LegacyLazyFrame(), "__sample_row") is sentinel
+
+
+def test_metric_coverage_accepts_metric_filter(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+
+    coverage = dataset.metric_coverage(["market_cap"])
+
+    assert coverage.height == 1
+    assert coverage.row(0, named=True)["metric"] == "market_cap"
+
+
+def test_dataset_lazy_and_pivot_wide_cover_filtered_branches(tmp_path: Path) -> None:
+    dataset = open_merged_metrics(_write_canonical_parquet(tmp_path / "merged_metrics.parquet"))
+
+    assert dataset.lazy() is not None
+
+    filtered = dataset.pivot_wide(metrics=["market_cap"])
+    assert filtered.columns == ["day_utc", "market_cap"]
+
+    empty_dataset = dataset.filter_search("definitely not real")
+    empty_wide = empty_dataset.pivot_wide(fill_null=0.0)
+    assert empty_wide.columns == ["day_utc"]
+
+
+def test_metric_catalog_filter_and_coverage_cover_positive_selector_branches() -> None:
+    catalog = load_metric_catalog()
+
+    filtered = catalog.filter(metrics=["market_cap"], prefixes=["adjusted_"])
+    coverage = catalog.coverage()
+
+    assert "market_cap" in filtered["metric"].to_list()
+    assert coverage.height >= catalog.summary()["metric_count"]
+
+
+def test_metric_catalog_filter_metrics_path_without_prefixes() -> None:
+    catalog = load_metric_catalog()
+
+    filtered = catalog.filter(metrics=["market_cap"])
+
+    assert filtered["metric"].to_list() == ["market_cap"]
 
 
 def test_packaged_catalog_asset_matches_repo_copy() -> None:

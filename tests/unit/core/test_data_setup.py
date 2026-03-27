@@ -695,3 +695,39 @@ def test_data_doctor_empty_frame_reports_none_coverage(
     assert report["status"] == "ok"
     assert report["coverage_start"] is None
     assert report["coverage_end"] is None
+
+
+def test_fetch_assets_download_error_without_temp_file_still_reraises(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    payload = b"x" * 16
+    manifest = {
+        "gdrive_folder_url": "https://drive.google.com/drive/folders/abc",
+        "parquet": {
+            "name": "x.parquet",
+            "file_id": "f1",
+            "sha256": _sha256(payload),
+            "size_bytes": len(payload),
+            "version": "1",
+        },
+        "schema": {
+            "name": "x.md",
+            "file_id": "f2",
+            "sha256": _sha256(payload),
+            "size_bytes": len(payload),
+            "version": "1",
+        },
+        "updated_at_utc": "2026-01-01T00:00:00Z",
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def raising_downloader(_fid: str, _out: Path) -> int:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        data_setup.fetch_assets(
+            manifest_path=manifest_path,
+            target_dir=tmp_path / "target",
+            downloader=raising_downloader,
+        )
+
+    assert not (tmp_path / "target" / "x.parquet.part").exists()

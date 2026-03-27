@@ -210,7 +210,7 @@ venv/bin/python -m ruff check .
 venv/bin/python scripts/check_no_coinmetrics_refs.py
 venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 bash scripts/check_docs_refs.sh
-bash scripts/check_coverage.sh  # heavy; enforces 100% line coverage on stacksats/
+bash scripts/check_coverage.sh  # heavy; enforces 100% line + branch coverage on stacksats/
 bash scripts/clean_local.sh
 bash scripts/release_check.sh
 ```

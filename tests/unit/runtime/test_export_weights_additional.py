@@ -387,3 +387,71 @@ def test_update_today_weights_returns_zero_when_no_api_price_and_today_missing(
     updated = update_today_weights(conn, df, today_str="2024-01-01")
 
     assert updated == 0
+
+
+def test_get_current_btc_price_falls_back_to_last_finite_history_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import stacksats.export_weights as export_weights_module
+
+    class _FixedDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2024, 1, 3, 12, 0, tzinfo=tz)
+
+    class _Provider:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        def load(self, **kwargs):
+            del kwargs
+            return pl.DataFrame(
+                {
+                    "date": [dt.datetime(2024, 1, 2), dt.datetime(2024, 1, 3)],
+                    "price_usd": [41000.0, float("nan")],
+                }
+            )
+
+    monkeypatch.setattr(export_weights_module, "datetime", _FixedDateTime)
+    monkeypatch.setattr(export_weights_module, "BTCDataProvider", _Provider)
+    monkeypatch.setattr(export_weights_module, "_get_current_btc_price", lambda **kwargs: 99999.0)
+
+    assert export_weights_module.get_current_btc_price(previous_price=40000.0) == 41000.0
+
+
+def test_get_current_btc_price_uses_api_fallback_when_history_has_no_finite_prices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import stacksats.export_weights as export_weights_module
+
+    class _FixedDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2024, 1, 3, 12, 0, tzinfo=tz)
+
+    class _Provider:
+        def __init__(self, *args, **kwargs):
+            del args, kwargs
+
+        def load(self, **kwargs):
+            del kwargs
+            return pl.DataFrame(
+                {
+                    "date": [dt.datetime(2024, 1, 3)],
+                    "price_usd": [float("nan")],
+                }
+            )
+
+    observed: dict[str, object] = {}
+
+    def _fallback(**kwargs):
+        observed.update(kwargs)
+        return 51500.0
+
+    monkeypatch.setattr(export_weights_module, "datetime", _FixedDateTime)
+    monkeypatch.setattr(export_weights_module, "BTCDataProvider", _Provider)
+    monkeypatch.setattr(export_weights_module, "_get_current_btc_price", _fallback)
+
+    assert export_weights_module.get_current_btc_price(previous_price=50000.0) == 51500.0
+    assert observed["previous_price"] == 50000.0
+    assert observed["fetch_btc_price_fn"] is export_weights_module.fetch_btc_price_robust

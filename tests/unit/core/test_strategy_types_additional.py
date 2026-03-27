@@ -481,3 +481,70 @@ def test_base_strategy_default_propose_weight_raises_not_implemented() -> None:
 
     with pytest.raises(NotImplementedError, match="Override propose_weight"):
         _ProfileOnlyStrategy().propose_weight(state)
+
+
+def test_backtest_and_save_respects_disabled_plot_and_json_outputs(tmp_path: Path) -> None:
+    strategy = _SimpleProposeStrategy()
+
+    class FakeBacktestResult:
+        def __init__(self):
+            self.plot_calls = 0
+            self.json_calls = 0
+            self.strategy_id = strategy.strategy_id
+            self.strategy_version = strategy.version
+            self.run_id = "run-disabled"
+
+        def plot(self, output_dir="output"):
+            del output_dir
+            self.plot_calls += 1
+            return {}
+
+        def to_json(self, path=None):
+            del path
+            self.json_calls += 1
+            return {}
+
+    fake_result = FakeBacktestResult()
+    strategy.backtest = lambda *args, **kwargs: fake_result  # type: ignore[method-assign]
+
+    result, output_dir = strategy.backtest_and_save(
+        config=BacktestConfig(),
+        output_dir=str(tmp_path),
+        write_plots=False,
+        write_json=False,
+    )
+
+    assert result is fake_result
+    assert Path(output_dir).exists()
+    assert fake_result.plot_calls == 0
+    assert fake_result.json_calls == 0
+
+
+def test_strategy_build_signals_accepts_valid_finite_signal_series() -> None:
+    class _SignalStrategy(BaseStrategy):
+        strategy_id = "signal-strategy"
+
+        def build_signals(self, ctx, features_df):
+            del ctx
+            n = features_df.height
+            return {
+                "one": pl.Series("one", [1.0] * n),
+                "two": pl.Series("two", [2.0] * n),
+            }
+
+        def build_target_profile(self, ctx, features_df, signals):
+            del ctx
+            return pl.DataFrame(
+                {
+                    "date": features_df["date"],
+                    "value": (signals["one"] + signals["two"]).cast(pl.Float64),
+                }
+            )
+
+    dates = [datetime(2024, 1, 1), datetime(2024, 1, 2)]
+    frame = pl.DataFrame({"date": dates, "price_usd": [100.0, 101.0]})
+    weights = _SignalStrategy().compute_weights(
+        strategy_context_from_features_df(frame, dates[0], dates[-1], dates[-1])
+    )
+
+    assert not weights.is_empty()

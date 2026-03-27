@@ -259,6 +259,19 @@ def test_feature_time_series_helper_edges() -> None:
         )
 
     FeatureTimeSeries.from_dataframe(
+        pl.DataFrame({"date": _dates(2), "x": [1, 2]}),
+        require_finite=("missing",),
+    )
+
+    series = FeatureTimeSeries.from_dataframe(pl.DataFrame({"date": _dates(2), "x": [1.0, 2.0]}))
+    series.validate_schema(("date", "x"))
+
+    FeatureTimeSeries.from_dataframe(
+        pl.DataFrame({"date": _dates(2), "x": [1.0, 2.0]}),
+        require_finite=("x",),
+    )
+
+    FeatureTimeSeries.from_dataframe(
         pl.DataFrame({"date": _dates(2), "signal": [1.0, 2.0]}),
         require_finite=("missing",),
     )

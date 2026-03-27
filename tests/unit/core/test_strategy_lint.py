@@ -9,6 +9,7 @@ from stacksats.strategy_lint import (
     _call_argument,
     _is_negative_integer,
     _is_rolling_aggregation,
+    _StrategyLintVisitor,
     _is_true_literal,
     lint_strategy_class,
     summarize_lint_findings,
@@ -173,3 +174,18 @@ def test_strategy_lint_helper_functions_cover_edge_paths() -> None:
     assert _is_rolling_aggregation(rolling_call) is True
     assert _is_rolling_aggregation(plain_call) is False
     assert _is_rolling_aggregation(name_call) is False
+
+
+def test_lint_strategy_class_does_not_warn_for_nonnegative_iloc() -> None:
+    source = "\n".join(
+        [
+            "class PositiveIlocStrategy:",
+            "    def transform_features(self, ctx):",
+            f"        _ = ctx.features.data.i{'loc'}[0]",
+            "        return ctx.features.data",
+        ]
+    )
+    visitor = _StrategyLintVisitor()
+    visitor.visit(ast.parse(source))
+    _, warnings = summarize_lint_findings(visitor.findings)
+    assert not any("iloc-negative" in warning for warning in warnings)

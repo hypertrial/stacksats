@@ -115,6 +115,7 @@ def test_resample_and_decompose_error_paths() -> None:
     assert list(_series().resample("D").columns) == ["date", "weight", "price_usd", "mvrv"]
     assert list(_series().resample("W").columns) == ["date", "weight", "price_usd", "mvrv"]
     assert list(_series().resample("M", agg="sum").columns) == ["date", "weight", "price_usd", "mvrv"]
+    assert list(_series().resample("2d").columns) == ["date", "weight", "price_usd", "mvrv"]
 
     with pytest.raises(ValueError, match="non-empty Polars interval string"):
         _series().resample("")
@@ -255,3 +256,22 @@ def test_calendar_cross_correlation_and_integration_order_edge_paths() -> None:
         ts.integration_order(acf_threshold=1.0)
     with pytest.raises(ValueError, match="Unknown columns for integration_order"):
         ts.integration_order(columns=["missing"])
+
+
+def test_integration_order_exhausts_all_differences_when_proxy_never_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ts = _series([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
+    monkeypatch.setattr(
+        WeightTimeSeries,
+        "_stationarity_proxy",
+        staticmethod(lambda series, acf_threshold=0.8: False),
+    )
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        result = ts.integration_order(columns=["price_usd"], max_order=2)
+    row = result.row(0, named=True)
+
+    assert row["column"] == "price_usd"
+    assert row["integration_order"] is None
