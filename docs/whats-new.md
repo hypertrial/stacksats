@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.0.1 highlights
+
+- Enforced true `100%` line and branch coverage for the `stacksats/` package in the release gate.
+- Added targeted regression coverage for optional dependency paths, plotting/runtime fallbacks, EDA helpers, and strategy time-series edge cases.
+- Synced maintainer docs and release guidance with the current branch-aware coverage contract.
+
 ## 1.0.0 highlights
 
 - Froze the stable `1.x` contract around top-level `stacksats` exports, documented artifact payloads, and the documented `stacksats` CLI subtree.

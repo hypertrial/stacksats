@@ -6,6 +6,13 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-03-27
+
+### Changed
+- Enforced `100%` line and branch coverage for `stacksats/` in the release gate so the published engineering contract now matches CI.
+- Added targeted branch-path regression coverage across optional dependency handling, EDA helpers, plotting fallbacks, runner/runtime edges, and strategy time-series helpers.
+- Tightened maintainer docs so release, contribution, and coverage guidance stay in sync with the current `1.x` process.
+
 ## [1.0.0] - 2026-03-27
 
 ### Added
