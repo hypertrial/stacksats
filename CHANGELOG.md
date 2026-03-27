@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-27
+
 ### Added
 - Added a published stability policy covering supported platforms, stable public API boundaries, experimental surfaces, and deprecation rules.
 - Added `schema_version` to stable JSON artifact payloads (`backtest_result.json`, `metrics.json`, `animation_manifest.json`, `artifacts.json`).
