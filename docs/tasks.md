@@ -5,19 +5,18 @@ description: Task-first workflows for common StackSats goals.
 
 # I Want To...
 
-Use this page to jump directly to the workflow you need.
+Use this page when you already know the outcome you want and need the shortest path to the right workflow.
 
-Global source contract:
-- Canonical dataset is long-format `merged_metrics*.parquet`; schema is documented in [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
-- Strategy runtime and validation read a runtime BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
-- Use [BRK Data Source](data-source.md) for canonical source, projection, and checksum workflow.
+For package install and first run, start with [Quickstart](start/quickstart.md).
+For exact CLI syntax and command grouping, use [Command Index](commands.md).
+For canonical source dataset details, use [BRK Data Source](data-source.md) and [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
 
 ## I want to validate a strategy
 
 ### Prerequisites
 
 - Strategy file exists and can be loaded (`module_or_path:ClassName`).
-- Local install is complete (`venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"`).
+- StackSats is installed and the command is importable.
 
 ### Command
 
@@ -201,7 +200,7 @@ stacksats strategy run-daily \
 
 ### Next step
 
-- Re-run fast tests and docs checks (`venv/bin/python -m pytest -q`, `venv/bin/python -m mkdocs build --strict`).
+- Re-run your local checks after updating imports and symbols.
 
 ## I want to start from minimal strategy code templates
 

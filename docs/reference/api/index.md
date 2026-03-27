@@ -5,6 +5,8 @@ description: Generated API documentation for core StackSats modules.
 
 # API Reference
 
+Start with [Public API](../public-api.md) if you want the supported `1.x` imports, CLI boundary, and artifact contracts.
+
 This section is generated from source code docstrings and signatures.
 Treat it as internal reference material unless a symbol is re-exported from top-level `stacksats`.
 

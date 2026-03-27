@@ -16,29 +16,26 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
 ## Start Here
 
-Fastest first run:
+Use this page when you want the fastest path into the hosted docs and need to choose the right next workflow.
+
+Canonical first run:
 
 1. `pip install stacksats`
 2. `stacksats demo backtest`
 3. Inspect `output/<strategy_id>/<version>/<run_id>/`
 
-Then choose your next path:
+Next steps:
 
 - [Quickstart](start/quickstart.md) for the offline packaged demo
 - [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
-- [EDA Quickstart](start/eda-quickstart.md) for notebook/script exploration of canonical `merged_metrics`
+- [Task Hub](tasks.md) for task-first workflows
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
-- [Stability Policy](stability.md) for the supported `1.x` contract
+- [Public API](reference/public-api.md) for the stable `1.x` library surface
 
 ## Canonical Dataset
 
 StackSats is anchored on the canonical BRK `merged_metrics*.parquet` dataset.
-
-- `236,259,020` rows in the current repo snapshot
-- `6,274` daily observations from `2009-01-03` to `2026-03-13`
-- `41,407` distinct metric keys across `284` top-level families
-
-Start here:
+Current coverage and scale are documented in the dataset-specific reference pages:
 
 - [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)
 - [BRK Data Source](data-source.md)
@@ -68,6 +65,14 @@ StackSats is built around three fundamental runtime objects:
 
     [Quickstart](start/quickstart.md)
 
+-   :material-format-list-checks: __I Know the Outcome I Want__
+
+    ---
+
+    Jump directly to the workflow you need.
+
+    [Task Hub](tasks.md)
+
 -   :material-code-braces: __I'm Building a Strategy__
 
     ---
@@ -75,30 +80,6 @@ StackSats is built around three fundamental runtime objects:
     Build custom hooks and run validate/backtest/export.
 
     [First Strategy Run](start/first-strategy-run.md)
-
--   :material-code-json: __I Need Minimal Code Templates__
-
-    ---
-
-    Copy minimal strategy examples for both supported hook styles.
-
-    [Minimal Strategy Examples](start/minimal-strategy-examples.md)
-
--   :material-console: __I Need Commands Fast__
-
-    ---
-
-    Use the command index and dedicated command reference pages.
-
-    [CLI Commands](commands.md)
-
--   :material-format-list-checks: __I Want Task-Based Guidance__
-
-    ---
-
-    Jump directly to workflow outcomes and next steps.
-
-    [Task Hub](tasks.md)
 
 -   :material-database: __I Need Full BRK Data__
 
@@ -108,38 +89,20 @@ StackSats is built around three fundamental runtime objects:
 
     [Full Data Setup](start/full-data-setup.md)
 
--   :material-progress-wrench: __I'm Upgrading Versions__
-
-    ---
-
-    Apply breaking-change mappings quickly.
-
-    [Migration Guide](migration.md)
-
--   :material-help-circle: __I Have Questions__
-
-    ---
-
-    Read frequently asked questions sourced from docs feedback.
-
-    [FAQ](faq.md)
-
--   :material-shield-check: __I Need Contract Details__
-
-    ---
-
-    Understand framework-owned invariants and user-owned hooks.
-
-    [Framework Boundary](framework.md)
-
 </div>
 
-## Start in 2 Clicks
+## Core Concepts
 
-1. New user path: [Quickstart](start/quickstart.md) -> [Full Data Setup](start/full-data-setup.md)
-2. Runner path: [Task Hub](tasks.md) -> [Command Index](commands.md)
-3. Builder path: [Create a Strategy](recipes/create-strategy.md) -> [Framework Boundary](framework.md)
-4. Maintainer path: [Release Guide](release.md) -> [Docs Ownership](docs_ownership.md)
+- [Framework Boundary](framework.md) explains framework-owned invariants versus user-owned strategy logic.
+- [Strategies](reference/strategies.md) documents stable built-ins and experimental reference strategies.
+- [Command Index](commands.md) is the canonical CLI reference for the stable `stacksats` command groups.
+- [Migration Guide](migration.md) maps old names and pre-v1 paths to the current `1.x` contract.
+
+## Maintainer Links
+
+- [What's New](whats-new.md)
+- [Release Guide](release.md)
+- [Docs Ownership](docs_ownership.md)
 
 ## Feedback
 

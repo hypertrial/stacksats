@@ -5,10 +5,9 @@ description: Canonical index for StackSats strategy lifecycle commands.
 
 # Command Index
 
-Use this page to find the canonical command reference for each lifecycle action.
+Use this page when you need the canonical CLI reference for the stable `stacksats` command groups.
+For first-run onboarding, use [Quickstart](start/quickstart.md). For task-first routing, use [Task Hub](tasks.md).
 For built-in strategy behavior and parameter defaults, see [Strategies](reference/strategies.md).
-The frozen stable CLI contract covers the `stacksats demo`, `stacksats data`, and `stacksats strategy` command groups documented here.
-Optional helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are useful companion tools, but they are outside the stable `1.x` CLI subset.
 
 ## Most Common Commands (copy/paste)
 
@@ -36,24 +35,17 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 
 ## Prerequisites
 
-- The fastest first run is `stacksats demo backtest`.
-- Canonical dataset is `merged_metrics*.parquet`; see [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md).
+- If you have not run StackSats before, start with `stacksats demo backtest`.
+- The stable CLI subset covers `stacksats demo`, `stacksats data`, and `stacksats strategy`.
 - Runtime commands resolve a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
 - Visual commands (`stacksats strategy animate`, `stacksats-plot-mvrv`, `stacksats-plot-weights`) require `stacksats[viz]`.
 - `stacksats-plot-weights` also needs `stacksats[deploy]` plus `DATABASE_URL` because it reads stored weight windows from Postgres before rendering.
-- `stacksats-plot-mvrv` and `stacksats-plot-weights` are helper scripts, not part of the stable CLI contract frozen in [Stability Policy](stability.md).
-- Use editable install for local command consistency:
+- Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented tools outside the frozen stable CLI contract.
+- See [Stability Policy](stability.md) for the exact boundary and [Quickstart](start/quickstart.md) for install paths.
 
-```bash
-python -m venv venv
-source venv/bin/activate
-venv/bin/python -m pip install --upgrade pip
-venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
-```
+## Legacy Anchors
 
-## Compatibility Anchors
-
-These sections intentionally preserve older in-page anchor links.
+These sections are retained only to preserve older in-page links.
 
 ## 2) Validate Strategy via Strategy Lifecycle CLI
 
@@ -77,7 +69,7 @@ Canonical page: [Animate Command](run/animate.md)
 
 ## Troubleshooting
 
-- If a command errors with import issues, verify editable install from repo root.
+- If a command errors with import issues, verify StackSats is installed; if you are using a checkout, confirm editable install from repo root.
 - If a command errors with data coverage, verify runtime parquet path/date bounds and confirm it was derived from canonical `merged_metrics`.
 - For strict validation failures, use [Validation Checklist](validation_checklist.md).
 - For task-first troubleshooting, use [Task Hub](tasks.md#i-want-to-troubleshoot-command-failures-quickly).

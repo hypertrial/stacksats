@@ -116,6 +116,7 @@ nav:
       - Animate Backtest Performance: recipes/animate-backtest.md
       - Migration Guide: migration.md
   - Reference:
+      - Public API: reference/public-api.md
       - Stability Policy: stability.md
       - Glossary: glossary.md
       - Merged Metrics Data Guide: reference/merged-metrics-data-guide.md

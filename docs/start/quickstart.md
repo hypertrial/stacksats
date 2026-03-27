@@ -5,27 +5,29 @@ description: Five-minute setup and first execution path for StackSats.
 
 # Quickstart
 
-Use this page for a 5-minute first run with the packaged offline demo.
+Use this page when you want the canonical first-run path for StackSats as a package user.
 
-!!! tip "Recommended Path"
-    Start with editable install so local examples and docs stay in sync with your checkout.
+## 1) Choose your install mode
 
-## 1) Install
+| Use case | Install mode | Command |
+|---|---|---|
+| I want to use StackSats | package install | `pip install stacksats` |
+| I am working from a checkout | editable install | `python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"` |
 
-=== "Editable (recommended)"
+Recommended first run:
 
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    venv/bin/python -m pip install --upgrade pip
-    venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
-    ```
+```bash
+pip install stacksats
+```
 
-=== "Package only"
+If you are working from this repository checkout instead:
 
-    ```bash
-    pip install stacksats
-    ```
+```bash
+python -m venv venv
+source venv/bin/activate
+venv/bin/python -m pip install --upgrade pip
+venv/bin/python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
+```
 
 For plotting or animation commands later, install visual extras:
 
@@ -56,7 +58,7 @@ output/<strategy_id>/<version>/<run_id>/
 
 After the demo succeeds, move to the full `strategy` and `data` command families.
 
-Run lifecycle commands from the canonical reference:
+Use these pages next:
 
 - [Validate Strategy](../run/validate.md)
 - [Run Full Backtest](../run/backtest.md)
@@ -101,7 +103,7 @@ A successful quickstart run should produce all of the following:
 
 ## Troubleshooting
 
-- If command import fails, confirm editable install from repo root.
+- If command import fails, confirm you installed either the package or the editable checkout from repo root.
 - If you want the canonical BRK workflow next, use [Full Data Setup](full-data-setup.md).
 - If dates or outputs look wrong, run explicit lifecycle commands from [CLI Commands](../commands.md).
 - If upgrading and old helper names fail, use [Migration Guide](../migration.md).

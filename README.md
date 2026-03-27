@@ -15,18 +15,19 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
 Start with the hosted docs: <https://hypertrial.github.io/stacksats/>.
 
-Local docs entry points:
+User docs:
 
 - [`docs/index.md`](docs/index.md) for the full map
 - [`docs/start/quickstart.md`](docs/start/quickstart.md) for the packaged five-minute demo
 - [`docs/tasks.md`](docs/tasks.md) for task-first workflows
-- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
-- [`docs/start/minimal-strategy-examples.md`](docs/start/minimal-strategy-examples.md) for copyable minimal strategy templates
 - [`docs/commands.md`](docs/commands.md) for canonical CLI command reference
+- [`docs/reference/public-api.md`](docs/reference/public-api.md) for the supported `1.x` library surface
+- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
 - [`docs/migration.md`](docs/migration.md) for old-to-new breaking-change mappings
-- [`docs/faq.md`](docs/faq.md) for recurring docs and integration questions
-- [`docs/framework.md`](docs/framework.md) for the framework contract
-- [`docs/stability.md`](docs/stability.md) for the supported `1.x` contract
+
+Maintainer docs:
+
+- [`docs/release.md`](docs/release.md) for maintainers cutting releases
 
 ## Framework Principles
 
@@ -39,6 +40,13 @@ Local docs entry points:
 See [`docs/framework.md`](docs/framework.md) for the canonical contract.
 
 ## Installation
+
+Choose your install mode:
+
+| Use case | Install mode | Command |
+|---|---|---|
+| I want to use StackSats | package install | `pip install stacksats` |
+| I am working from a checkout | editable install | `python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"` |
 
 ```bash
 pip install stacksats
@@ -55,7 +63,7 @@ pip install "stacksats[deploy]"
 Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
 Helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are convenience tools, not part of the frozen stable `1.x` CLI subset.
 
-For local development:
+For local development from a checkout:
 
 ```bash
 python -m venv venv
@@ -67,7 +75,7 @@ pip install pre-commit
 
 ## Quick Start
 
-Run the packaged offline demo first:
+Canonical first run:
 
 ```bash
 stacksats demo backtest
@@ -91,6 +99,7 @@ For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/comma
 For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
 For full BRK data setup, see [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md).
 For upgrades, see [`docs/migration.md`](docs/migration.md).
+For stable imports and contract boundaries, see [`docs/reference/public-api.md`](docs/reference/public-api.md).
 For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
 `stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
 
@@ -128,12 +137,7 @@ Runtime resolution precedence:
 - `~/.stacksats/data/bitcoin_analytics.parquet`
 - `./bitcoin_analytics.parquet`
 
-Current canonical `merged_metrics*.parquet` snapshot in repo-backed docs:
-
-- `236,259,020` rows
-- `6,274` daily observations
-- `41,407` distinct metric keys
-- `284` top-level metric families
+Current coverage and dataset scale are documented in the merged-metrics reference pages.
 
 Detailed references:
 
@@ -170,34 +174,19 @@ If you need to reload an export later, use `WeightTimeSeriesBatch.from_artifact_
 
 ## Public API
 
-Stable `1.x` contract:
+The stable `1.x` contract is intentionally narrow:
 
-- `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
-- `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
-- `BacktestConfig`, `ValidationConfig`, `ExportConfig`
-- `RunDailyConfig`
-- `StrategyMetadata`, `StrategySpec`, `StrategyArtifactSet`, `StrategyRunResult`
-- `StrategySeriesMetadata`, `ColumnSpec`
-- `BacktestResult`, `ValidationResult`, `DailyRunResult`
-- `DailyOrderRequest`, `DailyOrderReceipt`
-- `ColumnMapDataProvider`, `ColumnMapError`
-- `MergedMetricsDataset`, `MetricCatalog`
-- `StrategyRunner`, `load_strategy()`, `load_data()`, `open_merged_metrics()`, `load_metric_catalog()`, `precompute_features()`
-- `UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
+- top-level `stacksats` exports
+- documented artifact payloads
+- documented `stacksats demo`, `stacksats data`, and `stacksats strategy` CLI subset
 
-Stable CLI contract:
-
-- `stacksats demo validate|backtest|export`
-- `stacksats data fetch|prepare|doctor`
-- `stacksats strategy validate|backtest|export|run-daily|animate`
-
-Experimental/reference strategies now live under `stacksats.strategies.experimental.*` and are outside the stable `1.x` API boundary.
-Optional helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points, but they are outside the stable `1.x` CLI contract.
+Experimental/reference strategies live under `stacksats.strategies.experimental.*` and stay outside the stable `1.x` API boundary.
+Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points outside the frozen stable CLI contract.
 
 `load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
 
 For canonical `merged_metrics*.parquet` exploration, use `open_merged_metrics()` and `load_metric_catalog()`. See [docs/start/eda-quickstart.md](docs/start/eda-quickstart.md).
-See [docs/stability.md](docs/stability.md) for the support matrix, deprecation policy, and CLI/artifact stability boundary.
+See [docs/reference/public-api.md](docs/reference/public-api.md) for the stable import surface and [docs/stability.md](docs/stability.md) for the support matrix, deprecation policy, and CLI/artifact boundary.
 
 ## Development
 
