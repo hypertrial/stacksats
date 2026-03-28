@@ -53,6 +53,29 @@ def _btc_df(days: int = 500) -> pl.DataFrame:
     )
 
 
+def _allow_validation_and_capture_config(
+    runner: StrategyRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, ValidationConfig]:
+    captured: dict[str, ValidationConfig] = {}
+
+    def _validate(strategy_arg, config, btc_df=None):
+        del strategy_arg, btc_df
+        captured["config"] = config
+        return ValidationResult(
+            passed=True,
+            forward_leakage_ok=True,
+            weight_constraints_ok=True,
+            win_rate=100.0,
+            win_rate_ok=True,
+            messages=["ok"],
+            diagnostics={},
+        )
+
+    monkeypatch.setattr(runner, "validate", _validate)
+    return captured
+
+
 def test_run_daily_fails_fast_when_strict_validation_fails(
     tmp_path,
     monkeypatch,
@@ -101,24 +124,10 @@ def test_run_daily_preflight_uses_strategy_owned_validation_defaults(
 ) -> None:
     runner = StrategyRunner()
     strategy = _CustomDailyValidationStrategy()
-    captured: dict[str, object] = {}
+    captured = _allow_validation_and_capture_config(runner, monkeypatch)
+    state_store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
 
-    def _validate(strategy_arg, config, btc_df=None):
-        del strategy_arg, btc_df
-        captured["config"] = config
-        return ValidationResult(
-            passed=True,
-            forward_leakage_ok=True,
-            weight_constraints_ok=True,
-            win_rate=100.0,
-            win_rate_ok=True,
-            messages=["ok"],
-            diagnostics={},
-        )
-
-    monkeypatch.setattr(runner, "validate", _validate)
-
-    _, window_start, window_end, _, passed, _, _, _, _ = runner._run_daily_strict_preflight(
+    _, window_start, window_end, _, passed, _, receipt_id, _, _ = runner._run_daily_strict_preflight(
         strategy=strategy,
         metadata=strategy.metadata(),
         config=RunDailyConfig(
@@ -129,7 +138,7 @@ def test_run_daily_preflight_uses_strategy_owned_validation_defaults(
         run_date="2024-05-01",
         run_ts=dt.datetime(2024, 5, 1),
         fingerprint="fp",
-        state_store=SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3")),
+        state_store=state_store,
         btc_df=_btc_df(),
     )
 
@@ -142,6 +151,9 @@ def test_run_daily_preflight_uses_strategy_owned_validation_defaults(
     assert config.strict is False
     assert config.max_boundary_hit_rate == 0.42
     assert config.shuffled_trials == 7
+    receipt = state_store.get_validation_receipt(receipt_id)
+    assert receipt is not None
+    assert receipt.config_hash == runner._config_hash(config)
 
 
 def test_run_daily_preflight_keeps_strict_defaults_without_override(
@@ -150,24 +162,10 @@ def test_run_daily_preflight_keeps_strict_defaults_without_override(
 ) -> None:
     runner = StrategyRunner()
     strategy = _UniformStrategy()
-    captured: dict[str, object] = {}
+    captured = _allow_validation_and_capture_config(runner, monkeypatch)
+    state_store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
 
-    def _validate(strategy_arg, config, btc_df=None):
-        del strategy_arg, btc_df
-        captured["config"] = config
-        return ValidationResult(
-            passed=True,
-            forward_leakage_ok=True,
-            weight_constraints_ok=True,
-            win_rate=100.0,
-            win_rate_ok=True,
-            messages=["ok"],
-            diagnostics={},
-        )
-
-    monkeypatch.setattr(runner, "validate", _validate)
-
-    runner._run_daily_strict_preflight(
+    *_, receipt_id, _, _ = runner._run_daily_strict_preflight(
         strategy=strategy,
         metadata=strategy.metadata(),
         config=RunDailyConfig(
@@ -178,7 +176,7 @@ def test_run_daily_preflight_keeps_strict_defaults_without_override(
         run_date="2024-05-01",
         run_ts=dt.datetime(2024, 5, 1),
         fingerprint="fp",
-        state_store=SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3")),
+        state_store=state_store,
         btc_df=_btc_df(),
     )
 
@@ -186,6 +184,91 @@ def test_run_daily_preflight_keeps_strict_defaults_without_override(
     assert isinstance(config, ValidationConfig)
     assert config.min_win_rate == 50.0
     assert config.strict is True
+    receipt = state_store.get_validation_receipt(receipt_id)
+    assert receipt is not None
+    assert receipt.config_hash == runner._config_hash(config)
+
+
+def test_run_daily_preflight_custom_daily_validation_changes_receipt_hash(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custom_runner = StrategyRunner()
+    default_runner = StrategyRunner()
+    custom_captured = _allow_validation_and_capture_config(custom_runner, monkeypatch)
+    default_captured = _allow_validation_and_capture_config(default_runner, monkeypatch)
+    custom_store = SQLiteExecutionStateStore(str(tmp_path / "custom.sqlite3"))
+    default_store = SQLiteExecutionStateStore(str(tmp_path / "default.sqlite3"))
+
+    *_, custom_receipt_id, _, _ = custom_runner._run_daily_strict_preflight(
+        strategy=_CustomDailyValidationStrategy(),
+        metadata=_CustomDailyValidationStrategy().metadata(),
+        config=RunDailyConfig(
+            run_date="2024-05-01",
+            total_window_budget_usd=1000.0,
+            state_db_path=str(tmp_path / "custom.sqlite3"),
+        ),
+        run_date="2024-05-01",
+        run_ts=dt.datetime(2024, 5, 1),
+        fingerprint="custom-fp",
+        state_store=custom_store,
+        btc_df=_btc_df(),
+    )
+    *_, default_receipt_id, _, _ = default_runner._run_daily_strict_preflight(
+        strategy=_UniformStrategy(),
+        metadata=_UniformStrategy().metadata(),
+        config=RunDailyConfig(
+            run_date="2024-05-01",
+            total_window_budget_usd=1000.0,
+            state_db_path=str(tmp_path / "default.sqlite3"),
+        ),
+        run_date="2024-05-01",
+        run_ts=dt.datetime(2024, 5, 1),
+        fingerprint="default-fp",
+        state_store=default_store,
+        btc_df=_btc_df(),
+    )
+
+    custom_receipt = custom_store.get_validation_receipt(custom_receipt_id)
+    default_receipt = default_store.get_validation_receipt(default_receipt_id)
+    assert custom_receipt is not None
+    assert default_receipt is not None
+    assert custom_receipt.config_hash == custom_runner._config_hash(custom_captured["config"])
+    assert default_receipt.config_hash == default_runner._config_hash(default_captured["config"])
+    assert custom_receipt.config_hash != default_receipt.config_hash
+
+
+def test_classify_reconciliation_status_is_stable_for_identical_snapshot_and_weight() -> None:
+    status = StrategyRunner._classify_reconciliation_status(
+        previous_weight_today=0.1,
+        recomputed_weight_today=0.1,
+        previous_feature_snapshot_hash="same",
+        recomputed_feature_snapshot_hash="same",
+    )
+
+    assert status == "stable"
+
+
+def test_classify_reconciliation_status_detects_data_revised_without_decision_change() -> None:
+    status = StrategyRunner._classify_reconciliation_status(
+        previous_weight_today=0.1,
+        recomputed_weight_today=0.1,
+        previous_feature_snapshot_hash="old",
+        recomputed_feature_snapshot_hash="new",
+    )
+
+    assert status == "data_revised_no_decision_change"
+
+
+def test_classify_reconciliation_status_detects_decision_change() -> None:
+    status = StrategyRunner._classify_reconciliation_status(
+        previous_weight_today=0.1,
+        recomputed_weight_today=0.2,
+        previous_feature_snapshot_hash="old",
+        recomputed_feature_snapshot_hash="new",
+    )
+
+    assert status == "decision_changed_due_to_revision"
 
 
 def test_reconcile_daily_run_detects_decision_change(tmp_path, monkeypatch) -> None:
