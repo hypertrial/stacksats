@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.0.2 highlights
+
+- Fixed the documented stable paper `run-daily` path by adding a dedicated `RunDailyPaperStrategy` and moving daily preflight defaults onto the strategy contract.
+- Added a local CLI smoke lane plus broader workflow/release contract coverage so docs examples, daily execution flows, and release scripts are tested together.
+- Updated first-party GitHub Actions to Node 24-ready versions and clarified maintainer docs around local, scheduled/manual, and release-grade verification lanes.
+
 ## 1.0.1 highlights
 
 - Enforced true `100%` line and branch coverage for the `stacksats/` package in the release gate.

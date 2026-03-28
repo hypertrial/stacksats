@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-03-28
+
+### Added
+- Added `RunDailyPaperStrategy` as the stable canonical paper-execution built-in for the documented `run-daily` flow.
+- Added local CLI smoke coverage for `demo backtest`, `strategy export`, `strategy animate`, `data prepare`, `data doctor`, `run-daily`, and `reconcile-daily`, plus direct contract coverage for release/wheel smoke orchestration.
+- Added workflow contract tests that lock first-party CI/docs workflow wiring and current GitHub Action major versions.
+
+### Changed
+- Moved `run-daily` validation defaults to a strategy-owned hook while preserving strict defaults for existing strategies.
+- Updated first-party GitHub Actions to Node 24-ready action majors and documented the verification lanes more explicitly for maintainers.
+- Expanded public API, strategy catalog, task, command, and release docs to match the stable `1.x` daily execution and verification contracts.
+
+### Fixed
+- Fixed the documented stable paper `run-daily` happy path on packaged demo data without weakening validation for existing strategies.
+
 ## [1.0.1] - 2026-03-27
 
 ### Changed
