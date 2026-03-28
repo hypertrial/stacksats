@@ -139,6 +139,22 @@ def _write_live_adapter_module(tmp_path: Path) -> Path:
     return adapter_path
 
 
+def _write_broken_live_adapter_module(tmp_path: Path) -> Path:
+    adapter_path = tmp_path / "broken_live_adapter.py"
+    adapter_path.write_text(
+        "\n".join(
+            [
+                "class BrokenAdapter:",
+                "    def submit_order(self, request, *, idempotency_key):",
+                "        del request, idempotency_key",
+                "        return object()",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return adapter_path
+
+
 def _assert_required_keys(payload: dict[str, object], keys: set[str]) -> None:
     assert keys.issubset(set(payload)), payload
 
@@ -508,6 +524,44 @@ def test_run_daily_live_mode_with_temp_adapter_smoke(tmp_path: Path) -> None:
     saved_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert saved_payload["mode"] == "live"
     assert saved_payload["adapter_name"] == "TempAdapter"
+
+
+def test_run_daily_live_mode_with_broken_adapter_fails(tmp_path: Path) -> None:
+    env = _demo_env(tmp_path)
+    state_db = tmp_path / "state-live-bad.sqlite3"
+    output_dir = tmp_path / "daily-live-bad"
+    adapter_path = _write_broken_live_adapter_module(tmp_path)
+
+    run = _run_cli(
+        "strategy",
+        "run-daily",
+        "--strategy",
+        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "--run-date",
+        "2024-12-31",
+        "--total-window-budget-usd",
+        "1000",
+        "--mode",
+        "live",
+        "--adapter",
+        f"{adapter_path}:BrokenAdapter",
+        "--state-db-path",
+        str(state_db),
+        "--output-dir",
+        str(output_dir),
+        env=env,
+    )
+
+    assert run.returncode == 1
+    payload = _decode_leading_json(run.stdout)
+    _assert_run_daily_payload_contract(payload, expected_mode="live")
+    assert payload["status"] == "failed"
+    assert payload["artifact_path"] is None
+    assert payload["message"] == (
+        "Daily execution failed: Execution adapter must return DailyOrderReceipt."
+    )
+    assert Path(str(payload["state_db_path"])) == state_db.resolve()
+    assert "Status: FAILED" in run.stdout
 
 
 def test_run_daily_live_mode_without_adapter_fails(tmp_path: Path) -> None:

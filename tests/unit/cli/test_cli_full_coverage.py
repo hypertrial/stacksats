@@ -72,6 +72,101 @@ def test_cli_reconcile_daily_path_prints_payload(monkeypatch, capsys) -> None:
     assert json.loads(out) == {"status": "ok", "reconciled": True}
 
 
+def test_cli_reconcile_daily_forwards_strategy_config(monkeypatch, capsys, tmp_path: Path) -> None:
+    observed: dict[str, object] = {}
+
+    class _Runner:
+        def reconcile_daily_run(self, strategy, run_date, mode, state_db_path):
+            observed["strategy"] = strategy
+            observed["run_date"] = run_date
+            observed["mode"] = mode
+            observed["state_db_path"] = state_db_path
+            return {"status": "ok", "reconciled": True}
+
+    def _load_strategy(spec, *, config_path=None):
+        observed["strategy_spec"] = spec
+        observed["config_path"] = config_path
+        return object()
+
+    config_path = tmp_path / "strategy.json"
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: _Runner())
+    monkeypatch.setattr(cli, "load_strategy", _load_strategy)
+
+    code = cli.main(
+        [
+            "strategy",
+            "reconcile-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--strategy-config",
+            str(config_path),
+            "--run-date",
+            "2025-01-02",
+        ]
+    )
+
+    assert code == 0
+    assert observed["strategy_spec"] == "dummy.py:Dummy"
+    assert observed["config_path"] == str(config_path)
+    assert observed["run_date"] == "2025-01-02"
+    assert observed["mode"] == "paper"
+    assert observed["state_db_path"] == ".stacksats/run_state.sqlite3"
+    assert json.loads(capsys.readouterr().out) == {"status": "ok", "reconciled": True}
+
+
+def test_cli_reconcile_daily_missing_run_exits_user_error(monkeypatch, capsys) -> None:
+    class _Runner:
+        def reconcile_daily_run(self, strategy, run_date, mode, state_db_path):
+            del strategy, run_date, mode, state_db_path
+            raise ValueError("No stored daily run exists for the requested key.")
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: _Runner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(
+            [
+                "strategy",
+                "reconcile-daily",
+                "--strategy",
+                "dummy.py:Dummy",
+                "--run-date",
+                "2025-01-02",
+            ]
+        )
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "No stored daily run exists for the requested key." in err
+
+
+def test_cli_reconcile_daily_invalid_strategy_config_exits_user_error(
+    monkeypatch, capsys
+) -> None:
+    def _raise_json_error(*args, **kwargs):
+        del args, kwargs
+        raise json.JSONDecodeError("bad", doc="{", pos=1)
+
+    monkeypatch.setattr(cli, "load_strategy", _raise_json_error)
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(
+            [
+                "strategy",
+                "reconcile-daily",
+                "--strategy",
+                "dummy.py:Dummy",
+                "--strategy-config",
+                "bad.json",
+                "--run-date",
+                "2025-01-02",
+            ]
+        )
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "Invalid JSON in strategy config file." in err
+
+
 def test_run_lifecycle_command_unsupported_raises() -> None:
     """_run_lifecycle_command with unsupported command raises ValueError."""
     from stacksats.runner import StrategyRunner

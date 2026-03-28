@@ -238,6 +238,59 @@ def test_cli_strategy_run_daily_maps_config(monkeypatch, capsys, tmp_path) -> No
     assert "Status: EXECUTED" in out
 
 
+def test_cli_strategy_run_daily_forwards_strategy_config(monkeypatch, tmp_path) -> None:
+    observed: dict[str, object] = {}
+
+    class FakeRunResult:
+        status = "executed"
+
+        @staticmethod
+        def to_json():
+            return {"status": "executed", "run_key": "rk-1"}
+
+    class FakeRunner:
+        def run_daily(self, strategy, config):
+            observed["strategy"] = strategy
+            observed["config"] = config
+            return FakeRunResult()
+
+    class FakeStrategy:
+        strategy_id = "fake-strategy"
+        version = "1.0.0"
+
+    def fake_load_strategy(spec, *, config_path=None):
+        observed["strategy_spec"] = spec
+        observed["config_path"] = config_path
+        return FakeStrategy()
+
+    config_path = tmp_path / "strategy.json"
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", fake_load_strategy)
+
+    code = cli.main(
+        [
+            "strategy",
+            "run-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--strategy-config",
+            str(config_path),
+            "--total-window-budget-usd",
+            "1000",
+            "--state-db-path",
+            str(tmp_path / "state.sqlite3"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ]
+    )
+
+    assert code == 0
+    assert observed["strategy_spec"] == "dummy.py:Dummy"
+    assert observed["config_path"] == str(config_path)
+    assert isinstance(observed["config"], RunDailyConfig)
+
+
 def test_cli_strategy_run_daily_failure_exits_nonzero(monkeypatch) -> None:
     class FakeRunResult:
         status = "failed"
@@ -269,6 +322,49 @@ def test_cli_strategy_run_daily_failure_exits_nonzero(monkeypatch) -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 1
+
+
+def test_cli_strategy_run_daily_failure_prints_adapter_error_payload(
+    monkeypatch, capsys
+) -> None:
+    class FakeRunResult:
+        status = "failed"
+
+        @staticmethod
+        def to_json():
+            return {
+                "status": "failed",
+                "message": "Daily execution failed: Execution adapter must return DailyOrderReceipt.",
+            }
+
+    class FakeRunner:
+        def run_daily(self, strategy, config):
+            del strategy, config
+            return FakeRunResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(
+            [
+                "strategy",
+                "run-daily",
+                "--strategy",
+                "dummy.py:Dummy",
+                "--total-window-budget-usd",
+                "1000",
+                "--mode",
+                "live",
+                "--adapter",
+                "bad.py:BadAdapter",
+            ]
+        )
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert '"status": "failed"' in out
+    assert "Daily execution failed: Execution adapter must return DailyOrderReceipt." in out
+    assert "Status: FAILED" in out
 
 
 def test_cli_strategy_run_daily_live_without_adapter_exits_user_error(
@@ -304,6 +400,33 @@ def test_cli_strategy_run_daily_live_without_adapter_exits_user_error(
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "Live mode requires --adapter." in err
+
+
+def test_cli_strategy_run_daily_invalid_strategy_config_exits_user_error(
+    monkeypatch, capsys
+) -> None:
+    def _raise_json_error(*args, **kwargs):
+        del args, kwargs
+        raise json.JSONDecodeError("bad", doc="{", pos=1)
+
+    monkeypatch.setattr(cli, "load_strategy", _raise_json_error)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(
+            [
+                "strategy",
+                "run-daily",
+                "--strategy",
+                "dummy.py:Dummy",
+                "--strategy-config",
+                "bad.json",
+                "--total-window-budget-usd",
+                "1000",
+            ]
+        )
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "Invalid JSON in strategy config file." in err
 
 
 def test_cli_unsupported_command_routes_to_parser_error(monkeypatch) -> None:

@@ -81,9 +81,13 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
 
     assert "name: docs-pages" in docs_pages
     assert "python -m mkdocs build --strict" in docs_pages
+    assert "actions/configure-pages@v5" in docs_pages
+    assert "actions/upload-pages-artifact@v3" in docs_pages
+    assert "actions/deploy-pages@v4" in docs_pages
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
     assert "python scripts/check_docs_ux.py" in docs_check
+    assert "lycheeverse/lychee-action@v2" in docs_check
 
     assert "name: example-commands-smoke" in example_commands_smoke
     assert "pytest tests/unit/core/test_distribution_wheel_smoke.py -q" in example_commands_smoke
