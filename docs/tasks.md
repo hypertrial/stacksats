@@ -158,10 +158,12 @@ stacksats strategy export \
 
 ```bash
 stacksats strategy run-daily \
-  --strategy my_strategy.py:MyStrategy \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
+
+Replace `stacksats.strategies.examples:RunDailyPaperStrategy` with your own strategy spec once you move past the canonical paper-flow example.
 
 ### Expected output
 
@@ -172,7 +174,7 @@ stacksats strategy run-daily \
 ### Troubleshooting
 
 - Live mode requires `--adapter module_or_path:ClassName`.
-- Reruns with changed parameters require `--force`.
+- Reruns with changed parameters require `--force`; unchanged reruns still return `NO-OP (idempotent)`.
 - Missing run-date BTC price coverage causes deterministic failure.
 
 ### Next step

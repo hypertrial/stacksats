@@ -56,6 +56,12 @@ bash scripts/release_check.sh
 Hook behavior:
 - `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check, and a local CLI smoke lane for demo/export/animate/data/run-daily happy paths.
 
+Verification lanes:
+- Local `pre-commit`: fast local confidence lane, including the local CLI smoke lane.
+- Scheduled/manual `example-commands-smoke.yml`: docs-example regression lane driven by `scripts/test_example_commands.py`.
+- Scheduled/manual `coverage-report.yml`: maintenance coverage visibility lane driven by `scripts/check_coverage.sh`.
+- Release-grade `release-gate.yml`: release signoff lane, including isolated wheel validation via `scripts/release_wheel_smoke.py`.
+
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
 Current source contract is BRK parquet–only; keep runtime, docs, and tests aligned with canonical BRK parquet naming and providers.
 The release-grade GitHub workflow is `release-gate.yml`; fast PR/main workflows are confidence lanes and do not replace release-branch and tag validation.

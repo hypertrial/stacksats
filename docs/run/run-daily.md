@@ -32,15 +32,19 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Key options
 
-- `--run-date YYYY-MM-DD`: execution date override.
-- `--state-db-path <path>`: idempotency/state DB.
+- `--strategy-config <path>`: strategy params JSON.
+- `--run-date YYYY-MM-DD`: execution date override (defaults to the current UTC date).
+- `--state-db-path <path>`: idempotency/state DB (default `.stacksats/run_state.sqlite3`).
+- `--output-dir <dir>`: artifact root for executed runs (default `output`).
 - `--adapter module_or_path:ClassName`: required for `--mode live`.
-- `--force`: bypass idempotency no-op guard.
+- `--btc-price-col <name>`: BTC price column used for the run-date order calculation (default `price_usd`).
+- `--force`: rerun when stored state detects changed parameters and would otherwise raise an idempotency conflict.
 
 ## Troubleshooting
 
-- If live mode fails without adapter, pass `--adapter`.
-- If price coverage fails, verify runtime BRK parquet path and run-date coverage (and confirm it was derived from canonical `merged_metrics`).
+- If live mode fails without adapter, pass `--adapter module_or_path:ClassName`.
+- If a rerun fails after inputs changed, rerun with `--force`; unchanged reruns still return `NO-OP (idempotent)`.
+- If price coverage or allocation-window checks fail, verify runtime BRK parquet path, run-date coverage, and the selected `--btc-price-col` (and confirm the parquet was derived from canonical `merged_metrics`).
 
 ## Next step
 

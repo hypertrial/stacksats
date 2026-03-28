@@ -204,7 +204,7 @@ bash scripts/clean_local.sh
 bash scripts/release_check.sh
 ```
 
-`pre-commit` now includes a local CLI smoke lane covering `demo backtest`, `strategy export`, `strategy animate`, `data prepare`, `data doctor`, and the documented paper `run-daily` flow.
+`pre-commit` now includes a local CLI smoke lane covering `demo backtest`, `strategy export`, `strategy animate`, `data prepare`, `data doctor`, and the documented paper `run-daily` flow. Treat it as a local confidence lane, not release signoff; scheduled/manual GitHub smoke and `release-gate.yml` provide the heavier remote verification layers.
 
 If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.
 

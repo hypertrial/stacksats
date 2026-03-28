@@ -47,7 +47,10 @@ Update docs in the same PR when any of these change:
 - Breaking or removed compatibility surfaces: update `docs/migration.md`, `docs/whats-new.md`, and `CHANGELOG.md`.
 - Repeated docs feedback questions: fold updates into `docs/faq.md` and link affected task/start pages.
 - Release tooling or release workflow changes: update `docs/release.md`, `CONTRIBUTING.md`, and release-facing sections in `README.md`.
+- `scripts/test_example_commands.py` changes: update `docs/release.md`, `README.md`, and `CONTRIBUTING.md`; update `docs/commands.md` too if user-visible example guidance changes.
+- `scripts/release_wheel_smoke.py` changes: update `docs/release.md`, `README.md`, and `CONTRIBUTING.md`.
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
+- Docs/release workflow changes (`.github/workflows/docs-*.yml`, `.github/workflows/example-commands-smoke.yml`, `.github/workflows/coverage-report.yml`, `.github/workflows/release-gate.yml`): update `docs/release.md`, `README.md`, and `CONTRIBUTING.md`; update `docs/commands.md` too if user-visible command guidance changes.
 - BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
 - BRK data distribution changes (`stacksats/assets/brk_data_manifest.json`, `data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, `stacksats/data_setup.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
 - merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `data/brk_merged_metrics_catalog.json`, `docs/reference/merged-metrics-data-guide.md`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.

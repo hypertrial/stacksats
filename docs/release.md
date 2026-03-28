@@ -148,6 +148,18 @@ bash scripts/publish_pypi_manual.sh
 
 ## CI Workflow Notes
 
+- Verification lanes at a glance:
+
+| Workflow | Role | What it proves |
+| --- | --- | --- |
+| `package-check-pr.yml` | fast PR confidence | quick lint/docs/tests/package confidence before merge |
+| `package-check.yml` | main confidence | ongoing confidence on `main`, not release approval |
+| `docs-check.yml` | docs quality | markdown, spelling, links, docs sync, docs UX, strict docs build |
+| `docs-pages.yml` | docs publish | strict docs build plus GitHub Pages deploy from `main` |
+| `example-commands-smoke.yml` | scheduled/manual command smoke | docs-example regression lane via `scripts/test_example_commands.py` plus inherited-environment wheel regression |
+| `coverage-report.yml` | scheduled/manual maintenance coverage | branch-aware coverage visibility via `scripts/check_coverage.sh` |
+| `release-gate.yml` | release signoff | release-grade quality/docs/tests/coverage/package validation plus isolated wheel smoke via `scripts/release_wheel_smoke.py` |
+
 - `release-gate.yml` is the release-grade blocking workflow for `release/*` branches and `v*` tags.
 - `release-gate.yml` now validates the built wheel in isolated virtual environments. It does not rely on inherited site-packages.
 - `release-gate.yml` covers the stable `stacksats` CLI path plus the optional `stacksats-plot-mvrv` helper; it does not attempt database-backed `stacksats-plot-weights` smoke in CI.
@@ -155,7 +167,7 @@ bash scripts/publish_pypi_manual.sh
 - Pushes to `main` run `package-check.yml` for ongoing confidence, not release approval.
 - Full non-performance branch-aware coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
 - Coverage fail-under is `100%` line and branch coverage for `stacksats/` and should not be lowered in routine maintenance PRs.
-- CLI docs examples are smoke-tested in scheduled/manual `example-commands-smoke.yml`.
+- CLI docs examples are smoke-tested in scheduled/manual `example-commands-smoke.yml` via `scripts/test_example_commands.py`.
 - PyPI publishing is manual only via `scripts/publish_pypi_manual.sh`.
 - Pull requests also run docs quality checks (`docs-check.yml`):
   - markdown lint across all tracked `.md` files
@@ -168,6 +180,7 @@ bash scripts/publish_pypi_manual.sh
 - Both `docs-check.yml` and `docs-pages.yml` install with `requirements/constraints-maintainer.txt` and `.[dev,all]` so docs environments stay aligned with release-grade installs.
 - Pushes to `main` publish docs to GitHub Pages via `docs-pages.yml`.
 - `example-commands-smoke.yml` keeps a lighter inherited-environment wheel regression test for maintainers, but it is not the release artifact gate.
+- `release-gate.yml` is still the only release-signoff workflow; none of the faster confidence or scheduled/manual lanes replace it.
 
 ## GitHub Pages Source
 
