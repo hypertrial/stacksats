@@ -7,6 +7,7 @@ import subprocess
 import sys
 from json import JSONDecodeError
 from pathlib import Path
+from uuid import UUID
 
 import polars as pl
 
@@ -114,6 +115,69 @@ def _write_gapped_runtime_parquet(tmp_path: Path) -> Path:
     return output
 
 
+def _write_live_adapter_module(tmp_path: Path) -> Path:
+    adapter_path = tmp_path / "temp_live_adapter.py"
+    adapter_path.write_text(
+        "\n".join(
+            [
+                "from stacksats.api import DailyOrderReceipt",
+                "",
+                "class TempAdapter:",
+                "    def submit_order(self, request, *, idempotency_key):",
+                "        return DailyOrderReceipt(",
+                "            status='filled',",
+                "            external_order_id='live-' + idempotency_key,",
+                "            filled_notional_usd=float(request.notional_usd),",
+                "            filled_quantity_btc=float(request.quantity_btc),",
+                "            fill_price_usd=float(request.price_usd),",
+                "            metadata={'adapter': 'temp-live', 'mode': request.mode},",
+                "        )",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return adapter_path
+
+
+def _assert_required_keys(payload: dict[str, object], keys: set[str]) -> None:
+    assert keys.issubset(set(payload)), payload
+
+
+def _assert_uuid_like(value: object) -> None:
+    UUID(str(value))
+
+
+def _assert_path_under(path_value: object, root: Path) -> Path:
+    path = Path(str(path_value))
+    assert path.exists()
+    assert str(path).startswith(str(root.resolve()))
+    return path
+
+
+def _assert_run_daily_payload_contract(payload: dict[str, object], *, expected_mode: str) -> None:
+    _assert_required_keys(
+        payload,
+        {
+            "status",
+            "strategy_id",
+            "strategy_version",
+            "run_date",
+            "run_key",
+            "mode",
+            "idempotency_hit",
+            "forced_rerun",
+            "state_db_path",
+            "artifact_path",
+            "message",
+        },
+    )
+    assert payload["strategy_id"] == "run-daily-paper"
+    assert payload["strategy_version"] == "1.0.0"
+    assert payload["run_date"] == "2024-12-31"
+    assert payload["mode"] == expected_mode
+    _assert_uuid_like(payload["run_key"])
+
+
 def test_demo_backtest_smoke(tmp_path: Path) -> None:
     env = _base_env(tmp_path)
 
@@ -150,12 +214,23 @@ def test_strategy_export_round_trip_smoke(tmp_path: Path) -> None:
 
     assert export_run.returncode == 0, export_run.stderr
     payload = _decode_leading_json(export_run.stdout)
+    _assert_required_keys(
+        payload,
+        {
+            "rows",
+            "windows",
+            "strategy_id",
+            "version",
+            "schema_version",
+            "output_dir",
+        },
+    )
     assert payload["strategy_id"] == "simple-zscore"
+    assert payload["version"] == "1.0.0"
+    assert payload["schema_version"] == "1.0.0"
     assert payload["rows"] > 0
     assert payload["windows"] > 0
-    artifact_dir = Path(str(payload["output_dir"]))
-    assert artifact_dir.exists()
-    assert str(artifact_dir).startswith(str(output_dir))
+    artifact_dir = _assert_path_under(payload["output_dir"], output_dir)
 
     batch = WeightTimeSeriesBatch.from_artifact_dir(artifact_dir)
     assert batch.strategy_id == "simple-zscore"
@@ -191,10 +266,11 @@ def test_strategy_animate_smoke(tmp_path: Path) -> None:
 
     assert animate_run.returncode == 0, animate_run.stderr
     payload = _decode_leading_json(animate_run.stdout)
+    _assert_required_keys(payload, {"gif", "manifest_json"})
     assert payload["gif"].endswith("smoke.gif")
     assert payload["manifest_json"].endswith("animation_manifest.json")
-    assert Path(payload["gif"]).exists()
-    assert Path(payload["manifest_json"]).exists()
+    assert Path(str(payload["gif"])).exists()
+    assert Path(str(payload["manifest_json"])).exists()
     assert str(Path(payload["gif"]).parent) == str(backtest_json.parent.resolve())
 
 
@@ -215,6 +291,7 @@ def test_data_prepare_and_doctor_smoke(tmp_path: Path) -> None:
 
     assert prepare_run.returncode == 0, prepare_run.stderr
     prepare_payload = json.loads(prepare_run.stdout)
+    _assert_required_keys(prepare_payload, {"runtime_parquet"})
     assert prepare_payload["runtime_parquet"] == str(runtime_parquet.resolve())
     assert runtime_parquet.exists()
 
@@ -228,6 +305,10 @@ def test_data_prepare_and_doctor_smoke(tmp_path: Path) -> None:
 
     assert doctor_run.returncode == 0, doctor_run.stderr
     doctor_payload = json.loads(doctor_run.stdout)
+    _assert_required_keys(
+        doctor_payload,
+        {"status", "has_price_usd", "has_mvrv", "has_daily_gaps"},
+    )
     assert doctor_payload["status"] == "ok"
     assert doctor_payload["has_price_usd"] is True
     assert doctor_payload["has_mvrv"] is True
@@ -258,19 +339,24 @@ def test_run_daily_and_reconcile_smoke(tmp_path: Path) -> None:
     first_run = _run_cli(*run_daily_args, env=env)
     assert first_run.returncode == 0, first_run.stderr
     first_payload = _decode_leading_json(first_run.stdout)
+    _assert_run_daily_payload_contract(first_payload, expected_mode="paper")
     assert first_payload["status"] == "executed"
     assert first_payload["idempotency_hit"] is False
+    assert first_payload["forced_rerun"] is False
     assert first_payload["validation_passed"] is True
     assert first_payload["artifact_path"] is not None
-    assert Path(str(first_payload["artifact_path"])).exists()
-    assert str(first_payload["artifact_path"]).startswith(str(output_dir.resolve()))
+    artifact_path = _assert_path_under(first_payload["artifact_path"], output_dir)
+    assert Path(str(first_payload["state_db_path"])) == state_db.resolve()
+    assert artifact_path.name.endswith(".json")
     assert "Status: EXECUTED" in first_run.stdout
 
     second_run = _run_cli(*run_daily_args, env=env)
     assert second_run.returncode == 0, second_run.stderr
     second_payload = _decode_leading_json(second_run.stdout)
+    _assert_run_daily_payload_contract(second_payload, expected_mode="paper")
     assert second_payload["status"] == "noop"
     assert second_payload["idempotency_hit"] is True
+    assert second_payload["forced_rerun"] is False
     assert second_payload["run_key"] == first_payload["run_key"]
     assert "Status: NO-OP (idempotent)" in second_run.stdout
 
@@ -289,6 +375,16 @@ def test_run_daily_and_reconcile_smoke(tmp_path: Path) -> None:
     )
     assert reconcile_run.returncode == 0, reconcile_run.stderr
     reconcile_payload = _decode_leading_json(reconcile_run.stdout)
+    _assert_required_keys(
+        reconcile_payload,
+        {
+            "status",
+            "previous_weight_today",
+            "recomputed_weight_today",
+            "previous_feature_snapshot_hash",
+            "recomputed_feature_snapshot_hash",
+        },
+    )
     assert reconcile_payload["status"] in {
         "stable",
         "data_revised_no_decision_change",
@@ -324,9 +420,94 @@ def test_run_daily_missing_price_coverage_fails(tmp_path: Path) -> None:
 
     assert run.returncode == 1
     payload = _decode_leading_json(run.stdout)
+    _assert_run_daily_payload_contract(payload, expected_mode="paper")
     assert payload["status"] == "failed"
     assert "missing price_usd values" in payload["message"]
     assert "Status: FAILED" in run.stdout
+
+
+def test_run_daily_force_rerun_executes_with_new_run_key(tmp_path: Path) -> None:
+    env = _demo_env(tmp_path)
+    state_db = tmp_path / "state.sqlite3"
+    output_dir = tmp_path / "daily"
+    base_args = [
+        "strategy",
+        "run-daily",
+        "--strategy",
+        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "--run-date",
+        "2024-12-31",
+        "--mode",
+        "paper",
+        "--state-db-path",
+        str(state_db),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+    first_run = _run_cli(*base_args, "--total-window-budget-usd", "1000", env=env)
+    assert first_run.returncode == 0, first_run.stderr
+    first_payload = _decode_leading_json(first_run.stdout)
+
+    conflicting_run = _run_cli(*base_args, "--total-window-budget-usd", "2000", env=env)
+    assert conflicting_run.returncode == 2
+    assert "Use --force to rerun with new parameters." in conflicting_run.stderr
+
+    forced_run = _run_cli(
+        *base_args,
+        "--total-window-budget-usd",
+        "2000",
+        "--force",
+        env=env,
+    )
+    assert forced_run.returncode == 0, forced_run.stderr
+    forced_payload = _decode_leading_json(forced_run.stdout)
+    _assert_run_daily_payload_contract(forced_payload, expected_mode="paper")
+    assert forced_payload["status"] == "executed"
+    assert forced_payload["forced_rerun"] is True
+    assert forced_payload["idempotency_hit"] is False
+    assert forced_payload["run_key"] != first_payload["run_key"]
+    _assert_path_under(forced_payload["artifact_path"], output_dir)
+
+
+def test_run_daily_live_mode_with_temp_adapter_smoke(tmp_path: Path) -> None:
+    env = _demo_env(tmp_path)
+    state_db = tmp_path / "state-live.sqlite3"
+    output_dir = tmp_path / "daily-live"
+    adapter_path = _write_live_adapter_module(tmp_path)
+
+    run = _run_cli(
+        "strategy",
+        "run-daily",
+        "--strategy",
+        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "--run-date",
+        "2024-12-31",
+        "--total-window-budget-usd",
+        "1000",
+        "--mode",
+        "live",
+        "--adapter",
+        f"{adapter_path}:TempAdapter",
+        "--state-db-path",
+        str(state_db),
+        "--output-dir",
+        str(output_dir),
+        env=env,
+    )
+
+    assert run.returncode == 0, run.stderr
+    payload = _decode_leading_json(run.stdout)
+    _assert_run_daily_payload_contract(payload, expected_mode="live")
+    assert payload["status"] == "executed"
+    assert payload["adapter_name"] == "TempAdapter"
+    assert payload["order_receipt"]["external_order_id"].startswith("live-")
+    assert payload["order_receipt"]["metadata"]["adapter"] == "temp-live"
+    assert payload["order_receipt"]["metadata"]["mode"] == "live"
+    artifact_path = _assert_path_under(payload["artifact_path"], output_dir)
+    saved_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert saved_payload["mode"] == "live"
+    assert saved_payload["adapter_name"] == "TempAdapter"
 
 
 def test_run_daily_live_mode_without_adapter_fails(tmp_path: Path) -> None:
@@ -381,6 +562,10 @@ def test_data_doctor_reports_warning_for_daily_gaps(tmp_path: Path) -> None:
 
     assert run.returncode == 0, run.stderr
     payload = json.loads(run.stdout)
+    _assert_required_keys(
+        payload,
+        {"status", "has_price_usd", "has_mvrv", "has_daily_gaps", "gap_count"},
+    )
     assert payload["status"] == "warning"
     assert payload["has_daily_gaps"] is True
     assert payload["gap_count"] == 1

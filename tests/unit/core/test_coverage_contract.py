@@ -6,8 +6,10 @@ import re
 
 
 WORKFLOW_FILES = (
+    ".github/workflows/coverage-report.yml",
     ".github/workflows/docs-check.yml",
     ".github/workflows/docs-pages.yml",
+    ".github/workflows/example-commands-smoke.yml",
     ".github/workflows/package-check-pr.yml",
     ".github/workflows/package-check.yml",
     ".github/workflows/release-gate.yml",
@@ -54,11 +56,13 @@ def test_reusable_python_setup_action_is_wired_into_expected_workflows() -> None
 
 def test_ci_workflow_contracts_keep_critical_gates() -> None:
     workflow_texts = _workflow_texts()
+    coverage_report = workflow_texts[".github/workflows/coverage-report.yml"]
     package_check = workflow_texts[".github/workflows/package-check.yml"]
     package_check_pr = workflow_texts[".github/workflows/package-check-pr.yml"]
     release_gate = workflow_texts[".github/workflows/release-gate.yml"]
     docs_pages = workflow_texts[".github/workflows/docs-pages.yml"]
     docs_check = workflow_texts[".github/workflows/docs-check.yml"]
+    example_commands_smoke = workflow_texts[".github/workflows/example-commands-smoke.yml"]
 
     assert "name: package-check" in package_check
     assert 'pytest ${{ matrix.test_target }} -v -m "${{ matrix.marker }}"' in package_check
@@ -80,6 +84,15 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
     assert "python scripts/check_docs_ux.py" in docs_check
+
+    assert "name: example-commands-smoke" in example_commands_smoke
+    assert "pytest tests/unit/core/test_distribution_wheel_smoke.py -q" in example_commands_smoke
+    assert "python scripts/test_example_commands.py" in example_commands_smoke
+
+    assert "name: coverage-report" in coverage_report
+    assert "bash scripts/check_coverage.sh" in coverage_report
+    assert "name: coverage-xml" in coverage_report
+    assert "path: coverage.xml" in coverage_report
 
 
 def test_docs_home_contract_is_explicit() -> None:
