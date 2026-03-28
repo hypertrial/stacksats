@@ -20,6 +20,7 @@ from stacksats.strategy_types import (
 )
 from stacksats.strategies.examples import (
     MomentumStrategy,
+    RunDailyPaperStrategy,
     SimpleZScoreStrategy,
     UniformStrategy,
 )
@@ -343,7 +344,12 @@ def test_example_strategies_return_valid_weight_vectors():
     start_date = datetime(2022, 1, 1)
     end_date = datetime(2022, 12, 31)
 
-    for strategy in (UniformStrategy(), SimpleZScoreStrategy(), MomentumStrategy()):
+    for strategy in (
+        UniformStrategy(),
+        RunDailyPaperStrategy(),
+        SimpleZScoreStrategy(),
+        MomentumStrategy(),
+    ):
         weights = strategy.compute_weights(
             strategy_context_from_features_df(
                 features_df,

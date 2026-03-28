@@ -150,7 +150,7 @@ Run idempotent daily execution (paper mode):
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
@@ -203,6 +203,8 @@ bash scripts/check_coverage.sh  # heavy; enforces 100% line + branch coverage on
 bash scripts/clean_local.sh
 bash scripts/release_check.sh
 ```
+
+`pre-commit` now includes a local CLI smoke lane covering `demo backtest`, `strategy export`, `strategy animate`, `data prepare`, `data doctor`, and the documented paper `run-daily` flow.
 
 If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.
 

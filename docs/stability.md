@@ -39,6 +39,7 @@ Lower-level modules are allowed to change between releases unless they are re-ex
 Stable supported built-ins:
 
 - `UniformStrategy`
+- `RunDailyPaperStrategy`
 - `SimpleZScoreStrategy`
 - `MomentumStrategy`
 - `MVRVStrategy`

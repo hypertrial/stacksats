@@ -14,7 +14,7 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
   </p>
 </div>
 
-## Start Here
+## Start in 2 Clicks
 
 Use this page when you want the fastest path into the hosted docs and need to choose the right next workflow.
 

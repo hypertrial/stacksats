@@ -5,11 +5,13 @@ from types import MethodType
 
 import numpy as np
 import polars as pl
+import pytest
 
 from stacksats.api import DailyOrderReceipt, ValidationResult
-from stacksats.execution_state import StoredRun
+from stacksats.execution_state import SQLiteExecutionStateStore, StoredRun
 from stacksats.runner import StrategyRunner
-from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext
+from stacksats.strategies.examples import RunDailyPaperStrategy
+from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext, ValidationConfig
 from tests.test_helpers import btc_frame
 
 
@@ -32,6 +34,16 @@ class _TiltedStrategy(BaseStrategy):
                 "date": features_df["date"],
                 "value": np.linspace(0.0, 1.0, features_df.height, dtype=float),
             }
+        )
+
+
+class _CustomDailyValidationStrategy(_UniformStrategy):
+    def default_run_daily_validation_config(self) -> ValidationConfig:
+        return ValidationConfig(
+            min_win_rate=12.5,
+            strict=False,
+            max_boundary_hit_rate=0.42,
+            shuffled_trials=7,
         )
 
 
@@ -75,6 +87,105 @@ def test_run_daily_fails_fast_when_strict_validation_fails(
     assert "Strict validation failed" in result.message
     assert result.validation_receipt_id is not None
     assert result.validation_passed is False
+
+
+def test_run_daily_paper_strategy_uses_relaxed_daily_validation_defaults() -> None:
+    config = RunDailyPaperStrategy().default_run_daily_validation_config()
+    assert config.min_win_rate == 0.0
+    assert config.strict is False
+
+
+def test_run_daily_preflight_uses_strategy_owned_validation_defaults(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    strategy = _CustomDailyValidationStrategy()
+    captured: dict[str, object] = {}
+
+    def _validate(strategy_arg, config, btc_df=None):
+        del strategy_arg, btc_df
+        captured["config"] = config
+        return ValidationResult(
+            passed=True,
+            forward_leakage_ok=True,
+            weight_constraints_ok=True,
+            win_rate=100.0,
+            win_rate_ok=True,
+            messages=["ok"],
+            diagnostics={},
+        )
+
+    monkeypatch.setattr(runner, "validate", _validate)
+
+    _, window_start, window_end, _, passed, _, _, _, _ = runner._run_daily_strict_preflight(
+        strategy=strategy,
+        metadata=strategy.metadata(),
+        config=RunDailyConfig(
+            run_date="2024-05-01",
+            total_window_budget_usd=1000.0,
+            state_db_path=str(tmp_path / "state.sqlite3"),
+        ),
+        run_date="2024-05-01",
+        run_ts=dt.datetime(2024, 5, 1),
+        fingerprint="fp",
+        state_store=SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3")),
+        btc_df=_btc_df(),
+    )
+
+    assert passed is True
+    config = captured["config"]
+    assert isinstance(config, ValidationConfig)
+    assert config.start_date == window_start.strftime("%Y-%m-%d")
+    assert config.end_date == window_end.strftime("%Y-%m-%d")
+    assert config.min_win_rate == 12.5
+    assert config.strict is False
+    assert config.max_boundary_hit_rate == 0.42
+    assert config.shuffled_trials == 7
+
+
+def test_run_daily_preflight_keeps_strict_defaults_without_override(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    strategy = _UniformStrategy()
+    captured: dict[str, object] = {}
+
+    def _validate(strategy_arg, config, btc_df=None):
+        del strategy_arg, btc_df
+        captured["config"] = config
+        return ValidationResult(
+            passed=True,
+            forward_leakage_ok=True,
+            weight_constraints_ok=True,
+            win_rate=100.0,
+            win_rate_ok=True,
+            messages=["ok"],
+            diagnostics={},
+        )
+
+    monkeypatch.setattr(runner, "validate", _validate)
+
+    runner._run_daily_strict_preflight(
+        strategy=strategy,
+        metadata=strategy.metadata(),
+        config=RunDailyConfig(
+            run_date="2024-05-01",
+            total_window_budget_usd=1000.0,
+            state_db_path=str(tmp_path / "state.sqlite3"),
+        ),
+        run_date="2024-05-01",
+        run_ts=dt.datetime(2024, 5, 1),
+        fingerprint="fp",
+        state_store=SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3")),
+        btc_df=_btc_df(),
+    )
+
+    config = captured["config"]
+    assert isinstance(config, ValidationConfig)
+    assert config.min_win_rate == 50.0
+    assert config.strict is True
 
 
 def test_reconcile_daily_run_detects_decision_change(tmp_path, monkeypatch) -> None:

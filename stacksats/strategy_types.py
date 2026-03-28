@@ -743,6 +743,9 @@ class BaseStrategy(ABC):
     def default_validation_config(self) -> ValidationConfig:
         return ValidationConfig()
 
+    def default_run_daily_validation_config(self) -> ValidationConfig:
+        return ValidationConfig(min_win_rate=50.0, strict=True)
+
     def default_export_config(self) -> ExportConfig:
         return ExportConfig()
 

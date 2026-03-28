@@ -7,6 +7,7 @@ import polars as pl
 
 from stacksats.strategy_types import (
     BacktestConfig,
+    BaseStrategy,
     ExportConfig,
     StrategyArtifactSet,
     StrategyMetadata,
@@ -42,6 +43,12 @@ def test_config_defaults() -> None:
     end = datetime.strptime(export_config.range_end, "%Y-%m-%d")
     assert end >= start
     assert (end - start).days in {364, 365}
+
+
+def test_default_run_daily_validation_config_is_strict() -> None:
+    config = BaseStrategy().default_run_daily_validation_config()
+    assert config.min_win_rate == 50.0
+    assert config.strict is True
 
 
 def test_strategy_artifact_set_fields() -> None:

@@ -54,7 +54,7 @@ bash scripts/release_check.sh
 ```
 
 Hook behavior:
-- `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check.
+- `pre-commit` (every commit): YAML sanity, whitespace fixes, `ruff`, docs reference checks, schema sync check, and a local CLI smoke lane for demo/export/animate/data/run-daily happy paths.
 
 Use `bash scripts/release_check.sh` for release prep only. It intentionally runs the full non-performance suite in addition to build/docs checks.
 Current source contract is BRK parquet–only; keep runtime, docs, and tests aligned with canonical BRK parquet naming and providers.

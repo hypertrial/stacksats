@@ -6,6 +6,7 @@ import datetime as dt
 import hashlib
 import json
 import time
+from dataclasses import replace
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -502,10 +503,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
 
         # Strict gate invariant: run_daily must validate against the same snapshot
         # used for execution.
-        validation_config = ValidationConfig(
+        validation_config = replace(
+            strategy.default_run_daily_validation_config(),
             start_date=window_start.strftime("%Y-%m-%d"),
             end_date=window_end.strftime("%Y-%m-%d"),
-            strict=True,
         )
         validation_result = self.validate(
             strategy,

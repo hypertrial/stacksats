@@ -29,3 +29,9 @@ repos:
         entry: env PYTHONPATH=. venv/bin/python scripts/sync_objects_schema_docs.py --check
         language: system
         pass_filenames: false
+
+      - id: e2e-cli-smoke
+        name: e2e cli smoke
+        entry: env MPLBACKEND=Agg MPLCONFIGDIR=/tmp/stacksats-mplcache venv/bin/python -m pytest -q -n 0 tests/e2e/test_cli_smoke.py
+        language: system
+        pass_filenames: false

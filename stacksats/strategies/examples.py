@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from ..strategy_types import BaseStrategy, DayState, StrategyContext
+from ..strategy_types import BaseStrategy, DayState, StrategyContext, ValidationConfig
 
 
 class UniformStrategy(BaseStrategy):
@@ -21,6 +21,23 @@ class UniformStrategy(BaseStrategy):
     def propose_weight(self, state: DayState) -> float:
         # Framework enforces clipping, remaining budget, and lock semantics.
         return float(state.uniform_weight)
+
+
+class RunDailyPaperStrategy(BaseStrategy):
+    """Canonical paper-execution example for the documented run-daily flow."""
+
+    strategy_id = "run-daily-paper"
+    version = "1.0.0"
+    description = "Canonical paper-execution example for run-daily docs; not a benchmark strategy."
+
+    def required_feature_columns(self) -> tuple[str, ...]:
+        return ()
+
+    def propose_weight(self, state: DayState) -> float:
+        return float(state.uniform_weight)
+
+    def default_run_daily_validation_config(self) -> ValidationConfig:
+        return ValidationConfig(min_win_rate=0.0, strict=False)
 
 
 class SimpleZScoreStrategy(BaseStrategy):

@@ -19,7 +19,7 @@ stacksats data doctor
 stacksats strategy validate --strategy stacksats.strategies.examples:SimpleZScoreStrategy
 stacksats strategy backtest --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy export --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
-stacksats strategy run-daily --strategy stacksats.strategies.examples:SimpleZScoreStrategy --total-window-budget-usd 1000 --mode paper
+stacksats strategy run-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000 --mode paper
 stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json
 ```
 

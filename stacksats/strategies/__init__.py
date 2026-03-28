@@ -1,7 +1,12 @@
 """Strategy interfaces and built-ins."""
 
 from .base import BaseStrategy, DayState, StrategyContext
-from .examples import MomentumStrategy, SimpleZScoreStrategy, UniformStrategy
+from .examples import (
+    MomentumStrategy,
+    RunDailyPaperStrategy,
+    SimpleZScoreStrategy,
+    UniformStrategy,
+)
 from .mvrv import MVRVStrategy
 
 __all__ = [
@@ -9,6 +14,7 @@ __all__ = [
     "DayState",
     "MomentumStrategy",
     "MVRVStrategy",
+    "RunDailyPaperStrategy",
     "SimpleZScoreStrategy",
     "StrategyContext",
     "UniformStrategy",

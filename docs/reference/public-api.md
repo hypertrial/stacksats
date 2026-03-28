@@ -29,7 +29,7 @@ Common stable imports include:
 - configs and results: `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyRunResult`
 - metadata and schema types: `StrategyMetadata`, `StrategySpec`, `StrategySeriesMetadata`, `StrategyArtifactSet`, `ColumnSpec`
 - runners and loaders: `StrategyRunner`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
-- stable built-ins: `UniformStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
+- stable built-ins: `UniformStrategy`, `RunDailyPaperStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
 
 See [Stability Policy](../stability.md) for the canonical support and deprecation rules.
 

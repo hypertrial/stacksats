@@ -20,7 +20,12 @@ from .strategy_time_series import (
     WeightTimeSeries,
     WeightTimeSeriesBatch,
 )
-from .strategies.examples import MomentumStrategy, SimpleZScoreStrategy, UniformStrategy
+from .strategies.examples import (
+    MomentumStrategy,
+    RunDailyPaperStrategy,
+    SimpleZScoreStrategy,
+    UniformStrategy,
+)
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     BacktestConfig,
@@ -65,6 +70,7 @@ __all__ = [
     "DayState",
     "MomentumStrategy",
     "MVRVStrategy",
+    "RunDailyPaperStrategy",
     "SimpleZScoreStrategy",
     "StrategyRunner",
     "StrategySeriesMetadata",

@@ -195,6 +195,9 @@ def test_default_config_methods_include_strategy_metadata() -> None:
 
     assert strategy.default_backtest_config().strategy_label == strategy.strategy_id
     assert strategy.default_validation_config().min_win_rate == 50.0
+    daily_validation_config = strategy.default_run_daily_validation_config()
+    assert daily_validation_config.min_win_rate == 50.0
+    assert daily_validation_config.strict is True
     export_config = strategy.default_export_config()
     start = datetime.strptime(export_config.range_start, "%Y-%m-%d")
     end = datetime.strptime(export_config.range_end, "%Y-%m-%d")

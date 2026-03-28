@@ -15,7 +15,7 @@ description: Reference for `stacksats strategy run-daily`.
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
   --total-window-budget-usd 1000 \
   --mode paper
 ```

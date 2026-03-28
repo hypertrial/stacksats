@@ -17,6 +17,7 @@ from stacksats import (
     MergedMetricsDataset,
     MetricCatalog,
     MomentumStrategy,
+    RunDailyPaperStrategy,
     SimpleZScoreStrategy,
     UniformStrategy,
     WeightTimeSeries,
@@ -101,6 +102,7 @@ def test_public_api_snapshot_matches_contract() -> None:
 
 def test_stable_strategies_are_top_level_exports() -> None:
     assert UniformStrategy is stacksats.UniformStrategy
+    assert RunDailyPaperStrategy is stacksats.RunDailyPaperStrategy
     assert SimpleZScoreStrategy is stacksats.SimpleZScoreStrategy
     assert MomentumStrategy is stacksats.MomentumStrategy
     assert MVRVStrategy is stacksats.MVRVStrategy

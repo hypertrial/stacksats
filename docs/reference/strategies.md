@@ -61,6 +61,7 @@ These strategies are part of the stable `1.x` contract.
 | Strategy | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Expected behavior | Common failure modes | Use when |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `UniformStrategy` | `stacksats.strategies.examples:UniformStrategy` | `propose` | `core_model_features_v1` | none | none | Uniform baseline allocation across each window. | Invalid/missing runtime data window, or date bounds too short for 365-day windows. | Baseline sanity checks and normalization reference. |
+| `RunDailyPaperStrategy` | `stacksats.strategies.examples:RunDailyPaperStrategy` | `propose` | `core_model_features_v1` | none | daily validation defaults: `min_win_rate=0.0`, `strict=False` | Canonical paper-execution example for the documented `run-daily` path; not a benchmark strategy, and uses uniform daily intent with relaxed daily preflight defaults. | Invalid/missing runtime allocation window or BTC price coverage for the run date. | Paper execution docs, idempotency checks, and local daily-flow smoke tests. |
 | `SimpleZScoreStrategy` | `stacksats.strategies.examples:SimpleZScoreStrategy` | `profile` | `core_model_features_v1` | none | none | Preference tilts toward lower `mvrv_zscore`; intended as a simple toy comparator. | Missing `mvrv_zscore` can collapse behavior near uniform-like outputs. | Quick toy benchmark for profile-hook flow and contract checks. |
 | `MomentumStrategy` | `stacksats.strategies.examples:MomentumStrategy` | `profile` | `core_model_features_v1` | `price_usd` | none | Contrarian tilt from 30-day momentum (`pct_change(30)`), clipped and converted to preference scores. | Missing `price_usd`, sparse data windows, or very short ranges produce weak/flat signals. | Toy momentum baseline and sensitivity checks. |
 | `MVRVStrategy` | `stacksats.strategies.mvrv:MVRVStrategy` | `profile` | `core_model_features_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence` | none | Core package MVRV/MA preference model via `compute_preference_scores(...)`. | Missing transformed feature columns from provider/materialization path. | Canonical production-style baseline model. |
@@ -76,7 +77,7 @@ These strategies live under `stacksats.strategies.experimental.*` and are not pa
 
 Built-in intent is explicit by implementation shape:
 
-- `UniformStrategy` uses `propose_weight(state)`.
+- `UniformStrategy` and `RunDailyPaperStrategy` use `propose_weight(state)`.
 - all other built-ins use `build_target_profile(...)`.
 - no built-in currently requires dual-hook `intent_preference`.
 
@@ -133,6 +134,7 @@ Primary metrics:
 Reasonableness expectations by strategy family:
 
 - `UniformStrategy`: baseline multiple should stay near `1.0`; material drift indicates a bug.
+- `RunDailyPaperStrategy`: treat as a daily-execution harness, not a benchmark; expect near-uniform behavior and use it to verify paper-flow correctness.
 - `SimpleZScoreStrategy`, `MomentumStrategy`: acceptable if finite/stable and non-pathological, even when close to baseline.
 - `MVRVStrategy`: stable baseline model; should produce distinct, non-baseline behavior on representative windows.
 - experimental overlay models: treat outputs as reference or research signals, not as stable benchmark promises.
