@@ -8,6 +8,7 @@ import polars as pl
 from stacksats.strategy_types import (
     BacktestConfig,
     BaseStrategy,
+    DecideDailyConfig,
     ExportConfig,
     StrategyArtifactSet,
     StrategyMetadata,
@@ -49,6 +50,16 @@ def test_default_run_daily_validation_config_is_strict() -> None:
     config = BaseStrategy().default_run_daily_validation_config()
     assert config.min_win_rate == 50.0
     assert config.strict is True
+
+
+def test_default_decide_daily_config_uses_documented_defaults() -> None:
+    config = BaseStrategy().default_decide_daily_config()
+    assert isinstance(config, DecideDailyConfig)
+    assert config.total_window_budget_usd == 1000.0
+    assert config.btc_price_col == "price_usd"
+    assert config.output_dir == "output"
+    assert config.force is False
+    assert config.state_db_path.endswith(".stacksats/run_state.sqlite3")
 
 
 def test_strategy_artifact_set_fields() -> None:

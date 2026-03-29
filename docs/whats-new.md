@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.1.1 highlights
+
+- No intended public API changes; `1.1.1` is the release-recovery follow-up to `1.1.0`.
+- Restored the tag-triggered release gate to a true green state by closing the uncovered `decide-daily` branches and removing one unreachable exception path.
+- Added targeted regression coverage for failed and noop daily decision CLI results, strict decision-validation failures, and the default decision config helper.
+
 ## 1.1.0 highlights
 
 - Added a stable agent-facing daily decision interface with `DecideDailyConfig`, `DailyDecisionResult`, Python helpers, and the `stacksats strategy decide-daily` CLI command.

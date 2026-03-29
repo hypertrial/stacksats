@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-03-29
+
+### Changed
+- No intended public API changes; this is a release-recovery follow-up to `1.1.0`.
+
+### Fixed
+- Restored the release coverage gate to `100%` by removing an unreachable `decide_daily()` exception branch and adding targeted regression coverage for failed and noop decision CLI paths, strict decision-validation failures, and the default decision config helper.
+
 ## [1.1.0] - 2026-03-29
 
 ### Added

@@ -1202,7 +1202,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         btc_df: pl.DataFrame | None = None,
     ):
         from .api import DailyDecisionResult
-        from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
+        from .execution_state import SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
         metadata, _, run_ts, run_date = self._parse_daily_decision_config(strategy, config)
@@ -1291,8 +1291,6 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 payload=result_payload,
             )
             return result
-        except IdempotencyConflictError:
-            raise
         except Exception as exc:
             if isinstance(exc, _DailyDecisionPreparationError):
                 bootstrap = exc.bootstrap

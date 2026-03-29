@@ -369,6 +369,77 @@ def test_cli_strategy_run_daily_failure_exits_nonzero(monkeypatch) -> None:
     assert exc.value.code == 1
 
 
+def test_cli_strategy_decide_daily_failure_exits_nonzero_and_prints_status(
+    monkeypatch,
+    capsys,
+) -> None:
+    class FakeDecisionResult:
+        status = "failed"
+
+        @staticmethod
+        def to_json():
+            return {"status": "failed", "message": "Strict validation failed before daily decision."}
+
+    class FakeRunner:
+        def decide_daily(self, strategy, config):
+            del strategy, config
+            return FakeDecisionResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(
+            [
+                "strategy",
+                "decide-daily",
+                "--strategy",
+                "dummy.py:Dummy",
+                "--total-window-budget-usd",
+                "1000",
+            ]
+        )
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert '"status": "failed"' in out
+    assert "Status: FAILED" in out
+
+
+def test_cli_strategy_decide_daily_noop_prints_idempotent_status(
+    monkeypatch,
+    capsys,
+) -> None:
+    class FakeDecisionResult:
+        status = "noop"
+
+        @staticmethod
+        def to_json():
+            return {"status": "noop", "decision_key": "decision-1"}
+
+    class FakeRunner:
+        def decide_daily(self, strategy, config):
+            del strategy, config
+            return FakeDecisionResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: object())
+
+    code = cli.main(
+        [
+            "strategy",
+            "decide-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--total-window-budget-usd",
+            "1000",
+        ]
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert '"status": "noop"' in out
+    assert "Status: NO-OP (idempotent)" in out
+
+
 def test_cli_strategy_run_daily_failure_prints_adapter_error_payload(
     monkeypatch, capsys
 ) -> None:
