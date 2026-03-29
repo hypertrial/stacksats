@@ -35,12 +35,19 @@ def test_github_workflows_use_current_action_versions() -> None:
 
     assert "actions/checkout@v4" not in combined
     assert "actions/setup-python@v5" not in combined
+    assert "actions/upload-artifact@v4" not in combined
+    assert "actions/download-artifact@v4" not in combined
     for workflow_path, workflow_text in workflow_texts.items():
         assert "actions/checkout@v6" in workflow_text, workflow_path
     assert "actions/setup-python@v6" in helper_text
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/package-check.yml"]
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/release-gate.yml"]
+    assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/coverage-report.yml"]
+    assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
+    assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/release-gate.yml"]
+    assert "actions/download-artifact@v8" in workflow_texts[".github/workflows/package-check-pr.yml"]
+    assert "actions/download-artifact@v8" in workflow_texts[".github/workflows/release-gate.yml"]
 
 
 def test_reusable_python_setup_action_is_wired_into_expected_workflows() -> None:

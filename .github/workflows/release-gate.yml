@@ -146,7 +146,7 @@ jobs:
         run: twine check dist/*
 
       - name: Upload built distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-dist
           path: dist/*
@@ -170,7 +170,7 @@ jobs:
             requirements/constraints-maintainer.txt
 
       - name: Download built distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-dist
           path: dist
@@ -200,7 +200,7 @@ jobs:
             requirements/constraints-maintainer.txt
 
       - name: Download built distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-dist
           path: dist

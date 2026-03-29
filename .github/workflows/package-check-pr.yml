@@ -57,7 +57,7 @@ jobs:
           echo "$elapsed" > quality_duration.txt
 
       - name: Upload quality duration
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: quality-duration
           path: quality_duration.txt
@@ -107,7 +107,7 @@ jobs:
           echo "$elapsed" > "test_duration_${{ matrix.name }}.txt"
 
       - name: Upload test duration
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-duration-${{ matrix.name }}
           path: test_duration_${{ matrix.name }}.txt
@@ -120,7 +120,7 @@ jobs:
       - tests
     steps:
       - name: Download runtime duration artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: timing
           pattern: "*duration*"
