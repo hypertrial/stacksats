@@ -28,6 +28,7 @@ def test_cli_help() -> None:
     assert "strategy" in proc.stdout
     assert "demo" in proc.stdout
     assert "data" in proc.stdout
+    assert "serve" in proc.stdout
 
 
 def test_cli_help_examples_use_stable_packaged_strategy_spec() -> None:
@@ -281,6 +282,127 @@ def test_cli_strategy_decide_daily_maps_config(monkeypatch, capsys, tmp_path) ->
     out = capsys.readouterr().out
     assert '"status": "decided"' in out
     assert "Status: DECIDED" in out
+
+
+def test_cli_serve_agent_api_maps_config(monkeypatch, tmp_path) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_start(args) -> None:
+        observed["host"] = args.host
+        observed["port"] = args.port
+        observed["registry_path"] = args.registry_path
+        observed["state_db_path"] = args.state_db_path
+        observed["output_dir"] = args.output_dir
+        observed["auth_token_env"] = args.auth_token_env
+        observed["btc_price_col_default"] = args.btc_price_col_default
+
+    monkeypatch.setattr(cli, "_start_agent_service_from_args", fake_start)
+
+    code = cli.main(
+        [
+            "serve",
+            "agent-api",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9001",
+            "--registry-path",
+            str(tmp_path / "registry.json"),
+            "--state-db-path",
+            str(tmp_path / "state.sqlite3"),
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--auth-token-env",
+            "CUSTOM_STACKSATS_TOKEN",
+            "--btc-price-col-default",
+            "close_usd",
+        ]
+    )
+
+    assert code == 0
+    assert observed["host"] == "0.0.0.0"
+    assert observed["port"] == 9001
+    assert observed["registry_path"] == str(tmp_path / "registry.json")
+    assert observed["state_db_path"] == str(tmp_path / "state.sqlite3")
+    assert observed["output_dir"] == str(tmp_path / "output")
+    assert observed["auth_token_env"] == "CUSTOM_STACKSATS_TOKEN"
+    assert observed["btc_price_col_default"] == "close_usd"
+
+
+def test_cli_serve_agent_api_missing_service_extra_exits_user_error(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "_start_agent_service_from_args",
+        lambda _args: (_ for _ in ()).throw(
+            ImportError(
+                "Missing optional dependency 'fastapi'. Install 'service' extras with: "
+                "pip install \"stacksats[service]\" to use agent HTTP service."
+            )
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["serve", "agent-api"])
+
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "stacksats[service]" in err
+
+
+def test_start_agent_service_from_args_builds_service_config(monkeypatch) -> None:
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "stacksats.service.start_agent_service",
+        lambda config: observed.setdefault("config", config),
+    )
+
+    cli._start_agent_service_from_args(
+        SimpleNamespace(
+            host="0.0.0.0",
+            port=9001,
+            registry_path="/tmp/registry.json",
+            state_db_path="/tmp/state.sqlite3",
+            output_dir="/tmp/output",
+            auth_token_env="TOKEN_ENV",
+            btc_price_col_default="close_usd",
+        )
+    )
+
+    config = observed["config"]
+    assert config.host == "0.0.0.0"
+    assert config.port == 9001
+    assert config.registry_path == "/tmp/registry.json"
+    assert config.auth_token_env == "TOKEN_ENV"
+
+
+def test_cli_unsupported_serve_command_errors() -> None:
+    class FakeParser:
+        def parse_args(self, argv):
+            del argv
+            return SimpleNamespace(
+                command="serve",
+                serve_command="unknown",
+                strategy_command=None,
+                demo_command=None,
+                data_command=None,
+            )
+
+        def error(self, message):
+            raise SystemExit(message)
+
+    original = cli._build_parser
+    cli._build_parser = lambda: FakeParser()
+    try:
+        with pytest.raises(SystemExit) as exc:
+            cli.run([])
+    finally:
+        cli._build_parser = original
+
+    assert "Unsupported serve command." in str(exc.value)
 
 
 def test_cli_strategy_run_daily_forwards_strategy_config(monkeypatch, tmp_path) -> None:

@@ -62,15 +62,18 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 ## Production Daily Lifecycle
 
 Canonical agent-native entrypoint: `stacksats strategy decide-daily`.
+Hosted agent-native surface: `stacksats serve agent-api`.
 
 1. Load locked historical weights for the active allocation span.
 2. Build lagged features/signals using information available up to `current_date`.
 3. Collect user daily intent (`proposed_weight_today` or profile-derived intent).
 4. Project to feasible `final_weight_today` with remaining-budget constraints.
 5. Emit a structured decision payload for an external agent.
-6. External brokerage execution happens outside StackSats.
-7. Persist today as locked.
-8. Advance to next day; past values remain immutable.
+6. Either hand that payload to an external agent directly or serve it over the hosted `/v1/decisions/daily` HTTP surface.
+7. External brokerage execution happens outside StackSats.
+8. External agents report execution receipts back through `/v1/executions/receipts` when using the hosted service.
+9. Persist today as locked.
+10. Advance to next day; past values remain immutable.
 
 Integrated convenience path: `stacksats strategy run-daily`.
 Use it when you intentionally want StackSats to submit through an execution adapter after generating the same validated decision.

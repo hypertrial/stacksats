@@ -48,6 +48,10 @@ viz = [
 network = [
   "requests>=2.32,<3",
 ]
+service = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.35,<1",
+]
 deploy = [
   "psycopg2-binary>=2.9,<3",
   "python-dotenv>=1.2,<2",
@@ -57,6 +61,8 @@ all = [
   "Pillow>=11.3,<12",
   "seaborn>=0.13,<0.14",
   "requests>=2.32,<3",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.35,<1",
   "psycopg2-binary>=2.9,<3",
   "python-dotenv>=1.2,<2",
 ]
@@ -71,6 +77,7 @@ dev = [
   "pytest-mock==3.15.1",
   "pytest-benchmark==5.2.3",
   "pytest-xdist==3.8.0",
+  "httpx>=0.28,<1",
   "responses==0.25.8",
   "freezegun==1.5.5",
   "hypothesis==6.151.6",

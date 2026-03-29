@@ -48,6 +48,7 @@ The primary production pattern is agent-native:
 3. Brokerage-specific execution happens outside StackSats.
 
 Use `stacksats strategy decide-daily` or `strategy.decide_daily(...)` for the canonical agent-facing daily decision interface.
+Use `stacksats serve agent-api` when the same agent-native flow should be exposed over a hosted `/v1` HTTP service with receipt ingestion and reconciliation.
 `stacksats strategy run-daily` remains available as an integrated convenience flow when you want StackSats to submit through a configured adapter.
 
 ## Installation
@@ -68,10 +69,11 @@ Optional extras:
 ```bash
 pip install "stacksats[viz]"
 pip install "stacksats[network]"
+pip install "stacksats[service]"
 pip install "stacksats[deploy]"
 ```
 
-Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
+Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, `service` for the hosted agent API, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
 Helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are convenience tools, not part of the frozen stable `1.x` CLI subset.
 
 For local development from a checkout:
@@ -176,6 +178,14 @@ stacksats strategy decide-daily \
   --total-window-budget-usd 1000
 ```
 
+Host the same decision flow behind a bearer-protected `/v1` API:
+
+```bash
+export STACKSATS_AGENT_API_TOKEN=replace-me
+stacksats serve agent-api \
+  --registry-path .stacksats/agent_service_registry.json
+```
+
 Export requires explicit date bounds:
 
 ```bash
@@ -197,7 +207,8 @@ The stable `1.x` contract is intentionally narrow:
 
 - top-level `stacksats` exports
 - documented artifact payloads
-- documented `stacksats demo`, `stacksats data`, and `stacksats strategy` CLI subset, including `decide-daily`
+- documented `stacksats demo`, `stacksats data`, `stacksats strategy`, and `stacksats serve agent-api` CLI subset
+- documented hosted `/v1` agent API surface
 
 Experimental/reference strategies live under `stacksats.strategies.experimental.*` and stay outside the stable `1.x` API boundary.
 Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points outside the frozen stable CLI contract.

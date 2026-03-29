@@ -103,6 +103,7 @@ nav:
       - Backtest Command: run/backtest.md
       - Export Command: run/export.md
       - Decide Daily Command: run/decide-daily.md
+      - Agent API Service: run/agent-api.md
       - Run Daily Command: run/run-daily.md
       - Animate Command: run/animate.md
   - Build:

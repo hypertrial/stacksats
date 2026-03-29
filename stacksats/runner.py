@@ -1298,26 +1298,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 data_hash = exc.data_hash
                 feature_snapshot_hash = exc.feature_snapshot_hash
             error_message = str(exc)
-            failure_payload = {
-                "status": "failed",
-                "strategy_id": metadata.strategy_id,
-                "strategy_version": metadata.version,
-                "run_date": run_date,
-                "decision_key": decision_key,
-                "error": error_message,
-            }
-            state_store.mark_run_failure(
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
-                run_date=run_date,
-                mode="decision",
-                payload=failure_payload,
-                force_flag=forced_rerun,
-                validation_receipt_id=validation_receipt_id,
-                data_hash=data_hash,
-                feature_snapshot_hash=feature_snapshot_hash,
-            )
-            return self._build_failed_daily_decision_result(
+            failed_result = self._build_failed_daily_decision_result(
                 metadata=metadata,
                 config=config,
                 run_date=run_date,
@@ -1331,6 +1312,18 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 error_message=error_message,
                 daily_decision_result_cls=DailyDecisionResult,
             )
+            state_store.mark_run_failure(
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
+                run_date=run_date,
+                mode="decision",
+                payload=failed_result.to_json(),
+                force_flag=forced_rerun,
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+            )
+            return failed_result
 
     def run_daily(
         self,
@@ -1477,27 +1470,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 data_hash = exc.data_hash
                 feature_snapshot_hash = exc.feature_snapshot_hash
             error_message = str(exc)
-            failure_payload = {
-                "status": "failed",
-                "strategy_id": metadata.strategy_id,
-                "strategy_version": metadata.version,
-                "run_date": run_date,
-                "run_key": run_key,
-                "mode": config.mode,
-                "error": error_message,
-            }
-            state_store.mark_run_failure(
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
-                run_date=run_date,
-                mode=config.mode,
-                payload=failure_payload,
-                force_flag=forced_rerun,
-                validation_receipt_id=validation_receipt_id,
-                data_hash=data_hash,
-                feature_snapshot_hash=feature_snapshot_hash,
-            )
-            return self._build_failed_daily_result(
+            failed_result = self._build_failed_daily_result(
                 metadata=metadata,
                 config=config,
                 run_date=run_date,
@@ -1511,6 +1484,18 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 error_message=error_message,
                 daily_run_result_cls=DailyRunResult,
             )
+            state_store.mark_run_failure(
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
+                run_date=run_date,
+                mode=config.mode,
+                payload=failed_result.to_json(),
+                force_flag=forced_rerun,
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+            )
+            return failed_result
 
     def reconcile_daily_run(
         self,

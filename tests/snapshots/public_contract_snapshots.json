@@ -1,5 +1,6 @@
 {
   "public_api_all": [
+    "AgentServiceConfig",
     "BacktestConfig",
     "BacktestResult",
     "BaseStrategy",
@@ -12,6 +13,9 @@
     "DailyRunResult",
     "DayState",
     "DecideDailyConfig",
+    "ExecutionReceiptEvent",
+    "ExecutionReceiptHistoryResult",
+    "ExecutionStatusResult",
     "ExportConfig",
     "FeatureTimeSeries",
     "MVRVStrategy",
@@ -35,6 +39,7 @@
     "ValidationResult",
     "WeightTimeSeries",
     "WeightTimeSeriesBatch",
+    "create_agent_service_app",
     "load_data",
     "load_metric_catalog",
     "load_strategy",

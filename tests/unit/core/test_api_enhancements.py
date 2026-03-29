@@ -14,6 +14,9 @@ from stacksats.api import (
     BacktestResult,
     DailyDecisionResult,
     DailyRunResult,
+    ExecutionReceiptEvent,
+    ExecutionReceiptHistoryResult,
+    ExecutionStatusResult,
     ValidationResult,
 )
 from stacksats.strategy_types import (
@@ -307,6 +310,68 @@ def test_base_strategy_decide_daily_delegates_to_runner(mocker) -> None:
 
     assert result is expected
     mock_decide.assert_called_once()
+
+
+def test_execution_receipt_event_to_json() -> None:
+    event = ExecutionReceiptEvent(
+        decision_key="decision-123",
+        event_id="evt-1",
+        event_type="submitted",
+        event_time="2025-01-01T10:00:00Z",
+        metadata={"broker": "paper"},
+    )
+
+    payload = event.to_json()
+
+    assert payload["schema_version"]
+    assert payload["decision_key"] == "decision-123"
+    assert payload["metadata"]["broker"] == "paper"
+
+
+def test_execution_status_result_summary_and_json() -> None:
+    result = ExecutionStatusResult(
+        decision_key="decision-123",
+        strategy_id="uniform",
+        run_date="2025-01-01",
+        decision_status="decided",
+        execution_status="filled",
+        reconciliation_status="matched",
+        recommended_notional_usd=10.0,
+        recommended_quantity_btc=0.0001,
+        filled_notional_usd=10.0,
+        filled_quantity_btc=0.0001,
+        average_fill_price_usd=100000.0,
+        receipt_count=2,
+        latest_event_type="filled",
+        latest_event_time="2025-01-01T10:02:00Z",
+        message="matched",
+    )
+
+    summary = result.summary()
+    payload = result.to_json()
+
+    assert "Execution FILLED" in summary
+    assert payload["reconciliation_status"] == "matched"
+    assert payload["receipt_count"] == 2
+
+
+def test_execution_receipt_history_result_to_json() -> None:
+    history = ExecutionReceiptHistoryResult(
+        decision_key="decision-123",
+        receipts=[
+            ExecutionReceiptEvent(
+                decision_key="decision-123",
+                event_id="evt-1",
+                event_type="submitted",
+                event_time="2025-01-01T10:00:00Z",
+            )
+        ],
+    )
+
+    payload = history.to_json()
+
+    assert payload["decision_key"] == "decision-123"
+    assert payload["receipts"][0]["event_id"] == "evt-1"
 
 
 @pytest.mark.slow

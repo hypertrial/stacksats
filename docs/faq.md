@@ -35,6 +35,11 @@ See: [Framework Boundary](framework.md).
 Use `decide-daily` when StackSats should emit a validated, execution-ready decision payload for an external AI agent or brokerage workflow.
 Use `run-daily` only when you intentionally want StackSats to submit through a configured execution adapter after generating that same decision.
 
+### When should I use `stacksats serve agent-api`?
+
+Use the hosted agent API when your external agent needs a stable remote `/v1` service instead of a local Python or CLI integration.
+The service exposes decision generation plus receipt ingestion and reconciliation on the same surface.
+
 ### Where are artifacts written?
 
 Backtest and export artifacts are written under:
@@ -89,7 +94,7 @@ If you need a lazy integration point before the final execution boundary, use `B
 
 ### Which modules are stable public API?
 
-Use top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset. Generated module pages are reference material, not a promise that the module import path is stable.
+Use top-level `stacksats` exports, documented artifact payloads, the documented CLI subset, and the documented hosted `/v1` HTTP service. Generated module pages are reference material, not a promise that the module import path is stable.
 
 For canonical `merged_metrics*.parquet` exploration, use the stable public
 top-level exports `open_merged_metrics()` and `load_metric_catalog()` plus [EDA Quickstart](start/eda-quickstart.md).
@@ -98,12 +103,17 @@ See: [API Reference](reference/api/index.md) and [Stability Policy](stability.md
 
 ### Are `stacksats-plot-mvrv` and `stacksats-plot-weights` part of the stable CLI?
 
-No. They are documented helper console scripts for plotting workflows, but the frozen stable `1.x` CLI contract is the `stacksats demo`, `stacksats data`, and `stacksats strategy` subtree documented in the stability policy.
+No. They are documented helper console scripts for plotting workflows, but the frozen stable `1.x` CLI contract is the documented `stacksats demo`, `stacksats data`, `stacksats strategy`, and `stacksats serve agent-api` surface in the stability policy.
 
 Treat the helper scripts as convenience entry points with optional extras:
 
 - `stacksats-plot-mvrv` requires `stacksats[viz]`
 - `stacksats-plot-weights` requires both `stacksats[viz]` and `stacksats[deploy]`
+
+### Does StackSats talk directly to my broker in hosted mode?
+
+No. The hosted agent API remains broker-agnostic.
+It generates decisions and accepts append-only execution receipts from your external agent; it does not poll brokerage state or manage broker credentials.
 
 ## Docs feedback workflow
 

@@ -6,6 +6,9 @@ from .api import (
     DailyOrderReceipt,
     DailyOrderRequest,
     DailyRunResult,
+    ExecutionReceiptEvent,
+    ExecutionReceiptHistoryResult,
+    ExecutionStatusResult,
     ValidationResult,
 )
 from .column_map_provider import ColumnMapDataProvider, ColumnMapError
@@ -15,6 +18,7 @@ from .loader import load_strategy
 from .model_development import precompute_features
 from .prelude import load_data
 from .runner import StrategyRunner
+from .service import create_agent_service_app
 from .strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
@@ -29,9 +33,10 @@ from .strategies.examples import (
 )
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
+    AgentServiceConfig,
     BacktestConfig,
-    DecideDailyConfig,
     BaseStrategy,
+    DecideDailyConfig,
     DayState,
     ExportConfig,
     RunDailyConfig,
@@ -56,9 +61,13 @@ __all__ = [
     # Results
     "BacktestResult",
     "DailyDecisionResult",
+    "ExecutionReceiptEvent",
+    "ExecutionReceiptHistoryResult",
+    "ExecutionStatusResult",
     "ValidationResult",
     "DailyRunResult",
     # Configs
+    "AgentServiceConfig",
     "BacktestConfig",
     "DecideDailyConfig",
     "ExportConfig",
@@ -86,6 +95,7 @@ __all__ = [
     "StrategySpec",
     "TargetProfile",
     "UniformStrategy",
+    "create_agent_service_app",
     "load_strategy",
     "load_metric_catalog",
     "load_data",

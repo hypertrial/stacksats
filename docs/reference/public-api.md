@@ -17,6 +17,13 @@ The stable public contract is intentionally narrow:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
   - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
+  - `stacksats serve agent-api`
+- documented hosted HTTP service:
+  - `POST /v1/decisions/daily`
+  - `GET /v1/decisions/{decision_key}`
+  - `POST /v1/executions/receipts`
+  - `GET /v1/executions/{decision_key}`
+  - `GET /v1/executions/{decision_key}/receipts`
 
 Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience tools outside the frozen stable CLI subset.
 
@@ -26,9 +33,9 @@ Common stable imports include:
 
 - runtime objects: `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - strategy contract types: `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
-- configs and results: `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyDecisionResult`, `DailyRunResult`
+- configs and results: `AgentServiceConfig`, `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyDecisionResult`, `DailyRunResult`, `ExecutionReceiptEvent`, `ExecutionReceiptHistoryResult`, `ExecutionStatusResult`
 - metadata and schema types: `StrategyMetadata`, `StrategySpec`, `StrategySeriesMetadata`, `StrategyArtifactSet`, `ColumnSpec`
-- runners and loaders: `StrategyRunner`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
+- runners and loaders: `StrategyRunner`, `create_agent_service_app`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
 - stable built-ins: `UniformStrategy`, `RunDailyPaperStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
 
 See [Stability Policy](../stability.md) for the canonical support and deprecation rules.
@@ -70,6 +77,16 @@ result = RunDailyPaperStrategy().decide_daily(
 print(result.to_json())
 ```
 
+Embed the hosted agent API in your own process:
+
+```python
+from stacksats import AgentServiceConfig, create_agent_service_app
+
+app = create_agent_service_app(
+    AgentServiceConfig(registry_path=".stacksats/agent_service_registry.json")
+)
+```
+
 Reload exported artifacts:
 
 ```python
@@ -99,7 +116,8 @@ These payloads carry `schema_version` and are part of the stable `1.x` artifact 
 | Surface | Status | Notes |
 |---|---|---|
 | top-level `stacksats` exports | stable | covered by SemVer and deprecation policy |
-| documented CLI subset | stable | `demo`, `data`, and `strategy` command groups only |
+| documented CLI subset | stable | `demo`, `data`, `strategy`, and `serve agent-api` |
+| documented hosted HTTP service | stable | versioned `/v1` agent decision + receipt endpoints |
 | documented artifact payloads | stable | frozen `1.x` JSON contract |
 | generated module pages under API Reference | internal | useful for reading internals; not stable by default |
 | lower-level modules such as `stacksats.runner` or `stacksats.strategy_types` | internal | may change even when still documented |

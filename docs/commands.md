@@ -20,6 +20,7 @@ stacksats strategy validate --strategy stacksats.strategies.examples:SimpleZScor
 stacksats strategy backtest --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy export --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy decide-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000
+stacksats serve agent-api --registry-path .stacksats/agent_service_registry.json
 stacksats strategy run-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000 --mode paper
 stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json
 ```
@@ -30,6 +31,7 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - [Backtest Command](run/backtest.md)
 - [Export Command](run/export.md)
 - [Decide Daily Command](run/decide-daily.md)
+- [Agent API Service](run/agent-api.md)
 - [Demo Command](run/demo.md)
 - [Data Command](run/data.md)
 - [Run Daily Command](run/run-daily.md)
@@ -38,9 +40,10 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 ## Prerequisites
 
 - If you have not run StackSats before, start with `stacksats demo backtest`.
-- The stable CLI subset covers `stacksats demo`, `stacksats data`, and `stacksats strategy`.
+- The stable CLI subset covers `stacksats demo`, `stacksats data`, `stacksats strategy`, and `stacksats serve`.
 - Runtime commands resolve a BRK-wide parquet via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`.
 - Visual commands (`stacksats strategy animate`, `stacksats-plot-mvrv`, `stacksats-plot-weights`) require `stacksats[viz]`.
+- Hosted agent API commands (`stacksats serve agent-api`) require `stacksats[service]`.
 - `stacksats-plot-weights` also needs `stacksats[deploy]` plus `DATABASE_URL` because it reads stored weight windows from Postgres before rendering.
 - Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented tools outside the frozen stable CLI contract.
 - See [Stability Policy](stability.md) for the exact boundary and [Quickstart](start/quickstart.md) for install paths.
@@ -69,7 +72,11 @@ Canonical page: [Run Daily Command](run/run-daily.md)
 
 Canonical page: [Decide Daily Command](run/decide-daily.md)
 
-## 7) Animate Backtest Output (HD GIF)
+## 7) Host the Agent API Service
+
+Canonical page: [Agent API Service](run/agent-api.md)
+
+## 8) Animate Backtest Output (HD GIF)
 
 Canonical page: [Animate Command](run/animate.md)
 

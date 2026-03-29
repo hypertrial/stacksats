@@ -7,13 +7,20 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
 
+from .api import ExecutionReceiptEvent, ExecutionReceiptHistoryResult, ExecutionStatusResult
+
 
 class IdempotencyConflictError(ValueError):
     """Raised when an existing run conflicts with new run inputs."""
+
+
+class ReceiptConflictError(ValueError):
+    """Raised when a duplicate execution receipt conflicts with stored data."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +57,26 @@ class ValidationReceipt:
     config_hash: str
     passed: bool
     diagnostics: dict
+
+
+@dataclass(frozen=True, slots=True)
+class StoredReceiptEvent:
+    decision_key: str
+    strategy_id: str
+    strategy_version: str
+    run_date: str
+    event_id: str
+    event_type: str
+    event_time: str
+    broker_name: str | None
+    broker_account_ref: str | None
+    external_order_id: str | None
+    filled_notional_usd: float | None
+    filled_quantity_btc: float | None
+    fill_price_usd: float | None
+    message: str | None
+    metadata: dict[str, object]
+    payload: dict[str, object]
 
 
 class SQLiteExecutionStateStore:
@@ -128,6 +155,55 @@ class SQLiteExecutionStateStore:
                     passed INTEGER NOT NULL,
                     diagnostics_json TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS execution_receipt_events (
+                    event_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    decision_key TEXT NOT NULL,
+                    strategy_id TEXT NOT NULL,
+                    strategy_version TEXT NOT NULL,
+                    run_date TEXT NOT NULL,
+                    event_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    event_time TEXT NOT NULL,
+                    broker_name TEXT,
+                    broker_account_ref TEXT,
+                    external_order_id TEXT,
+                    filled_notional_usd REAL,
+                    filled_quantity_btc REAL,
+                    fill_price_usd REAL,
+                    message TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE (decision_key, event_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS execution_status (
+                    decision_key TEXT PRIMARY KEY,
+                    strategy_id TEXT NOT NULL,
+                    strategy_version TEXT NOT NULL,
+                    run_date TEXT NOT NULL,
+                    decision_status TEXT NOT NULL,
+                    execution_status TEXT NOT NULL,
+                    reconciliation_status TEXT NOT NULL,
+                    recommended_notional_usd REAL,
+                    recommended_quantity_btc REAL,
+                    filled_notional_usd REAL NOT NULL DEFAULT 0.0,
+                    filled_quantity_btc REAL NOT NULL DEFAULT 0.0,
+                    average_fill_price_usd REAL,
+                    receipt_count INTEGER NOT NULL DEFAULT 0,
+                    latest_event_type TEXT,
+                    latest_event_time TEXT,
+                    message TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )
                 """
             )
@@ -600,6 +676,268 @@ class SQLiteExecutionStateStore:
             return None
         return _row_to_stored_run(row)
 
+    def get_run_by_run_key(
+        self,
+        *,
+        run_key: str,
+        mode: str | None = None,
+    ) -> StoredRun | None:
+        with self._connect() as conn:
+            if mode is None:
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM daily_runs
+                    WHERE run_key = ?
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (run_key,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM daily_runs
+                    WHERE run_key = ? AND mode = ?
+                    LIMIT 1
+                    """,
+                    (run_key, mode),
+                ).fetchone()
+        if row is None:
+            return None
+        return _row_to_stored_run(row)
+
+    def ingest_execution_receipt(
+        self,
+        *,
+        decision_key: str,
+        event: ExecutionReceiptEvent,
+    ) -> tuple[ExecutionStatusResult, bool]:
+        normalized_event = _normalize_execution_receipt_event(event)
+        if normalized_event.decision_key != decision_key:
+            raise ValueError("Receipt event decision_key must match the request decision_key.")
+        payload_json = json.dumps(normalized_event.to_json(), sort_keys=True, default=str)
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            decision = self._get_decision_run(conn, decision_key)
+            if decision is None:
+                raise ValueError(
+                    "No stored daily decision exists for the requested decision_key."
+                )
+            if str(decision.payload.get("status", "")) != "decided":
+                raise ValueError(
+                    "Execution receipts can only be ingested for decided daily decisions."
+                )
+
+            existing = conn.execute(
+                """
+                SELECT payload_json
+                FROM execution_receipt_events
+                WHERE decision_key = ? AND event_id = ?
+                """,
+                (decision_key, normalized_event.event_id),
+            ).fetchone()
+            if existing is not None:
+                if existing["payload_json"] != payload_json:
+                    raise ReceiptConflictError(
+                        "Existing execution receipt has different inputs for the same event_id."
+                    )
+                return self._load_execution_status_for_decision(conn, decision), True
+
+            conn.execute(
+                """
+                INSERT INTO execution_receipt_events (
+                    decision_key,
+                    strategy_id,
+                    strategy_version,
+                    run_date,
+                    event_id,
+                    event_type,
+                    event_time,
+                    broker_name,
+                    broker_account_ref,
+                    external_order_id,
+                    filled_notional_usd,
+                    filled_quantity_btc,
+                    fill_price_usd,
+                    message,
+                    metadata_json,
+                    payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    decision_key,
+                    decision.strategy_id,
+                    decision.strategy_version,
+                    decision.run_date,
+                    normalized_event.event_id,
+                    normalized_event.event_type,
+                    normalized_event.event_time,
+                    normalized_event.broker_name,
+                    normalized_event.broker_account_ref,
+                    normalized_event.external_order_id,
+                    normalized_event.filled_notional_usd,
+                    normalized_event.filled_quantity_btc,
+                    normalized_event.fill_price_usd,
+                    normalized_event.message,
+                    json.dumps(normalized_event.metadata, sort_keys=True, default=str),
+                    payload_json,
+                ),
+            )
+            status = _build_execution_status(
+                decision=decision,
+                receipts=self._load_receipt_events(conn, decision_key),
+            )
+            self._write_execution_status(conn, decision=decision, status=status)
+            return status, False
+
+    def get_execution_status(self, *, decision_key: str) -> ExecutionStatusResult | None:
+        with self._connect() as conn:
+            decision = self._get_decision_run(conn, decision_key)
+            if decision is None:
+                return None
+            return self._load_execution_status_for_decision(conn, decision)
+
+    def get_execution_receipts(
+        self,
+        *,
+        decision_key: str,
+    ) -> ExecutionReceiptHistoryResult | None:
+        with self._connect() as conn:
+            decision = self._get_decision_run(conn, decision_key)
+            if decision is None:
+                return None
+            receipts = [
+                _stored_receipt_event_to_public(event)
+                for event in self._load_receipt_events(conn, decision_key)
+            ]
+        return ExecutionReceiptHistoryResult(
+            decision_key=decision_key,
+            receipts=receipts,
+        )
+
+    def _get_decision_run(
+        self,
+        conn: sqlite3.Connection,
+        decision_key: str,
+    ) -> StoredRun | None:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM daily_runs
+            WHERE run_key = ? AND mode = 'decision'
+            LIMIT 1
+            """,
+            (decision_key,),
+        ).fetchone()
+        if row is None:
+            return None
+        return _row_to_stored_run(row)
+
+    def _load_receipt_events(
+        self,
+        conn: sqlite3.Connection,
+        decision_key: str,
+    ) -> list[StoredReceiptEvent]:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM execution_receipt_events
+            WHERE decision_key = ?
+            ORDER BY event_sequence ASC
+            """,
+            (decision_key,),
+        ).fetchall()
+        return [_row_to_stored_receipt_event(row) for row in rows]
+
+    def _load_execution_status_for_decision(
+        self,
+        conn: sqlite3.Connection,
+        decision: StoredRun,
+    ) -> ExecutionStatusResult:
+        row = conn.execute(
+            """
+            SELECT payload_json
+            FROM execution_status
+            WHERE decision_key = ?
+            """,
+            (decision.run_key,),
+        ).fetchone()
+        if row is not None:
+            return _payload_to_execution_status(json.loads(row["payload_json"]))
+        return _build_execution_status(
+            decision=decision,
+            receipts=self._load_receipt_events(conn, decision.run_key),
+        )
+
+    def _write_execution_status(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        decision: StoredRun,
+        status: ExecutionStatusResult,
+    ) -> None:
+        payload = status.to_json()
+        conn.execute(
+            """
+            INSERT INTO execution_status (
+                decision_key,
+                strategy_id,
+                strategy_version,
+                run_date,
+                decision_status,
+                execution_status,
+                reconciliation_status,
+                recommended_notional_usd,
+                recommended_quantity_btc,
+                filled_notional_usd,
+                filled_quantity_btc,
+                average_fill_price_usd,
+                receipt_count,
+                latest_event_type,
+                latest_event_time,
+                message,
+                payload_json,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(decision_key) DO UPDATE SET
+                decision_status = excluded.decision_status,
+                execution_status = excluded.execution_status,
+                reconciliation_status = excluded.reconciliation_status,
+                recommended_notional_usd = excluded.recommended_notional_usd,
+                recommended_quantity_btc = excluded.recommended_quantity_btc,
+                filled_notional_usd = excluded.filled_notional_usd,
+                filled_quantity_btc = excluded.filled_quantity_btc,
+                average_fill_price_usd = excluded.average_fill_price_usd,
+                receipt_count = excluded.receipt_count,
+                latest_event_type = excluded.latest_event_type,
+                latest_event_time = excluded.latest_event_time,
+                message = excluded.message,
+                payload_json = excluded.payload_json,
+                updated_at = datetime('now')
+            """,
+            (
+                decision.run_key,
+                decision.strategy_id,
+                decision.strategy_version,
+                decision.run_date,
+                status.decision_status,
+                status.execution_status,
+                status.reconciliation_status,
+                status.recommended_notional_usd,
+                status.recommended_quantity_btc,
+                status.filled_notional_usd,
+                status.filled_quantity_btc,
+                status.average_fill_price_usd,
+                status.receipt_count,
+                status.latest_event_type,
+                status.latest_event_time,
+                status.message,
+                json.dumps(payload, sort_keys=True, default=str),
+            ),
+        )
+
     def load_locked_prefix(
         self,
         *,
@@ -657,6 +995,236 @@ class SQLiteExecutionStateStore:
         return np.asarray([float(row["weight"]) for row in rows], dtype=float)
 
 
+USD_RECONCILIATION_TOLERANCE = 0.01
+BTC_RECONCILIATION_TOLERANCE = 1e-10
+
+
+def _normalize_execution_receipt_event(event: ExecutionReceiptEvent) -> ExecutionReceiptEvent:
+    return ExecutionReceiptEvent(
+        decision_key=event.decision_key,
+        event_id=event.event_id,
+        event_type=event.event_type,
+        event_time=_normalize_event_time(event.event_time),
+        broker_name=event.broker_name,
+        broker_account_ref=event.broker_account_ref,
+        external_order_id=event.external_order_id,
+        filled_notional_usd=_optional_float(event.filled_notional_usd),
+        filled_quantity_btc=_optional_float(event.filled_quantity_btc),
+        fill_price_usd=_optional_float(event.fill_price_usd),
+        message=event.message,
+        metadata=dict(event.metadata),
+    )
+
+
+def _normalize_event_time(value: str | dt.datetime) -> str:
+    parsed = _parse_datetime_like(value)
+    return parsed.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_datetime_like(value: str | dt.datetime) -> dt.datetime:
+    if isinstance(value, dt.datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        normalized = text.replace("Z", "+00:00")
+        parsed = dt.datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed
+
+
+def _optional_float(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _row_to_stored_receipt_event(row: sqlite3.Row) -> StoredReceiptEvent:
+    return StoredReceiptEvent(
+        decision_key=row["decision_key"],
+        strategy_id=row["strategy_id"],
+        strategy_version=row["strategy_version"],
+        run_date=row["run_date"],
+        event_id=row["event_id"],
+        event_type=row["event_type"],
+        event_time=row["event_time"],
+        broker_name=row["broker_name"],
+        broker_account_ref=row["broker_account_ref"],
+        external_order_id=row["external_order_id"],
+        filled_notional_usd=_optional_float(row["filled_notional_usd"]),
+        filled_quantity_btc=_optional_float(row["filled_quantity_btc"]),
+        fill_price_usd=_optional_float(row["fill_price_usd"]),
+        message=row["message"],
+        metadata=json.loads(row["metadata_json"] or "{}"),
+        payload=json.loads(row["payload_json"] or "{}"),
+    )
+
+
+def _stored_receipt_event_to_public(event: StoredReceiptEvent) -> ExecutionReceiptEvent:
+    return ExecutionReceiptEvent(
+        decision_key=event.decision_key,
+        event_id=event.event_id,
+        event_type=event.event_type,
+        event_time=event.event_time,
+        broker_name=event.broker_name,
+        broker_account_ref=event.broker_account_ref,
+        external_order_id=event.external_order_id,
+        filled_notional_usd=event.filled_notional_usd,
+        filled_quantity_btc=event.filled_quantity_btc,
+        fill_price_usd=event.fill_price_usd,
+        message=event.message,
+        metadata=event.metadata,
+    )
+
+
+def _payload_to_execution_status(payload: dict[str, Any]) -> ExecutionStatusResult:
+    return ExecutionStatusResult(
+        decision_key=str(payload["decision_key"]),
+        strategy_id=str(payload["strategy_id"]),
+        run_date=str(payload["run_date"]),
+        decision_status=str(payload["decision_status"]),
+        execution_status=str(payload["execution_status"]),
+        reconciliation_status=str(payload["reconciliation_status"]),
+        recommended_notional_usd=_optional_float(payload.get("recommended_notional_usd")),
+        recommended_quantity_btc=_optional_float(payload.get("recommended_quantity_btc")),
+        filled_notional_usd=float(payload["filled_notional_usd"]),
+        filled_quantity_btc=float(payload["filled_quantity_btc"]),
+        average_fill_price_usd=_optional_float(payload.get("average_fill_price_usd")),
+        receipt_count=int(payload["receipt_count"]),
+        latest_event_type=payload.get("latest_event_type"),
+        latest_event_time=payload.get("latest_event_time"),
+        message=str(payload["message"]),
+    )
+
+
+def _build_execution_status(
+    *,
+    decision: StoredRun,
+    receipts: list[StoredReceiptEvent],
+) -> ExecutionStatusResult:
+    decision_status = str(decision.payload.get("status") or decision.status)
+    recommended_notional = _optional_float(decision.payload.get("recommended_notional_usd"))
+    recommended_quantity = _optional_float(decision.payload.get("recommended_quantity_btc"))
+    if not receipts:
+        return _default_execution_status(
+            decision=decision,
+            decision_status=decision_status,
+            recommended_notional=recommended_notional,
+            recommended_quantity=recommended_quantity,
+        )
+
+    latest = receipts[-1]
+    filled_notional = float(sum(event.filled_notional_usd or 0.0 for event in receipts))
+    filled_quantity = float(sum(event.filled_quantity_btc or 0.0 for event in receipts))
+    average_fill_price = (
+        filled_notional / filled_quantity
+        if filled_quantity > BTC_RECONCILIATION_TOLERANCE
+        else None
+    )
+    execution_status = latest.event_type
+    reconciliation_status = _classify_execution_reconciliation_status(
+        decision_status=decision_status,
+        execution_status=execution_status,
+        recommended_notional_usd=recommended_notional,
+        recommended_quantity_btc=recommended_quantity,
+        filled_notional_usd=filled_notional,
+        filled_quantity_btc=filled_quantity,
+    )
+    message = latest.message or (
+        f"Execution status is '{execution_status}' with reconciliation "
+        f"'{reconciliation_status}'."
+    )
+    return ExecutionStatusResult(
+        decision_key=decision.run_key,
+        strategy_id=decision.strategy_id,
+        run_date=decision.run_date,
+        decision_status=decision_status,
+        execution_status=execution_status,
+        reconciliation_status=reconciliation_status,
+        recommended_notional_usd=recommended_notional,
+        recommended_quantity_btc=recommended_quantity,
+        filled_notional_usd=filled_notional,
+        filled_quantity_btc=filled_quantity,
+        average_fill_price_usd=average_fill_price,
+        receipt_count=len(receipts),
+        latest_event_type=latest.event_type,
+        latest_event_time=latest.event_time,
+        message=message,
+    )
+
+
+def _default_execution_status(
+    *,
+    decision: StoredRun,
+    decision_status: str,
+    recommended_notional: float | None,
+    recommended_quantity: float | None,
+) -> ExecutionStatusResult:
+    if decision_status == "decided":
+        execution_status = "pending"
+        reconciliation_status = "pending"
+        message = "Decision created; waiting for external execution receipts."
+    else:
+        execution_status = "failed"
+        reconciliation_status = "failed"
+        message = str(
+            decision.payload.get("error")
+            or decision.payload.get("message")
+            or "Decision failed before external execution."
+        )
+    return ExecutionStatusResult(
+        decision_key=decision.run_key,
+        strategy_id=decision.strategy_id,
+        run_date=decision.run_date,
+        decision_status=decision_status,
+        execution_status=execution_status,
+        reconciliation_status=reconciliation_status,
+        recommended_notional_usd=recommended_notional,
+        recommended_quantity_btc=recommended_quantity,
+        filled_notional_usd=0.0,
+        filled_quantity_btc=0.0,
+        average_fill_price_usd=None,
+        receipt_count=0,
+        latest_event_type=None,
+        latest_event_time=None,
+        message=message,
+    )
+
+
+def _classify_execution_reconciliation_status(
+    *,
+    decision_status: str,
+    execution_status: str,
+    recommended_notional_usd: float | None,
+    recommended_quantity_btc: float | None,
+    filled_notional_usd: float,
+    filled_quantity_btc: float,
+) -> str:
+    if decision_status != "decided":
+        return "failed"
+    notional_target = float(recommended_notional_usd or 0.0)
+    quantity_target = float(recommended_quantity_btc or 0.0)
+    overfilled = (
+        filled_notional_usd > (notional_target + USD_RECONCILIATION_TOLERANCE)
+        or filled_quantity_btc > (quantity_target + BTC_RECONCILIATION_TOLERANCE)
+    )
+    matched = (
+        abs(filled_notional_usd - notional_target) <= USD_RECONCILIATION_TOLERANCE
+        and abs(filled_quantity_btc - quantity_target) <= BTC_RECONCILIATION_TOLERANCE
+    )
+    if overfilled:
+        return "overfilled"
+    if execution_status in {"submitted", "partially_filled", "pending"}:
+        return "pending"
+    if execution_status == "filled":
+        return "matched" if matched else "underfilled"
+    if execution_status == "canceled":
+        return "underfilled"
+    if execution_status in {"rejected", "failed"}:
+        return "failed"
+    return "pending"
+
+
 def _parse_date_like(date_like: str | dt.datetime) -> dt.datetime:
     if isinstance(date_like, dt.datetime):
         out = date_like.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -695,6 +1263,7 @@ def _row_to_stored_run(row: sqlite3.Row) -> StoredRun:
 
 __all__ = [
     "IdempotencyConflictError",
+    "ReceiptConflictError",
     "RunClaim",
     "SQLiteExecutionStateStore",
     "StoredRun",

@@ -24,6 +24,10 @@ The stable `1.x` contract is intentionally narrow:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
   - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
+  - `stacksats serve agent-api`
+- documented hosted HTTP service:
+  - `/v1/decisions/*`
+  - `/v1/executions/*`
 - Optional helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience tools, but they are outside the frozen stable CLI subset.
 
 Lower-level modules are allowed to change between releases unless they are re-exported from top-level `stacksats`.
@@ -62,6 +66,7 @@ After `1.0.0`, any incompatible change to the stable surface requires:
 - Base install: stable core library and non-visual CLI flows.
 - `viz`: plotting and animation commands.
 - `network`: HTTP-backed helper modules such as BTC price fetching helpers.
+- `service`: hosted agent API runtime.
 - `deploy`: database/export integrations.
 - `stacksats-plot-mvrv` is an optional helper script that requires `viz`.
 - `stacksats-plot-weights` is an optional helper script that spans both `deploy` (DB access) and `viz` (rendering).

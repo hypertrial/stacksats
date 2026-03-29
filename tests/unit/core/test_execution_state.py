@@ -7,8 +7,11 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from stacksats.api import ExecutionReceiptEvent
+import stacksats.execution_state as execution_state_module
 from stacksats.execution_state import (
     IdempotencyConflictError,
+    ReceiptConflictError,
     SQLiteExecutionStateStore,
     ValidationReceipt,
     _norm_dt_str,
@@ -637,3 +640,290 @@ def test_ensure_column_adds_missing_column(tmp_path: Path) -> None:
             row["name"] for row in conn.execute("PRAGMA table_info(demo)").fetchall()
         }
     assert "name" in cols
+
+
+def _claim_decision(store: SQLiteExecutionStateStore) -> None:
+    store.claim_run(
+        strategy_id="decision-strategy",
+        strategy_version="1.0.0",
+        run_date="2025-01-01",
+        mode="decision",
+        run_key="decision-1",
+        fingerprint="decision-fp",
+        force=False,
+    )
+    store.mark_run_success(
+        strategy_id="decision-strategy",
+        strategy_version="1.0.0",
+        run_date="2025-01-01",
+        mode="decision",
+        payload={
+            "status": "decided",
+            "decision_key": "decision-1",
+            "strategy_id": "decision-strategy",
+            "strategy_version": "1.0.0",
+            "run_date": "2025-01-01",
+            "recommended_notional_usd": 10.0,
+            "recommended_quantity_btc": 0.0001,
+        },
+        order_summary=None,
+        force_flag=False,
+    )
+
+
+def test_get_run_by_run_key_returns_decision_record(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+
+    stored = store.get_run_by_run_key(run_key="decision-1", mode="decision")
+
+    assert stored is not None
+    assert stored.run_key == "decision-1"
+    assert stored.payload["status"] == "decided"
+
+
+def test_ingest_execution_receipt_accumulates_and_matches(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+
+    submitted, submitted_idempotent = store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=ExecutionReceiptEvent(
+            decision_key="decision-1",
+            event_id="evt-1",
+            event_type="submitted",
+            event_time="2025-01-01T10:00:00Z",
+            external_order_id="ord-1",
+        ),
+    )
+    partial, partial_idempotent = store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=ExecutionReceiptEvent(
+            decision_key="decision-1",
+            event_id="evt-2",
+            event_type="partially_filled",
+            event_time="2025-01-01T10:01:00Z",
+            external_order_id="ord-1",
+            filled_notional_usd=4.0,
+            filled_quantity_btc=0.00004,
+            fill_price_usd=100000.0,
+        ),
+    )
+    matched, matched_idempotent = store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=ExecutionReceiptEvent(
+            decision_key="decision-1",
+            event_id="evt-3",
+            event_type="filled",
+            event_time="2025-01-01T10:02:00Z",
+            external_order_id="ord-1",
+            filled_notional_usd=6.0,
+            filled_quantity_btc=0.00006,
+            fill_price_usd=100000.0,
+        ),
+    )
+
+    assert submitted_idempotent is False
+    assert partial_idempotent is False
+    assert matched_idempotent is False
+    assert submitted.execution_status == "submitted"
+    assert submitted.reconciliation_status == "pending"
+    assert partial.filled_notional_usd == pytest.approx(4.0)
+    assert partial.receipt_count == 2
+    assert matched.execution_status == "filled"
+    assert matched.reconciliation_status == "matched"
+    assert matched.filled_notional_usd == pytest.approx(10.0)
+    assert matched.filled_quantity_btc == pytest.approx(0.0001)
+    assert matched.average_fill_price_usd == pytest.approx(100000.0)
+
+
+def test_ingest_execution_receipt_duplicate_same_body_is_idempotent(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+    event = ExecutionReceiptEvent(
+        decision_key="decision-1",
+        event_id="evt-1",
+        event_type="submitted",
+        event_time="2025-01-01T10:00:00Z",
+        external_order_id="ord-1",
+    )
+
+    first, first_idempotent = store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=event,
+    )
+    second, second_idempotent = store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=event,
+    )
+
+    assert first_idempotent is False
+    assert second_idempotent is True
+    assert second.receipt_count == 1
+    assert second.execution_status == first.execution_status
+
+
+def test_ingest_execution_receipt_duplicate_conflict_raises(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+    store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=ExecutionReceiptEvent(
+            decision_key="decision-1",
+            event_id="evt-1",
+            event_type="submitted",
+            event_time="2025-01-01T10:00:00Z",
+        ),
+    )
+
+    with pytest.raises(ReceiptConflictError):
+        store.ingest_execution_receipt(
+            decision_key="decision-1",
+            event=ExecutionReceiptEvent(
+                decision_key="decision-1",
+                event_id="evt-1",
+                event_type="failed",
+                event_time="2025-01-01T10:05:00Z",
+                message="broker rejected order",
+            ),
+        )
+
+
+def test_execution_status_and_history_retrieval_cover_terminal_states(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+    store.ingest_execution_receipt(
+        decision_key="decision-1",
+        event=ExecutionReceiptEvent(
+            decision_key="decision-1",
+            event_id="evt-1",
+            event_type="partially_filled",
+            event_time="2025-01-01T10:01:00Z",
+            filled_notional_usd=12.0,
+            filled_quantity_btc=0.00012,
+        ),
+    )
+    status_result = store.get_execution_status(decision_key="decision-1")
+    history_result = store.get_execution_receipts(decision_key="decision-1")
+
+    assert status_result is not None
+    assert status_result.reconciliation_status == "overfilled"
+    assert history_result is not None
+    assert len(history_result.receipts) == 1
+    assert history_result.receipts[0].event_type == "partially_filled"
+
+
+def test_execution_state_returns_none_for_missing_lookup_paths(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+
+    assert store.get_run_by_run_key(run_key="missing") is None
+    assert store.get_execution_status(decision_key="missing") is None
+    assert store.get_execution_receipts(decision_key="missing") is None
+
+
+def test_ingest_execution_receipt_validates_decision_key_and_status(tmp_path: Path) -> None:
+    store = SQLiteExecutionStateStore(str(tmp_path / "state.sqlite3"))
+    _claim_decision(store)
+
+    with pytest.raises(ValueError, match="must match"):
+        store.ingest_execution_receipt(
+            decision_key="decision-1",
+            event=ExecutionReceiptEvent(
+                decision_key="other-decision",
+                event_id="evt-1",
+                event_type="submitted",
+                event_time="2025-01-01T10:00:00Z",
+            ),
+        )
+
+    store.claim_run(
+        strategy_id="failed-strategy",
+        strategy_version="1.0.0",
+        run_date="2025-01-02",
+        mode="decision",
+        run_key="failed-decision",
+        fingerprint="fp-failed",
+        force=False,
+    )
+    store.mark_run_failure(
+        strategy_id="failed-strategy",
+        strategy_version="1.0.0",
+        run_date="2025-01-02",
+        mode="decision",
+        payload={"status": "failed", "decision_key": "failed-decision", "message": "bad"},
+        force_flag=False,
+    )
+
+    with pytest.raises(ValueError, match="decided daily decisions"):
+        store.ingest_execution_receipt(
+            decision_key="failed-decision",
+            event=ExecutionReceiptEvent(
+                decision_key="failed-decision",
+                event_id="evt-2",
+                event_type="submitted",
+                event_time="2025-01-02T10:00:00Z",
+            ),
+        )
+
+
+def test_execution_state_internal_datetime_and_status_helpers() -> None:
+    naive_dt = dt.datetime(2025, 1, 1, 10, 0, 0)
+    aware_dt = dt.datetime(2025, 1, 1, 10, 0, 0, tzinfo=dt.timezone.utc)
+
+    assert execution_state_module._parse_datetime_like(naive_dt).tzinfo is not None
+    assert execution_state_module._parse_datetime_like("2025-01-01T10:00:00Z").tzinfo is not None
+    assert execution_state_module._normalize_event_time(aware_dt).endswith("Z")
+
+    failed_decision = execution_state_module.StoredRun(
+        strategy_id="s",
+        strategy_version="1.0.0",
+        run_date="2025-01-01",
+        mode="decision",
+        run_key="decision-1",
+        fingerprint="fp",
+        status="failed",
+        payload={"status": "failed", "message": "decision failed"},
+        order_summary=None,
+        force_flag=False,
+    )
+    failed_status = execution_state_module._default_execution_status(
+        decision=failed_decision,
+        decision_status="failed",
+        recommended_notional=1.0,
+        recommended_quantity=0.1,
+    )
+
+    assert failed_status.execution_status == "failed"
+    assert failed_status.reconciliation_status == "failed"
+    assert execution_state_module._classify_execution_reconciliation_status(
+        decision_status="failed",
+        execution_status="filled",
+        recommended_notional_usd=1.0,
+        recommended_quantity_btc=0.1,
+        filled_notional_usd=1.0,
+        filled_quantity_btc=0.1,
+    ) == "failed"
+    assert execution_state_module._classify_execution_reconciliation_status(
+        decision_status="decided",
+        execution_status="canceled",
+        recommended_notional_usd=10.0,
+        recommended_quantity_btc=0.1,
+        filled_notional_usd=5.0,
+        filled_quantity_btc=0.05,
+    ) == "underfilled"
+    assert execution_state_module._classify_execution_reconciliation_status(
+        decision_status="decided",
+        execution_status="rejected",
+        recommended_notional_usd=10.0,
+        recommended_quantity_btc=0.1,
+        filled_notional_usd=0.0,
+        filled_quantity_btc=0.0,
+    ) == "failed"
+    assert execution_state_module._classify_execution_reconciliation_status(
+        decision_status="decided",
+        execution_status="mystery",
+        recommended_notional_usd=10.0,
+        recommended_quantity_btc=0.1,
+        filled_notional_usd=0.0,
+        filled_quantity_btc=0.0,
+    ) == "pending"

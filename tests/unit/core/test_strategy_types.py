@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import polars as pl
 
 from stacksats.strategy_types import (
+    AgentServiceConfig,
     BacktestConfig,
     BaseStrategy,
     DecideDailyConfig,
@@ -59,6 +60,17 @@ def test_default_decide_daily_config_uses_documented_defaults() -> None:
     assert config.btc_price_col == "price_usd"
     assert config.output_dir == "output"
     assert config.force is False
+    assert config.state_db_path.endswith(".stacksats/run_state.sqlite3")
+
+
+def test_agent_service_config_uses_documented_defaults() -> None:
+    config = AgentServiceConfig()
+    assert config.host == "127.0.0.1"
+    assert config.port == 8000
+    assert config.output_dir == "output"
+    assert config.auth_token_env == "STACKSATS_AGENT_API_TOKEN"
+    assert config.btc_price_col_default == "price_usd"
+    assert config.registry_path.endswith(".stacksats/agent_service_registry.json")
     assert config.state_db_path.endswith(".stacksats/run_state.sqlite3")
 
 

@@ -13,6 +13,8 @@ import stacksats._optional as optional
 import stacksats.btc_price_fetcher as btc_price_fetcher
 import stacksats.plot_mvrv as plot_mvrv
 import stacksats.plot_weights as plot_weights
+from stacksats.service import create_agent_service_app
+from stacksats.strategy_types import AgentServiceConfig
 
 
 def test_import_optional_raises_helpful_error_for_missing_module(
@@ -114,6 +116,80 @@ def test_btc_price_fetcher_requires_network_extra(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.undo()
     importlib.reload(btc_price_fetcher)
+
+
+def test_agent_service_requires_service_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "fastapi" or name.startswith("fastapi."):
+            exc = ModuleNotFoundError("No module named 'fastapi'")
+            exc.name = "fastapi"
+            raise exc
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    sys.modules.pop("stacksats.service.app", None)
+
+    with pytest.raises(ImportError, match=r"stacksats\[service\]"):
+        create_agent_service_app(AgentServiceConfig())
+
+
+def test_agent_service_reraises_nested_fastapi_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "fastapi" or name.startswith("fastapi."):
+            exc = ModuleNotFoundError("No module named 'starlette'")
+            exc.name = "starlette"
+            raise exc
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    sys.modules.pop("stacksats.service.app", None)
+
+    with pytest.raises(ModuleNotFoundError, match="starlette"):
+        create_agent_service_app(AgentServiceConfig())
+
+
+def test_agent_service_requires_pydantic_from_service_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pydantic" or name.startswith("pydantic."):
+            exc = ModuleNotFoundError("No module named 'pydantic'")
+            exc.name = "pydantic"
+            raise exc
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    sys.modules.pop("stacksats.service.app", None)
+
+    with pytest.raises(ImportError, match=r"stacksats\[service\]"):
+        create_agent_service_app(AgentServiceConfig())
+
+
+def test_agent_service_reraises_nested_pydantic_import_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pydantic" or name.startswith("pydantic."):
+            exc = ModuleNotFoundError("No module named 'pydantic_core'")
+            exc.name = "pydantic_core"
+            raise exc
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    sys.modules.pop("stacksats.service.app", None)
+
+    with pytest.raises(ModuleNotFoundError, match="pydantic_core"):
+        create_agent_service_app(AgentServiceConfig())
 
 
 def test_plot_mvrv_help_does_not_require_viz_extra(

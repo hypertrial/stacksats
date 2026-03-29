@@ -252,6 +252,81 @@ class DailyDecisionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ExecutionReceiptEvent:
+    """Append-only execution receipt event reported by an external agent."""
+
+    decision_key: str
+    event_id: str
+    event_type: str
+    event_time: str
+    broker_name: str | None = None
+    broker_account_ref: str | None = None
+    external_order_id: str | None = None
+    filled_notional_usd: float | None = None
+    filled_quantity_btc: float | None = None
+    fill_price_usd: float | None = None
+    message: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+
+    def to_json(self) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        payload = asdict(self)
+        payload["schema_version"] = PUBLIC_ARTIFACT_SCHEMA_VERSION
+        return payload
+
+
+@dataclass(slots=True)
+class ExecutionStatusResult:
+    """Current execution lifecycle and reconciliation summary for a decision."""
+
+    decision_key: str
+    strategy_id: str
+    run_date: str
+    decision_status: str
+    execution_status: str
+    reconciliation_status: str
+    recommended_notional_usd: float | None
+    recommended_quantity_btc: float | None
+    filled_notional_usd: float
+    filled_quantity_btc: float
+    average_fill_price_usd: float | None
+    receipt_count: int
+    latest_event_type: str | None
+    latest_event_time: str | None
+    message: str
+
+    def summary(self) -> str:
+        """Return concise execution lifecycle summary."""
+        return (
+            f"Execution {self.execution_status.upper()} | "
+            f"Reconciliation: {self.reconciliation_status.upper()} | "
+            f"Decision Key: {self.decision_key} | Receipts: {self.receipt_count}"
+        )
+
+    def to_json(self) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        payload = asdict(self)
+        payload["schema_version"] = PUBLIC_ARTIFACT_SCHEMA_VERSION
+        return payload
+
+
+@dataclass(slots=True)
+class ExecutionReceiptHistoryResult:
+    """Stored append-only execution receipt history for a decision."""
+
+    decision_key: str
+    receipts: list[ExecutionReceiptEvent]
+
+    def to_json(self) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        return {
+            "schema_version": PUBLIC_ARTIFACT_SCHEMA_VERSION,
+            "decision_key": self.decision_key,
+            "receipts": [receipt.to_json() for receipt in self.receipts],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DailyOrderRequest:
     """Execution request for a single strategy daily order."""
 

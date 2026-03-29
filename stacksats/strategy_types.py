@@ -205,6 +205,10 @@ def _default_state_db_path() -> str:
     return str(Path(".stacksats") / "run_state.sqlite3")
 
 
+def _default_agent_registry_path() -> str:
+    return str(Path(".stacksats") / "agent_service_registry.json")
+
+
 @dataclass(frozen=True)
 class DecideDailyConfig:
     run_date: str | None = None
@@ -225,6 +229,17 @@ class RunDailyConfig:
     adapter_spec: str | None = None
     force: bool = False
     btc_price_col: str = "price_usd"
+
+
+@dataclass(frozen=True)
+class AgentServiceConfig:
+    host: str = "127.0.0.1"
+    port: int = 8000
+    registry_path: str = field(default_factory=_default_agent_registry_path)
+    state_db_path: str = field(default_factory=_default_state_db_path)
+    output_dir: str = "output"
+    auth_token_env: str = "STACKSATS_AGENT_API_TOKEN"
+    btc_price_col_default: str = "price_usd"
 
 
 @dataclass(frozen=True)

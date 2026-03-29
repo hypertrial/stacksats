@@ -23,6 +23,7 @@ from .data_setup import (
 from .loader import load_strategy
 from .runner import StrategyRunner
 from .strategy_types import (
+    AgentServiceConfig,
     BacktestConfig,
     DecideDailyConfig,
     ExportConfig,
@@ -167,6 +168,22 @@ def _add_export_command(
     return command
 
 
+def _start_agent_service_from_args(args) -> None:
+    from .service import start_agent_service
+
+    start_agent_service(
+        AgentServiceConfig(
+            host=args.host,
+            port=args.port,
+            registry_path=args.registry_path,
+            state_db_path=args.state_db_path,
+            output_dir=args.output_dir,
+            auth_token_env=args.auth_token_env,
+            btc_price_col_default=args.btc_price_col_default,
+        )
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="stacksats",
@@ -181,6 +198,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "stacksats.strategies.examples:SimpleZScoreStrategy --output-dir output\n"
             "  stacksats strategy decide-daily --strategy "
             "stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000\n"
+            "  stacksats serve agent-api --registry-path .stacksats/agent_service_registry.json\n"
             "  stacksats strategy animate --backtest-json "
             "output/my_strategy/1.0.0/run-1/backtest_result.json"
         ),
@@ -304,6 +322,37 @@ def _build_parser() -> argparse.ArgumentParser:
         "--window-mode",
         choices=("rolling", "non-overlapping"),
         default="rolling",
+    )
+
+    serve_parser = root.add_parser(
+        "serve",
+        help="Hosted service commands",
+        formatter_class=_HelpFormatter,
+    )
+    serve_sub = serve_parser.add_subparsers(dest="serve_command", required=True)
+    agent_api_cmd = serve_sub.add_parser(
+        "agent-api",
+        help="Start the StackSats agent HTTP service",
+        formatter_class=_HelpFormatter,
+    )
+    agent_api_cmd.add_argument("--host", default="127.0.0.1")
+    agent_api_cmd.add_argument("--port", type=int, default=8000)
+    agent_api_cmd.add_argument(
+        "--registry-path",
+        default=str(Path(".stacksats") / "agent_service_registry.json"),
+    )
+    agent_api_cmd.add_argument(
+        "--state-db-path",
+        default=str(Path(".stacksats") / "run_state.sqlite3"),
+    )
+    agent_api_cmd.add_argument("--output-dir", default="output")
+    agent_api_cmd.add_argument(
+        "--auth-token-env",
+        default="STACKSATS_AGENT_API_TOKEN",
+    )
+    agent_api_cmd.add_argument(
+        "--btc-price-col-default",
+        default="price_usd",
     )
 
     demo_parser = root.add_parser(
@@ -484,7 +533,17 @@ def run(argv: list[str] | None = None) -> int:
     strategy_command = getattr(args, "strategy_command", None)
     demo_command = getattr(args, "demo_command", None)
     data_command = getattr(args, "data_command", None)
+    serve_command = getattr(args, "serve_command", None)
     try:
+        if command == "serve":
+            if serve_command == "agent-api":
+                try:
+                    _start_agent_service_from_args(args)
+                except ImportError as exc:
+                    _exit_user_error(str(exc))
+                return 0
+            parser.error("Unsupported serve command.")
+
         if command == "data":
             if data_command == "fetch":
                 manifest = Path(args.manifest).expanduser().resolve() if args.manifest else None

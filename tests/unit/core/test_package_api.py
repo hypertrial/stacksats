@@ -12,9 +12,13 @@ import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
 import stacksats.strategy_time_series as strategy_time_series
 from stacksats import (
+    AgentServiceConfig,
     BacktestConfig,
     DailyDecisionResult,
     DecideDailyConfig,
+    ExecutionReceiptEvent,
+    ExecutionReceiptHistoryResult,
+    ExecutionStatusResult,
     MVRVStrategy,
     MergedMetricsDataset,
     MetricCatalog,
@@ -113,6 +117,11 @@ def test_stable_strategies_are_top_level_exports() -> None:
 def test_decision_types_are_top_level_exports() -> None:
     assert DailyDecisionResult is stacksats.DailyDecisionResult
     assert DecideDailyConfig is stacksats.DecideDailyConfig
+    assert AgentServiceConfig is stacksats.AgentServiceConfig
+    assert ExecutionReceiptEvent is stacksats.ExecutionReceiptEvent
+    assert ExecutionReceiptHistoryResult is stacksats.ExecutionReceiptHistoryResult
+    assert ExecutionStatusResult is stacksats.ExecutionStatusResult
+    assert callable(stacksats.create_agent_service_app)
 
 
 def test_experimental_strategies_are_not_top_level_exports() -> None:
