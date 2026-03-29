@@ -5,6 +5,9 @@ description: Reference for `stacksats strategy run-daily`.
 
 # Run Daily Command
 
+Use this command when you intentionally want StackSats to submit an order through an execution adapter after generating the same validated daily decision payload that powers the agent-native flow.
+If you only need a machine-consumable decision for an external AI agent, use [Decide Daily Command](decide-daily.md) instead.
+
 ## Prerequisites
 
 - Strategy is validated and ready for execution.
@@ -49,6 +52,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 ## Next step
 
 - Inspect the structured JSON result and the persisted state DB for the executed run. `reconcile-daily` remains an internal maintenance command and is not part of the stable CLI contract.
+- Prefer [Decide Daily Command](decide-daily.md) when an external AI agent or brokerage workflow will execute the decision.
 
 ## Feedback
 

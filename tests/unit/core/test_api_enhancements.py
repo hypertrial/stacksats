@@ -10,9 +10,15 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.api import BacktestResult, DailyRunResult, ValidationResult
+from stacksats.api import (
+    BacktestResult,
+    DailyDecisionResult,
+    DailyRunResult,
+    ValidationResult,
+)
 from stacksats.strategy_types import (
     BaseStrategy,
+    DecideDailyConfig,
     StrategyContext,
     TargetProfile,
     ValidationConfig,
@@ -238,6 +244,69 @@ def test_validation_result_summary_uses_configured_threshold():
     summary = result.summary()
     assert ">=75.00%" in summary
     assert "False" in summary
+
+
+def test_daily_decision_result_summary_and_json(tmp_path: Path) -> None:
+    result = DailyDecisionResult(
+        status="decided",
+        strategy_id="uniform",
+        strategy_version="1.0.0",
+        run_date="2024-12-31",
+        decision_key="decision-123",
+        idempotency_hit=False,
+        forced_rerun=False,
+        weight_today=0.05,
+        recommended_notional_usd=50.0,
+        recommended_quantity_btc=0.001,
+        reference_price_usd=50000.0,
+        btc_price_col="price_usd",
+        state_db_path=str(tmp_path / "state.sqlite3"),
+        artifact_path=str(tmp_path / "decision_result.json"),
+        message="Daily decision completed.",
+        validation_receipt_id=7,
+        validation_passed=True,
+        data_hash="data-hash",
+        feature_snapshot_hash="feature-hash",
+    )
+
+    summary = result.summary()
+    assert "Daily Decision DECIDED" in summary
+    assert "decision-123" in summary
+
+    output_path = tmp_path / "decision_result.json"
+    payload = result.to_json(output_path)
+    assert output_path.exists()
+    persisted = json.loads(output_path.read_text(encoding="utf-8"))
+    assert persisted == payload
+    assert payload["recommended_notional_usd"] == 50.0
+    assert payload["recommended_quantity_btc"] == 0.001
+    assert payload["reference_price_usd"] == 50000.0
+
+
+def test_base_strategy_decide_daily_delegates_to_runner(mocker) -> None:
+    expected = DailyDecisionResult(
+        status="decided",
+        strategy_id="uniform",
+        strategy_version="1.0.0",
+        run_date="2024-12-31",
+        decision_key="decision-123",
+        idempotency_hit=False,
+        forced_rerun=False,
+        weight_today=0.05,
+        recommended_notional_usd=50.0,
+        recommended_quantity_btc=0.001,
+        reference_price_usd=50000.0,
+        btc_price_col="price_usd",
+        state_db_path=".stacksats/run_state.sqlite3",
+        artifact_path=None,
+        message="ok",
+    )
+    mock_decide = mocker.patch("stacksats.runner.StrategyRunner.decide_daily", return_value=expected)
+
+    result = UniformStrategy().decide_daily(DecideDailyConfig(run_date="2024-12-31"))
+
+    assert result is expected
+    mock_decide.assert_called_once()
 
 
 @pytest.mark.slow

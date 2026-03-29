@@ -7,7 +7,7 @@ description: Entry point for StackSats docs, quick navigation, and recommended l
 
 <div class="hero-block">
   <p class="hero-kicker">Strategy-first Bitcoin DCA toolkit</p>
-  <h2>Build, validate, and backtest Bitcoin dollar cost averaging (DCA) strategies with a sealed allocation framework.</h2>
+  <h2>Build, validate, and emit agent-consumable Bitcoin dollar cost averaging (DCA) decisions with a sealed allocation framework.</h2>
   <p>
     StackSats, developed by Hypertrial, is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
     Learn more at <a href="https://www.stackingsats.org">www.stackingsats.org</a>.
@@ -31,6 +31,16 @@ Next steps:
 - [Task Hub](tasks.md) for task-first workflows
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
 - [Public API](reference/public-api.md) for the stable `1.x` library surface
+
+## Agent-Native Flow
+
+The primary production flow is:
+
+1. StackSats computes a validated daily BTC accumulation decision.
+2. An external AI agent reads the structured decision payload.
+3. Brokerage-specific execution happens outside StackSats.
+
+Use [Task Hub](tasks.md) for the shortest path into `decide-daily` or the Python API.
 
 ## Canonical Dataset
 

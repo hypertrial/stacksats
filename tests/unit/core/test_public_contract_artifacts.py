@@ -7,6 +7,7 @@ import numpy as np
 
 from stacksats import BacktestConfig, ExportConfig, UniformStrategy
 import stacksats.animation_render as animation_render
+from stacksats.api import DailyDecisionResult
 from tests.test_helpers import btc_frame
 
 SNAPSHOT_PATH = Path(__file__).resolve().parents[2] / "snapshots" / "public_contract_snapshots.json"
@@ -68,6 +69,29 @@ def test_public_artifact_contract_snapshots(tmp_path) -> None:
 
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert sorted(manifest_payload.keys()) == snapshots["animation_manifest"]["top_level"]
+
+    decision_payload = DailyDecisionResult(
+        status="decided",
+        strategy_id="uniform",
+        strategy_version="1.0.0",
+        run_date="2024-12-31",
+        decision_key="decision-123",
+        idempotency_hit=False,
+        forced_rerun=False,
+        weight_today=0.05,
+        recommended_notional_usd=50.0,
+        recommended_quantity_btc=0.001,
+        reference_price_usd=50000.0,
+        btc_price_col="price_usd",
+        state_db_path=str(tmp_path / "state.sqlite3"),
+        artifact_path=str(tmp_path / "decision_result.json"),
+        message="Daily decision completed.",
+        validation_receipt_id=7,
+        validation_passed=True,
+        data_hash="data-hash",
+        feature_snapshot_hash="feature-hash",
+    ).to_json()
+    assert sorted(decision_payload.keys()) == snapshots["decision_result"]["top_level"]
 
     UniformStrategy().export(
         ExportConfig(

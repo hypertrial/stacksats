@@ -55,17 +55,22 @@ User output (`proposed_weight_today` or daily profile intent) is handed to the f
 
 1. Users can strongly influence allocation each day through features/signals/intent.
 2. Users cannot alter iteration mechanics or rewrite past allocations.
-3. Local, backtest, and production run the same sealed allocation kernel.
+3. Local, backtest, decision, and production-integrated execution run the same sealed allocation kernel.
 4. Hard-required transformed columns should be declared via `required_feature_columns()`.
 5. Durable strategy configuration should come from `params()`, not runtime caches.
 
 ## Production Daily Lifecycle
 
-Canonical entrypoint: `stacksats strategy run-daily`.
+Canonical agent-native entrypoint: `stacksats strategy decide-daily`.
 
 1. Load locked historical weights for the active allocation span.
 2. Build lagged features/signals using information available up to `current_date`.
 3. Collect user daily intent (`proposed_weight_today` or profile-derived intent).
 4. Project to feasible `final_weight_today` with remaining-budget constraints.
-5. Persist today as locked.
-6. Advance to next day; past values remain immutable.
+5. Emit a structured decision payload for an external agent.
+6. External brokerage execution happens outside StackSats.
+7. Persist today as locked.
+8. Advance to next day; past values remain immutable.
+
+Integrated convenience path: `stacksats strategy run-daily`.
+Use it when you intentionally want StackSats to submit through an execution adapter after generating the same validated decision.

@@ -30,6 +30,11 @@ See: [Framework Boundary](framework.md).
 
 ## CLI and outputs
 
+### What is the recommended production flow: `decide-daily` or `run-daily`?
+
+Use `decide-daily` when StackSats should emit a validated, execution-ready decision payload for an external AI agent or brokerage workflow.
+Use `run-daily` only when you intentionally want StackSats to submit through a configured execution adapter after generating that same decision.
+
 ### Where are artifacts written?
 
 Backtest and export artifacts are written under:

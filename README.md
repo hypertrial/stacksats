@@ -7,7 +7,7 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats is a **strategy-first backtesting and execution framework** for Bitcoin weight management. It separates **Strategy** intent from validated weight time-series outcomes, providing a strict boundary for causal validation.
+StackSats is a **strategy-first backtesting and decision framework** for Bitcoin weight management. It separates **Strategy** intent from validated weight time-series outcomes, providing a strict boundary for causal validation.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
@@ -38,6 +38,17 @@ Maintainer docs:
 - The same sealed allocation kernel runs in local, backtest, and production.
 
 See [`docs/framework.md`](docs/framework.md) for the canonical contract.
+
+## Primary Production Flow
+
+The primary production pattern is agent-native:
+
+1. StackSats computes a validated BTC accumulation decision.
+2. An external AI agent reads the decision payload.
+3. Brokerage-specific execution happens outside StackSats.
+
+Use `stacksats strategy decide-daily` or `strategy.decide_daily(...)` for the canonical agent-facing daily decision interface.
+`stacksats strategy run-daily` remains available as an integrated convenience flow when you want StackSats to submit through a configured adapter.
 
 ## Installation
 
@@ -157,6 +168,14 @@ stacksats strategy run-daily \
 
 Daily state is persisted by default to `.stacksats/run_state.sqlite3`.
 
+Generate an execution-ready daily decision payload for an external agent:
+
+```bash
+stacksats strategy decide-daily \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --total-window-budget-usd 1000
+```
+
 Export requires explicit date bounds:
 
 ```bash
@@ -178,7 +197,7 @@ The stable `1.x` contract is intentionally narrow:
 
 - top-level `stacksats` exports
 - documented artifact payloads
-- documented `stacksats demo`, `stacksats data`, and `stacksats strategy` CLI subset
+- documented `stacksats demo`, `stacksats data`, and `stacksats strategy` CLI subset, including `decide-daily`
 
 Experimental/reference strategies live under `stacksats.strategies.experimental.*` and stay outside the stable `1.x` API boundary.
 Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points outside the frozen stable CLI contract.

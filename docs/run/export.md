@@ -41,7 +41,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Next step
 
-- Move to daily execution: [Run Daily Command](run-daily.md).
+- Move to agent-facing daily decisions: [Decide Daily Command](decide-daily.md).
 
 ## Feedback
 

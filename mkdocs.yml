@@ -102,6 +102,7 @@ nav:
       - Validate Command: run/validate.md
       - Backtest Command: run/backtest.md
       - Export Command: run/export.md
+      - Decide Daily Command: run/decide-daily.md
       - Run Daily Command: run/run-daily.md
       - Animate Command: run/animate.md
   - Build:

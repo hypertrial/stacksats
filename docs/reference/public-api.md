@@ -16,7 +16,7 @@ The stable public contract is intentionally narrow:
 - documented CLI commands:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
-  - `stacksats strategy validate|backtest|export|run-daily|animate`
+  - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
 
 Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience tools outside the frozen stable CLI subset.
 
@@ -26,7 +26,7 @@ Common stable imports include:
 
 - runtime objects: `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - strategy contract types: `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
-- configs and results: `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyRunResult`
+- configs and results: `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyDecisionResult`, `DailyRunResult`
 - metadata and schema types: `StrategyMetadata`, `StrategySpec`, `StrategySeriesMetadata`, `StrategyArtifactSet`, `ColumnSpec`
 - runners and loaders: `StrategyRunner`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
 - stable built-ins: `UniformStrategy`, `RunDailyPaperStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
@@ -38,11 +38,14 @@ See [Stability Policy](../stability.md) for the canonical support and deprecatio
 Run a strategy through `StrategyRunner`:
 
 ```python
-from stacksats import StrategyRunner, UniformStrategy
+from stacksats import BacktestConfig, StrategyRunner, UniformStrategy
 
-runner = StrategyRunner(strategy=UniformStrategy())
-result = runner.backtest(start_date="2024-01-01", end_date="2024-12-31")
-print(result.summary_metrics)
+runner = StrategyRunner()
+result = runner.backtest(
+    UniformStrategy(),
+    BacktestConfig(start_date="2024-01-01", end_date="2024-12-31"),
+)
+print(result.summary())
 ```
 
 Load canonical data for the stable runtime path:
@@ -54,6 +57,17 @@ btc_df = load_data()
 dataset = open_merged_metrics()
 print(btc_df.columns)
 print(dataset.summary())
+```
+
+Generate an agent-facing daily decision payload:
+
+```python
+from stacksats import DecideDailyConfig, RunDailyPaperStrategy
+
+result = RunDailyPaperStrategy().decide_daily(
+    DecideDailyConfig(total_window_budget_usd=1000.0)
+)
+print(result.to_json())
 ```
 
 Reload exported artifacts:
@@ -73,6 +87,7 @@ print(batch.to_dataframe().columns)
 The documented stable JSON payloads are:
 
 - `backtest_result.json`
+- `decision_result.json`
 - `metrics.json`
 - `animation_manifest.json`
 - `artifacts.json`

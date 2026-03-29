@@ -19,6 +19,7 @@ stacksats data doctor
 stacksats strategy validate --strategy stacksats.strategies.examples:SimpleZScoreStrategy
 stacksats strategy backtest --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy export --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
+stacksats strategy decide-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000
 stacksats strategy run-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000 --mode paper
 stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json
 ```
@@ -28,6 +29,7 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - [Validate Command](run/validate.md)
 - [Backtest Command](run/backtest.md)
 - [Export Command](run/export.md)
+- [Decide Daily Command](run/decide-daily.md)
 - [Demo Command](run/demo.md)
 - [Data Command](run/data.md)
 - [Run Daily Command](run/run-daily.md)
@@ -63,7 +65,11 @@ Canonical page: [Export Command](run/export.md)
 
 Canonical page: [Run Daily Command](run/run-daily.md)
 
-## 6) Animate Backtest Output (HD GIF)
+## 6) Generate Agent-Facing Daily Decisions
+
+Canonical page: [Decide Daily Command](run/decide-daily.md)
+
+## 7) Animate Backtest Output (HD GIF)
 
 Canonical page: [Animate Command](run/animate.md)
 

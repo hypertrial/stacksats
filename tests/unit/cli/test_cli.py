@@ -36,6 +36,7 @@ def test_cli_help_examples_use_stable_packaged_strategy_spec() -> None:
     assert "stacksats.strategies.experimental.model_example:ExampleMVRVStrategy" not in help_text
     assert "stacksats demo backtest" in help_text
     assert "stacksats data fetch" in help_text
+    assert "stacksats strategy decide-daily" in help_text
 
 
 def test_cli_strategy_validate_uses_runner(monkeypatch, capsys) -> None:
@@ -236,6 +237,50 @@ def test_cli_strategy_run_daily_maps_config(monkeypatch, capsys, tmp_path) -> No
     out = capsys.readouterr().out
     assert '"status": "executed"' in out
     assert "Status: EXECUTED" in out
+
+
+def test_cli_strategy_decide_daily_maps_config(monkeypatch, capsys, tmp_path) -> None:
+    class FakeDecisionResult:
+        status = "decided"
+
+        def to_json(self):
+            return {"status": "decided", "decision_key": "decision-1"}
+
+    class FakeRunner:
+        def decide_daily(self, strategy, config):
+            del strategy
+            assert config.total_window_budget_usd == 1000.0
+            assert config.btc_price_col == "price_usd"
+            return FakeDecisionResult()
+
+    class FakeStrategy:
+        strategy_id = "fake-strategy"
+        version = "1.0.0"
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(cli, "load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "decide-daily",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--total-window-budget-usd",
+            "1000",
+            "--state-db-path",
+            str(tmp_path / "state.sqlite3"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert '"status": "decided"' in out
+    assert "Status: DECIDED" in out
 
 
 def test_cli_strategy_run_daily_forwards_strategy_config(monkeypatch, tmp_path) -> None:

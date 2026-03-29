@@ -194,6 +194,27 @@ def _assert_run_daily_payload_contract(payload: dict[str, object], *, expected_m
     _assert_uuid_like(payload["run_key"])
 
 
+def _assert_decide_daily_payload_contract(payload: dict[str, object]) -> None:
+    _assert_required_keys(
+        payload,
+        {
+            "status",
+            "strategy_id",
+            "strategy_version",
+            "run_date",
+            "decision_key",
+            "btc_price_col",
+            "state_db_path",
+            "artifact_path",
+            "message",
+        },
+    )
+    assert payload["strategy_id"] == "run-daily-paper"
+    assert payload["strategy_version"] == "1.0.0"
+    assert payload["run_date"] == "2024-12-31"
+    _assert_uuid_like(payload["decision_key"])
+
+
 def test_demo_backtest_smoke(tmp_path: Path) -> None:
     env = _base_env(tmp_path)
 
@@ -408,6 +429,49 @@ def test_run_daily_and_reconcile_smoke(tmp_path: Path) -> None:
     }
     assert "previous_feature_snapshot_hash" in reconcile_payload
     assert "recomputed_feature_snapshot_hash" in reconcile_payload
+
+
+def test_decide_daily_smoke(tmp_path: Path) -> None:
+    env = _demo_env(tmp_path)
+    state_db = tmp_path / "decision-state.sqlite3"
+    output_dir = tmp_path / "decisions"
+    decide_args = [
+        "strategy",
+        "decide-daily",
+        "--strategy",
+        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "--run-date",
+        "2024-12-31",
+        "--total-window-budget-usd",
+        "1000",
+        "--state-db-path",
+        str(state_db),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+    first_run = _run_cli(*decide_args, env=env)
+    assert first_run.returncode == 0, first_run.stderr
+    first_payload = _decode_leading_json(first_run.stdout)
+    _assert_decide_daily_payload_contract(first_payload)
+    assert first_payload["status"] == "decided"
+    assert first_payload["validation_passed"] is True
+    assert "order_receipt" not in first_payload
+    assert "adapter_name" not in first_payload
+    assert first_payload["artifact_path"] is not None
+    artifact_path = _assert_path_under(first_payload["artifact_path"], output_dir)
+    assert Path(str(first_payload["state_db_path"])) == state_db.resolve()
+    assert artifact_path.name == "decision_result.json"
+    assert "Status: DECIDED" in first_run.stdout
+
+    second_run = _run_cli(*decide_args, env=env)
+    assert second_run.returncode == 0, second_run.stderr
+    second_payload = _decode_leading_json(second_run.stdout)
+    _assert_decide_daily_payload_contract(second_payload)
+    assert second_payload["status"] == "noop"
+    assert second_payload["idempotency_hit"] is True
+    assert second_payload["decision_key"] == first_payload["decision_key"]
+    assert "Status: NO-OP (idempotent)" in second_run.stdout
 
 
 def test_run_daily_missing_price_coverage_fails(tmp_path: Path) -> None:

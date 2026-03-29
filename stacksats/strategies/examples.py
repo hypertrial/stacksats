@@ -24,11 +24,13 @@ class UniformStrategy(BaseStrategy):
 
 
 class RunDailyPaperStrategy(BaseStrategy):
-    """Canonical paper-execution example for the documented run-daily flow."""
+    """Canonical daily decision example for agent-native docs and smoke tests."""
 
     strategy_id = "run-daily-paper"
     version = "1.0.0"
-    description = "Canonical paper-execution example for run-daily docs; not a benchmark strategy."
+    description = (
+        "Canonical agent-facing daily decision example; not a benchmark strategy."
+    )
 
     def required_feature_columns(self) -> tuple[str, ...]:
         return ()

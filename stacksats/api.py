@@ -205,6 +205,52 @@ class ValidationResult:
         )
 
 
+@dataclass(slots=True)
+class DailyDecisionResult:
+    """Structured result for a daily agent-facing decision."""
+
+    status: str
+    strategy_id: str
+    strategy_version: str
+    run_date: str
+    decision_key: str
+    idempotency_hit: bool
+    forced_rerun: bool
+    weight_today: float | None
+    recommended_notional_usd: float | None
+    recommended_quantity_btc: float | None
+    reference_price_usd: float | None
+    btc_price_col: str
+    state_db_path: str
+    artifact_path: str | None
+    message: str
+    validation_receipt_id: int | None = None
+    validation_passed: bool | None = None
+    data_hash: str = ""
+    feature_snapshot_hash: str = ""
+    bootstrap: bool = False
+
+    def summary(self) -> str:
+        """Return concise daily decision status summary."""
+        return (
+            f"Daily Decision {self.status.upper()} | "
+            f"Strategy: {self.strategy_id}@{self.strategy_version} | "
+            f"Date: {self.run_date} | "
+            f"Decision Key: {self.decision_key} | "
+            f"Idempotency Hit: {self.idempotency_hit}"
+        )
+
+    def to_json(self, path: str | Path | None = None) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        payload = asdict(self)
+        payload["schema_version"] = PUBLIC_ARTIFACT_SCHEMA_VERSION
+        if path is not None:
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return payload
+
+
 @dataclass(frozen=True, slots=True)
 class DailyOrderRequest:
     """Execution request for a single strategy daily order."""

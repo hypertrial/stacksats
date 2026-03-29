@@ -146,6 +146,39 @@ stacksats strategy export \
 - Review schema guarantees: [WeightTimeSeries](reference/strategy-timeseries.md).
 - Full flag reference: [Export Command](run/export.md).
 
+## I want to generate an agent-consumable daily decision
+
+### Prerequisites
+
+- Strategy loads successfully.
+- You know your canonical total window budget in USD.
+- An external AI agent or downstream system will handle brokerage execution.
+
+### Command
+
+```bash
+stacksats strategy decide-daily \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --total-window-budget-usd 1000
+```
+
+### Expected output
+
+- Structured JSON decision payload with recommended weight, notional, BTC quantity, and provenance fields.
+- Status line: `DECIDED`, `NO-OP (idempotent)`, or `FAILED`.
+- Decision state written to `.stacksats/run_state.sqlite3` by default.
+
+### Troubleshooting
+
+- If a rerun fails after inputs changed, rerun with `--force`; unchanged reruns still return `NO-OP (idempotent)`.
+- If price coverage or allocation-window checks fail, verify runtime BRK parquet path, run-date coverage, and the selected `--btc-price-col`.
+- If strict validation fails, inspect the decision payload fields `validation_receipt_id`, `data_hash`, and `feature_snapshot_hash`.
+
+### Next step
+
+- Hand the payload to your external AI agent or broker-specific automation layer.
+- Full flag reference: [Decide Daily Command](run/decide-daily.md).
+
 ## I want to run daily execution safely
 
 ### Prerequisites
@@ -153,6 +186,7 @@ stacksats strategy export \
 - Strategy loads successfully.
 - You know your canonical total window budget in USD.
 - Optional for live mode: an adapter class implementing `submit_order(...)`.
+- Use this path only when you want StackSats to submit the order itself after generating the validated decision.
 
 ### Command
 

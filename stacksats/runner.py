@@ -6,8 +6,7 @@ import datetime as dt
 import hashlib
 import json
 import time
-from dataclasses import replace
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -33,6 +32,7 @@ from .strategy_time_series import WeightTimeSeriesBatch
 from .strategy_types import (
     BacktestConfig,
     BaseStrategy,
+    DecideDailyConfig,
     ExportConfig,
     RunDailyConfig,
     StrategyArtifactSet,
@@ -168,6 +168,44 @@ class _FrameworkBacktestAdapter:
         )
 
 
+@dataclass(frozen=True)
+class _DailyDecisionComputation:
+    metadata: StrategyMetadata
+    run_date: str
+    decision_key: str
+    weight_today: float
+    recommended_notional_usd: float
+    recommended_quantity_btc: float
+    reference_price_usd: float
+    weights: pl.DataFrame
+    state_db_path: str
+    forced_rerun: bool
+    bootstrap: bool
+    validation_receipt_id: int | None
+    validation_passed: bool | None
+    data_hash: str
+    feature_snapshot_hash: str
+
+
+class _DailyDecisionPreparationError(ValueError):
+    """Internal error carrying partial decision-preflight state."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        validation_receipt_id: int | None,
+        data_hash: str,
+        feature_snapshot_hash: str,
+        bootstrap: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.validation_receipt_id = validation_receipt_id
+        self.data_hash = data_hash
+        self.feature_snapshot_hash = feature_snapshot_hash
+        self.bootstrap = bootstrap
+
+
 class StrategyRunner(StrategyRunnerValidationMixin):
     """Single orchestration path for strategy lifecycle operations."""
 
@@ -252,11 +290,15 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             "run_id": str(uuid4()),
         }
 
-    def _daily_run_fingerprint(
+    def _daily_fingerprint(
         self,
         strategy: BaseStrategy,
-        config: RunDailyConfig,
+        *,
         run_date: str,
+        mode: str,
+        total_window_budget_usd: float,
+        btc_price_col: str,
+        adapter_spec: str | None = None,
     ) -> str:
         spec = strategy.spec()
         payload = {
@@ -268,14 +310,43 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             "strategy_class": strategy.__class__.__name__,
             "strategy_module": strategy.__class__.__module__,
             "run_date": run_date,
-            "mode": config.mode,
-            "total_window_budget_usd": float(config.total_window_budget_usd),
-            "btc_price_col": config.btc_price_col,
-            "adapter_spec": config.adapter_spec,
+            "mode": mode,
+            "total_window_budget_usd": float(total_window_budget_usd),
+            "btc_price_col": btc_price_col,
+            "adapter_spec": adapter_spec,
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
+
+    def _daily_run_fingerprint(
+        self,
+        strategy: BaseStrategy,
+        config: RunDailyConfig,
+        run_date: str,
+    ) -> str:
+        return self._daily_fingerprint(
+            strategy,
+            run_date=run_date,
+            mode=config.mode,
+            total_window_budget_usd=config.total_window_budget_usd,
+            btc_price_col=config.btc_price_col,
+            adapter_spec=config.adapter_spec,
+        )
+
+    def _daily_decision_fingerprint(
+        self,
+        strategy: BaseStrategy,
+        config: DecideDailyConfig,
+        run_date: str,
+    ) -> str:
+        return self._daily_fingerprint(
+            strategy,
+            run_date=run_date,
+            mode="decision",
+            total_window_budget_usd=config.total_window_budget_usd,
+            btc_price_col=config.btc_price_col,
+        )
 
     @staticmethod
     def _config_hash(config: ValidationConfig) -> str:
@@ -298,14 +369,22 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         strategy: BaseStrategy,
         config: RunDailyConfig,
     ) -> tuple[StrategyMetadata, float, dt.datetime, str]:
-        metadata = strategy.metadata()
-        budget = float(config.total_window_budget_usd)
-        if not (budget == budget) or budget <= 0.0:
-            raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
+        metadata, budget, run_ts, run_date = self._parse_daily_decision_config(strategy, config)
         if config.mode not in {"paper", "live"}:
             raise ValueError("mode must be either 'paper' or 'live'.")
         if config.mode == "live" and not config.adapter_spec:
             raise ValueError("Live mode requires --adapter.")
+        return metadata, budget, run_ts, run_date
+
+    def _parse_daily_decision_config(
+        self,
+        strategy: BaseStrategy,
+        config: DecideDailyConfig | RunDailyConfig,
+    ) -> tuple[StrategyMetadata, float, dt.datetime, str]:
+        metadata = strategy.metadata()
+        budget = float(config.total_window_budget_usd)
+        if not (budget == budget) or budget <= 0.0:
+            raise ValueError("total_window_budget_usd must be a finite value greater than 0.")
         if config.run_date is not None:
             run_ts = dt.datetime.strptime(config.run_date[:10], "%Y-%m-%d")
         else:
@@ -313,6 +392,24 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             run_ts = now.replace(hour=0, minute=0, second=0, microsecond=0)
         run_date = run_ts.strftime("%Y-%m-%d")
         return metadata, budget, run_ts, run_date
+
+    @staticmethod
+    def _decision_artifact_path(
+        *,
+        output_dir: str,
+        metadata: StrategyMetadata,
+        run_date: str,
+        decision_key: str,
+    ) -> Path:
+        return (
+            Path(output_dir)
+            / metadata.strategy_id
+            / metadata.version
+            / "decisions"
+            / run_date
+            / decision_key
+            / "decision_result.json"
+        )
 
     def _build_noop_daily_result(
         self,
@@ -387,12 +484,77 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
         )
 
+    def _build_noop_daily_decision_result(
+        self,
+        *,
+        metadata: StrategyMetadata,
+        config: DecideDailyConfig,
+        run_date: str,
+        state_store,
+        existing_run,
+        daily_decision_result_cls,
+    ):
+        payload = existing_run.payload
+        return daily_decision_result_cls(
+            status="noop",
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            decision_key=existing_run.run_key,
+            idempotency_hit=True,
+            forced_rerun=False,
+            weight_today=(
+                float(payload["weight_today"])
+                if payload.get("weight_today") is not None
+                else None
+            ),
+            recommended_notional_usd=(
+                float(payload["recommended_notional_usd"])
+                if payload.get("recommended_notional_usd") is not None
+                else None
+            ),
+            recommended_quantity_btc=(
+                float(payload["recommended_quantity_btc"])
+                if payload.get("recommended_quantity_btc") is not None
+                else None
+            ),
+            reference_price_usd=(
+                float(payload["reference_price_usd"])
+                if payload.get("reference_price_usd") is not None
+                else None
+            ),
+            btc_price_col=str(payload.get("btc_price_col", config.btc_price_col)),
+            state_db_path=str(state_store.db_path),
+            artifact_path=(
+                str(payload["artifact_path"])
+                if payload.get("artifact_path") is not None
+                else None
+            ),
+            message="Existing completed decision reused via idempotency ledger.",
+            validation_receipt_id=(
+                int(payload["validation_receipt_id"])
+                if payload.get("validation_receipt_id") is not None
+                else None
+            ),
+            validation_passed=payload.get("validation_passed"),
+            data_hash=str(payload.get("data_hash", "")),
+            feature_snapshot_hash=str(payload.get("feature_snapshot_hash", "")),
+            bootstrap=bool(payload.get("bootstrap", False)),
+        )
+
     @staticmethod
     def _strict_validation_failure_message(messages: list[str]) -> str:
         details = "; ".join(message for message in messages if message)
         if details:
             return f"Strict validation failed before daily execution: {details}"
         return "Strict validation failed before daily execution."
+
+    @staticmethod
+    def _strict_decision_failure_message(messages: list[str]) -> str:
+        details = "; ".join(message for message in messages if message)
+        if details:
+            return f"Strict validation failed before daily decision: {details}"
+        return "Strict validation failed before daily decision."
 
     def _build_failed_daily_result(
         self,
@@ -437,6 +599,45 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             feature_snapshot_hash=feature_snapshot_hash,
         )
 
+    def _build_failed_daily_decision_result(
+        self,
+        *,
+        metadata: StrategyMetadata,
+        config: DecideDailyConfig,
+        run_date: str,
+        decision_key: str,
+        state_store,
+        forced_rerun: bool,
+        bootstrap: bool,
+        validation_receipt_id: int | None,
+        data_hash: str,
+        feature_snapshot_hash: str,
+        error_message: str,
+        daily_decision_result_cls,
+    ):
+        return daily_decision_result_cls(
+            status="failed",
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            decision_key=decision_key,
+            idempotency_hit=False,
+            forced_rerun=forced_rerun,
+            weight_today=None,
+            recommended_notional_usd=None,
+            recommended_quantity_btc=None,
+            reference_price_usd=None,
+            btc_price_col=config.btc_price_col,
+            state_db_path=str(state_store.db_path),
+            artifact_path=None,
+            message=f"Daily decision failed: {error_message}",
+            validation_receipt_id=validation_receipt_id,
+            validation_passed=False if validation_receipt_id is not None else None,
+            data_hash=data_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
+            bootstrap=bootstrap,
+        )
+
     @staticmethod
     def _classify_reconciliation_status(
         *,
@@ -463,7 +664,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         strategy: BaseStrategy,
         metadata: StrategyMetadata,
-        config: RunDailyConfig,
+        config: DecideDailyConfig | RunDailyConfig,
         run_date: str,
         run_ts: dt.datetime,
         fingerprint: str,
@@ -549,6 +750,137 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             validation_receipt.receipt_id,
             data_hash,
             feature_snapshot_hash,
+        )
+
+    def _compute_daily_decision(
+        self,
+        *,
+        strategy: BaseStrategy,
+        metadata: StrategyMetadata,
+        config: DecideDailyConfig | RunDailyConfig,
+        run_date: str,
+        run_ts: dt.datetime,
+        decision_key: str,
+        forced_rerun: bool,
+        fingerprint: str,
+        state_store,
+        btc_df: pl.DataFrame | None = None,
+    ) -> _DailyDecisionComputation:
+        (
+            btc_df_loaded,
+            window_start,
+            window_end,
+            observed_features,
+            validation_passed,
+            validation_messages,
+            validation_receipt_id,
+            data_hash,
+            feature_snapshot_hash,
+        ) = self._run_daily_strict_preflight(
+            strategy=strategy,
+            metadata=metadata,
+            config=config,
+            run_date=run_date,
+            run_ts=run_ts,
+            fingerprint=fingerprint,
+            state_store=state_store,
+            btc_df=btc_df,
+        )
+        if not validation_passed:
+            if isinstance(config, RunDailyConfig):
+                raise _DailyDecisionPreparationError(
+                    self._strict_validation_failure_message(validation_messages),
+                    validation_receipt_id=validation_receipt_id,
+                    data_hash=data_hash,
+                    feature_snapshot_hash=feature_snapshot_hash,
+                )
+            raise _DailyDecisionPreparationError(
+                self._strict_decision_failure_message(validation_messages),
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+            )
+
+        required_dates = pl.datetime_range(
+            window_start, window_end, interval="1d", eager=True
+        ).to_list()
+        required_window = pl.DataFrame({"date": required_dates}).join(
+            btc_df_loaded.select(["date", config.btc_price_col]),
+            on="date",
+            how="left",
+        )
+
+        locked_prefix = state_store.load_locked_prefix(
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            mode="decision" if isinstance(config, DecideDailyConfig) else config.mode,
+            run_date=run_date,
+            window_start=window_start,
+        )
+        bootstrap = locked_prefix is None
+        ctx = strategy_context_from_features_df(
+            observed_features,
+            window_start,
+            window_end,
+            window_end,
+            required_columns=tuple(strategy.required_feature_columns()),
+            as_of_date=window_end,
+            locked_weights=locked_prefix,
+            btc_price_col=config.btc_price_col,
+        )
+        weights = strategy.compute_weights(ctx)
+        self._validate_weights(weights, window_start, window_end)
+        strategy.validate_weights(weights, ctx)
+        run_row = weights.filter(pl.col("date") == run_ts)
+        if run_row.is_empty():
+            raise ValueError("Strategy weights are missing run_date allocation.")
+
+        weight_today = float(run_row["weight"][0])
+        price_row = required_window.filter(pl.col("date") == run_ts)
+        reference_price_usd = float(price_row[config.btc_price_col][0])
+        if reference_price_usd <= 0.0:
+            raise ValueError("BTC price must be greater than 0 for run_date.")
+        recommended_notional_usd = float(config.total_window_budget_usd) * weight_today
+        recommended_quantity_btc = recommended_notional_usd / reference_price_usd
+
+        return _DailyDecisionComputation(
+            metadata=metadata,
+            run_date=run_date,
+            decision_key=decision_key,
+            weight_today=weight_today,
+            recommended_notional_usd=recommended_notional_usd,
+            recommended_quantity_btc=recommended_quantity_btc,
+            reference_price_usd=reference_price_usd,
+            weights=weights,
+            state_db_path=str(state_store.db_path),
+            forced_rerun=forced_rerun,
+            bootstrap=bootstrap,
+            validation_receipt_id=validation_receipt_id,
+            validation_passed=True,
+            data_hash=data_hash,
+            feature_snapshot_hash=feature_snapshot_hash,
+        )
+
+    def _persist_daily_decision_result(
+        self,
+        *,
+        computation: _DailyDecisionComputation,
+        state_store,
+        payload: dict,
+    ) -> None:
+        state_store.mark_run_success_with_snapshot(
+            strategy_id=computation.metadata.strategy_id,
+            strategy_version=computation.metadata.version,
+            run_date=computation.run_date,
+            mode="decision",
+            payload=payload,
+            order_summary=None,
+            force_flag=computation.forced_rerun,
+            snapshot_date=computation.run_date,
+            weights=computation.weights,
+            validation_receipt_id=computation.validation_receipt_id,
+            data_hash=computation.data_hash,
+            feature_snapshot_hash=computation.feature_snapshot_hash,
         )
 
     def backtest(
@@ -862,6 +1194,146 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         finally:
             self._release_runtime_cache(clear=created_cache)
 
+    def decide_daily(
+        self,
+        strategy: BaseStrategy,
+        config: DecideDailyConfig,
+        *,
+        btc_df: pl.DataFrame | None = None,
+    ):
+        from .api import DailyDecisionResult
+        from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
+
+        self._validate_strategy_contract(strategy)
+        metadata, _, run_ts, run_date = self._parse_daily_decision_config(strategy, config)
+        decision_key = str(uuid4())
+        state_store = SQLiteExecutionStateStore(config.state_db_path)
+        fingerprint = self._daily_decision_fingerprint(strategy, config, run_date)
+        claim = state_store.claim_run(
+            strategy_id=metadata.strategy_id,
+            strategy_version=metadata.version,
+            run_date=run_date,
+            mode="decision",
+            run_key=decision_key,
+            fingerprint=fingerprint,
+            force=config.force,
+        )
+        if claim.status == "noop":
+            existing = claim.existing_run
+            assert existing is not None
+            return self._build_noop_daily_decision_result(
+                metadata=metadata,
+                config=config,
+                run_date=run_date,
+                state_store=state_store,
+                existing_run=existing,
+                daily_decision_result_cls=DailyDecisionResult,
+            )
+
+        forced_rerun = bool(config.force or claim.forced_overwrite)
+        bootstrap = False
+        validation_receipt_id: int | None = None
+        data_hash = ""
+        feature_snapshot_hash = ""
+        try:
+            computation = self._compute_daily_decision(
+                strategy=strategy,
+                metadata=metadata,
+                config=config,
+                run_date=run_date,
+                run_ts=run_ts,
+                decision_key=decision_key,
+                forced_rerun=forced_rerun,
+                fingerprint=fingerprint,
+                state_store=state_store,
+                btc_df=btc_df,
+            )
+            bootstrap = computation.bootstrap
+            validation_receipt_id = computation.validation_receipt_id
+            data_hash = computation.data_hash
+            feature_snapshot_hash = computation.feature_snapshot_hash
+            artifact_path = self._decision_artifact_path(
+                output_dir=config.output_dir,
+                metadata=metadata,
+                run_date=run_date,
+                decision_key=decision_key,
+            )
+            result = DailyDecisionResult(
+                status="decided",
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
+                run_date=run_date,
+                decision_key=decision_key,
+                idempotency_hit=False,
+                forced_rerun=computation.forced_rerun,
+                weight_today=computation.weight_today,
+                recommended_notional_usd=computation.recommended_notional_usd,
+                recommended_quantity_btc=computation.recommended_quantity_btc,
+                reference_price_usd=computation.reference_price_usd,
+                btc_price_col=config.btc_price_col,
+                state_db_path=computation.state_db_path,
+                artifact_path=str(artifact_path),
+                message=(
+                    "Daily decision completed."
+                    if not computation.bootstrap
+                    else "Daily decision completed (bootstrap run with no prior snapshot)."
+                ),
+                validation_receipt_id=computation.validation_receipt_id,
+                validation_passed=computation.validation_passed,
+                data_hash=computation.data_hash,
+                feature_snapshot_hash=computation.feature_snapshot_hash,
+                bootstrap=computation.bootstrap,
+            )
+            result_payload = result.to_json(path=artifact_path)
+            self._persist_daily_decision_result(
+                computation=computation,
+                state_store=state_store,
+                payload=result_payload,
+            )
+            return result
+        except IdempotencyConflictError:
+            raise
+        except Exception as exc:
+            if isinstance(exc, _DailyDecisionPreparationError):
+                bootstrap = exc.bootstrap
+                validation_receipt_id = exc.validation_receipt_id
+                data_hash = exc.data_hash
+                feature_snapshot_hash = exc.feature_snapshot_hash
+            error_message = str(exc)
+            failure_payload = {
+                "status": "failed",
+                "strategy_id": metadata.strategy_id,
+                "strategy_version": metadata.version,
+                "run_date": run_date,
+                "decision_key": decision_key,
+                "error": error_message,
+            }
+            state_store.mark_run_failure(
+                strategy_id=metadata.strategy_id,
+                strategy_version=metadata.version,
+                run_date=run_date,
+                mode="decision",
+                payload=failure_payload,
+                force_flag=forced_rerun,
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+            )
+            return self._build_failed_daily_decision_result(
+                metadata=metadata,
+                config=config,
+                run_date=run_date,
+                decision_key=decision_key,
+                state_store=state_store,
+                forced_rerun=forced_rerun,
+                bootstrap=bootstrap,
+                validation_receipt_id=validation_receipt_id,
+                data_hash=data_hash,
+                feature_snapshot_hash=feature_snapshot_hash,
+                error_message=error_message,
+                daily_decision_result_cls=DailyDecisionResult,
+            )
+
     def run_daily(
         self,
         strategy: BaseStrategy,
@@ -874,7 +1346,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
-        metadata, budget, run_ts, run_date = self._parse_run_daily_config(strategy, config)
+        metadata, _, run_ts, run_date = self._parse_run_daily_config(strategy, config)
         run_key = str(uuid4())
         state_store = SQLiteExecutionStateStore(config.state_db_path)
         fingerprint = self._daily_run_fingerprint(strategy, config, run_date)
@@ -900,78 +1372,28 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 daily_run_result_cls=DailyRunResult,
             )
 
+        forced_rerun = bool(config.force or claim.forced_overwrite)
         bootstrap = False
         validation_receipt_id: int | None = None
         data_hash = ""
         feature_snapshot_hash = ""
         try:
-            (
-                btc_df_loaded,
-                window_start,
-                window_end,
-                observed_features,
-                validation_passed,
-                validation_messages,
-                validation_receipt_id,
-                data_hash,
-                feature_snapshot_hash,
-            ) = self._run_daily_strict_preflight(
+            computation = self._compute_daily_decision(
                 strategy=strategy,
                 metadata=metadata,
                 config=config,
                 run_date=run_date,
                 run_ts=run_ts,
+                decision_key=run_key,
+                forced_rerun=forced_rerun,
                 fingerprint=fingerprint,
                 state_store=state_store,
                 btc_df=btc_df,
             )
-            if not validation_passed:
-                raise ValueError(self._strict_validation_failure_message(validation_messages))
-            required_dates = pl.datetime_range(
-                window_start, window_end, interval="1d", eager=True
-            ).to_list()
-            required_dates_df = pl.DataFrame({"date": required_dates})
-            required_window = required_dates_df.join(
-                btc_df_loaded.select(["date", config.btc_price_col]),
-                on="date",
-                how="left",
-            )
-
-            # Prefix-lock invariant: once prior daily allocations exist, the strategy
-            # cannot rewrite historical weights for this allocation window.
-            locked_prefix = state_store.load_locked_prefix(
-                strategy_id=metadata.strategy_id,
-                strategy_version=metadata.version,
-                mode=config.mode,
-                run_date=run_date,
-                window_start=window_start,
-            )
-            if locked_prefix is None:
-                bootstrap = True
-            ctx = strategy_context_from_features_df(
-                observed_features,
-                window_start,
-                window_end,
-                window_end,
-                required_columns=tuple(strategy.required_feature_columns()),
-                as_of_date=window_end,
-                locked_weights=locked_prefix,
-                btc_price_col=config.btc_price_col,
-            )
-            weights = strategy.compute_weights(ctx)
-            self._validate_weights(weights, window_start, window_end)
-            strategy.validate_weights(weights, ctx)
-            run_row = weights.filter(pl.col("date") == run_ts)
-            if run_row.is_empty():
-                raise ValueError("Strategy weights are missing run_date allocation.")
-
-            weight_today = float(run_row["weight"][0])
-            price_row = required_window.filter(pl.col("date") == run_ts)
-            price_usd = float(price_row[config.btc_price_col][0])
-            if price_usd <= 0.0:
-                raise ValueError("BTC price must be greater than 0 for run_date.")
-            order_notional_usd = budget * weight_today
-            btc_quantity = order_notional_usd / price_usd
+            bootstrap = computation.bootstrap
+            validation_receipt_id = computation.validation_receipt_id
+            data_hash = computation.data_hash
+            feature_snapshot_hash = computation.feature_snapshot_hash
 
             if config.mode == "paper":
                 adapter = PaperExecutionAdapter()
@@ -983,10 +1405,10 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 strategy_version=metadata.version,
                 run_date=run_date,
                 mode=config.mode,
-                weight_today=weight_today,
-                notional_usd=order_notional_usd,
-                price_usd=price_usd,
-                quantity_btc=btc_quantity,
+                weight_today=computation.weight_today,
+                notional_usd=computation.recommended_notional_usd,
+                price_usd=computation.reference_price_usd,
+                quantity_btc=computation.recommended_quantity_btc,
                 btc_price_col=config.btc_price_col,
             )
             receipt = adapter.submit_order(order_request, idempotency_key=run_key)
@@ -1012,25 +1434,25 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 run_key=run_key,
                 mode=config.mode,
                 idempotency_hit=False,
-                forced_rerun=bool(config.force or claim.forced_overwrite),
-                weight_today=weight_today,
-                order_notional_usd=order_notional_usd,
-                btc_quantity=btc_quantity,
-                price_usd=price_usd,
+                forced_rerun=computation.forced_rerun,
+                weight_today=computation.weight_today,
+                order_notional_usd=computation.recommended_notional_usd,
+                btc_quantity=computation.recommended_quantity_btc,
+                price_usd=computation.reference_price_usd,
                 adapter_name=adapter_name,
-                state_db_path=str(state_store.db_path),
+                state_db_path=computation.state_db_path,
                 artifact_path=str(artifact_path),
                 message=(
                     "Daily execution completed."
-                    if not bootstrap
+                    if not computation.bootstrap
                     else "Daily execution completed (bootstrap run with no prior snapshot)."
                 ),
                 order_receipt=receipt,
-                bootstrap=bootstrap,
-                validation_receipt_id=validation_receipt_id,
-                validation_passed=True,
-                data_hash=data_hash,
-                feature_snapshot_hash=feature_snapshot_hash,
+                bootstrap=computation.bootstrap,
+                validation_receipt_id=computation.validation_receipt_id,
+                validation_passed=computation.validation_passed,
+                data_hash=computation.data_hash,
+                feature_snapshot_hash=computation.feature_snapshot_hash,
             )
             result_payload = result.to_json(path=artifact_path)
             state_store.mark_run_success_with_snapshot(
@@ -1040,17 +1462,22 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 mode=config.mode,
                 payload=result_payload,
                 order_summary=asdict(receipt),
-                force_flag=bool(config.force or claim.forced_overwrite),
+                force_flag=computation.forced_rerun,
                 snapshot_date=run_date,
-                weights=weights,
-                validation_receipt_id=validation_receipt_id,
-                data_hash=data_hash,
-                feature_snapshot_hash=feature_snapshot_hash,
+                weights=computation.weights,
+                validation_receipt_id=computation.validation_receipt_id,
+                data_hash=computation.data_hash,
+                feature_snapshot_hash=computation.feature_snapshot_hash,
             )
             return result
         except IdempotencyConflictError:
             raise
         except Exception as exc:
+            if isinstance(exc, _DailyDecisionPreparationError):
+                bootstrap = exc.bootstrap
+                validation_receipt_id = exc.validation_receipt_id
+                data_hash = exc.data_hash
+                feature_snapshot_hash = exc.feature_snapshot_hash
             error_message = str(exc)
             failure_payload = {
                 "status": "failed",
@@ -1067,7 +1494,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 run_date=run_date,
                 mode=config.mode,
                 payload=failure_payload,
-                force_flag=bool(config.force or claim.forced_overwrite),
+                force_flag=forced_rerun,
                 validation_receipt_id=validation_receipt_id,
                 data_hash=data_hash,
                 feature_snapshot_hash=feature_snapshot_hash,
@@ -1078,7 +1505,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
                 run_date=run_date,
                 run_key=run_key,
                 state_store=state_store,
-                forced_rerun=bool(config.force or claim.forced_overwrite),
+                forced_rerun=forced_rerun,
                 bootstrap=bootstrap,
                 validation_receipt_id=validation_receipt_id,
                 data_hash=data_hash,

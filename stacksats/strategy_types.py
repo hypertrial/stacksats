@@ -20,7 +20,12 @@ from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAIL
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
-    from .api import BacktestResult, DailyRunResult, ValidationResult  # pragma: no cover
+    from .api import (  # pragma: no cover
+        BacktestResult,
+        DailyDecisionResult,
+        DailyRunResult,
+        ValidationResult,
+    )
     from .strategy_time_series import WeightTimeSeriesBatch  # pragma: no cover
 
 
@@ -198,6 +203,16 @@ class ExportConfig:
 
 def _default_state_db_path() -> str:
     return str(Path(".stacksats") / "run_state.sqlite3")
+
+
+@dataclass(frozen=True)
+class DecideDailyConfig:
+    run_date: str | None = None
+    total_window_budget_usd: float = 1000.0
+    state_db_path: str = field(default_factory=_default_state_db_path)
+    output_dir: str = "output"
+    force: bool = False
+    btc_price_col: str = "price_usd"
 
 
 @dataclass(frozen=True)
@@ -746,6 +761,9 @@ class BaseStrategy(ABC):
     def default_run_daily_validation_config(self) -> ValidationConfig:
         return ValidationConfig(min_win_rate=50.0, strict=True)
 
+    def default_decide_daily_config(self) -> DecideDailyConfig:
+        return DecideDailyConfig()
+
     def default_export_config(self) -> ExportConfig:
         return ExportConfig()
 
@@ -879,6 +897,16 @@ class BaseStrategy(ABC):
 
         runner = StrategyRunner()
         return runner.run_daily(self, config or RunDailyConfig(), **kwargs)
+
+    def decide_daily(
+        self,
+        config: DecideDailyConfig | None = None,
+        **kwargs,
+    ) -> "DailyDecisionResult":
+        from .runner import StrategyRunner
+
+        runner = StrategyRunner()
+        return runner.decide_daily(self, config or self.default_decide_daily_config(), **kwargs)
 
 
 def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:

@@ -9,7 +9,7 @@ import pytest
 
 from stacksats.api import DailyOrderReceipt, ValidationResult
 from stacksats.execution_state import SQLiteExecutionStateStore, StoredRun
-from stacksats.runner import StrategyRunner
+from stacksats.runner import StrategyRunner, _DailyDecisionComputation
 from stacksats.strategies.examples import RunDailyPaperStrategy
 from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext, ValidationConfig
 from tests.test_helpers import btc_frame
@@ -236,6 +236,60 @@ def test_run_daily_preflight_custom_daily_validation_changes_receipt_hash(
     assert custom_receipt.config_hash == custom_runner._config_hash(custom_captured["config"])
     assert default_receipt.config_hash == default_runner._config_hash(default_captured["config"])
     assert custom_receipt.config_hash != default_receipt.config_hash
+
+
+def test_run_daily_delegates_decision_computation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    calls: dict[str, object] = {}
+
+    def _fake_compute(self, **kwargs):
+        calls.update(kwargs)
+        return _DailyDecisionComputation(
+            metadata=kwargs["metadata"],
+            run_date=kwargs["run_date"],
+            decision_key=kwargs["decision_key"],
+            weight_today=0.1,
+            recommended_notional_usd=100.0,
+            recommended_quantity_btc=0.002,
+            reference_price_usd=50000.0,
+            weights=pl.DataFrame(
+                {
+                    "date": pl.datetime_range(
+                        dt.datetime(2024, 5, 1) - dt.timedelta(days=364),
+                        dt.datetime(2024, 5, 1),
+                        interval="1d",
+                        eager=True,
+                    ),
+                    "weight": np.full(365, 1.0 / 365.0),
+                }
+            ),
+            state_db_path=str(tmp_path / "state.sqlite3"),
+            forced_rerun=False,
+            bootstrap=False,
+            validation_receipt_id=11,
+            validation_passed=True,
+            data_hash="data",
+            feature_snapshot_hash="features",
+        )
+
+    monkeypatch.setattr(StrategyRunner, "_compute_daily_decision", _fake_compute)
+
+    result = runner.run_daily(
+        _UniformStrategy(),
+        RunDailyConfig(
+            run_date="2024-05-01",
+            total_window_budget_usd=1000.0,
+            state_db_path=str(tmp_path / "state.sqlite3"),
+            output_dir=str(tmp_path / "output"),
+        ),
+        btc_df=_btc_df(),
+    )
+
+    assert result.status == "executed"
+    assert calls["decision_key"] == result.run_key
 
 
 def test_classify_reconciliation_status_is_stable_for_identical_snapshot_and_weight() -> None:

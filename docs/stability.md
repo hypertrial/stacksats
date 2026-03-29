@@ -23,7 +23,7 @@ The stable `1.x` contract is intentionally narrow:
 - documented CLI commands:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
-  - `stacksats strategy validate|backtest|export|run-daily|animate`
+  - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
 - Optional helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience tools, but they are outside the frozen stable CLI subset.
 
 Lower-level modules are allowed to change between releases unless they are re-exported from top-level `stacksats`.

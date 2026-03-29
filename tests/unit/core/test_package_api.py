@@ -13,6 +13,8 @@ import stacksats.export_weights as pkg_export_weights
 import stacksats.strategy_time_series as strategy_time_series
 from stacksats import (
     BacktestConfig,
+    DailyDecisionResult,
+    DecideDailyConfig,
     MVRVStrategy,
     MergedMetricsDataset,
     MetricCatalog,
@@ -106,6 +108,11 @@ def test_stable_strategies_are_top_level_exports() -> None:
     assert SimpleZScoreStrategy is stacksats.SimpleZScoreStrategy
     assert MomentumStrategy is stacksats.MomentumStrategy
     assert MVRVStrategy is stacksats.MVRVStrategy
+
+
+def test_decision_types_are_top_level_exports() -> None:
+    assert DailyDecisionResult is stacksats.DailyDecisionResult
+    assert DecideDailyConfig is stacksats.DecideDailyConfig
 
 
 def test_experimental_strategies_are_not_top_level_exports() -> None:

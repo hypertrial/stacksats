@@ -11,7 +11,12 @@ from stacksats.execution_state import IdempotencyConflictError
 from stacksats.runner import StrategyRunner
 from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy
 from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy
-from stacksats.strategy_types import BaseStrategy, RunDailyConfig, StrategyContext
+from stacksats.strategy_types import (
+    BaseStrategy,
+    DecideDailyConfig,
+    RunDailyConfig,
+    StrategyContext,
+)
 
 
 class _UniformDailyStrategy(BaseStrategy):
@@ -60,6 +65,17 @@ def _config(tmp_path, **overrides) -> RunDailyConfig:
     return RunDailyConfig(**params)
 
 
+def _decision_config(tmp_path, **overrides) -> DecideDailyConfig:
+    params = {
+        "run_date": "2024-12-31",
+        "total_window_budget_usd": 1000.0,
+        "state_db_path": str(tmp_path / "state.sqlite3"),
+        "output_dir": str(tmp_path / "output"),
+    }
+    params.update(overrides)
+    return DecideDailyConfig(**params)
+
+
 def _allow_validation(runner: StrategyRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         runner,
@@ -89,6 +105,96 @@ def test_run_daily_executes_paper_order(tmp_path, monkeypatch: pytest.MonkeyPatc
     assert result.btc_quantity is not None
     assert result.idempotency_hit is False
     assert result.artifact_path is not None
+
+
+def test_decide_daily_emits_execution_ready_recommendation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
+    result = runner.decide_daily(
+        _UniformDailyStrategy(),
+        _decision_config(tmp_path),
+        btc_df=_btc_df(),
+    )
+    assert result.status == "decided"
+    assert result.recommended_notional_usd is not None
+    assert result.recommended_quantity_btc is not None
+    assert result.reference_price_usd is not None
+    assert result.idempotency_hit is False
+    assert result.artifact_path is not None
+
+
+def test_decide_daily_second_invocation_is_noop_for_same_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
+    strategy = _UniformDailyStrategy()
+    first = runner.decide_daily(strategy, _decision_config(tmp_path), btc_df=_btc_df())
+    second = runner.decide_daily(strategy, _decision_config(tmp_path), btc_df=_btc_df())
+    assert first.status == "decided"
+    assert second.status == "noop"
+    assert second.idempotency_hit is True
+    assert second.decision_key == first.decision_key
+
+
+def test_decide_daily_force_rerun_allows_changed_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
+    strategy = _UniformDailyStrategy()
+    runner.decide_daily(strategy, _decision_config(tmp_path), btc_df=_btc_df())
+    forced = runner.decide_daily(
+        strategy,
+        _decision_config(tmp_path, total_window_budget_usd=2000.0, force=True),
+        btc_df=_btc_df(),
+    )
+    assert forced.status == "decided"
+    assert forced.forced_rerun is True
+
+
+def test_decide_daily_conflict_without_force_on_changed_inputs(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
+    strategy = _UniformDailyStrategy()
+    runner.decide_daily(strategy, _decision_config(tmp_path), btc_df=_btc_df())
+    with pytest.raises(IdempotencyConflictError):
+        runner.decide_daily(
+            strategy,
+            _decision_config(tmp_path, total_window_budget_usd=2000.0),
+            btc_df=_btc_df(),
+        )
+
+
+def test_decide_daily_missing_price_data_returns_failed_result(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    df = _btc_df()
+    run_date_str = "2024-12-31"
+    df = df.with_columns(
+        pl.when(pl.col("date").dt.strftime("%Y-%m-%d") == run_date_str)
+        .then(pl.lit(None).cast(pl.Float64))
+        .otherwise(pl.col("price_usd"))
+        .alias("price_usd")
+    )
+    runner = StrategyRunner()
+    _allow_validation(runner, monkeypatch)
+    result = runner.decide_daily(
+        _UniformDailyStrategy(),
+        _decision_config(tmp_path),
+        btc_df=df,
+    )
+    assert result.status == "failed"
+    assert "Missing BTC price data" in result.message
 
 
 def test_run_daily_second_invocation_is_noop_for_same_inputs(

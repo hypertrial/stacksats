@@ -22,7 +22,13 @@ from .data_setup import (
 )
 from .loader import load_strategy
 from .runner import StrategyRunner
-from .strategy_types import BacktestConfig, ExportConfig, RunDailyConfig, ValidationConfig
+from .strategy_types import (
+    BacktestConfig,
+    DecideDailyConfig,
+    ExportConfig,
+    RunDailyConfig,
+    ValidationConfig,
+)
 
 DEMO_STRATEGY_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
 DEMO_START_DATE = "2018-01-01"
@@ -173,6 +179,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "  stacksats data prepare\n"
             "  stacksats strategy backtest --strategy "
             "stacksats.strategies.examples:SimpleZScoreStrategy --output-dir output\n"
+            "  stacksats strategy decide-daily --strategy "
+            "stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000\n"
             "  stacksats strategy animate --backtest-json "
             "output/my_strategy/1.0.0/run-1/backtest_result.json"
         ),
@@ -220,6 +228,23 @@ def _build_parser() -> argparse.ArgumentParser:
         default_start=None,
         default_end=None,
     )
+    decide_daily_cmd = strategy_sub.add_parser(
+        "decide-daily",
+        help="Generate an agent-facing daily decision payload",
+        formatter_class=_HelpFormatter,
+    )
+    _add_strategy_spec_arguments(decide_daily_cmd, required=True, default=None)
+    decide_daily_cmd.add_argument("--run-date", default=None)
+    decide_daily_cmd.add_argument(
+        "--total-window-budget-usd",
+        required=True,
+        type=float,
+        help="Total USD budget associated with the full allocation window.",
+    )
+    decide_daily_cmd.add_argument("--state-db-path", default=".stacksats/run_state.sqlite3")
+    decide_daily_cmd.add_argument("--output-dir", default="output")
+    decide_daily_cmd.add_argument("--btc-price-col", default="price_usd")
+    decide_daily_cmd.add_argument("--force", action="store_true")
 
     run_daily_cmd = strategy_sub.add_parser(
         "run-daily",
@@ -535,6 +560,28 @@ def run(argv: list[str] | None = None) -> int:
 
         strategy = load_strategy(args.strategy, config_path=args.strategy_config)
         runner = StrategyRunner()
+        if strategy_command == "decide-daily":
+            result = runner.decide_daily(
+                strategy,
+                DecideDailyConfig(
+                    run_date=args.run_date,
+                    total_window_budget_usd=args.total_window_budget_usd,
+                    state_db_path=args.state_db_path,
+                    output_dir=args.output_dir,
+                    force=args.force,
+                    btc_price_col=args.btc_price_col,
+                ),
+            )
+            print(json.dumps(result.to_json(), indent=2))
+            if result.status == "decided":
+                print("Status: DECIDED")
+                return 0
+            if result.status == "noop":
+                print("Status: NO-OP (idempotent)")
+                return 0
+            print("Status: FAILED")
+            raise SystemExit(1)
+
         if strategy_command == "run-daily":
             result = runner.run_daily(
                 strategy,

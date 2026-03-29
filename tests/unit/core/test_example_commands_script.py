@@ -70,39 +70,58 @@ def test_example_commands_main_uses_venv_python_when_available(
         monkeypatch,
         tmp_path,
         venv_exists=True,
-        returncodes=[0] * 8,
+        returncodes=[0] * 9,
     )
 
     exit_code = example_commands.main()
 
     assert exit_code == 0
-    assert len(recorded) == 8
+    assert len(recorded) == 9
     assert len(writes) == 1
     parquet_path, end_date, lookback_days = writes[0]
     assert parquet_path == tmp_path / "example-smoke-home" / "bitcoin_analytics.parquet"
     assert end_date == date(2026, 3, 28)
     assert lookback_days == 3300
+    expected_output_dir = str(tmp_path / "example-smoke-home" / "output")
+    expected_state_db_path = str(
+        tmp_path / "example-smoke-home" / ".stacksats" / "run_state.sqlite3"
+    )
 
     first = recorded[0]
-    assert first["cwd"] == str(root_dir)
+    assert first["cwd"] == str(tmp_path / "example-smoke-home")
     assert first["cmd"][:3] == [str(venv_python), "-m", "stacksats.cli"]
-    assert first["cmd"][3:] == ["demo", "backtest", "--output-dir", "output"]
+    assert first["cmd"][3:] == ["demo", "backtest", "--output-dir", expected_output_dir]
 
     commands = [entry["cmd"][3:] for entry in recorded]
     assert ["strategy", "validate", "--strategy", example_commands.EXAMPLE_SPEC, "--start-date", "2025-03-28", "--end-date", "2026-03-28", "--min-win-rate", "0.0", "--no-strict"] in commands
     assert ["strategy", "backtest", "--strategy", example_commands.EXAMPLE_SPEC, "--start-date", "2025-03-28", "--end-date", "2026-03-28"] in commands
-    assert ["strategy", "export", "--strategy", example_commands.EXAMPLE_SPEC, "--start-date", "2025-03-28", "--end-date", "2026-03-28", "--output-dir", "output"] in commands
+    assert ["strategy", "export", "--strategy", example_commands.EXAMPLE_SPEC, "--start-date", "2025-03-28", "--end-date", "2026-03-28", "--output-dir", expected_output_dir] in commands
+    assert [
+        "strategy",
+        "decide-daily",
+        "--strategy",
+        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "--run-date",
+        "2026-03-28",
+        "--total-window-budget-usd",
+        "1000",
+        "--state-db-path",
+        expected_state_db_path,
+        "--output-dir",
+        expected_output_dir,
+    ] in commands
 
     env = first["env"]
     assert env["PATH"].startswith(str(venv_python.parent))
     assert env["HOME"] == str(tmp_path / "example-smoke-home")
     assert env["MPLCONFIGDIR"] == str(tmp_path / "example-smoke-home" / ".mplconfig")
+    assert env["PYTHONPATH"].split(":")[0] == str(root_dir)
     assert env["STACKSATS_ANALYTICS_PARQUET"] == str(
         tmp_path / "example-smoke-home" / "bitcoin_analytics.parquet"
     )
 
     stdout = capsys.readouterr().out
-    assert "Passed: 8" in stdout
+    assert "Passed: 9" in stdout
     assert "Failed: 0" in stdout
     assert "Skipped: 2" in stdout
 
@@ -116,19 +135,20 @@ def test_example_commands_main_falls_back_to_runtime_python_and_reports_failures
         monkeypatch,
         tmp_path,
         venv_exists=False,
-        returncodes=[0, 1, 0, 0, 0, 0, 0, 0],
+        returncodes=[0, 1, 0, 0, 0, 0, 0, 0, 0],
     )
 
     exit_code = example_commands.main()
 
     assert exit_code == 1
-    assert len(recorded) == 8
+    assert len(recorded) == 9
     first = recorded[0]
-    assert first["cwd"] == str(root_dir)
+    assert first["cwd"] == str(tmp_path / "example-smoke-home")
     assert first["cmd"][:3] == [str(Path(sys.executable).resolve()), "-m", "stacksats.cli"]
+    assert first["env"]["PYTHONPATH"].split(":")[0] == str(root_dir)
 
     stdout = capsys.readouterr().out
     assert "using current interpreter" in stdout
-    assert "Passed: 7" in stdout
+    assert "Passed: 8" in stdout
     assert "Failed: 1" in stdout
     assert "Skipped: 2" in stdout

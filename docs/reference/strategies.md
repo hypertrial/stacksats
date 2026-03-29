@@ -61,7 +61,7 @@ These strategies are part of the stable `1.x` contract.
 | Strategy | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Expected behavior | Common failure modes | Use when |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `UniformStrategy` | `stacksats.strategies.examples:UniformStrategy` | `propose` | `core_model_features_v1` | none | none | Uniform baseline allocation across each window. | Invalid/missing runtime data window, or date bounds too short for 365-day windows. | Baseline sanity checks and normalization reference. |
-| `RunDailyPaperStrategy` | `stacksats.strategies.examples:RunDailyPaperStrategy` | `propose` | `core_model_features_v1` | none | daily validation defaults: `min_win_rate=0.0`, `strict=False` | Canonical paper-execution example for the documented `run-daily` path; not a benchmark strategy, and uses uniform daily intent with relaxed daily preflight defaults. | Invalid/missing runtime allocation window or BTC price coverage for the run date. | Paper execution docs, idempotency checks, and local daily-flow smoke tests. |
+| `RunDailyPaperStrategy` | `stacksats.strategies.examples:RunDailyPaperStrategy` | `propose` | `core_model_features_v1` | none | daily validation defaults: `min_win_rate=0.0`, `strict=False` | Canonical agent-facing daily decision example and integrated execution smoke-test strategy; not a benchmark strategy, and uses uniform daily intent with relaxed daily preflight defaults. | Invalid/missing runtime allocation window or BTC price coverage for the run date. | Agent-native decision docs, idempotency checks, and optional integrated execution smoke tests. |
 | `SimpleZScoreStrategy` | `stacksats.strategies.examples:SimpleZScoreStrategy` | `profile` | `core_model_features_v1` | none | none | Preference tilts toward lower `mvrv_zscore`; intended as a simple toy comparator. | Missing `mvrv_zscore` can collapse behavior near uniform-like outputs. | Quick toy benchmark for profile-hook flow and contract checks. |
 | `MomentumStrategy` | `stacksats.strategies.examples:MomentumStrategy` | `profile` | `core_model_features_v1` | `price_usd` | none | Contrarian tilt from 30-day momentum (`pct_change(30)`), clipped and converted to preference scores. | Missing `price_usd`, sparse data windows, or very short ranges produce weak/flat signals. | Toy momentum baseline and sensitivity checks. |
 | `MVRVStrategy` | `stacksats.strategies.mvrv:MVRVStrategy` | `profile` | `core_model_features_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence` | none | Core package MVRV/MA preference model via `compute_preference_scores(...)`. | Missing transformed feature columns from provider/materialization path. | Canonical production-style baseline model. |
@@ -119,6 +119,14 @@ Profile hot paths for strategy runtime:
 
 ```bash
 python scripts/profile_strategy_hotpaths.py
+```
+
+Generate an execution-ready daily decision payload for an external agent:
+
+```bash
+stacksats strategy decide-daily \
+  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --total-window-budget-usd 1000
 ```
 
 ## Metric Interpretation Guide

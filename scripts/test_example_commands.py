@@ -58,6 +58,9 @@ def main() -> int:
     runtime_python = Path(sys.executable).resolve()
 
     env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        part for part in [str(root_dir), env.get("PYTHONPATH", "")] if part
+    )
     if venv_python.exists():
         env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
         cli_prefix = [str(venv_python), "-m", "stacksats.cli"]
@@ -76,6 +79,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="stacksats-example-smoke-") as tmp_home:
         synthetic_home = Path(tmp_home)
         pq_path = synthetic_home / "bitcoin_analytics.parquet"
+        output_dir = synthetic_home / "output"
+        state_db_path = synthetic_home / ".stacksats" / "run_state.sqlite3"
         _write_synthetic_brk_parquet(pq_path, end_date=today)
         mpl_config_dir = synthetic_home / ".mplconfig"
         mpl_config_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +96,7 @@ def main() -> int:
                     "demo",
                     "backtest",
                     "--output-dir",
-                    "output",
+                    str(output_dir),
                 ],
             ),
             (
@@ -124,7 +129,7 @@ def main() -> int:
                     "--end-date",
                     end_date,
                     "--output-dir",
-                    "output",
+                    str(output_dir),
                     "--strategy-label",
                     "simple-zscore",
                 ],
@@ -190,7 +195,7 @@ def main() -> int:
                     "--end-date",
                     end_date,
                     "--output-dir",
-                    "output",
+                    str(output_dir),
                     "--strategy-label",
                     "simple-zscore",
                 ],
@@ -208,13 +213,31 @@ def main() -> int:
                     "--end-date",
                     end_date,
                     "--output-dir",
-                    "output",
+                    str(output_dir),
+                ],
+            ),
+            (
+                "Decide daily",
+                [
+                    *cli_prefix,
+                    "strategy",
+                    "decide-daily",
+                    "--strategy",
+                    "stacksats.strategies.examples:RunDailyPaperStrategy",
+                    "--run-date",
+                    end_date,
+                    "--total-window-budget-usd",
+                    "1000",
+                    "--state-db-path",
+                    str(state_db_path),
+                    "--output-dir",
+                    str(output_dir),
                 ],
             ),
         ]
 
         for label, cmd in steps:
-            if run_step(label, cmd, cwd=root_dir, env=env):
+            if run_step(label, cmd, cwd=synthetic_home, env=env):
                 passed += 1
             else:
                 failed += 1

@@ -6,10 +6,12 @@
     "ColumnMapDataProvider",
     "ColumnMapError",
     "ColumnSpec",
+    "DailyDecisionResult",
     "DailyOrderReceipt",
     "DailyOrderRequest",
     "DailyRunResult",
     "DayState",
+    "DecideDailyConfig",
     "ExportConfig",
     "FeatureTimeSeries",
     "MVRVStrategy",
@@ -121,6 +123,31 @@
         "strategy_version",
         "width",
         "window_mode"
+      ]
+    },
+    "decision_result": {
+      "top_level": [
+        "artifact_path",
+        "bootstrap",
+        "btc_price_col",
+        "data_hash",
+        "decision_key",
+        "feature_snapshot_hash",
+        "forced_rerun",
+        "idempotency_hit",
+        "message",
+        "recommended_notional_usd",
+        "recommended_quantity_btc",
+        "reference_price_usd",
+        "run_date",
+        "schema_version",
+        "state_db_path",
+        "status",
+        "strategy_id",
+        "strategy_version",
+        "validation_passed",
+        "validation_receipt_id",
+        "weight_today"
       ]
     },
     "export_artifacts": {

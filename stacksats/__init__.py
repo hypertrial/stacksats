@@ -2,6 +2,7 @@
 
 from .api import (
     BacktestResult,
+    DailyDecisionResult,
     DailyOrderReceipt,
     DailyOrderRequest,
     DailyRunResult,
@@ -29,6 +30,7 @@ from .strategies.examples import (
 from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     BacktestConfig,
+    DecideDailyConfig,
     BaseStrategy,
     DayState,
     ExportConfig,
@@ -53,10 +55,12 @@ __all__ = [
     "BaseStrategy",
     # Results
     "BacktestResult",
+    "DailyDecisionResult",
     "ValidationResult",
     "DailyRunResult",
     # Configs
     "BacktestConfig",
+    "DecideDailyConfig",
     "ExportConfig",
     "RunDailyConfig",
     "ValidationConfig",

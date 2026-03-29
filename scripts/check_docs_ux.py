@@ -80,6 +80,7 @@ COMMAND_PAGE_PATHS = [
     "docs/run/validate.md",
     "docs/run/backtest.md",
     "docs/run/export.md",
+    "docs/run/decide-daily.md",
     "docs/run/run-daily.md",
     "docs/run/animate.md",
 ]
@@ -183,6 +184,7 @@ def main() -> int:
         "run/validate.md",
         "run/backtest.md",
         "run/export.md",
+        "run/decide-daily.md",
         "run/run-daily.md",
         "run/animate.md",
     ]:
