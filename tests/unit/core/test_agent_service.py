@@ -4,6 +4,7 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 from types import SimpleNamespace
 
 import numpy as np
@@ -222,15 +223,11 @@ def test_agent_service_entrypoint_wrappers_delegate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     observed: dict[str, object] = {}
+    stub_module = ModuleType("stacksats.service.app")
+    stub_module.create_agent_service_app = lambda config: observed.setdefault("create", config)
+    stub_module.start_agent_service = lambda config: observed.setdefault("start", config)
 
-    monkeypatch.setattr(
-        "stacksats.service.app.create_agent_service_app",
-        lambda config: observed.setdefault("create", config),
-    )
-    monkeypatch.setattr(
-        "stacksats.service.app.start_agent_service",
-        lambda config: observed.setdefault("start", config),
-    )
+    monkeypatch.setitem(sys.modules, "stacksats.service.app", stub_module)
     config = AgentServiceConfig()
 
     service_entrypoints.create_agent_service_app(config)
