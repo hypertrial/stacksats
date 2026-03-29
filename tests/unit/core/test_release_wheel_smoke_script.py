@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pytest
@@ -290,3 +291,42 @@ def test_main_exits_when_current_python_is_unavailable(tmp_path: Path, monkeypat
 
     with pytest.raises(SystemExit, match="Current Python executable is not available"):
         release_wheel_smoke.main()
+
+
+def test_http_json_normalizes_response_headers_to_lowercase(monkeypatch) -> None:
+    payload = {"status": "ok"}
+
+    class _Headers:
+        def items(self):
+            return [("X-Request-ID", "Req-123"), ("Content-Type", "application/json")]
+
+    class _Response:
+        status = 200
+        headers = _Headers()
+
+        def read(self) -> bytes:
+            return json.dumps(payload).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    monkeypatch.setattr(
+        release_wheel_smoke.urllib.request,
+        "urlopen",
+        lambda request, timeout: _Response(),
+    )
+
+    status_code, headers, parsed_payload = release_wheel_smoke._http_json(
+        url="http://example.test/healthz"
+    )
+
+    assert status_code == 200
+    assert headers == {
+        "x-request-id": "Req-123",
+        "content-type": "application/json",
+    }
+    assert parsed_payload == payload

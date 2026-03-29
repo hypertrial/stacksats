@@ -227,11 +227,13 @@ def _http_json(
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             status_code = int(response.status)
-            response_headers = dict(response.headers.items())
+            response_headers = {
+                str(key).lower(): str(value) for key, value in response.headers.items()
+            }
             response_payload = json.loads(response.read().decode("utf-8"))
             return status_code, response_headers, response_payload
     except urllib.error.HTTPError as exc:
-        response_headers = dict(exc.headers.items())
+        response_headers = {str(key).lower(): str(value) for key, value in exc.headers.items()}
         response_payload = json.loads(exc.read().decode("utf-8"))
         return int(exc.code), response_headers, response_payload
 
@@ -328,7 +330,7 @@ def _service_smoke(root: Path, wheel_path: Path) -> None:
         health_status, health_headers, health_payload = _http_json(url=f"{service_url}/healthz")
         if health_status != 200 or health_payload.get("api_version") != "v1":
             raise RuntimeError(f"Unexpected healthz response: {health_status} {health_payload}")
-        if "X-Request-ID" not in health_headers:
+        if "x-request-id" not in health_headers:
             raise RuntimeError("Hosted service healthz response is missing X-Request-ID header.")
 
         discovery_status, _, discovery_payload = _http_json(
@@ -359,7 +361,7 @@ def _service_smoke(root: Path, wheel_path: Path) -> None:
             raise RuntimeError(f"Unexpected decision payload: {decision_payload}")
         if decision_payload.get("strategy_id") != "run-daily-paper":
             raise RuntimeError(f"Unexpected strategy_id in decision payload: {decision_payload}")
-        if decision_headers.get("X-Request-ID") != "service-smoke-request":
+        if decision_headers.get("x-request-id") != "service-smoke-request":
             raise RuntimeError(
                 "Hosted service decision response did not preserve the X-Request-ID header."
             )
