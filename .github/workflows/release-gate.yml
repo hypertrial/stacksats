@@ -175,7 +175,7 @@ jobs:
           name: release-dist
           path: dist
 
-      - name: Run isolated wheel smoke tests
+      - name: Run isolated wheel smoke tests (base, viz, service)
         run: |
           python scripts/release_wheel_smoke.py \
             --wheel dist/*.whl \

@@ -76,6 +76,14 @@ curl -sS http://127.0.0.1:8000/v1/executions/receipts \
 - Reconciliation compares ingested cumulative fills to the original StackSats recommendation.
 - StackSats does not poll broker state or store broker credentials in hosted mode.
 
+## Operations
+
+- Every response includes `X-Request-ID`. If the client sends a non-empty `X-Request-ID`, StackSats preserves it; otherwise the service generates one.
+- The hosted service logs one `INFO` line per request with request ID, method, path, status, duration, and client host when available.
+- Unhandled server exceptions are logged at `ERROR` with the request ID and traceback, and the client receives a stable `500` response body with `detail` plus `request_id`.
+- Rotate bearer tokens by updating the secret behind `STACKSATS_AGENT_API_TOKEN` or the configured `--auth-token-env` variable, then restart or roll the service so it reloads the new value.
+- Never log token values. Inject tokens through environment variables or a secret manager, not checked-in config files.
+
 ## Next step
 
 - Use [Decide Daily Command](decide-daily.md) for the same flow without HTTP.

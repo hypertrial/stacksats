@@ -19,6 +19,8 @@ The stable public contract is intentionally narrow:
   - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
   - `stacksats serve agent-api`
 - documented hosted HTTP service:
+  - `GET /healthz`
+  - `GET /.well-known/agent-integration.json`
   - `POST /v1/decisions/daily`
   - `GET /v1/decisions/{decision_key}`
   - `POST /v1/executions/receipts`
@@ -87,6 +89,8 @@ app = create_agent_service_app(
 )
 ```
 
+The hosted HTTP service also includes stable liveness and discovery routes plus request-ID behavior documented on [Agent API Service](../run/agent-api.md).
+
 Reload exported artifacts:
 
 ```python
@@ -117,7 +121,7 @@ These payloads carry `schema_version` and are part of the stable `1.x` artifact 
 |---|---|---|
 | top-level `stacksats` exports | stable | covered by SemVer and deprecation policy |
 | documented CLI subset | stable | `demo`, `data`, `strategy`, and `serve agent-api` |
-| documented hosted HTTP service | stable | versioned `/v1` agent decision + receipt endpoints |
+| documented hosted HTTP service | stable | liveness, discovery, and versioned `/v1` agent decision + receipt endpoints |
 | documented artifact payloads | stable | frozen `1.x` JSON contract |
 | generated module pages under API Reference | internal | useful for reading internals; not stable by default |
 | lower-level modules such as `stacksats.runner` or `stacksats.strategy_types` | internal | may change even when still documented |

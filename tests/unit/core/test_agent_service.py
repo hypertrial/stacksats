@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -268,9 +269,11 @@ def test_agent_service_receipt_request_validation_and_naive_event_time() -> None
 
 def test_start_agent_service_uses_uvicorn(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     observed: dict[str, object] = {}
     config = AgentServiceConfig()
+    caplog.set_level(logging.INFO, logger=service_app.logger.name)
 
     monkeypatch.setattr(service_app, "import_optional", lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -294,6 +297,8 @@ def test_start_agent_service_uses_uvicorn(
     assert observed["uvicorn_app"] is config
     assert observed["host"] == config.host
     assert observed["port"] == config.port
+    assert f"host={config.host}" in caplog.text
+    assert f"auth_token_env={config.auth_token_env}" in caplog.text
 
 
 def test_agent_service_requires_valid_bearer_token(
@@ -316,12 +321,17 @@ def test_agent_service_requires_valid_bearer_token(
     )
     invalid = client.post(
         "/v1/decisions/daily",
-        headers={"Authorization": "Bearer wrong"},
+        headers={
+            "Authorization": "Bearer wrong",
+            "X-Request-ID": "req-invalid",
+        },
         json={"strategy_id": "uniform-service", "total_window_budget_usd": 1000.0},
     )
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
+    assert "X-Request-ID" in missing.headers
+    assert invalid.headers["X-Request-ID"] == "req-invalid"
 
 
 def test_agent_service_missing_decision_retrievals_return_404(
@@ -351,8 +361,10 @@ def test_agent_service_missing_decision_retrievals_return_404(
 def test_agent_service_decision_endpoints_and_discovery_document(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     registry_path = _registry_path(tmp_path)
+    caplog.set_level(logging.INFO, logger=service_app.logger.name)
     monkeypatch.setenv("STACKSATS_AGENT_API_TOKEN", "top-secret")
     monkeypatch.setattr(service_app, "load_strategy", lambda *args, **kwargs: _UniformDailyStrategy())
     runner = StrategyRunner()
@@ -376,7 +388,10 @@ def test_agent_service_decision_endpoints_and_discovery_document(
     openapi = client.get("/openapi.json")
     first = client.post(
         "/v1/decisions/daily",
-        headers=headers,
+        headers={
+            **headers,
+            "X-Request-ID": "req-decide",
+        },
         json={
             "strategy_id": "uniform-service",
             "total_window_budget_usd": 1000.0,
@@ -394,6 +409,8 @@ def test_agent_service_decision_endpoints_and_discovery_document(
     )
 
     assert health.status_code == 200
+    assert "X-Request-ID" in health.headers
+    assert len(health.headers["X-Request-ID"]) >= 8
     assert discovery.status_code == 200
     assert discovery.json()["endpoints"]["decision_create"] == "/v1/decisions/daily"
     assert openapi.status_code == 200
@@ -411,6 +428,9 @@ def test_agent_service_decision_endpoints_and_discovery_document(
     assert execution_status.status_code == 200
     assert execution_status.json()["execution_status"] == "pending"
     assert execution_status.json()["reconciliation_status"] == "pending"
+    assert first.headers["X-Request-ID"] == "req-decide"
+    assert "request_id=req-decide" in caplog.text
+    assert "path=/v1/decisions/daily" in caplog.text
 
 
 def test_agent_service_decision_failure_and_unknown_strategy(
@@ -589,3 +609,59 @@ def test_agent_service_receipt_ingestion_and_retrieval(
     assert execution.json()["receipt_count"] == 3
     assert receipts.status_code == 200
     assert len(receipts.json()["receipts"]) == 3
+
+
+def test_agent_service_preserves_request_ids_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_path = _registry_path(tmp_path)
+    monkeypatch.setenv("STACKSATS_AGENT_API_TOKEN", "top-secret")
+    monkeypatch.setattr(service_app, "load_strategy", lambda *args, **kwargs: _UniformDailyStrategy())
+    monkeypatch.setattr(
+        service_app,
+        "StrategyRunner",
+        lambda: SimpleNamespace(decide_daily=lambda strategy, config: None),
+    )
+    client = TestClient(service_app.create_agent_service_app(_service_config(tmp_path, registry_path)))
+
+    response = client.get("/healthz", headers={"X-Request-ID": "req-health"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "req-health"
+
+
+def test_agent_service_logs_and_returns_request_id_for_internal_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    registry_path = _registry_path(tmp_path)
+    caplog.set_level(logging.INFO, logger=service_app.logger.name)
+    monkeypatch.setenv("STACKSATS_AGENT_API_TOKEN", "top-secret")
+    monkeypatch.setattr(service_app, "load_strategy", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    client = TestClient(
+        service_app.create_agent_service_app(_service_config(tmp_path, registry_path)),
+        raise_server_exceptions=False,
+    )
+
+    response = client.post(
+        "/v1/decisions/daily",
+        headers={
+            "Authorization": "Bearer top-secret",
+            "X-Request-ID": "req-boom",
+        },
+        json={
+            "strategy_id": "uniform-service",
+            "total_window_budget_usd": 1000.0,
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.headers["X-Request-ID"] == "req-boom"
+    assert response.json() == {
+        "detail": "Internal server error.",
+        "request_id": "req-boom",
+    }
+    assert "Unhandled agent API exception request_id=req-boom" in caplog.text
+    assert "Agent API request complete request_id=req-boom" in caplog.text

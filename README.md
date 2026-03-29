@@ -186,6 +186,9 @@ stacksats serve agent-api \
   --registry-path .stacksats/agent_service_registry.json
 ```
 
+Hosted agent API responses include `X-Request-ID`. If the client provides one, StackSats preserves it; otherwise the service generates one.
+For token rotation, update the secret behind `STACKSATS_AGENT_API_TOKEN` and restart or roll the service so it reloads the new value.
+
 Export requires explicit date bounds:
 
 ```bash

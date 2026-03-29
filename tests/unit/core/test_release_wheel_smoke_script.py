@@ -67,7 +67,7 @@ def test_resolve_single_path_exits_when_glob_is_not_unique(
         release_wheel_smoke._resolve_single_path(pattern, kind="wheel")
 
 
-@pytest.mark.parametrize("mode", ["base", "all"])
+@pytest.mark.parametrize("mode", ["base", "service", "all"])
 def test_parse_args_accepts_supported_modes(monkeypatch, mode: str) -> None:
     monkeypatch.setattr(
         "sys.argv",
@@ -130,6 +130,11 @@ def test_main_runs_only_base_smoke_for_base_mode(tmp_path: Path, monkeypatch, ca
         "_viz_smoke",
         lambda smoke_root, wheel, constraints: calls.append(("viz", smoke_root, constraints)),
     )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_service_smoke",
+        lambda smoke_root, wheel: calls.append(("service", smoke_root, wheel)),
+    )
 
     exit_code = release_wheel_smoke.main()
 
@@ -138,7 +143,69 @@ def test_main_runs_only_base_smoke_for_base_mode(tmp_path: Path, monkeypatch, ca
     assert "Release wheel smoke passed for stacksats.whl (base)" in capsys.readouterr().out
 
 
-def test_main_runs_base_and_viz_smokes_for_all_mode(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_main_runs_only_service_smoke_for_service_mode(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    root = tmp_path / "release-root"
+    wheel_path = tmp_path / "dist" / "stacksats.whl"
+    constraints_file = tmp_path / "requirements.txt"
+    wheel_path.parent.mkdir(parents=True, exist_ok=True)
+    wheel_path.write_text("wheel", encoding="utf-8")
+    constraints_file.write_text("constraints", encoding="utf-8")
+    calls: list[tuple[str, Path, Path | None]] = []
+
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_parse_args",
+        lambda: argparse.Namespace(
+            wheel=str(wheel_path),
+            constraints_file=str(constraints_file),
+            mode="service",
+        ),
+    )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_resolve_single_path",
+        lambda pattern, *, kind: wheel_path.resolve()
+        if kind == "wheel"
+        else constraints_file.resolve(),
+    )
+    monkeypatch.setattr(release_wheel_smoke.shutil, "which", lambda executable: executable)
+    monkeypatch.setattr(
+        release_wheel_smoke.tempfile,
+        "TemporaryDirectory",
+        lambda prefix: _TempDirContext(root),
+    )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_base_smoke",
+        lambda smoke_root, wheel: calls.append(("base", smoke_root, wheel)),
+    )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_viz_smoke",
+        lambda smoke_root, wheel, constraints: calls.append(("viz", smoke_root, constraints)),
+    )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_service_smoke",
+        lambda smoke_root, wheel: calls.append(("service", smoke_root, wheel)),
+    )
+
+    exit_code = release_wheel_smoke.main()
+
+    assert exit_code == 0
+    assert calls == [("service", root, wheel_path.resolve())]
+    assert "Release wheel smoke passed for stacksats.whl (service)" in capsys.readouterr().out
+
+
+def test_main_runs_base_viz_and_service_smokes_for_all_mode(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
     root = tmp_path / "release-root"
     wheel_path = tmp_path / "dist" / "stacksats.whl"
     constraints_file = tmp_path / "requirements.txt"
@@ -179,6 +246,11 @@ def test_main_runs_base_and_viz_smokes_for_all_mode(tmp_path: Path, monkeypatch,
         "_viz_smoke",
         lambda smoke_root, wheel, constraints: calls.append(("viz", smoke_root, wheel, constraints)),
     )
+    monkeypatch.setattr(
+        release_wheel_smoke,
+        "_service_smoke",
+        lambda smoke_root, wheel: calls.append(("service", smoke_root, wheel, None)),
+    )
 
     exit_code = release_wheel_smoke.main()
 
@@ -186,6 +258,7 @@ def test_main_runs_base_and_viz_smokes_for_all_mode(tmp_path: Path, monkeypatch,
     assert calls == [
         ("base", root, wheel_path.resolve(), None),
         ("viz", root, wheel_path.resolve(), constraints_file.resolve()),
+        ("service", root, wheel_path.resolve(), None),
     ]
     assert "Release wheel smoke passed for stacksats.whl (all)" in capsys.readouterr().out
 

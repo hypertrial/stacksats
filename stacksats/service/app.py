@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
+import time
 from typing import Any, Literal
+import uuid
 
 from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 from .._optional import import_optional, missing_dependency_error
 
 try:
-    from fastapi import Depends, FastAPI, HTTPException, status
+    from fastapi import Depends, FastAPI, HTTPException, Request, status
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 except ModuleNotFoundError as exc:
     if exc.name == "fastapi" or exc.name.startswith("fastapi."):
@@ -33,12 +36,16 @@ except ModuleNotFoundError as exc:
         ) from exc
     raise
 
+from fastapi.responses import JSONResponse
+
 from ..api import ExecutionReceiptEvent
 from ..execution_state import ReceiptConflictError, SQLiteExecutionStateStore
 from ..loader import load_strategy
 from ..runner import StrategyRunner
 from ..strategy_types import AgentServiceConfig, DecideDailyConfig
 from .registry import RegisteredStrategy, load_strategy_registry
+
+logger = logging.getLogger(__name__)
 
 
 class _HealthResponse(BaseModel):
@@ -198,6 +205,45 @@ def create_agent_service_app(config: AgentServiceConfig) -> FastAPI:
             "reconciliation."
         ),
     )
+
+    @app.middleware("http")
+    async def add_request_context(request: Request, call_next):
+        request_id = (request.headers.get("X-Request-ID") or "").strip() or uuid.uuid4().hex
+        request.state.request_id = request_id
+        client_host = request.client.host if request.client else "-"
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - started) * 1000.0
+            logger.error(
+                "Unhandled agent API exception request_id=%s method=%s path=%s duration_ms=%.2f client=%s",
+                request_id,
+                request.method,
+                request.url.path,
+                duration_ms,
+                client_host,
+                exc_info=True,
+            )
+            response = JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "detail": "Internal server error.",
+                    "request_id": request_id,
+                },
+            )
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        response.headers["X-Request-ID"] = request_id
+        logger.info(
+            "Agent API request complete request_id=%s method=%s path=%s status=%s duration_ms=%.2f client=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+            client_host,
+        )
+        return response
 
     def require_bearer_token(
         credentials: HTTPAuthorizationCredentials | None = Depends(security),
@@ -363,6 +409,15 @@ def start_agent_service(config: AgentServiceConfig) -> None:
     import_optional("uvicorn", extra="service", feature="agent HTTP service")
     import uvicorn
 
+    logger.info(
+        "Starting StackSats agent API host=%s port=%s registry_path=%s state_db_path=%s output_dir=%s auth_token_env=%s",
+        config.host,
+        config.port,
+        config.registry_path,
+        config.state_db_path,
+        config.output_dir,
+        config.auth_token_env,
+    )
     app = create_agent_service_app(config)
     uvicorn.run(app, host=config.host, port=int(config.port))
 

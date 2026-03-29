@@ -14,6 +14,9 @@ def test_agent_api_doc_page_contains_curl_examples_and_discovery_route() -> None
     assert "curl -sS http://127.0.0.1:8000/.well-known/agent-integration.json" in markdown
     assert "POST /v1/decisions/daily" in markdown
     assert "POST /v1/executions/receipts" in markdown
+    assert "X-Request-ID" in markdown
+    assert "Rotate bearer tokens" in markdown
+    assert "restart or roll the service" in markdown
 
 
 def test_commands_and_public_api_docs_reference_agent_api_service() -> None:

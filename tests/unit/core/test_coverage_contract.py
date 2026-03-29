@@ -44,8 +44,10 @@ def test_github_workflows_use_current_action_versions() -> None:
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/release-gate.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/coverage-report.yml"]
+    assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/package-check.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/release-gate.yml"]
+    assert "actions/download-artifact@v8" in workflow_texts[".github/workflows/package-check.yml"]
     assert "actions/download-artifact@v8" in workflow_texts[".github/workflows/package-check-pr.yml"]
     assert "actions/download-artifact@v8" in workflow_texts[".github/workflows/release-gate.yml"]
 
@@ -85,11 +87,13 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "bash scripts/check_coverage.sh" in release_gate
     assert "python scripts/check_release_docs_sync.py" in release_gate
     assert "python scripts/release_wheel_smoke.py" in release_gate
+    assert "--mode all" in release_gate
 
     assert "name: docs-pages" in docs_pages
     assert "python -m mkdocs build --strict" in docs_pages
+    assert 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' in docs_pages
     assert "actions/configure-pages@v5" in docs_pages
-    assert "actions/upload-pages-artifact@v3" in docs_pages
+    assert "actions/upload-pages-artifact@v4" in docs_pages
     assert "actions/deploy-pages@v4" in docs_pages
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
@@ -104,6 +108,9 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "bash scripts/check_coverage.sh" in coverage_report
     assert "name: coverage-xml" in coverage_report
     assert "path: coverage.xml" in coverage_report
+    assert "service_wheel_smoke:" in package_check
+    assert "name: package-check-dist" in package_check
+    assert "--mode service" in package_check
 
 
 def test_docs_home_contract_is_explicit() -> None:

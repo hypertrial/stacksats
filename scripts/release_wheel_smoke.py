@@ -8,9 +8,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
+import urllib.request
 
 
 def _venv_bin_dir(venv_dir: Path) -> Path:
@@ -87,6 +91,21 @@ def _resolve_packaged_demo_parquet(python_path: Path, *, cwd: Path, env: dict[st
 
 def _install_wheel(pip_path: Path, wheel_path: Path, *, cwd: Path, env: dict[str, str]) -> None:
     _run_checked([str(pip_path), "install", str(wheel_path)], cwd=cwd, env=env)
+
+
+def _install_wheel_with_extra(
+    pip_path: Path,
+    wheel_path: Path,
+    *,
+    extra: str,
+    cwd: Path,
+    env: dict[str, str],
+) -> None:
+    _run_checked(
+        [str(pip_path), "install", f"stacksats[{extra}] @ {wheel_path.resolve().as_uri()}"],
+        cwd=cwd,
+        env=env,
+    )
 
 
 def _install_viz_deps(
@@ -184,6 +203,178 @@ def _viz_smoke(root: Path, wheel_path: Path, constraints_file: Path) -> None:
         raise RuntimeError(f"Missing plot output at {output_path}")
 
 
+def _choose_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        return int(sock.getsockname()[1])
+
+
+def _http_json(
+    *,
+    url: str,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    payload: dict[str, object] | None = None,
+    timeout: int = 10,
+) -> tuple[int, dict[str, str], dict[str, object]]:
+    request_headers = dict(headers or {})
+    body = None
+    if payload is not None:
+        request_headers.setdefault("Content-Type", "application/json")
+        body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = int(response.status)
+            response_headers = dict(response.headers.items())
+            response_payload = json.loads(response.read().decode("utf-8"))
+            return status_code, response_headers, response_payload
+    except urllib.error.HTTPError as exc:
+        response_headers = dict(exc.headers.items())
+        response_payload = json.loads(exc.read().decode("utf-8"))
+        return int(exc.code), response_headers, response_payload
+
+
+def _wait_for_service_ready(*, url: str, process: subprocess.Popen[str], timeout: int = 60) -> None:
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stdout = process.communicate(timeout=5)[0]
+            raise RuntimeError(f"Hosted service exited before readiness check passed.\n{stdout}")
+        try:
+            status_code, _, payload = _http_json(url=url, timeout=2)
+            if status_code == 200 and payload.get("status") == "ok":
+                return
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            last_error = exc
+        time.sleep(0.5)
+    process.terminate()
+    stdout = process.communicate(timeout=5)[0]
+    raise RuntimeError(
+        "Timed out waiting for hosted service readiness.\n"
+        f"Last error: {last_error}\n{stdout}"
+    )
+
+
+def _service_smoke(root: Path, wheel_path: Path) -> None:
+    home_dir = root / "service-home"
+    runtime_dir = root / "service-runtime"
+    output_dir = runtime_dir / "output"
+    state_db_path = runtime_dir / ".stacksats" / "run_state.sqlite3"
+    registry_path = runtime_dir / "agent_service_registry.json"
+    home_dir.mkdir(parents=True, exist_ok=True)
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    state_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    service_token = "service-smoke-token"
+    service_port = _choose_free_port()
+    service_url = f"http://127.0.0.1:{service_port}"
+
+    service_venv_dir, python_path, pip_path = _create_venv(root, "service-venv")
+    service_env = _base_runtime_env(home_dir)
+    _install_wheel_with_extra(
+        pip_path,
+        wheel_path,
+        extra="service",
+        cwd=root,
+        env=service_env,
+    )
+
+    demo_parquet = _resolve_packaged_demo_parquet(python_path, cwd=runtime_dir, env=service_env)
+    service_env["STACKSATS_ANALYTICS_PARQUET"] = str(demo_parquet)
+    service_env["STACKSATS_AGENT_API_TOKEN"] = service_token
+    registry_path.write_text(
+        json.dumps(
+            {
+                "btc-dca-paper": {
+                    "strategy_spec": "stacksats.strategies.examples:RunDailyPaperStrategy",
+                    "enabled": True,
+                    "btc_price_col": "price_usd",
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    cli_name = "stacksats.exe" if os.name == "nt" else "stacksats"
+    cli_path = _venv_bin_dir(service_venv_dir) / cli_name
+    process = subprocess.Popen(
+        [
+            str(cli_path),
+            "serve",
+            "agent-api",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(service_port),
+            "--registry-path",
+            str(registry_path),
+            "--state-db-path",
+            str(state_db_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=str(runtime_dir),
+        env=service_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        _wait_for_service_ready(url=f"{service_url}/healthz", process=process)
+        health_status, health_headers, health_payload = _http_json(url=f"{service_url}/healthz")
+        if health_status != 200 or health_payload.get("api_version") != "v1":
+            raise RuntimeError(f"Unexpected healthz response: {health_status} {health_payload}")
+        if "X-Request-ID" not in health_headers:
+            raise RuntimeError("Hosted service healthz response is missing X-Request-ID header.")
+
+        discovery_status, _, discovery_payload = _http_json(
+            url=f"{service_url}/.well-known/agent-integration.json"
+        )
+        if discovery_status != 200 or discovery_payload.get("api_version") != "v1":
+            raise RuntimeError(
+                f"Unexpected discovery response: {discovery_status} {discovery_payload}"
+            )
+
+        decision_status, decision_headers, decision_payload = _http_json(
+            url=f"{service_url}/v1/decisions/daily",
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {service_token}",
+                "X-Request-ID": "service-smoke-request",
+            },
+            payload={
+                "strategy_id": "btc-dca-paper",
+                "total_window_budget_usd": 1000.0,
+            },
+        )
+        if decision_status != 200:
+            raise RuntimeError(
+                f"Unexpected decision response status: {decision_status} {decision_payload}"
+            )
+        if decision_payload.get("status") != "decided":
+            raise RuntimeError(f"Unexpected decision payload: {decision_payload}")
+        if decision_payload.get("strategy_id") != "run-daily-paper":
+            raise RuntimeError(f"Unexpected strategy_id in decision payload: {decision_payload}")
+        if decision_headers.get("X-Request-ID") != "service-smoke-request":
+            raise RuntimeError(
+                "Hosted service decision response did not preserve the X-Request-ID header."
+            )
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=5)
+        else:
+            process.communicate(timeout=5)
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run isolated release smoke checks against a built StackSats wheel."
@@ -200,9 +391,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=("base", "all"),
+        choices=("base", "service", "all"),
         default="all",
-        help="Run only the base smoke or both base and viz smokes.",
+        help="Run base-only, service-only, or base+viz+service smokes.",
     )
     return parser.parse_args()
 
@@ -231,9 +422,13 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="stacksats-release-smoke-") as tmp:
         root = Path(tmp)
-        _base_smoke(root, wheel_path)
+        if args.mode in {"base", "all"}:
+            _base_smoke(root, wheel_path)
+        if args.mode == "service":
+            _service_smoke(root, wheel_path)
         if args.mode == "all":
             _viz_smoke(root, wheel_path, constraints_file)
+            _service_smoke(root, wheel_path)
 
     print(f"Release wheel smoke passed for {wheel_path.name} ({args.mode})")
     return 0
