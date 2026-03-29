@@ -89,6 +89,37 @@ def _resolve_packaged_demo_parquet(python_path: Path, *, cwd: Path, env: dict[st
     return Path(result.stdout.strip())
 
 
+def _resolve_packaged_demo_run_date(
+    python_path: Path,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+) -> str:
+    result = _run_checked(
+        [
+            str(python_path),
+            "-c",
+            "\n".join(
+                [
+                    "import polars as pl",
+                    "from stacksats.data_setup import packaged_demo_parquet_path",
+                    "with packaged_demo_parquet_path() as path:",
+                    "    latest = (",
+                    "        pl.scan_parquet(path)",
+                    "        .select(pl.col('date').max().dt.strftime('%Y-%m-%d').alias('run_date'))",
+                    "        .collect()",
+                    "        .item()",
+                    "    )",
+                    "print(latest)",
+                ]
+            ),
+        ],
+        cwd=cwd,
+        env=env,
+    )
+    return result.stdout.strip()
+
+
 def _install_wheel(pip_path: Path, wheel_path: Path, *, cwd: Path, env: dict[str, str]) -> None:
     _run_checked([str(pip_path), "install", str(wheel_path)], cwd=cwd, env=env)
 
@@ -285,6 +316,11 @@ def _service_smoke(root: Path, wheel_path: Path) -> None:
     )
 
     demo_parquet = _resolve_packaged_demo_parquet(python_path, cwd=runtime_dir, env=service_env)
+    demo_run_date = _resolve_packaged_demo_run_date(
+        python_path,
+        cwd=runtime_dir,
+        env=service_env,
+    )
     service_env["STACKSATS_ANALYTICS_PARQUET"] = str(demo_parquet)
     service_env["STACKSATS_AGENT_API_TOKEN"] = service_token
     registry_path.write_text(
@@ -351,6 +387,7 @@ def _service_smoke(root: Path, wheel_path: Path) -> None:
             payload={
                 "strategy_id": "btc-dca-paper",
                 "total_window_budget_usd": 1000.0,
+                "run_date": demo_run_date,
             },
         )
         if decision_status != 200:

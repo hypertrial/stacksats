@@ -330,3 +330,33 @@ def test_http_json_normalizes_response_headers_to_lowercase(monkeypatch) -> None
         "content-type": "application/json",
     }
     assert parsed_payload == payload
+
+
+def test_resolve_packaged_demo_run_date_returns_latest_date(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def _fake_run_checked(cmd, *, cwd, env, timeout=600):
+        del timeout
+        observed["cmd"] = cmd
+        observed["cwd"] = cwd
+        observed["env"] = env
+
+        class _Result:
+            stdout = "2025-12-31\n"
+
+        return _Result()
+
+    monkeypatch.setattr(release_wheel_smoke, "_run_checked", _fake_run_checked)
+
+    run_date = release_wheel_smoke._resolve_packaged_demo_run_date(
+        Path("/tmp/fake-python"),
+        cwd=tmp_path,
+        env={"HOME": str(tmp_path / "home")},
+    )
+
+    assert run_date == "2025-12-31"
+    assert observed["cmd"][0] == "/tmp/fake-python"
+    assert "pl.scan_parquet(path)" in observed["cmd"][2]
