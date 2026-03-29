@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-29
+
+### Added
+- Added a stable agent-facing daily decision interface: `DecideDailyConfig`, `DailyDecisionResult`, `StrategyRunner.decide_daily(...)`, `BaseStrategy.decide_daily(...)`, and the `stacksats strategy decide-daily` CLI command.
+- Added a documented `decision_result.json` artifact contract for execution-ready daily decision payloads consumed by external AI agents or brokerage layers.
+- Added direct unit and end-to-end coverage for the new decision flow, including idempotent noop behavior, force reruns, CLI mapping, artifact snapshots, and package exports.
+
+### Changed
+- Repositioned StackSats docs around an agent-native production flow where StackSats computes the validated decision and external systems execute brokerage orders.
+- Refactored `run-daily` to reuse the shared daily decision computation path so integrated execution stays aligned with the agent-facing interface.
+- Expanded the stable `1.x` contract docs and command references to include `decide-daily` across README, task, command, public API, strategy, FAQ, and stability pages.
+
+### Fixed
+- Isolated the docs/example smoke harness so decision and output artifacts no longer reuse repository-local `.stacksats` or `output/` state during verification.
+
 ## [1.0.2] - 2026-03-28
 
 ### Added

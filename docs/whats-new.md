@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.1.0 highlights
+
+- Added a stable agent-facing daily decision interface with `DecideDailyConfig`, `DailyDecisionResult`, Python helpers, and the `stacksats strategy decide-daily` CLI command.
+- Repositioned StackSats as a decision engine first, with external AI agents or brokerage layers handling execution and `run-daily` retained as the integrated convenience path.
+- Added stable `decision_result.json` artifacts plus coverage for idempotent daily decisions, CLI contracts, and isolated example-command smoke verification.
+
 ## 1.0.2 highlights
 
 - Fixed the documented stable paper `run-daily` path by adding a dedicated `RunDailyPaperStrategy` and moving daily preflight defaults onto the strategy contract.
