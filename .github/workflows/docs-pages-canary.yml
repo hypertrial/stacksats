@@ -1,0 +1,37 @@
+name: docs-pages-canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pages-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Resolve expected docs commit
+        run: echo "EXPECTED_DOCS_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Run external docs pages canary
+        run: |
+          python scripts/check_docs_pages_canary.py \
+            --expected-commit "${EXPECTED_DOCS_COMMIT}" \
+            --timeout-seconds 120 \
+            --poll-interval-seconds 5

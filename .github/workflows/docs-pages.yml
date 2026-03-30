@@ -35,6 +35,13 @@ jobs:
       - name: Build docs
         run: python -m mkdocs build --strict
 
+      - name: Stamp deployed docs freshness marker
+        run: |
+          python scripts/stamp_docs_pages_marker.py \
+            --html-path site/index.html \
+            --commit "${GITHUB_SHA}" \
+            --built-at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
@@ -53,3 +60,22 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  canary:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Verify deployed docs freshness
+        run: |
+          python scripts/check_docs_pages_canary.py \
+            --expected-commit "${GITHUB_SHA}" \
+            --timeout-seconds 180 \
+            --poll-interval-seconds 5

@@ -8,6 +8,7 @@ import re
 WORKFLOW_FILES = (
     ".github/workflows/coverage-report.yml",
     ".github/workflows/docs-check.yml",
+    ".github/workflows/docs-pages-canary.yml",
     ".github/workflows/docs-pages.yml",
     ".github/workflows/example-commands-smoke.yml",
     ".github/workflows/package-check-pr.yml",
@@ -43,6 +44,7 @@ def test_github_workflows_use_current_action_versions() -> None:
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/package-check.yml"]
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
     assert "actions/setup-python@v6" in workflow_texts[".github/workflows/release-gate.yml"]
+    assert "actions/setup-python@v6" in workflow_texts[".github/workflows/docs-pages-canary.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/coverage-report.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/package-check.yml"]
     assert "actions/upload-artifact@v6" in workflow_texts[".github/workflows/package-check-pr.yml"]
@@ -55,10 +57,20 @@ def test_github_workflows_use_current_action_versions() -> None:
 def test_reusable_python_setup_action_is_wired_into_expected_workflows() -> None:
     workflow_texts = _workflow_texts()
     helper_action = _read(".github/actions/setup-python-project/action.yml")
+    expected_workflows = (
+        ".github/workflows/coverage-report.yml",
+        ".github/workflows/docs-check.yml",
+        ".github/workflows/docs-pages.yml",
+        ".github/workflows/example-commands-smoke.yml",
+        ".github/workflows/package-check-pr.yml",
+        ".github/workflows/package-check.yml",
+        ".github/workflows/release-gate.yml",
+    )
 
     assert "name: setup-python-project" in helper_action
     assert "cache: pip" in helper_action
-    for workflow_path, workflow_text in workflow_texts.items():
+    for workflow_path in expected_workflows:
+        workflow_text = workflow_texts[workflow_path]
         assert "uses: ./.github/actions/setup-python-project" in workflow_text
         assert "constraints-file: " in workflow_text, workflow_path
 
@@ -70,6 +82,7 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     package_check_pr = workflow_texts[".github/workflows/package-check-pr.yml"]
     release_gate = workflow_texts[".github/workflows/release-gate.yml"]
     docs_pages = workflow_texts[".github/workflows/docs-pages.yml"]
+    docs_pages_canary = workflow_texts[".github/workflows/docs-pages-canary.yml"]
     docs_check = workflow_texts[".github/workflows/docs-check.yml"]
     example_commands_smoke = workflow_texts[".github/workflows/example-commands-smoke.yml"]
 
@@ -91,6 +104,8 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
 
     assert "name: docs-pages" in docs_pages
     assert "python -m mkdocs build --strict" in docs_pages
+    assert "python scripts/stamp_docs_pages_marker.py" in docs_pages
+    assert '--commit "${GITHUB_SHA}"' in docs_pages
     assert 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' in docs_pages
     assert "actions/configure-pages@v5" in docs_pages
     assert "actions/upload-pages-artifact@v4" in docs_pages
@@ -99,6 +114,15 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "gzip -f \"$RUNNER_TEMP/github-pages.tar\"" not in docs_pages
     assert "path: site" in docs_pages
     assert "actions/deploy-pages@v4" in docs_pages
+    assert "canary:" in docs_pages
+    assert "needs: deploy" in docs_pages
+    assert "python scripts/check_docs_pages_canary.py" in docs_pages
+    assert "--expected-commit \"${GITHUB_SHA}\"" in docs_pages
+    assert "name: docs-pages-canary" in docs_pages_canary
+    assert 'cron: "35 3 * * *"' in docs_pages_canary
+    assert "ref: main" in docs_pages_canary
+    assert "git rev-parse HEAD" in docs_pages_canary
+    assert "python scripts/check_docs_pages_canary.py" in docs_pages_canary
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
     assert "python scripts/check_docs_ux.py" in docs_check
@@ -119,6 +143,7 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
 
 def test_docs_home_contract_is_explicit() -> None:
     docs_home = _read("docs/index.md")
+    assert "# StackSats Documentation" in docs_home
     assert re.search(r"^##\s+Start in 2 Clicks$", docs_home, flags=re.MULTILINE)
     assert re.search(r"^##\s+Choose Your Path$", docs_home, flags=re.MULTILINE)
     assert re.search(r"^##\s+Feedback$", docs_home, flags=re.MULTILINE)
