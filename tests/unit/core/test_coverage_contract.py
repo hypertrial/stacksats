@@ -93,7 +93,12 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "python -m mkdocs build --strict" in docs_pages
     assert 'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"' in docs_pages
     assert "actions/configure-pages@v5" in docs_pages
-    assert "actions/upload-pages-artifact@v4" in docs_pages
+    assert "actions/upload-pages-artifact@v4" not in docs_pages
+    assert "tar --directory site -cf \"$RUNNER_TEMP/github-pages.tar\" ." in docs_pages
+    assert "gzip -f \"$RUNNER_TEMP/github-pages.tar\"" in docs_pages
+    assert "actions/upload-artifact@v6" in docs_pages
+    assert "name: github-pages" in docs_pages
+    assert "path: ${{ runner.temp }}/github-pages.tar.gz" in docs_pages
     assert "actions/deploy-pages@v4" in docs_pages
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
