@@ -100,6 +100,7 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "name: github-pages" in docs_pages
     assert "path: ${{ runner.temp }}/github-pages.tar.gz" in docs_pages
     assert "actions/deploy-pages@v4" in docs_pages
+    assert 'timeout: "1800000"' in docs_pages
     assert "name: docs-check" in docs_check
     assert "python scripts/check_release_docs_sync.py" in docs_check
     assert "python scripts/check_docs_ux.py" in docs_check
