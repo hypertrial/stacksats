@@ -7,6 +7,10 @@ description: Reference for `stacksats strategy decide-daily`.
 
 Use this command when StackSats should emit a validated, execution-ready decision payload for an external AI agent or brokerage automation layer.
 
+## Security and sensitivity
+
+Decision payloads can include execution-relevant fields (for example sizing, hashes, and artifact paths). Treat stdout, logs, and stored JSON like operational data. Report security issues through the [GitHub security policy](https://github.com/hypertrial/stacksats/security/policy) (see the repository `SECURITY.md`).
+
 ## Prerequisites
 
 - Strategy is validated and ready for decision generation.

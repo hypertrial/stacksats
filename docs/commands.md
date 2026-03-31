@@ -82,6 +82,7 @@ Canonical page: [Animate Command](run/animate.md)
 
 ## Troubleshooting
 
+- Start with the [Troubleshooting](troubleshooting.md) hub for symptom-based links.
 - If a command errors with import issues, verify StackSats is installed; if you are using a checkout, confirm editable install from repo root.
 - If a command errors with data coverage, verify runtime parquet path/date bounds and confirm it was derived from canonical `merged_metrics`.
 - For strict validation failures, use [Validation Checklist](validation_checklist.md).

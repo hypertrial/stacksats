@@ -47,6 +47,8 @@ bash scripts/check_coverage.sh
 bash scripts/clean_local.sh
 ```
 
+[`pytest.ini`](pytest.ini) excludes `slow`, `integration`, and `performance` by default (see `addopts`); the command above runs those markers. BDD scenarios live under `tests/bdd/features` (`bdd_features_base_dir` in `pytest.ini`).
+
 Release-grade verification:
 
 ```bash

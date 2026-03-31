@@ -19,6 +19,8 @@ This page defines who updates what and when documentation updates are required.
 - `docs/migration.md` is the canonical old->new compatibility mapping page.
 - `docs/start/minimal-strategy-examples.md` is the canonical minimal template page for both strategy hook styles.
 - `docs/faq.md` captures recurring docs questions sourced from docs feedback issues.
+- `docs/troubleshooting.md` is the link-only troubleshooting hub; detailed answers stay on target pages (`docs/tasks.md`, `docs/commands.md`, validation pages, and so on).
+- `docs/start/system-overview.md` is the canonical high-level data-flow and production-path overview for onboarding.
 - `docs/start/*.md` are onboarding guides and should link to `docs/run/*.md` instead of duplicating full option matrices.
 - `README.md` stays concise and should link into docs for deep usage details.
 - `CHANGELOG.md` is the canonical release history source.
@@ -33,7 +35,8 @@ This page defines who updates what and when documentation updates are required.
 - `docs/reference/merged-metrics-*.md`: data/runtime maintainers.
 - `docs/commands.md`, `docs/run/*`, and `docs/recipes/*`: CLI/runtime maintainers.
 - `docs/tasks.md` and `docs/migration.md`: CLI/runtime maintainers.
-- `docs/start/minimal-strategy-examples.md` and `docs/faq.md`: CLI/runtime maintainers.
+- `docs/start/minimal-strategy-examples.md`, `docs/faq.md`, and `docs/troubleshooting.md`: CLI/runtime maintainers.
+- `docs/start/system-overview.md`: CLI/runtime maintainers (onboarding alignment with framework and data docs).
 - `docs/release.md`: release maintainers.
 
 ## Required docs update triggers
@@ -55,6 +58,10 @@ Update docs in the same PR when any of these change:
 - BRK data distribution changes (`stacksats/assets/brk_data_manifest.json`, `data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, `stacksats/data_setup.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
 - merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `data/brk_merged_metrics_catalog.json`, `docs/reference/merged-metrics-data-guide.md`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.
 - Docs IA changes (`mkdocs.yml`, `docs/commands.md`, `docs/run/*`): update `scripts/check_docs_ux.py` rules in the same PR.
+
+## Periodic review
+
+When changing CLI flags or command behavior, confirm `docs/run/*.md` remains canonical and that `docs/start/*.md` and `docs/tasks.md` only link or use minimal snippets (avoid duplicating full option matrices).
 
 ## Generated artifact policy
 

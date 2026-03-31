@@ -60,14 +60,15 @@ export TWINE_PASSWORD="${PYPI_API_KEY}"
 
 ### 1) Prepare release branch/PR
 
-1. Update `CHANGELOG.md` (required):
+1. Sanity-check that `README.md` deep-links into docs instead of duplicating long CLI matrices (see `docs/docs_ownership.md`).
+2. Update `CHANGELOG.md` (required):
    - Add user-visible changes under `## [Unreleased]`.
    - Before tagging, move unreleased entries into the new `vX.Y.Z` section with the release date.
    - Start a fresh `## [Unreleased]` section for follow-up work.
-2. Update `docs/whats-new.md` so the latest released section still matches the newest changelog release.
-3. Ensure CI/tests are green.
-4. Merge to `main`.
-5. Create a release branch such as `release/1.0.0` for final pre-tag verification.
+3. Update `docs/whats-new.md` so the latest released section still matches the newest changelog release.
+4. Ensure CI/tests are green.
+5. Merge to `main`.
+6. Create a release branch such as `release/1.0.0` for final pre-tag verification.
 
 ### 1a) Verify GitHub protections
 

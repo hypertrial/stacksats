@@ -11,72 +11,45 @@ StackSats is a **strategy-first backtesting and decision framework** for Bitcoin
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
-## Start Here
+**Hosted documentation:** <https://hypertrial.github.io/stacksats/> — start from [`docs/index.md`](docs/index.md).
 
-Start with the hosted docs: <https://hypertrial.github.io/stacksats/>.
+## Documentation map
 
-User docs:
+- [`docs/start/quickstart.md`](docs/start/quickstart.md) — packaged demo
+- [`docs/start/system-overview.md`](docs/start/system-overview.md) — data flow and production paths
+- [`docs/tasks.md`](docs/tasks.md) — task-first workflows
+- [`docs/commands.md`](docs/commands.md) — CLI index
+- [`docs/data-source.md`](docs/data-source.md) — canonical BRK dataset and manifests
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — symptom-based links
+- [`docs/reference/public-api.md`](docs/reference/public-api.md) — stable `1.x` library surface
+- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) — custom strategy walkthrough
+- [`docs/migration.md`](docs/migration.md) — breaking-change mappings
+- [`docs/release.md`](docs/release.md) — maintainer releases
 
-- [`docs/index.md`](docs/index.md) for the full map
-- [`docs/start/quickstart.md`](docs/start/quickstart.md) for the packaged five-minute demo
-- [`docs/tasks.md`](docs/tasks.md) for task-first workflows
-- [`docs/commands.md`](docs/commands.md) for canonical CLI command reference
-- [`docs/reference/public-api.md`](docs/reference/public-api.md) for the supported `1.x` library surface
-- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) for a custom strategy walkthrough
-- [`docs/migration.md`](docs/migration.md) for old-to-new breaking-change mappings
+## Framework principles
 
-Maintainer docs:
+The framework owns budget math, iteration, feasibility clipping, and lock semantics; you own features, signals, hyperparameters, and daily intent (`propose_weight` or `build_target_profile`). The same sealed allocation kernel runs in local runs, backtests, and production. See [`docs/framework.md`](docs/framework.md).
 
-- [`docs/release.md`](docs/release.md) for maintainers cutting releases
-
-## Framework Principles
-
-- The framework owns budget math, iteration, feasibility clipping, and lock semantics.
-- Users own features, signals, hyperparameters, and daily intent.
-- Strategy hooks support either day-level intent (`propose_weight(state)`) or batch intent (`build_target_profile(...)`).
-- `BaseStrategy.spec()` is the canonical strategy contract for stable metadata, params, intent mode, and required columns.
-- The same sealed allocation kernel runs in local, backtest, and production.
-
-See [`docs/framework.md`](docs/framework.md) for the canonical contract.
-
-## Primary Production Flow
-
-The primary production pattern is agent-native:
+## Primary production flow
 
 1. StackSats computes a validated BTC accumulation decision.
-2. An external AI agent reads the decision payload.
-3. Brokerage-specific execution happens outside StackSats.
+2. An external agent or automation reads the decision payload.
+3. Brokerage execution stays outside StackSats.
 
-Use `stacksats strategy decide-daily` or `strategy.decide_daily(...)` for the canonical agent-facing daily decision interface.
-Use `stacksats serve agent-api` when the same agent-native flow should be exposed over a hosted `/v1` HTTP service with receipt ingestion and reconciliation.
-`stacksats strategy run-daily` remains available as an integrated convenience flow when you want StackSats to submit through a configured adapter.
+Use `stacksats strategy decide-daily` (or `strategy.decide_daily(...)`) for the agent-facing interface; [`docs/run/decide-daily.md`](docs/run/decide-daily.md) covers payloads and sensitivity. Use `stacksats serve agent-api` for a hosted `/v1` HTTP service ([`docs/run/agent-api.md`](docs/run/agent-api.md), including token policy). Use `stacksats strategy run-daily` when StackSats should submit through a configured adapter ([`docs/run/run-daily.md`](docs/run/run-daily.md)).
+
+**Security:** follow [`SECURITY.md`](SECURITY.md) for reporting; treat decision and API tokens as secrets.
 
 ## Installation
 
-Choose your install mode:
+| Use case | Command |
+| --- | --- |
+| Use StackSats from PyPI | `pip install stacksats` |
+| Editable install from a checkout | `python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"` |
 
-| Use case | Install mode | Command |
-|---|---|---|
-| I want to use StackSats | package install | `pip install stacksats` |
-| I am working from a checkout | editable install | `python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"` |
+Optional extras: `pip install "stacksats[viz]"` (animation/plots), `[network]` (HTTP BTC price helpers), `[service]` (agent API), `[deploy]` (DB/export helpers such as `stacksats-plot-weights`). Helper scripts are documented convenience tools, not part of the frozen stable `1.x` CLI subset.
 
-```bash
-pip install stacksats
-```
-
-Optional extras:
-
-```bash
-pip install "stacksats[viz]"
-pip install "stacksats[network]"
-pip install "stacksats[service]"
-pip install "stacksats[deploy]"
-```
-
-Use `viz` for animation and plotting, `network` for HTTP-backed BTC price helpers, `service` for the hosted agent API, and `deploy` for database/export integrations such as `stacksats-plot-weights`.
-Helper console scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are convenience tools, not part of the frozen stable `1.x` CLI subset.
-
-For local development from a checkout:
+**Development venv** (from repo root):
 
 ```bash
 python -m venv venv
@@ -84,161 +57,33 @@ source venv/bin/activate
 python -m pip install --upgrade pip
 pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"
 pip install pre-commit
+venv/bin/python -m pre_commit install -t pre-commit
 ```
 
-## Quick Start
-
-Canonical first run:
+## Quick start
 
 ```bash
 stacksats demo backtest
 ```
 
-Artifacts are written under:
+Artifacts: `output/<strategy_id>/<version>/<run_id>/`
 
-```text
-output/<strategy_id>/<version>/<run_id>/
-```
-
-Demo lifecycle commands:
-
-```bash
-stacksats demo validate
-stacksats demo backtest
-stacksats demo export
-```
-
-For full lifecycle commands (`validate`, `backtest`, `export`), see [`docs/commands.md`](docs/commands.md).
-For task-first workflows, see [`docs/tasks.md`](docs/tasks.md).
-For full BRK data setup, see [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md).
-For upgrades, see [`docs/migration.md`](docs/migration.md).
-For stable imports and contract boundaries, see [`docs/reference/public-api.md`](docs/reference/public-api.md).
-For a custom strategy template, see [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md).
-`stacksats strategy validate` runs strict validation by default; use `--no-strict` only when you intentionally want the lighter path.
-
-Create a high-definition strategy-vs-uniform animation from an existing backtest:
-
-```bash
-pip install "stacksats[viz]"
-stacksats strategy animate \
-  --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
-  --output-dir output/<strategy_id>/<version>/<run_id> \
-  --output-name strategy_vs_uniform_hd.gif
-```
-
-## Full BRK Data Setup
-
-Use [docs/data-source.md](docs/data-source.md) as the canonical source for Drive linkage, manifest fields, checksum validation, and maintainer refresh workflow.
-
-Fetch the canonical long-format source data and prepare the runtime parquet:
-
-```bash
-stacksats data fetch
-stacksats data prepare
-stacksats data doctor
-```
-
-Default locations:
-
-- canonical source download: `~/.stacksats/data/brk/`
-- prepared runtime parquet: `~/.stacksats/data/bitcoin_analytics.parquet`
-
-Runtime resolution precedence:
-
-- `STACKSATS_ANALYTICS_PARQUET`
-- explicit `parquet_path`
-- `~/.stacksats/data/bitcoin_analytics.parquet`
-- `./bitcoin_analytics.parquet`
-
-Current coverage and dataset scale are documented in the merged-metrics reference pages.
-
-Detailed references:
-
-- [docs/start/full-data-setup.md](docs/start/full-data-setup.md)
-- [docs/reference/merged-metrics-data-guide.md](docs/reference/merged-metrics-data-guide.md)
-- [docs/reference/merged-metrics-parquet-schema.md](docs/reference/merged-metrics-parquet-schema.md)
-- [docs/reference/merged-metrics-taxonomy.md](docs/reference/merged-metrics-taxonomy.md)
-
-Run idempotent daily execution (paper mode):
-
-```bash
-stacksats strategy run-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
-  --total-window-budget-usd 1000 \
-  --mode paper
-```
-
-Daily state is persisted by default to `.stacksats/run_state.sqlite3`.
-
-Generate an execution-ready daily decision payload for an external agent:
-
-```bash
-stacksats strategy decide-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
-  --total-window-budget-usd 1000
-```
-
-Host the same decision flow behind a bearer-protected `/v1` API:
-
-```bash
-export STACKSATS_AGENT_API_TOKEN=replace-me
-stacksats serve agent-api \
-  --registry-path .stacksats/agent_service_registry.json
-```
-
-Hosted agent API responses include `X-Request-ID`. If the client provides one, StackSats preserves it; otherwise the service generates one.
-For token rotation, update the secret behind `STACKSATS_AGENT_API_TOKEN` and restart or roll the service so it reloads the new value.
-
-Export requires explicit date bounds:
-
-```bash
-stacksats strategy export \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --output-dir output
-```
-
-Use date bounds that are covered by available BTC source data.
-
-Exported `WeightTimeSeries` objects are read-only validated artifacts.
-If you need to reload an export later, use `WeightTimeSeriesBatch.from_artifact_dir(...)` against the artifact directory.
+Next: [`docs/commands.md`](docs/commands.md) for the full CLI, [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md) for BRK data (`stacksats data fetch|prepare|doctor`), [`docs/start/eda-quickstart.md`](docs/start/eda-quickstart.md) for EDA, [`docs/stability.md`](docs/stability.md) for the support boundary. `stacksats strategy validate` is strict by default; use `--no-strict` only when you intend the lighter path.
 
 ## Public API
 
-The stable `1.x` contract is intentionally narrow:
-
-- top-level `stacksats` exports
-- documented artifact payloads
-- documented `stacksats demo`, `stacksats data`, `stacksats strategy`, and `stacksats serve agent-api` CLI subset
-- documented hosted `/v1` agent API surface
-
-Experimental/reference strategies live under `stacksats.strategies.experimental.*` and stay outside the stable `1.x` API boundary.
-Helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` are documented convenience entry points outside the frozen stable CLI contract.
-
-`load_data()` uses strict source-only BRK validation (no synthetic gap-fill behavior) and supports an optional `end_date` bound.
-
-For canonical `merged_metrics*.parquet` exploration, use `open_merged_metrics()` and `load_metric_catalog()`. See [docs/start/eda-quickstart.md](docs/start/eda-quickstart.md).
-See [docs/reference/public-api.md](docs/reference/public-api.md) for the stable import surface and [docs/stability.md](docs/stability.md) for the support matrix, deprecation policy, and CLI/artifact boundary.
+The stable `1.x` contract covers top-level exports, documented artifacts, and the documented CLI/agent API subset. See [`docs/reference/public-api.md`](docs/reference/public-api.md) and [`docs/stability.md`](docs/stability.md). `load_data()` uses strict BRK validation; for long-format merged metrics exploration, see [`docs/start/eda-quickstart.md`](docs/start/eda-quickstart.md).
 
 ## Development
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full local quality matrix (tests, docs gates, coverage, release checks). Typical fast loop:
+
 ```bash
 venv/bin/python -m pytest -q
-venv/bin/python -m pytest -m "slow or integration or performance" -q
-venv/bin/python -m pre_commit install -t pre-commit
-venv/bin/python -m mkdocs build --strict
 venv/bin/python -m ruff check .
-venv/bin/python scripts/check_no_coinmetrics_refs.py
-venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 bash scripts/check_docs_refs.sh
-bash scripts/check_coverage.sh  # heavy; enforces 100% line + branch coverage on stacksats/
-bash scripts/clean_local.sh
-bash scripts/release_check.sh
+venv/bin/python scripts/check_docs_ux.py
+venv/bin/python -m mkdocs build --strict
 ```
 
-`pre-commit` now includes a local CLI smoke lane covering `demo backtest`, `strategy export`, `strategy animate`, `data prepare`, `data doctor`, and the documented paper `run-daily` flow. Treat it as a local confidence lane, not release signoff; scheduled/manual GitHub smoke and `release-gate.yml` provide the heavier remote verification layers.
-
-If the repo is moved or renamed locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.
-
-For command examples using the packaged strategy template, see `docs/commands.md`.
+If the repo path changes locally, rerun `bash scripts/install_hooks.sh` to refresh git hook paths.

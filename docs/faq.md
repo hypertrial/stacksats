@@ -7,6 +7,8 @@ description: Frequently asked questions based on recurring docs feedback themes.
 
 This FAQ is sourced from recurring themes in docs feedback submissions and docs-related support questions.
 
+For a structured index by symptom area, start with [Troubleshooting](troubleshooting.md).
+
 - Browse docs issues: [Documentation issues](https://github.com/hypertrial/stacksats/issues?q=is%3Aissue+label%3Adocumentation)
 - Submit new feedback: [Docs feedback template](https://github.com/hypertrial/stacksats/issues/new?template=docs_feedback.md)
 

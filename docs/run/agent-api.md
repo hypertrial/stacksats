@@ -7,6 +7,12 @@ description: Reference for `stacksats serve agent-api`.
 
 Use this command when StackSats should expose the agent-native daily decision flow over a hosted HTTP service.
 
+## Security
+
+- Inject bearer tokens via environment variables or a secret manager; never commit tokens or log them in plaintext.
+- Rotate tokens by updating the secret behind `STACKSATS_AGENT_API_TOKEN` (or the env name passed to `--auth-token-env`) and restarting or rolling the service so the new value loads.
+- Report vulnerabilities through the [GitHub security policy](https://github.com/hypertrial/stacksats/security/policy) (see the repository `SECURITY.md`).
+
 ## Prerequisites
 
 - Install the service extra: `pip install "stacksats[service]"`.
@@ -81,8 +87,7 @@ curl -sS http://127.0.0.1:8000/v1/executions/receipts \
 - Every response includes `X-Request-ID`. If the client sends a non-empty `X-Request-ID`, StackSats preserves it; otherwise the service generates one.
 - The hosted service logs one `INFO` line per request with request ID, method, path, status, duration, and client host when available.
 - Unhandled server exceptions are logged at `ERROR` with the request ID and traceback, and the client receives a stable `500` response body with `detail` plus `request_id`.
-- Rotate bearer tokens by updating the secret behind `STACKSATS_AGENT_API_TOKEN` or the configured `--auth-token-env` variable, then restart or roll the service so it reloads the new value.
-- Never log token values. Inject tokens through environment variables or a secret manager, not checked-in config files.
+- Token handling and rotation: see **Security** above.
 
 ## Next step
 

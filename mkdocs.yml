@@ -86,7 +86,9 @@ markdown_extensions:
 nav:
   - Start:
       - Welcome: index.md
+      - What's New: whats-new.md
       - Quickstart: start/quickstart.md
+      - System Overview: start/system-overview.md
       - Full Data Setup: start/full-data-setup.md
       - EDA Quickstart: start/eda-quickstart.md
       - First Strategy Run: start/first-strategy-run.md
@@ -94,6 +96,7 @@ nav:
       - Notebook Demo: start/notebook-demo.md
       - BRK Data Source: data-source.md
       - FAQ: faq.md
+      - Troubleshooting: troubleshooting.md
   - Run:
       - Task Hub: tasks.md
       - Command Index: commands.md
@@ -138,7 +141,6 @@ nav:
           - api module: reference/api/api-module.md
       - Validation Checklist: validation_checklist.md
   - Maintainers:
-      - What's New: whats-new.md
       - Release Guide: release.md
       - Docs Ownership: docs_ownership.md
       - Docs UX Plan: ux-plan.md

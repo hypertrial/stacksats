@@ -20,6 +20,7 @@ REQUIRED_HEADING_PATTERNS: dict[str, list[tuple[str, str]]] = {
     "docs/index.md": [
         ("choose path routing", r"^##\s+Choose Your Path$"),
         ("quick routes", r"^##\s+Start in 2 Clicks$"),
+        ("whats new section", r"^##\s+What's new$"),
         ("feedback section", r"^##\s+Feedback$"),
     ],
     "docs/tasks.md": [
@@ -74,6 +75,11 @@ REQUIRED_HEADING_PATTERNS: dict[str, list[tuple[str, str]]] = {
         ("feedback workflow section", r"^##\s+Docs feedback workflow$"),
         ("feedback section", r"^##\s+Feedback$"),
     ],
+    "docs/troubleshooting.md": [
+        ("page heading", r"^#\s+Troubleshooting$"),
+        ("quick links section", r"^##\s+Quick links$"),
+        ("feedback section", r"^##\s+Feedback$"),
+    ],
 }
 
 COMMAND_PAGE_PATHS = [
@@ -88,9 +94,11 @@ COMMAND_PAGE_PATHS = [
 
 FEEDBACK_LINK_PAGES = [
     "docs/index.md",
+    "docs/troubleshooting.md",
     "docs/tasks.md",
     "docs/commands.md",
     "docs/start/quickstart.md",
+    "docs/start/system-overview.md",
     "docs/start/first-strategy-run.md",
     "docs/start/minimal-strategy-examples.md",
     "docs/migration.md",

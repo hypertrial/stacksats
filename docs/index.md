@@ -27,10 +27,17 @@ Canonical first run:
 Next steps:
 
 - [Quickstart](start/quickstart.md) for the offline packaged demo
+- [System Overview](start/system-overview.md) for data flow and production paths
 - [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
 - [Task Hub](tasks.md) for task-first workflows
+- [Troubleshooting](troubleshooting.md) for symptom-based links
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
 - [Public API](reference/public-api.md) for the stable `1.x` library surface
+
+## What's new
+
+- [What's New](whats-new.md) for release highlights
+- [Changelog on GitHub](https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md) for full version history
 
 ## Agent-Native Flow
 
@@ -103,6 +110,7 @@ StackSats is built around three fundamental runtime objects:
 
 ## Core Concepts
 
+- [System Overview](start/system-overview.md) sketches BRK data through strategy hooks to weights and artifacts.
 - [Framework Boundary](framework.md) explains framework-owned invariants versus user-owned strategy logic.
 - [Strategies](reference/strategies.md) documents stable built-ins and experimental reference strategies.
 - [Command Index](commands.md) is the canonical CLI reference for the stable `stacksats` command groups.
@@ -110,7 +118,6 @@ StackSats is built around three fundamental runtime objects:
 
 ## Maintainer Links
 
-- [What's New](whats-new.md)
 - [Release Guide](release.md)
 - [Docs Ownership](docs_ownership.md)
 
