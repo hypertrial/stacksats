@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.1.2 highlights
+
+- Finished the package reorg by turning the major runtime roots into stable facade packages backed by smaller internal modules while preserving the documented CLI and public import surfaces.
+- Reorganized `tests/unit/` to mirror the runtime domains and added architecture checks that guard facade-only exports plus the intended cross-package import boundaries.
+- Fixed the packaged `service` install path so `stacksats.data` no longer pulls in the optional network dependency set at import time.
+
 ## 1.1.1 highlights
 
 - No intended public API changes; `1.1.1` is the release-recovery follow-up to `1.1.0`.

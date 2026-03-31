@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-03-31
+
 ### Changed
 
 - **Breaking:** Reorganized the Python package into domain subpackages. Imports that pointed at former top-level modules must be updated (for example `stacksats.model_development_helpers` → `stacksats.model_development.helpers`, `stacksats.runner_helpers` → `stacksats.runner.helpers`, `stacksats.execution_state` → `stacksats.execution.state`, `stacksats.prelude` → `stacksats.data.prelude`, `stacksats.feature_registry` → `stacksats.features.registry`, plot CLIs use `stacksats.viz.plot_mvrv` / `stacksats.viz.plot_weights`, and `export_weights_*` modules live under `stacksats.export_weights`). The curated public API in `stacksats` `__init__` is unchanged.
@@ -16,6 +18,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Fixed
 
 - CI: `package-check` and `package-check-pr` no longer skip when only files under `docs/` change, so pytest doc contract tests (for example `test_agent_service_docs.py`) run alongside run-page markdown edits.
+- Package installs that use `stacksats[service]` no longer import the optional network-only `requests` dependency at `stacksats.data` package import time, so the service wheel smoke stays green without `stacksats[network]`.
 
 ## [1.1.1] - 2026-03-29
 
