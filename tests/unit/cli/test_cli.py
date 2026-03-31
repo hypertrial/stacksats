@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import runpy
 import subprocess
@@ -790,6 +791,110 @@ def test_cli_demo_backtest_uses_packaged_demo_data(monkeypatch, tmp_path) -> Non
     assert observed["provider_path"] == str(tmp_path / "demo.parquet")
     assert observed["start_date"] == "2018-01-01"
     assert observed["end_date"] == "2025-12-31"
+
+
+def test_cli_package_init_dunder_main_executes(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeBatch:
+        row_count = 1
+        window_count = 1
+        schema_version = "1.0.0"
+        run_id = "run-init"
+
+        def to_csv(self, path):
+            Path(path).write_text("date,weight\n", encoding="utf-8")
+
+    class FakeRunner:
+        def export(self, strategy, config):
+            del strategy, config
+            return FakeBatch()
+
+    class FakeStrategy:
+        strategy_id = "fake-init"
+        version = "1.0.0"
+
+    monkeypatch.setattr("stacksats.loader.load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr("stacksats.runner.StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "export",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--start-date",
+            "2025-12-01",
+            "--end-date",
+            "2027-12-31",
+        ],
+    )
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        with pytest.raises(SystemExit) as raised:
+            runpy.run_module("stacksats.cli.__init__", run_name="__main__")
+
+    assert raised.value.code == 0
+
+
+def test_cli_package_main_dunder_main_executes(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeBatch:
+        row_count = 1
+        window_count = 1
+        schema_version = "1.0.0"
+        run_id = "run-main-module"
+
+        def to_csv(self, path):
+            Path(path).write_text("date,weight\n", encoding="utf-8")
+
+    class FakeRunner:
+        def export(self, strategy, config):
+            del strategy, config
+            return FakeBatch()
+
+    class FakeStrategy:
+        strategy_id = "fake-main-module"
+        version = "1.0.0"
+
+    monkeypatch.setattr("stacksats.loader.load_strategy", lambda *args, **kwargs: FakeStrategy())
+    monkeypatch.setattr("stacksats.runner.StrategyRunner", lambda: FakeRunner())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "export",
+            "--strategy",
+            "dummy.py:Dummy",
+            "--start-date",
+            "2025-12-01",
+            "--end-date",
+            "2027-12-31",
+        ],
+    )
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="'.*' found in sys.modules after import of package '.*'",
+            category=RuntimeWarning,
+        )
+        with pytest.raises(SystemExit) as raised:
+            runpy.run_module("stacksats.cli.__main__", run_name="__main__")
+
+    assert raised.value.code == 0
+
+
+def test_cli_package_main_import_does_not_exit() -> None:
+    module = importlib.import_module("stacksats.cli.__main__")
+
+    assert callable(module.main)
 
 
 def test_cli_data_fetch_invokes_fetch_assets(monkeypatch, capsys, tmp_path) -> None:
