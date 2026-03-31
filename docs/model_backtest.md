@@ -46,10 +46,10 @@ Backtesting is orchestrated through these modules:
    - `precompute_features(...)` computes the built-in lagged model feature set as an eager `pl.DataFrame`.
    - Framework-owned feature providers compose lazy feature pipelines internally, join them in the registry, and collect once before strategy hooks receive `ctx.features_df`.
    - Allocation prep is Polars-first through the calendar/profile alignment stage. The only intentional NumPy boundary in the hot path is the sealed sequential allocation kernel.
-4. `stacksats/api.py`
+4. `stacksats/api/__init__.py`
    - `BacktestResult` exposes summaries, JSON export, and plotting helpers.
 
-`stacksats/backtest.py` contains plotting/metrics visualization helpers used by `BacktestResult.plot(...)`.
+`stacksats/backtest/__init__.py` contains plotting/metrics visualization helpers used by `BacktestResult.plot(...)`.
 
 ## Migration Notes
 

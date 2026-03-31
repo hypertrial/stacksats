@@ -5,7 +5,7 @@ description: Contract for BaseStrategy identity and user hook responsibilities.
 
 # Strategy Object
 
-A strategy subclasses `BaseStrategy` (`stacksats/strategy_types.py`) and defines:
+A strategy subclasses `BaseStrategy` (`stacksats/strategy_types/__init__.py`) and defines:
 
 - identity: `strategy_id`, `version`, `description`
 - canonical contract surface: `metadata()`, `params()`, `spec()`

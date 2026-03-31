@@ -27,7 +27,7 @@ jobs:
           constraints-file: "requirements/constraints-maintainer.txt"
 
       - name: Run inherited-environment wheel regression smoke
-        run: pytest tests/unit/core/test_distribution_wheel_smoke.py -q
+        run: pytest tests/unit/package/test_distribution_wheel_smoke.py -q
 
       - name: Run docs example command smoke checks
         run: python scripts/test_example_commands.py

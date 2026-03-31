@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 
 WIN_RATE_TOLERANCE = 1e-10
 
@@ -86,7 +86,7 @@ class BacktestResult:
 
     def plot(self, output_dir: str = "output") -> dict[str, str]:
         """Export backtest metrics to JSON. Returns path to metrics file."""
-        from .backtest import export_metrics_json
+        from ..backtest import export_metrics_json
 
         dyn = self.spd_table["dynamic_percentile"]
         uni = self.spd_table["uniform_percentile"]
@@ -132,8 +132,8 @@ class BacktestResult:
         source_backtest_json: str | Path | None = None,
     ) -> dict[str, str]:
         """Render an animated strategy-vs-uniform GIF and write a manifest JSON."""
-        from .viz.animation_data import prepare_animation_frame_data
-        from .viz.animation_render import render_strategy_vs_uniform_gif
+        from ..viz.animation_data import prepare_animation_frame_data
+        from ..viz.animation_render import render_strategy_vs_uniform_gif
 
         output_root = Path(output_dir).expanduser().resolve()
         output_root.mkdir(parents=True, exist_ok=True)

@@ -82,7 +82,9 @@ If you imported **implementation modules** directly (not the stable top-level [`
 | `stacksats.execution_state` | `stacksats.execution.state` |
 | `stacksats.execution_adapters` | `stacksats.execution.adapters` |
 
-These remain valid **import paths** as packages: `stacksats.runner`, `stacksats.strategy_time_series`, `stacksats.export_weights`, `stacksats.model_development`. Plotting console scripts target `stacksats.viz.plot_mvrv` and `stacksats.viz.plot_weights` (see `pyproject.toml` `[project.scripts]`).
+These remain valid **import paths** as packages: `stacksats.runner`, `stacksats.strategy_time_series`, `stacksats.export_weights`, `stacksats.model_development`, `stacksats.api`, `stacksats.eda`, `stacksats.cli`, `stacksats.backtest`, `stacksats.statistical_validation`, and `stacksats.strategy_types`. Plotting console scripts target `stacksats.viz.plot_mvrv` and `stacksats.viz.plot_weights` (see `pyproject.toml` `[project.scripts]`).
+
+The package roots above are stable façade modules. They may delegate into files such as `runner/core.py`, `strategy_time_series/series.py`, `api/backtest.py`, or `eda/dataset.py`, but the old removed direct-import paths are still hard-broken and are not shimmed.
 
 ## Polars migration (core objects)
 

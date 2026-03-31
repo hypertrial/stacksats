@@ -11,7 +11,7 @@ from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT,
 from stacksats.runner import StrategyRunner
 from stacksats.runner.validation import _ValidationState
 from stacksats.strategy_types import StrategyContext, ValidationConfig
-from tests.unit.core.runner_validation_testkit import (
+from tests.unit.runner.runner_validation_testkit import (
     MutatingProposeStrategy,
     ProfileMutationStrategy,
     RandomProposeStrategy,

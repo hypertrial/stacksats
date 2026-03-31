@@ -43,9 +43,9 @@ This page defines who updates what and when documentation updates are required.
 
 Update docs in the same PR when any of these change:
 
-- `stacksats/runner/__init__.py` or lifecycle APIs: update runtime/backtest/reference pages.
-- `stacksats/strategy_types.py`: update strategy object docs and API reference.
-- `stacksats/strategy_time_series/__init__.py`: run schema sync script and update WeightTimeSeries docs.
+- `stacksats/runner/` lifecycle packages (`__init__.py`, `core.py`, `daily.py`, `export.py`, `validation.py`): update runtime/backtest/reference pages.
+- `stacksats/strategy_types/` or `stacksats/strategies/base.py`: update strategy object docs and API reference.
+- `stacksats/strategy_time_series/` (`__init__.py`, `series.py`, `schema.py`, `metadata.py`): run schema sync script and update WeightTimeSeries docs.
 - CLI flag or command behavior changes: update the relevant `docs/run/*.md` page, `docs/commands.md`, and relevant recipes.
 - Breaking or removed compatibility surfaces: update `docs/migration.md`, `docs/whats-new.md`, and `CHANGELOG.md`.
 - Repeated docs feedback questions: fold updates into `docs/faq.md` and link affected task/start pages.
@@ -54,6 +54,7 @@ Update docs in the same PR when any of these change:
 - `scripts/release_wheel_smoke.py` changes: update `docs/release.md`, `README.md`, and `CONTRIBUTING.md`.
 - `pytest.ini` marker defaults or test-tier expectations: update `README.md`, `CONTRIBUTING.md`, and `docs/release.md`.
 - Docs/release workflow changes (`.github/workflows/docs-*.yml`, `.github/workflows/example-commands-smoke.yml`, `.github/workflows/coverage-report.yml`, `.github/workflows/release-gate.yml`): update `docs/release.md`, `README.md`, and `CONTRIBUTING.md`; update `docs/commands.md` too if user-visible command guidance changes.
+- Test layout changes under `tests/unit/`: update workflow references, marker-contract tests, and any maintainer docs that cite specific test paths.
 - BRK source-contract guardrails (`scripts/check_no_coinmetrics_refs.py`) or source nomenclature changes: update `README.md`, `docs/migration.md`, `docs/commands.md`, and `docs/release.md`.
 - BRK data distribution changes (`stacksats/assets/brk_data_manifest.json`, `data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, `stacksats/data/data_setup.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
 - merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `data/brk_merged_metrics_catalog.json`, `docs/reference/merged-metrics-data-guide.md`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.

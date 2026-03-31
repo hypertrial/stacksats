@@ -10,7 +10,7 @@ Start with [Public API](../public-api.md) if you want the supported `1.x` import
 This section is generated from source code docstrings and signatures.
 Treat it as internal reference material unless a symbol is re-exported from top-level `stacksats`.
 
-Implementation code also lives in domain subpackages (for example `stacksats.data`, `stacksats.features`, `stacksats.model_development`, `stacksats.runner`, `stacksats.strategy_time_series`, `stacksats.export_weights`, `stacksats.execution`, `stacksats.viz`). If you imported former top-level modules by path, see [Python package layout (internal imports)](../../migration.md#python-package-layout-internal-imports) in the Migration Guide.
+Implementation code also lives in domain subpackages (for example `stacksats.data`, `stacksats.features`, `stacksats.model_development`, `stacksats.runner`, `stacksats.strategy_time_series`, `stacksats.export_weights`, `stacksats.execution`, `stacksats.viz`). Package roots such as `stacksats.runner`, `stacksats.model_development`, `stacksats.export_weights`, `stacksats.api`, and `stacksats.eda` are now façade modules that re-export focused implementation files underneath them. If you imported former top-level modules by path, see [Python package layout (internal imports)](../../migration.md#python-package-layout-internal-imports) in the Migration Guide.
 
 ## Core modules
 

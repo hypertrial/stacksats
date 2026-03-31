@@ -13,20 +13,20 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import polars as pl
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
-from .features.registry import DEFAULT_FEATURE_REGISTRY
-from .features.time_series import FeatureTimeSeries
-from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
-from .strategy_lint import lint_strategy_class, summarize_lint_findings
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from ..features.registry import DEFAULT_FEATURE_REGISTRY
+from ..features.time_series import FeatureTimeSeries
+from ..framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
+from ..strategy_lint import lint_strategy_class, summarize_lint_findings
 
 if TYPE_CHECKING:
-    from .api import (  # pragma: no cover
+    from ..api import (  # pragma: no cover
         BacktestResult,
         DailyDecisionResult,
         DailyRunResult,
         ValidationResult,
     )
-    from .strategy_time_series import WeightTimeSeriesBatch  # pragma: no cover
+    from ..strategy_time_series import WeightTimeSeriesBatch  # pragma: no cover
 
 
 def _to_datetime(value: dt.datetime | str) -> dt.datetime:
@@ -591,7 +591,7 @@ class BaseStrategy(ABC):
 
         Returns pl.DataFrame with columns 'date' and 'weight'.
         """
-        from .framework_contract import compute_n_past
+        from ..framework_contract import compute_n_past
 
         observed_end = (
             ctx.current_date
@@ -633,7 +633,7 @@ class BaseStrategy(ABC):
         intent_mode = self.intent_mode()
 
         if intent_mode == "propose":
-            from .model_development import compute_weights_from_proposals
+            from ..model_development import compute_weights_from_proposals
 
             proposals_df = self._collect_proposals(features_df)
             return compute_weights_from_proposals(
@@ -658,7 +658,7 @@ class BaseStrategy(ABC):
             return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
         self._validate_target_df(target_df, name="target profile", date_col=date_range)
 
-        from .model_development import compute_weights_from_target_profile
+        from ..model_development import compute_weights_from_target_profile
 
         return compute_weights_from_target_profile(
             features_df=features_df,
@@ -737,8 +737,8 @@ class BaseStrategy(ABC):
         *,
         date_range: pl.Series,
     ) -> pl.DataFrame:
-        from .framework_contract import compute_n_past
-        from .model_development import compute_weights_from_target_profile
+        from ..framework_contract import compute_n_past
+        from ..model_development import compute_weights_from_target_profile
 
         if date_range.len() == 0:
             return pl.DataFrame(schema={"date": pl.Datetime("us"), "weight": pl.Float64})
@@ -815,7 +815,7 @@ class BaseStrategy(ABC):
         config: BacktestConfig | None = None,
         **kwargs,
     ) -> "BacktestResult":
-        from .runner import StrategyRunner
+        from ..runner import StrategyRunner
 
         runner = StrategyRunner()
         return runner.backtest(self, config or self.default_backtest_config(), **kwargs)
@@ -825,7 +825,7 @@ class BaseStrategy(ABC):
         config: ValidationConfig | None = None,
         **kwargs,
     ) -> "ValidationResult":
-        from .runner import StrategyRunner
+        from ..runner import StrategyRunner
 
         runner = StrategyRunner()
         return runner.validate(self, config or self.default_validation_config(), **kwargs)
@@ -835,7 +835,7 @@ class BaseStrategy(ABC):
         config: ExportConfig | None = None,
         **kwargs,
     ) -> "WeightTimeSeriesBatch":
-        from .runner import StrategyRunner
+        from ..runner import StrategyRunner
 
         runner = StrategyRunner()
         return runner.export(self, config or self.default_export_config(), **kwargs)
@@ -908,7 +908,7 @@ class BaseStrategy(ABC):
         config: RunDailyConfig | None = None,
         **kwargs,
     ) -> "DailyRunResult":
-        from .runner import StrategyRunner
+        from ..runner import StrategyRunner
 
         runner = StrategyRunner()
         return runner.run_daily(self, config or RunDailyConfig(), **kwargs)
@@ -918,7 +918,7 @@ class BaseStrategy(ABC):
         config: DecideDailyConfig | None = None,
         **kwargs,
     ) -> "DailyDecisionResult":
-        from .runner import StrategyRunner
+        from ..runner import StrategyRunner
 
         runner = StrategyRunner()
         return runner.decide_daily(self, config or self.default_decide_daily_config(), **kwargs)

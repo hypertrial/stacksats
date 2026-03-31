@@ -45,7 +45,7 @@ def test_paper_execution_adapter_is_deterministic() -> None:
 
 
 def test_load_execution_adapter_from_module_path() -> None:
-    adapter = load_execution_adapter("tests.unit.core.test_execution_adapters:_InlineAdapter")
+    adapter = load_execution_adapter("tests.unit.execution.test_execution_adapters:_InlineAdapter")
     receipt = adapter.submit_order(_request(), idempotency_key="xyz")
     assert receipt.external_order_id == "inline-xyz"
 

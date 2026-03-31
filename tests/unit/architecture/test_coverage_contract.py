@@ -129,7 +129,7 @@ def test_ci_workflow_contracts_keep_critical_gates() -> None:
     assert "lycheeverse/lychee-action@v2" in docs_check
 
     assert "name: example-commands-smoke" in example_commands_smoke
-    assert "pytest tests/unit/core/test_distribution_wheel_smoke.py -q" in example_commands_smoke
+    assert "pytest tests/unit/package/test_distribution_wheel_smoke.py -q" in example_commands_smoke
     assert "python scripts/test_example_commands.py" in example_commands_smoke
 
     assert "name: coverage-report" in coverage_report

@@ -9,7 +9,15 @@ from ..strategy_types import AgentServiceConfig
 
 def create_agent_service_app(config: AgentServiceConfig) -> Any:
     """Create the FastAPI app for the StackSats agent service."""
-    from .app import create_agent_service_app as _create_agent_service_app
+    try:
+        from .app import create_agent_service_app as _create_agent_service_app
+    except ModuleNotFoundError as exc:
+        if exc.name == "pydantic":
+            raise ImportError(
+                "Missing optional dependency 'pydantic'. "
+                "Install service extras with: pip install stacksats[service]"
+            ) from exc
+        raise
 
     return _create_agent_service_app(config)
 

@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+from collections.abc import Callable
 
 import numpy as np
 import polars as pl
@@ -255,7 +256,7 @@ def _window_slice_from_row(
     prefix: str,
     expected_days: int | None,
 ) -> pl.DataFrame:
-    from ..runner.helpers import slice_window_or_filter
+    from ..data.windowing import slice_window_or_filter
 
     can_slice = bool(row.get(f"{prefix}_can_slice", False))
     start_idx = row.get(f"{prefix}_start_idx")
@@ -295,7 +296,7 @@ def _batched_spd_windows(
     start_ts: dt.datetime,
     end: dt.datetime,
 ) -> tuple[pl.DataFrame, pl.DataFrame, object, pl.DataFrame, object, pl.DataFrame]:
-    from ..runner.helpers import build_window_bounds, build_window_index
+    from ..data.windowing import build_window_bounds, build_window_index
 
     dataframe, price_plan = build_window_index(dataframe.filter(pl.col(DATE_COL) >= start_ts))
     full_feat, feature_plan = build_window_index(full_feat)
@@ -766,7 +767,7 @@ def _compute_cycle_spd_batched(
 
 def backtest_dynamic_dca(
     dataframe: pl.DataFrame,
-    strategy_function,
+    strategy_function: Callable[[pl.DataFrame], pl.DataFrame],
     features_df: pl.DataFrame | None = None,
     *,
     strategy_label: str = "strategy",

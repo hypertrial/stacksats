@@ -11,7 +11,7 @@ import pytest
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from stacksats.runner import StrategyRunner, WeightValidationError
 from stacksats.strategy_types import BacktestConfig, ExportConfig, StrategyMetadata, ValidationConfig
-from tests.unit.core.runner_validation_testkit import (
+from tests.unit.runner.runner_validation_testkit import (
     UniformProposeStrategy,
     btc_df,
     patch_skip_weight_and_lock_checks,

@@ -21,7 +21,7 @@ from stacksats.strategy_lint import _is_negative_integer
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
 from stacksats.strategy_time_series.batch import WeightTimeSeriesBatch
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, ExportConfig, ValidationConfig
-from tests.unit.core.runner_validation_testkit import (
+from tests.unit.runner.runner_validation_testkit import (
     ProfileOffsetLeakStrategy,
     UniformProposeStrategy,
     btc_df,

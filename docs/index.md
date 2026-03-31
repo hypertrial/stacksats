@@ -37,7 +37,7 @@ Next steps:
 ## What's new
 
 - [What's New](whats-new.md) for release highlights
-- [Changelog on GitHub](https://github.com/hypertrial/stacksats/blob/main/CHANGELOG.md) for full version history
+- [Changelog on GitHub](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md) for full version history
 
 ## Agent-Native Flow
 

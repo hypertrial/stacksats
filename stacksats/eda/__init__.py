@@ -13,7 +13,7 @@ from typing import Sequence
 
 import polars as pl
 
-from .data.data_setup import MANAGED_BRK_DIR, packaged_text
+from ..data.data_setup import MANAGED_BRK_DIR, packaged_text
 
 CANONICAL_COLUMNS = ("day_utc", "metric", "value")
 PACKAGED_CATALOG_NAME = "brk_merged_metrics_catalog.json"

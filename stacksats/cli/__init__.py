@@ -10,8 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .data.data_btc import BTCDataProvider, DataLoadError
-from .data.data_setup import (
+from ..data.data_btc import BTCDataProvider, DataLoadError
+from ..data.data_setup import (
     MANAGED_BRK_DIR,
     MANAGED_RUNTIME_PARQUET,
     data_doctor,
@@ -20,9 +20,9 @@ from .data.data_setup import (
     packaged_demo_parquet_path,
     prepare_runtime_parquet,
 )
-from .loader import load_strategy
-from .runner import StrategyRunner
-from .strategy_types import (
+from ..loader import load_strategy
+from ..runner import StrategyRunner
+from ..strategy_types import (
     AgentServiceConfig,
     BacktestConfig,
     DecideDailyConfig,
@@ -169,7 +169,7 @@ def _add_export_command(
 
 
 def _start_agent_service_from_args(args) -> None:
-    from .service import start_agent_service
+    from ..service import start_agent_service
 
     start_agent_service(
         AgentServiceConfig(
@@ -426,8 +426,8 @@ def _float_or_default(value: object, *, default: float = 0.0) -> float:
 
 
 def _backtest_result_from_json(path: str | Path):
-    from .viz.animation_data import load_backtest_payload, spd_table_from_backtest_payload
-    from .api import BacktestResult
+    from ..viz.animation_data import load_backtest_payload, spd_table_from_backtest_payload
+    from ..api import BacktestResult
 
     payload = load_backtest_payload(path)
     spd_table = spd_table_from_backtest_payload(payload)

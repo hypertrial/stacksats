@@ -7,8 +7,8 @@ from datetime import datetime
 
 import polars as pl
 
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
-from .model_development import compute_window_weights
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from ..model_development import compute_window_weights
 
 
 def compute_weights_with_features(

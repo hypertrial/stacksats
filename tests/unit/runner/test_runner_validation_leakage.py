@@ -8,7 +8,7 @@ import pytest
 
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import ValidationConfig
-from tests.unit.core.runner_validation_testkit import (
+from tests.unit.runner.runner_validation_testkit import (
     DualHookProfilePreferredLeakStrategy,
     ProfileOffsetLeakStrategy,
     ProfileValuePeekStrategy,

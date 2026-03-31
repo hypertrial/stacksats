@@ -1,19 +1,19 @@
-"""Strategy-first base interfaces."""
+"""Strategy contract validation helpers."""
 
-from ..strategy_types._legacy import (
+from ._legacy import (
     BaseStrategy,
-    DayState,
     StrategyContext,
     StrategyLazyContext,
-    TargetProfile,
     strategy_context_from_features_df,
+    strategy_hook_status,
+    validate_strategy_contract,
 )
 
 __all__ = [
     "BaseStrategy",
-    "DayState",
     "StrategyContext",
     "StrategyLazyContext",
-    "TargetProfile",
     "strategy_context_from_features_df",
+    "strategy_hook_status",
+    "validate_strategy_contract",
 ]
