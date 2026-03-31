@@ -10,7 +10,7 @@ Use this command when StackSats should expose the agent-native daily decision fl
 ## Security
 
 - Inject bearer tokens via environment variables or a secret manager; never commit tokens or log them in plaintext.
-- Rotate tokens by updating the secret behind `STACKSATS_AGENT_API_TOKEN` (or the env name passed to `--auth-token-env`) and restarting or rolling the service so the new value loads.
+- Rotate bearer tokens by updating the secret behind `STACKSATS_AGENT_API_TOKEN` (or the env name passed to `--auth-token-env`), then restart or roll the service so it reloads the new value.
 - Report vulnerabilities through the [GitHub security policy](https://github.com/hypertrial/stacksats/security/policy) (see the repository `SECURITY.md`).
 
 ## Prerequisites
