@@ -15,7 +15,7 @@ from stacksats.model_development import (
     compute_weights_fast,
     precompute_features,
 )
-from stacksats.prelude import compute_cycle_spd
+from stacksats.data.prelude import compute_cycle_spd
 from tests.integration.backtest.polars_backtest_testkit import (
     dt_at,
     make_btc_df,

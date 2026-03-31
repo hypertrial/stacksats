@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.animation_render import render_strategy_vs_uniform_gif
+from stacksats.viz.animation_render import render_strategy_vs_uniform_gif
 
 
 def _frame_data(n: int = 6) -> pl.DataFrame:

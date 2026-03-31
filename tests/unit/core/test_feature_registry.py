@@ -6,7 +6,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY, FeatureRegistry
+from stacksats.features.registry import DEFAULT_FEATURE_REGISTRY, FeatureRegistry
 from stacksats.strategy_types import BaseStrategy
 
 

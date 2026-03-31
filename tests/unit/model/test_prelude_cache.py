@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import polars as pl
 
-from stacksats.prelude import load_data
+from stacksats.data.prelude import load_data
 
 
 def test_load_data_passes_parquet_config_to_provider(mocker, tmp_path) -> None:
@@ -14,7 +14,7 @@ def test_load_data_passes_parquet_config_to_provider(mocker, tmp_path) -> None:
     )
     provider_instance = mocker.Mock(load=mocker.Mock(return_value=expected_df))
     provider_cls = mocker.Mock(return_value=provider_instance)
-    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", provider_cls)
 
     load_data(parquet_path=str(tmp_path / "analytics.parquet"), max_staleness_days=6)
 
@@ -37,7 +37,7 @@ def test_load_data_passes_end_date_to_provider(mocker) -> None:
         )
     )
     provider_cls = mocker.Mock(return_value=provider_instance)
-    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", provider_cls)
 
     load_data(parquet_path=None, end_date="2024-01-02")
 

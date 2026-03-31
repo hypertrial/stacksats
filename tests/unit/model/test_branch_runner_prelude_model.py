@@ -7,17 +7,17 @@ import polars as pl
 import pytest
 from types import SimpleNamespace
 
-import stacksats.prelude as prelude_module
+import stacksats.data.prelude as prelude_module
 from stacksats.model_development import (
     allocate_from_proposals,
     compute_preference_scores,
     compute_weights_from_proposals,
     compute_weights_from_target_profile,
 )
-from stacksats.model_development_allocation import compute_n_past_span
-from stacksats.prelude import compute_cycle_spd
+from stacksats.model_development.allocation import compute_n_past_span
+from stacksats.data.prelude import compute_cycle_spd
 from stacksats.runner import StrategyRunner
-from stacksats.runner_helpers import build_window_bounds, build_window_index
+from stacksats.runner.helpers import build_window_bounds, build_window_index
 from stacksats.strategy_types import (
     BacktestConfig,
     BaseStrategy,
@@ -189,7 +189,7 @@ def test_compute_cycle_spd_raises_when_weight_validation_fails(
         def __getattr__(self, name):
             return getattr(np, name)
 
-    monkeypatch.setattr("stacksats.prelude.np", _NumpyProxy())
+    monkeypatch.setattr("stacksats.data.prelude.np", _NumpyProxy())
 
     with pytest.raises(ValueError, match="sum to"):
         compute_cycle_spd(
@@ -215,7 +215,7 @@ def test_compute_cycle_spd_computes_features_when_none_provided(
         calls["count"] += 1
         return df.select(["date", "price_usd"])
 
-    monkeypatch.setattr("stacksats.prelude.precompute_features", _fake_precompute_features)
+    monkeypatch.setattr("stacksats.data.prelude.precompute_features", _fake_precompute_features)
 
     result = compute_cycle_spd(
         btc_df,
@@ -261,7 +261,7 @@ def test_compute_cycle_spd_skips_window_when_window_end_exceeds_requested_end(
             return pl.Series([start_ts])
         return real_datetime_range(start, end, interval=interval, eager=eager)
 
-    monkeypatch.setattr("stacksats.prelude.pl.datetime_range", _fake_datetime_range)
+    monkeypatch.setattr("stacksats.data.prelude.pl.datetime_range", _fake_datetime_range)
 
     calls = {"count": 0}
 

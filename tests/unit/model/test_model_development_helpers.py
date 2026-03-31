@@ -9,7 +9,7 @@ from stacksats.model_development import (
     rolling_percentile,
     zscore,
 )
-from stacksats.model_development_helpers import softmax
+from stacksats.model_development.helpers import softmax
 
 
 class TestModelDevelopmentHelpers:

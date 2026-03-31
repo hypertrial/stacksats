@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from stacksats.data_btc import BTCDataProvider, DataLoadError
+from stacksats.data.data_btc import BTCDataProvider, DataLoadError
 
 
 def _create_parquet_fixture(

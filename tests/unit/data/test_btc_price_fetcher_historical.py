@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 import responses
 
-from stacksats.btc_price_fetcher import (
+from stacksats.data.btc_price_fetcher import (
     fetch_btc_price_historical,
     fetch_historical_price_binance,
     fetch_historical_price_coingecko,
@@ -91,7 +91,7 @@ def test_binance_historical_empty_payload() -> None:
 def test_historical_fetcher_falls_back_to_binance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from stacksats import btc_price_fetcher as fetcher
+    import stacksats.data.btc_price_fetcher as fetcher
 
     monkeypatch.setattr(
         fetcher,
@@ -106,7 +106,7 @@ def test_historical_fetcher_falls_back_to_binance(
 def test_historical_fetcher_returns_none_when_all_sources_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from stacksats import btc_price_fetcher as fetcher
+    import stacksats.data.btc_price_fetcher as fetcher
 
     monkeypatch.setattr(
         fetcher,
@@ -125,7 +125,7 @@ def test_historical_fetcher_returns_none_when_all_sources_fail(
 def test_historical_fetcher_invalid_price_falls_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from stacksats import btc_price_fetcher as fetcher
+    import stacksats.data.btc_price_fetcher as fetcher
 
     monkeypatch.setattr(fetcher, "fetch_historical_price_coingecko", lambda _date: 10.0)
     monkeypatch.setattr(fetcher, "fetch_historical_price_binance", lambda _date: 42000.0)

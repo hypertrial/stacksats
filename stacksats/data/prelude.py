@@ -5,9 +5,8 @@ import numpy as np
 import polars as pl
 
 from .data_btc import BTCDataProvider
-from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
-from .model_development import precompute_features
-from .runner_helpers import build_window_bounds, build_window_index, slice_window_or_filter
+from ..framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
+from ..model_development import precompute_features
 
 # Configuration
 BACKTEST_START = "2018-01-01"
@@ -90,7 +89,7 @@ def generate_date_ranges(
 
     Uses DATE_FREQ (daily) for start date generation.
     Each start_date is paired with exactly one end_date at fixed span length.
-    Uses WINDOW_OFFSET from prelude.py for consistency across modules.
+    Uses WINDOW_OFFSET from this module for consistency across modules.
 
     Args:
         range_start: Start of the date range (YYYY-MM-DD format)
@@ -256,6 +255,8 @@ def _window_slice_from_row(
     prefix: str,
     expected_days: int | None,
 ) -> pl.DataFrame:
+    from ..runner.helpers import slice_window_or_filter
+
     can_slice = bool(row.get(f"{prefix}_can_slice", False))
     start_idx = row.get(f"{prefix}_start_idx")
     end_idx = row.get(f"{prefix}_end_idx")
@@ -294,6 +295,8 @@ def _batched_spd_windows(
     start_ts: dt.datetime,
     end: dt.datetime,
 ) -> tuple[pl.DataFrame, pl.DataFrame, object, pl.DataFrame, object, pl.DataFrame]:
+    from ..runner.helpers import build_window_bounds, build_window_index
+
     dataframe, price_plan = build_window_index(dataframe.filter(pl.col(DATE_COL) >= start_ts))
     full_feat, feature_plan = build_window_index(full_feat)
     inv_price_frame = dataframe.select(

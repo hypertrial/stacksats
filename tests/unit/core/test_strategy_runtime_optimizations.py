@@ -7,26 +7,26 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from stacksats.feature_providers import BRKOverlayFeatureProvider, _rolling_zscore_pl
+from stacksats.features.providers import BRKOverlayFeatureProvider, _rolling_zscore_pl
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
-from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY
+from stacksats.features.registry import DEFAULT_FEATURE_REGISTRY
 from stacksats.loader import load_strategy
 from stacksats.model_development import precompute_features
-from stacksats.model_development_allocation import (
+from stacksats.model_development.allocation import (
     _compute_stable_signal,
     allocate_sequential_stable,
 )
 from stacksats.framework_contract import apply_clipped_weight
-from stacksats.model_development_helpers import (
+from stacksats.model_development.helpers import (
     classify_mvrv_zone,
     compute_mvrv_volatility,
     compute_signal_confidence,
     rolling_percentile,
     zscore,
 )
-from stacksats.prelude import DATE_COL, compute_cycle_spd
+from stacksats.data.prelude import DATE_COL, compute_cycle_spd
 from stacksats.runner import StrategyRunner
-from stacksats.runner_validation import WIN_RATE_TOLERANCE
+from stacksats.runner.validation import WIN_RATE_TOLERANCE
 from stacksats.strategy_types import BaseStrategy, StrategyContext, ValidationConfig
 
 

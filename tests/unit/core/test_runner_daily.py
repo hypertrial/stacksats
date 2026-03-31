@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 
 from stacksats.api import ValidationResult
-from stacksats.execution_state import IdempotencyConflictError
+from stacksats.execution.state import IdempotencyConflictError
 from stacksats.runner import StrategyRunner
 from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy
 from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy

@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.prelude import date_range_list
+from stacksats.data.prelude import date_range_list
 from stacksats.strategy_types import (
     BaseStrategy,
     StrategyContext,

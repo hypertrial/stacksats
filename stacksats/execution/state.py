@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
-from .api import ExecutionReceiptEvent, ExecutionReceiptHistoryResult, ExecutionStatusResult
+from ..api import ExecutionReceiptEvent, ExecutionReceiptHistoryResult, ExecutionStatusResult
 
 
 class IdempotencyConflictError(ValueError):

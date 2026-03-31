@@ -77,7 +77,7 @@ def _resolve_packaged_demo_parquet(python_path: Path, *, cwd: Path, env: dict[st
             "\n".join(
                 [
                     "from pathlib import Path",
-                    "from stacksats.data_setup import packaged_demo_parquet_path",
+                    "from stacksats.data.data_setup import packaged_demo_parquet_path",
                     "with packaged_demo_parquet_path() as path:",
                     "    print(Path(path).resolve())",
                 ]
@@ -102,7 +102,7 @@ def _resolve_packaged_demo_run_date(
             "\n".join(
                 [
                     "import polars as pl",
-                    "from stacksats.data_setup import packaged_demo_parquet_path",
+                    "from stacksats.data.data_setup import packaged_demo_parquet_path",
                     "with packaged_demo_parquet_path() as path:",
                     "    latest = (",
                     "        pl.scan_parquet(path)",

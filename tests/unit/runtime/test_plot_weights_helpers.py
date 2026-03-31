@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 from matplotlib.axes import Axes
 
-from stacksats.plot_weights import (
+from stacksats.viz.plot_weights import (
     fetch_weights_for_date_range,
     get_oldest_date_range,
     get_date_range_options,
@@ -31,7 +31,7 @@ def test_get_db_connection_requires_database_url(monkeypatch: pytest.MonkeyPatch
 def test_get_db_connection_uses_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     connect_mock = MagicMock(return_value=object())
     monkeypatch.setenv("DATABASE_URL", "postgres://example")
-    monkeypatch.setattr("stacksats.plot_weights.psycopg2.connect", connect_mock)
+    monkeypatch.setattr("stacksats.viz.plot_weights.psycopg2.connect", connect_mock)
 
     conn = get_db_connection()
 
@@ -130,7 +130,7 @@ def test_plot_dca_weights_draws_boundary_for_mixed_past_and_future(
         return original_axvline(self, *args, **kwargs)
 
     monkeypatch.setattr(Axes, "axvline", _spy_axvline)
-    monkeypatch.setattr("stacksats.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("stacksats.viz.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
 
     import datetime as dt
 
@@ -161,7 +161,7 @@ def test_plot_dca_weights_draws_boundary_for_mixed_past_and_future(
 def test_plot_weights_import_falls_back_when_dotenv_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import stacksats.plot_weights as plot_weights_module
+    import stacksats.viz.plot_weights as plot_weights_module
 
     real_import = builtins.__import__
 
@@ -193,7 +193,7 @@ def test_plot_weights_module_dunder_main_executes(
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.plot_weights", run_name="__main__")
+        runpy.run_module("stacksats.viz.plot_weights", run_name="__main__")
 
     assert conn.close.called
 
@@ -201,7 +201,7 @@ def test_plot_weights_module_dunder_main_executes(
 def test_plot_weights_main_handles_connection_failure_before_conn_is_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("stacksats.plot_weights.get_db_connection", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("stacksats.viz.plot_weights.get_db_connection", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(sys, "argv", ["plot_weights.py"])
 
     with warnings.catch_warnings():
@@ -211,7 +211,7 @@ def test_plot_weights_main_handles_connection_failure_before_conn_is_set(
             category=RuntimeWarning,
         )
         with pytest.raises(SystemExit) as excinfo:
-            runpy.run_module("stacksats.plot_weights", run_name="__main__")
+            runpy.run_module("stacksats.viz.plot_weights", run_name="__main__")
 
     assert excinfo.value.code == 1
 

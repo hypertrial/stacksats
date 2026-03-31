@@ -1,4 +1,4 @@
-"""Tests for runner_helpers.slice_window_or_filter dict path and edge branches."""
+"""Tests for stacksats.runner.helpers.slice_window_or_filter dict path and edge branches."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from stacksats.runner_helpers import (
+from stacksats.runner.helpers import (
     build_fold_ranges,
     perturb_future_features,
     perturb_future_source_data,
@@ -188,27 +188,27 @@ def test_runner_helper_remaining_branch_paths(monkeypatch: pytest.MonkeyPatch) -
     assert build_fold_ranges(dates[0], dates[-1])
 
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: [0, 1, 366, 732, 1096],
     )
     assert build_fold_ranges(dates[0], dates[-1])
 
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: [0, 100, 500, 800, 1096],
     )
     sparse = build_fold_ranges(dates[0], dates[-1])
     assert sparse
 
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: [0, 1, 2, 3, 1096],
     )
     assert build_fold_ranges(dates[0], dates[-1])
 
     shorter_end = dt.datetime(2022, 12, 31)
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: [0, 1, 101, 1096],
     )
     assert build_fold_ranges(dates[0], shorter_end)

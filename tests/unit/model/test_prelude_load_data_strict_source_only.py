@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import polars as pl
 
-from stacksats.prelude import load_data
+from stacksats.data.prelude import load_data
 
 
 def test_load_data_preserves_missing_today_mvrv_without_fallback(mocker) -> None:
@@ -19,7 +19,7 @@ def test_load_data_preserves_missing_today_mvrv_without_fallback(mocker) -> None
         },
     )
     provider_instance = mocker.Mock(load=mocker.Mock(return_value=source_df))
-    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", return_value=provider_instance)
 
     result_df = load_data(end_date=today.strftime("%Y-%m-%d"))
 
@@ -41,7 +41,7 @@ def test_load_data_does_not_synthesize_today_row(mocker) -> None:
         },
     )
     provider_instance = mocker.Mock(load=mocker.Mock(return_value=source_df))
-    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", return_value=provider_instance)
 
     result_df = load_data(end_date="2024-01-02")
 

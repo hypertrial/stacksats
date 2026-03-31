@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 
 import stacksats.export_weights as export_weights
-from stacksats.btc_price_fetcher import fetch_btc_price_robust
+from stacksats.data.btc_price_fetcher import fetch_btc_price_robust
 from stacksats.export_weights import get_db_connection, process_start_date_batch, update_today_weights
 from stacksats.strategy_types import BaseStrategy
 

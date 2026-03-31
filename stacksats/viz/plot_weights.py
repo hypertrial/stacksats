@@ -14,7 +14,7 @@ import sys
 from types import ModuleType
 from typing import Tuple
 
-from ._optional import missing_dependency_error
+from .._optional import missing_dependency_error
 from .matplotlib_setup import configure_matplotlib_env
 from .plot_weights_data import (
     fetch_weights_for_date_range as _fetch_weights_for_date_range,

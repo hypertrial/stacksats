@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from stacksats import cli
-from stacksats.data_btc import DataLoadError
+from stacksats.data.data_btc import DataLoadError
 
 
 def _parser_args() -> SimpleNamespace:

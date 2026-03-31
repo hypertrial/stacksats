@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from stacksats.api import DailyOrderReceipt, ValidationResult
-from stacksats.execution_state import SQLiteExecutionStateStore, StoredRun
+from stacksats.execution.state import SQLiteExecutionStateStore, StoredRun
 from stacksats.runner import StrategyRunner, _DailyDecisionComputation
 from stacksats.strategies.examples import RunDailyPaperStrategy
 from stacksats.strategy_types import (
@@ -392,7 +392,7 @@ def test_reconcile_daily_run_detects_decision_change(tmp_path, monkeypatch) -> N
         ),
     )
     monkeypatch.setattr(
-        "stacksats.execution_adapters.PaperExecutionAdapter.submit_order",
+        "stacksats.execution.adapters.PaperExecutionAdapter.submit_order",
         lambda self, request, idempotency_key: DailyOrderReceipt(
             status="filled",
             external_order_id=idempotency_key,
@@ -447,7 +447,7 @@ def test_reconcile_daily_run_reuses_locked_prefix(monkeypatch) -> None:
 
     monkeypatch.setattr(runner, "_validate_strategy_contract", lambda _: None)
     monkeypatch.setattr(
-        "stacksats.execution_state.SQLiteExecutionStateStore.get_run",
+        "stacksats.execution.state.SQLiteExecutionStateStore.get_run",
         lambda self, **kwargs: StoredRun(
             strategy_id=strategy.strategy_id,
             strategy_version=strategy.version,
@@ -462,7 +462,7 @@ def test_reconcile_daily_run_reuses_locked_prefix(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "stacksats.execution_state.SQLiteExecutionStateStore.load_locked_prefix",
+        "stacksats.execution.state.SQLiteExecutionStateStore.load_locked_prefix",
         lambda self, **kwargs: locked_prefix,
     )
     monkeypatch.setattr(

@@ -16,7 +16,7 @@ import responses
 import requests
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_none
 
-from stacksats.btc_price_fetcher import (
+from stacksats.data.btc_price_fetcher import (
     fetch_price_coingecko,
     fetch_price_coinbase,
     fetch_price_bitstamp,
@@ -740,7 +740,7 @@ def test_module_dunder_main_executes_without_network(
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+        runpy.run_module("stacksats.data.btc_price_fetcher", run_name="__main__")
 
 
 def test_module_dunder_main_prints_failure_when_all_sources_raise(
@@ -762,7 +762,7 @@ def test_module_dunder_main_prints_failure_when_all_sources_raise(
             message="'.*' found in sys.modules after import of package '.*'",
             category=RuntimeWarning,
         )
-        runpy.run_module("stacksats.btc_price_fetcher", run_name="__main__")
+        runpy.run_module("stacksats.data.btc_price_fetcher", run_name="__main__")
 
     output = capsys.readouterr().out
     assert "Error - network down" in output

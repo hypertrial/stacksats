@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.animation_data import (
+from stacksats.viz.animation_data import (
     load_backtest_payload,
     load_spd_table_from_backtest_json,
     prepare_animation_frame_data,

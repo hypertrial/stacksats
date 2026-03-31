@@ -19,9 +19,9 @@ sys.path.insert(0, str(ROOT))
 
 from stacksats.framework_contract import ALLOCATION_WINDOW_OFFSET
 from stacksats.loader import load_strategy
-from stacksats.prelude import BACKTEST_END
+from stacksats.data.prelude import BACKTEST_END
 from stacksats.runner import StrategyRunner
-from stacksats.runner_helpers import weights_match
+from stacksats.runner.helpers import weights_match
 from stacksats.strategy_types import BacktestConfig, ValidationConfig
 
 STRATEGY_SPECS = [

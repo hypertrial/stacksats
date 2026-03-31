@@ -8,18 +8,18 @@ import numpy as np
 import polars as pl
 import pytest
 
-import stacksats.prelude as prelude_module
-from stacksats.animation_data import _parse_window_date, prepare_animation_frame_data
-from stacksats.animation_render import _axis_limits, _validate_animation_frame_data
-from stacksats.column_map_provider import ColumnMapDataProvider, ColumnMapError
-from stacksats.export_weights_runtime import _date_to_str, update_today_weights
-from stacksats.model_development_features import precompute_features
-from stacksats.plot_mvrv_render import _parse_date
-from stacksats.prelude import compute_cycle_spd
+import stacksats.data.prelude as prelude_module
+from stacksats.viz.animation_data import _parse_window_date, prepare_animation_frame_data
+from stacksats.viz.animation_render import _axis_limits, _validate_animation_frame_data
+from stacksats.features.column_map_provider import ColumnMapDataProvider, ColumnMapError
+from stacksats.export_weights.runtime import _date_to_str, update_today_weights
+from stacksats.model_development.features import precompute_features
+from stacksats.viz.plot_mvrv_render import _parse_date
+from stacksats.data.prelude import compute_cycle_spd
 from stacksats.runner import StrategyRunner
-from stacksats.runner_helpers import build_fold_ranges, weights_match
+from stacksats.runner.helpers import build_fold_ranges, weights_match
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
-from stacksats.strategy_time_series_schema import ColumnSpec
+from stacksats.strategy_time_series.schema import ColumnSpec
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, RunDailyConfig
 from stacksats.strategies.examples import SimpleZScoreStrategy
 from stacksats.strategies.experimental.model_example import ExampleMVRVStrategy

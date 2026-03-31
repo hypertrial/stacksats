@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
-from stacksats.strategy_time_series_analysis import _autocorr_pl
+from stacksats.strategy_time_series.analysis import _autocorr_pl
 
 
 def _series(prices: list[float] | None = None) -> WeightTimeSeries:
@@ -214,7 +214,7 @@ def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_la
     assert caught == []
 
     monkeypatch.setattr(
-        "stacksats.strategy_time_series_analysis._autocorr_pl",
+        "stacksats.strategy_time_series.analysis._autocorr_pl",
         lambda s, lag: None,
     )
     assert WeightTimeSeries._stationarity_proxy(
@@ -229,7 +229,7 @@ def test_multiplicative_decompose_seasonal_mean_fallback_and_stationarity_nan_la
             return False
         return orig_isfinite(value)
 
-    monkeypatch.setattr("stacksats.strategy_time_series_analysis.np.isfinite", _patched_isfinite)
+    monkeypatch.setattr("stacksats.strategy_time_series.analysis.np.isfinite", _patched_isfinite)
     dec_fallback = ts.decompose(period=2, model="multiplicative", series="price")
     assert "residual" in dec_fallback.columns
 

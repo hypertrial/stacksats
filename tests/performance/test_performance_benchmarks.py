@@ -28,7 +28,7 @@ from stacksats.model_development import (
     compute_weights_fast,
     precompute_features,
 )
-from stacksats.model_development_helpers import softmax
+from stacksats.model_development.helpers import softmax
 
 
 def _span_end(start_date):

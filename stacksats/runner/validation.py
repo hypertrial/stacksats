@@ -9,15 +9,23 @@ from dataclasses import dataclass, field
 import numpy as np
 import polars as pl
 
-from .feature_registry import DEFAULT_FEATURE_REGISTRY
-from .framework_contract import (
+from ..data.prelude import WINDOW_OFFSET as DEFAULT_WINDOW_OFFSET
+from ..features.registry import DEFAULT_FEATURE_REGISTRY
+from ..framework_contract import (
     ALLOCATION_SPAN_DAYS,
     MAX_DAILY_WEIGHT,
     MIN_DAILY_WEIGHT,
     _to_naive_utc,
 )
-from .prelude import WINDOW_OFFSET as DEFAULT_WINDOW_OFFSET
-from .runner_helpers import (
+from ..statistical_validation import (
+    anchored_window_excess,
+    block_bootstrap_confidence_interval,
+    build_purged_walk_forward_folds,
+    ks_statistic,
+    paired_block_permutation_pvalue,
+    population_stability_index,
+)
+from .helpers import (
     build_window_index,
     build_fold_ranges,
     frame_signature,
@@ -27,15 +35,7 @@ from .runner_helpers import (
     slice_window_or_filter,
     weights_match,
 )
-from .statistical_validation import (
-    anchored_window_excess,
-    block_bootstrap_confidence_interval,
-    build_purged_walk_forward_folds,
-    ks_statistic,
-    paired_block_permutation_pvalue,
-    population_stability_index,
-)
-from .strategy_types import (
+from ..strategy_types import (
     BacktestConfig,
     BaseStrategy,
     StrategyContext,

@@ -24,11 +24,11 @@ def test_backtest_result_from_json_uses_fallbacks_for_malformed_sections(
     payload_path.write_text("{}", encoding="utf-8")
 
     monkeypatch.setattr(
-        "stacksats.animation_data.load_backtest_payload",
+        "stacksats.viz.animation_data.load_backtest_payload",
         lambda path: {"summary_metrics": "bad", "provenance": []},
     )
     monkeypatch.setattr(
-        "stacksats.animation_data.spd_table_from_backtest_payload",
+        "stacksats.viz.animation_data.spd_table_from_backtest_payload",
         lambda payload: pl.DataFrame({"date": [], "dynamic_percentile": [], "uniform_percentile": []}),
     )
 

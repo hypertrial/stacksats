@@ -7,7 +7,7 @@ import datetime as dt
 import numpy as np
 import polars as pl
 
-from .framework_contract import (
+from ..framework_contract import (
     ALLOCATION_SPAN_DAYS,
     apply_clipped_weight,
     assert_final_invariants,

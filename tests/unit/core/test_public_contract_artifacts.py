@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from stacksats import BacktestConfig, ExportConfig, UniformStrategy
-import stacksats.animation_render as animation_render
+import stacksats.viz.animation_render as animation_render
 from stacksats.api import DailyDecisionResult
 from tests.test_helpers import btc_frame
 

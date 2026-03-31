@@ -132,8 +132,8 @@ class BacktestResult:
         source_backtest_json: str | Path | None = None,
     ) -> dict[str, str]:
         """Render an animated strategy-vs-uniform GIF and write a manifest JSON."""
-        from .animation_data import prepare_animation_frame_data
-        from .animation_render import render_strategy_vs_uniform_gif
+        from .viz.animation_data import prepare_animation_frame_data
+        from .viz.animation_render import render_strategy_vs_uniform_gif
 
         output_root = Path(output_dir).expanduser().resolve()
         output_root.mkdir(parents=True, exist_ok=True)

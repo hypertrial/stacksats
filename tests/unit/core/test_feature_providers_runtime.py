@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from stacksats.feature_providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
+from stacksats.features.providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
 from tests.test_helpers import btc_frame
 
 

@@ -11,8 +11,8 @@ from uuid import UUID
 
 import polars as pl
 
-from stacksats.data_setup import packaged_demo_parquet_path
-from stacksats.strategy_time_series_batch import WeightTimeSeriesBatch
+from stacksats.data.data_setup import packaged_demo_parquet_path
+from stacksats.strategy_time_series.batch import WeightTimeSeriesBatch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

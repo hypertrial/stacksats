@@ -8,7 +8,7 @@ from pytest_bdd import given, parsers, then, when
 
 from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
-from stacksats.prelude import backtest_dynamic_dca, compute_cycle_spd, get_backtest_end
+from stacksats.data.prelude import backtest_dynamic_dca, compute_cycle_spd, get_backtest_end
 
 
 def _parse_date(s: str) -> dt.datetime:

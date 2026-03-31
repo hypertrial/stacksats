@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import polars as pl
 from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
-from .feature_registry import DEFAULT_FEATURE_REGISTRY
-from .feature_time_series import FeatureTimeSeries
+from .features.registry import DEFAULT_FEATURE_REGISTRY
+from .features.time_series import FeatureTimeSeries
 from .framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from .strategy_lint import lint_strategy_class, summarize_lint_findings
 

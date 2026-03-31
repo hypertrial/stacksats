@@ -9,17 +9,17 @@ import numpy as np
 import polars as pl
 import pytest
 
-import stacksats.animation_data as animation_data
-import stacksats.prelude as prelude_module
-from stacksats.btc_price_fetcher import _fetch_with_retry
+import stacksats.viz.animation_data as animation_data
+import stacksats.data.prelude as prelude_module
+from stacksats.data.btc_price_fetcher import _fetch_with_retry
 from stacksats.loader import load_strategy
-from stacksats.plot_mvrv_render import plot_mvrv_metrics
+from stacksats.viz.plot_mvrv_render import plot_mvrv_metrics
 from stacksats.runner import StrategyRunner
-from stacksats.runner_helpers import build_fold_ranges, weights_match
-from stacksats.runner_validation import _ValidationState
+from stacksats.runner.helpers import build_fold_ranges, weights_match
+from stacksats.runner.validation import _ValidationState
 from stacksats.strategy_lint import _is_negative_integer
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
-from stacksats.strategy_time_series_batch import WeightTimeSeriesBatch
+from stacksats.strategy_time_series.batch import WeightTimeSeriesBatch
 from stacksats.strategy_types import BacktestConfig, BaseStrategy, ExportConfig, ValidationConfig
 from tests.unit.core.runner_validation_testkit import (
     ProfileOffsetLeakStrategy,
@@ -199,7 +199,7 @@ def test_compute_cycle_spd_skips_when_generated_window_start_is_past_end(
 
 def test_prelude_make_window_label() -> None:
     """_make_window_label formats window label."""
-    from stacksats.prelude import _make_window_label
+    from stacksats.data.prelude import _make_window_label
 
     label = _make_window_label(
         dt.datetime(2024, 1, 1),
@@ -313,9 +313,9 @@ def test_export_supports_non_polars_dataframe(
         def schema_markdown(self) -> str:
             return "# schema"
 
-    monkeypatch.setattr("stacksats.prelude.generate_date_ranges", lambda *args, **kwargs: [(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2))])
+    monkeypatch.setattr("stacksats.data.prelude.generate_date_ranges", lambda *args, **kwargs: [(dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2))])
     monkeypatch.setattr(
-        "stacksats.prelude.group_ranges_by_start_date",
+        "stacksats.data.prelude.group_ranges_by_start_date",
         lambda ranges: {ranges[0][0]: [ranges[0][1]]},
     )
     monkeypatch.setattr(
@@ -368,7 +368,7 @@ def test_runner_helper_edge_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     ) is False
 
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: np.array([0, 0, 366, 732, 1098], dtype=int),
     )
     folds = build_fold_ranges(dt.datetime(2020, 1, 1), dt.datetime(2025, 12, 31))
@@ -501,7 +501,7 @@ def test_strict_statistical_checks_cover_fold_skip_and_missing_feature_columns(
     )
 
     monkeypatch.setattr(
-        "stacksats.runner_validation.build_purged_walk_forward_folds",
+        "stacksats.runner.validation.build_purged_walk_forward_folds",
         lambda *args, **kwargs: [(None, None, start_ts, start_ts + dt.timedelta(days=1))],
     )
     runner._strict_statistical_checks(
@@ -533,7 +533,7 @@ def test_strict_statistical_checks_cover_fold_skip_and_missing_feature_columns(
         ]
     )
     monkeypatch.setattr(
-        "stacksats.runner_validation.build_purged_walk_forward_folds",
+        "stacksats.runner.validation.build_purged_walk_forward_folds",
         lambda *args, **kwargs: [
             (
                 None,
@@ -577,7 +577,7 @@ def test_strategy_lint_and_time_series_remaining_edges(monkeypatch: pytest.Monke
     ts = _weight_series([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     original_isclose = np.isclose
     monkeypatch.setattr(
-        "stacksats.strategy_time_series_analysis.np.isclose",
+        "stacksats.strategy_time_series.analysis.np.isclose",
         lambda value, other, *args, **kwargs: True
         if float(value) == 1.0 and float(other) == 0.0
         else original_isclose(value, other, *args, **kwargs),
@@ -836,9 +836,9 @@ def test_runner_and_validation_cover_remaining_cache_and_noop_branches(
     assert state.strict_checks_ok is True
 
     runner = StrategyRunner()
-    monkeypatch.setattr("stacksats.runner_validation.block_bootstrap_confidence_interval", lambda *args, **kwargs: type("B", (), {"lower": 1.0, "upper": 2.0})())
-    monkeypatch.setattr("stacksats.runner_validation.paired_block_permutation_pvalue", lambda *args, **kwargs: 0.0)
-    monkeypatch.setattr("stacksats.runner_validation.build_purged_walk_forward_folds", lambda *args, **kwargs: [])
+    monkeypatch.setattr("stacksats.runner.validation.block_bootstrap_confidence_interval", lambda *args, **kwargs: type("B", (), {"lower": 1.0, "upper": 2.0})())
+    monkeypatch.setattr("stacksats.runner.validation.paired_block_permutation_pvalue", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr("stacksats.runner.validation.build_purged_walk_forward_folds", lambda *args, **kwargs: [])
     state = _ValidationState(messages=[], diagnostics={})
     runner._strict_statistical_checks(
         strategy=UniformProposeStrategy(),

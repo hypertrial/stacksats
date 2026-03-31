@@ -10,21 +10,21 @@ from typing import TYPE_CHECKING, Iterable
 
 import polars as pl
 
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
-from .strategy_time_series_metadata import (
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from .metadata import (
     StrategySeriesMetadata,
     _normalize_generated_at,
     _utc_now,
 )
-from .strategy_time_series_schema import ColumnSpec, validate_schema_specs
+from .schema import ColumnSpec, validate_schema_specs
 
 if TYPE_CHECKING:
-    from .strategy_time_series import WeightTimeSeries  # pragma: no cover
+    from . import WeightTimeSeries  # pragma: no cover
 
 
 def _norm_window_dt(value: dt.datetime | str | object) -> dt.datetime:
     """Normalize window date to naive midnight UTC."""
-    from .framework_contract import _to_naive_utc
+    from ..framework_contract import _to_naive_utc
 
     return _to_naive_utc(value)
 
@@ -91,7 +91,7 @@ class WeightTimeSeriesBatch:
         extra_schema: tuple[ColumnSpec, ...] = (),
     ) -> "WeightTimeSeriesBatch":
         """Build a batch object from a flattened export dataframe."""
-        from .strategy_time_series import WeightTimeSeries
+        from . import WeightTimeSeries
 
         if not isinstance(data, pl.DataFrame):
             raise TypeError("data must be a Polars DataFrame.")

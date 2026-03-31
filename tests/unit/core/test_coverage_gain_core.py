@@ -9,15 +9,15 @@ import polars as pl
 import pytest
 
 import stacksats.export_weights as export_weights_module
-import stacksats.prelude as prelude_module
-import stacksats.data_btc as data_btc_module
-import stacksats.export_weights_core as export_weights_core_module
-import stacksats.feature_providers as feature_providers_module
+import stacksats.data.prelude as prelude_module
+import stacksats.data.data_btc as data_btc_module
+import stacksats.export_weights.core as export_weights_core_module
+import stacksats.features.providers as feature_providers_module
 import stacksats.framework_contract as framework_contract_module
-import stacksats.model_development_allocation as allocation_module
-import stacksats.plot_weights_data as plot_weights_data_module
-import stacksats.runner_helpers as runner_helpers_module
-from stacksats.animation_data import (
+import stacksats.model_development.allocation as allocation_module
+import stacksats.viz.plot_weights_data as plot_weights_data_module
+import stacksats.runner.helpers as runner_helpers_module
+from stacksats.viz.animation_data import (
     _downsample_frame,
     _extract_window_bounds,
     _normalize_spd_frame,
@@ -28,20 +28,20 @@ from stacksats.animation_data import (
     prepare_animation_frame_data,
     spd_table_from_backtest_payload,
 )
-from stacksats.feature_materialization import (
+from stacksats.features.materialization import (
     build_observed_frame,
     materialize_versioned_observations,
     normalize_timestamp,
 )
-from stacksats.feature_providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
-from stacksats.feature_registry import FeatureRegistry, _lazy_observed_frame
-from stacksats.feature_time_series import FeatureTimeSeries, _validate_no_future_data
-from stacksats.model_development_allocation import (
+from stacksats.features.providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
+from stacksats.features.registry import FeatureRegistry, _lazy_observed_frame
+from stacksats.features.time_series import FeatureTimeSeries, _validate_no_future_data
+from stacksats.model_development.allocation import (
     _normalize_intent_frame,
     _proposals_to_pl,
     _target_profile_to_pl,
 )
-from stacksats.model_development_weights import compute_weights_fast, compute_window_weights
+from stacksats.model_development.weights import compute_weights_fast, compute_window_weights
 from stacksats.statistical_validation import (
     _sample_blocks,
     anchored_window_excess,
@@ -56,12 +56,12 @@ from stacksats.strategy_time_series import (
     WeightTimeSeries,
     WeightTimeSeriesBatch,
 )
-from stacksats.strategy_time_series_metadata import (
+from stacksats.strategy_time_series.metadata import (
     _normalize_generated_at,
     _normalize_window_date,
     _parse_datetime,
 )
-from stacksats.strategy_time_series_schema import (
+from stacksats.strategy_time_series.schema import (
     BRK_LINEAGE,
     BRK_SOURCE_COLUMNS,
     ColumnSpec,

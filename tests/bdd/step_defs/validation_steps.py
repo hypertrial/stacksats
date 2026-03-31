@@ -12,7 +12,7 @@ from pytest_bdd import given, then, when
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from stacksats.model_development import MIN_W
-from stacksats.prelude import date_range_list
+from stacksats.data.prelude import date_range_list
 from tests.test_helpers import (
     DATE_COLS,
     FLOAT_TOLERANCE,

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .data_btc import BTCDataProvider, DataLoadError
-from .data_setup import (
+from .data.data_btc import BTCDataProvider, DataLoadError
+from .data.data_setup import (
     MANAGED_BRK_DIR,
     MANAGED_RUNTIME_PARQUET,
     data_doctor,
@@ -426,7 +426,7 @@ def _float_or_default(value: object, *, default: float = 0.0) -> float:
 
 
 def _backtest_result_from_json(path: str | Path):
-    from .animation_data import load_backtest_payload, spd_table_from_backtest_payload
+    from .viz.animation_data import load_backtest_payload, spd_table_from_backtest_payload
     from .api import BacktestResult
 
     payload = load_backtest_payload(path)

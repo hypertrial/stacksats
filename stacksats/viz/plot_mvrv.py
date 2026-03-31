@@ -14,8 +14,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Optional
 
-from ._optional import missing_dependency_error
-from .data_btc import BTCDataProvider
+from .._optional import missing_dependency_error
+from ..data.data_btc import BTCDataProvider
 from .matplotlib_setup import configure_matplotlib_env
 from .plot_mvrv_render import plot_mvrv_metrics as _plot_mvrv_metrics
 

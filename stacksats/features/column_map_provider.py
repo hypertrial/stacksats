@@ -7,7 +7,7 @@ actual column names in their DataFrame.
 Example usage::
 
     import polars as pl
-    from stacksats.column_map_provider import ColumnMapDataProvider
+    from stacksats.features.column_map_provider import ColumnMapDataProvider
     from stacksats.runner import StrategyRunner
 
     df = pl.read_csv("my_data.csv").with_columns(pl.col("date").str.to_datetime())

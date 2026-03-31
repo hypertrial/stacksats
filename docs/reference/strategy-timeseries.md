@@ -5,7 +5,7 @@ description: Metadata, guarantees, and export semantics for WeightTimeSeries and
 
 # WeightTimeSeries
 
-`WeightTimeSeries` (`stacksats/strategy_time_series.py`) is the single-window validated **output** of a strategy (weights, prices, metadata). It is used by `strategy export` and enforces framework invariants (see [Framework](../framework.md)).
+`WeightTimeSeries` (`stacksats/strategy_time_series/__init__.py`) is the single-window validated **output** of a strategy (weights, prices, metadata). It is used by `strategy export` and enforces framework invariants (see [Framework](../framework.md)).
 `WeightTimeSeriesBatch` is the multi-window container returned by export APIs and artifact loaders.
 
 > [!NOTE]

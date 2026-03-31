@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from ._optional import import_optional
+from .._optional import import_optional
 from .matplotlib_setup import configure_matplotlib_env
 
 REQUIRED_ANIMATION_COLUMNS = (

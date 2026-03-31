@@ -20,7 +20,7 @@ from stacksats.model_development import (
     compute_window_weights,
     precompute_features,
 )
-from stacksats.prelude import generate_date_ranges
+from stacksats.data.prelude import generate_date_ranges
 
 # Tolerance for floating-point comparisons
 FLOAT_TOLERANCE = 1e-10

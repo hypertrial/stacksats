@@ -47,7 +47,7 @@ Use `stacksats strategy decide-daily` (or `strategy.decide_daily(...)`) for the 
 | Use StackSats from PyPI | `pip install stacksats` |
 | Editable install from a checkout | `python -m pip install -c requirements/constraints-maintainer.txt -e ".[dev,all]"` |
 
-Optional extras: `pip install "stacksats[viz]"` (animation/plots), `[network]` (HTTP BTC price helpers), `[service]` (agent API), `[deploy]` (DB/export helpers such as `stacksats-plot-weights`). Helper scripts are documented convenience tools, not part of the frozen stable `1.x` CLI subset.
+Optional extras: `pip install "stacksats[viz]"` (animation/plots), `[network]` (HTTP BTC price helpers), `[service]` (agent API), `[deploy]` (Postgres/export helpers). The `stacksats-plot-weights` helper needs both `[viz]` and `[deploy]` plus a configured `DATABASE_URL` (it reads stored weight windows, then renders). Helper scripts are documented convenience tools, not part of the frozen stable `1.x` CLI subset.
 
 **Development venv** (from repo root):
 

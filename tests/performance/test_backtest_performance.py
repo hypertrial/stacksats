@@ -10,7 +10,7 @@ import pytest
 from stacksats.backtest import compute_weights_with_features
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
 from stacksats.model_development import compute_weights_fast, precompute_features
-from stacksats.prelude import compute_cycle_spd
+from stacksats.data.prelude import compute_cycle_spd
 from tests.integration.backtest.polars_backtest_testkit import (
     dt_at,
     frame_has_date,

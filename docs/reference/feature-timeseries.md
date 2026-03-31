@@ -5,7 +5,7 @@ description: Validated feature input to a strategy (schema and time-series valid
 
 # FeatureTimeSeries
 
-`FeatureTimeSeries` (`stacksats/feature_time_series.py`) is the **input** object passed into strategy computation. It wraps a Polars DataFrame with a canonical `date` column and feature columns. It provides schema validation and time-series invariants so that strategies receive validated feature data.
+`FeatureTimeSeries` (`stacksats/features/time_series.py`) is the **input** object passed into strategy computation. It wraps a Polars DataFrame with a canonical `date` column and feature columns. It provides schema validation and time-series invariants so that strategies receive validated feature data.
 
 Do not confuse with **WeightTimeSeries**, which is the **output** of a strategy (weights and prices).
 

@@ -7,7 +7,7 @@ import os
 import polars as pl
 
 from stacksats.backtest import export_metrics_json
-from stacksats.prelude import parse_window_dates
+from stacksats.data.prelude import parse_window_dates
 
 
 # -----------------------------------------------------------------------------

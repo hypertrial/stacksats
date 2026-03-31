@@ -18,7 +18,7 @@ SAMPLE_END = "2025-12-31"
 
 def pl_date_range(start: str, end: str) -> pl.Series:
     """Polars datetime series from start to end (inclusive)."""
-    from stacksats.prelude import date_range_series
+    from stacksats.data.prelude import date_range_series
 
     return date_range_series(start, end)
 

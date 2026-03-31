@@ -8,8 +8,8 @@ import polars as pl
 import pytest
 
 from stacksats.api import ExecutionReceiptEvent
-import stacksats.execution_state as execution_state_module
-from stacksats.execution_state import (
+import stacksats.execution.state as execution_state_module
+from stacksats.execution.state import (
     IdempotencyConflictError,
     ReceiptConflictError,
     SQLiteExecutionStateStore,

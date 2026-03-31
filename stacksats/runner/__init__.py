@@ -12,24 +12,16 @@ from uuid import uuid4
 
 import polars as pl
 
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
-from .column_map_provider import ColumnMapDataProvider
-from .data_btc import BTCDataProvider
-from .feature_materialization import hash_dataframe
-from .feature_registry import DEFAULT_FEATURE_REGISTRY
-from .framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
-from .prelude import BACKTEST_END, BACKTEST_START, backtest_dynamic_dca
-from .runner_validation import (
-    STRICT_MUTATION_MESSAGE,
-    STRICT_PROFILE_MUTATION_MESSAGE,
-    WIN_RATE_TOLERANCE,
-    StrategyRunnerValidationMixin,
-    WeightValidationError,
-    _ValidationState,
-)
-from .runner_helpers import slice_window_or_filter
-from .strategy_time_series import WeightTimeSeriesBatch
-from .strategy_types import (
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from ..data.data_btc import BTCDataProvider
+from ..data.prelude import BACKTEST_END, BACKTEST_START, backtest_dynamic_dca
+from ..features.column_map_provider import ColumnMapDataProvider
+from ..features.materialization import hash_dataframe
+from ..features.registry import DEFAULT_FEATURE_REGISTRY
+from ..framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
+from ..strategy_lint import lint_strategy_class, summarize_lint_findings
+from ..strategy_time_series import WeightTimeSeriesBatch
+from ..strategy_types import (
     BacktestConfig,
     BaseStrategy,
     DecideDailyConfig,
@@ -41,7 +33,15 @@ from .strategy_types import (
     strategy_context_from_features_df,
     validate_strategy_contract,
 )
-from .strategy_lint import lint_strategy_class, summarize_lint_findings
+from .helpers import slice_window_or_filter
+from .validation import (
+    STRICT_MUTATION_MESSAGE,
+    STRICT_PROFILE_MUTATION_MESSAGE,
+    WIN_RATE_TOLERANCE,
+    StrategyRunnerValidationMixin,
+    WeightValidationError,
+    _ValidationState,
+)
 
 
 class _FrameworkBacktestAdapter:
@@ -890,7 +890,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pl.DataFrame | None = None,
     ):
-        from .api import BacktestResult
+        from ..api import BacktestResult
 
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
@@ -1002,7 +1002,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pl.DataFrame | None = None,
     ):
-        from .api import ValidationResult
+        from ..api import ValidationResult
 
         try:
             self._validate_strategy_contract(strategy)
@@ -1201,8 +1201,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pl.DataFrame | None = None,
     ):
-        from .api import DailyDecisionResult
-        from .execution_state import SQLiteExecutionStateStore
+        from ..api import DailyDecisionResult
+        from ..execution.state import SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
         metadata, _, run_ts, run_date = self._parse_daily_decision_config(strategy, config)
@@ -1332,9 +1332,9 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         *,
         btc_df: pl.DataFrame | None = None,
     ):
-        from .api import DailyOrderReceipt, DailyOrderRequest, DailyRunResult
-        from .execution_adapters import PaperExecutionAdapter, load_execution_adapter
-        from .execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
+        from ..api import DailyOrderReceipt, DailyOrderRequest, DailyRunResult
+        from ..execution.adapters import PaperExecutionAdapter, load_execution_adapter
+        from ..execution.state import IdempotencyConflictError, SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
         metadata, _, run_ts, run_date = self._parse_run_daily_config(strategy, config)
@@ -1506,7 +1506,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         state_db_path: str = ".stacksats/run_state.sqlite3",
         btc_df: pl.DataFrame | None = None,
     ) -> dict[str, object]:
-        from .execution_state import SQLiteExecutionStateStore
+        from ..execution.state import SQLiteExecutionStateStore
 
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()
@@ -1576,8 +1576,8 @@ class StrategyRunner(StrategyRunnerValidationMixin):
         btc_df: pl.DataFrame | None = None,
         current_date: dt.datetime | None = None,
     ) -> WeightTimeSeriesBatch:
-        from .export_weights import process_start_date_batch
-        from .prelude import generate_date_ranges, group_ranges_by_start_date
+        from ..export_weights import process_start_date_batch
+        from ..data.prelude import generate_date_ranges, group_ranges_by_start_date
 
         self._validate_strategy_contract(strategy)
         metadata = strategy.metadata()

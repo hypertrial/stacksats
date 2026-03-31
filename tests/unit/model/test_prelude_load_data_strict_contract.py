@@ -6,8 +6,8 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from stacksats.data_btc import DataLoadError
-from stacksats.prelude import load_data
+from stacksats.data.data_btc import DataLoadError
+from stacksats.data.prelude import load_data
 
 
 def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
@@ -21,7 +21,7 @@ def test_load_data_delegates_to_btc_provider_with_defaults(mocker) -> None:
     load_mock = mocker.Mock(return_value=expected_df)
     provider_instance = mocker.Mock(load=load_mock)
     provider_cls = mocker.Mock(return_value=provider_instance)
-    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", provider_cls)
 
     df = load_data()
 
@@ -34,7 +34,7 @@ def test_load_data_propagates_missing_price_failure(mocker) -> None:
     provider_instance = mocker.Mock(
         load=mocker.Mock(side_effect=DataLoadError("missing price_usd values"))
     )
-    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", return_value=provider_instance)
 
     with pytest.raises(DataLoadError, match="missing price_usd values"):
         load_data(parquet_path=None)
@@ -44,7 +44,7 @@ def test_load_data_propagates_missing_dates_failure(mocker) -> None:
     provider_instance = mocker.Mock(
         load=mocker.Mock(side_effect=DataLoadError("missing dates"))
     )
-    mocker.patch("stacksats.prelude.BTCDataProvider", return_value=provider_instance)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", return_value=provider_instance)
 
     with pytest.raises(DataLoadError, match="missing dates"):
         load_data(parquet_path=None)
@@ -59,7 +59,7 @@ def test_load_data_propagates_past_only_cache_failure(mocker) -> None:
         )
     )
     provider_cls = mocker.Mock(return_value=provider_instance)
-    mocker.patch("stacksats.prelude.BTCDataProvider", provider_cls)
+    mocker.patch("stacksats.data.prelude.BTCDataProvider", provider_cls)
 
     with pytest.raises(DataLoadError, match="does not cover requested end_date"):
         load_data(parquet_path="~/analytics.parquet", end_date="2020-12-31")

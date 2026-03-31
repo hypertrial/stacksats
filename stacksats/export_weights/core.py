@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import polars as pl
 
-from .strategy_types import strategy_context_from_features_df
+from ..strategy_types import strategy_context_from_features_df
 
 
 def _to_dt(val) -> datetime:

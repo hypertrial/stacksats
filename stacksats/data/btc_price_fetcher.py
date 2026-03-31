@@ -17,7 +17,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from ._optional import import_optional
+from .._optional import import_optional
 
 requests = import_optional(
     "requests",

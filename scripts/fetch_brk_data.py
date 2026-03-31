@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin wrapper around stacksats.data_setup fetch helpers."""
+"""Thin wrapper around stacksats.data.data_setup fetch helpers."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import argparse
 from json import JSONDecodeError
 import sys
 
-from stacksats.data_setup import (
+from stacksats.data.data_setup import (
     DownloadError,
     MANAGED_BRK_DIR,
     ManifestError,

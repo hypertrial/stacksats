@@ -9,16 +9,15 @@ import re
 import sys
 
 HOTPATH_FILES = (
-    "stacksats/data_btc.py",
-    "stacksats/column_map_provider.py",
-    "stacksats/model_development_allocation.py",
-    "stacksats/model_development_features.py",
-    "stacksats/model_development_helpers.py",
-    "stacksats/model_development_weights.py",
-    "stacksats/prelude.py",
-    "stacksats/feature_providers.py",
-    "stacksats/feature_registry.py",
-    "stacksats/runner_helpers.py",
+    "stacksats/data/data_btc.py",
+    "stacksats/features/column_map_provider.py",
+    "stacksats/model_development/allocation.py",
+    "stacksats/model_development/features.py",
+    "stacksats/model_development/helpers.py",
+    "stacksats/model_development/weights.py",
+    "stacksats/features/providers.py",
+    "stacksats/features/registry.py",
+    "stacksats/runner/helpers.py",
 )
 
 PATTERN = re.compile(
@@ -26,11 +25,11 @@ PATTERN = re.compile(
 )
 
 ALLOWLIST: dict[str, tuple[str, ...]] = {
-    "stacksats/model_development_allocation.py": (
+    "stacksats/model_development/allocation.py": (
         'raw = target_df["_raw"].to_numpy()',
         'proposed_arr = full_df["_v"].to_numpy()',
     ),
-    "stacksats/model_development_features.py": (
+    "stacksats/model_development/features.py": (
         'df["price_vs_ma"].to_numpy()',
         'df["mvrv_zscore"].to_numpy()',
         'df["mvrv_gradient"].to_numpy()',
@@ -39,21 +38,21 @@ ALLOWLIST: dict[str, tuple[str, ...]] = {
         'df["mvrv_volatility"].to_numpy()',
         'df["signal_confidence"].to_numpy()',
     ),
-    "stacksats/model_development_helpers.py": (
+    "stacksats/model_development/helpers.py": (
         "arr = series.to_numpy()",
         "values = window_series.to_numpy()",
         "arr = vol.to_numpy()",
     ),
-    "stacksats/model_development_weights.py": (
+    "stacksats/model_development/weights.py": (
         'raw = merged["_raw"].to_numpy()',
         'weights["weight"].to_numpy().astype(float)',
     ),
-    "stacksats/prelude.py": (
+    "stacksats/data/prelude.py": (
         "return s.to_list()",
         "dynamic_pct.to_numpy()",
         "uniform_pct.to_numpy()",
     ),
-    "stacksats/runner_helpers.py": (
+    "stacksats/runner/helpers.py": (
         "rev_vals = future[col].reverse().to_list()",
         "arr = perturbed[col].to_list()",
         'mask_arr = (perturbed[DATE_COL] > probe).to_numpy()',

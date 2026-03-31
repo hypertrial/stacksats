@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from stacksats.strategy_time_series_schema import (
+from stacksats.strategy_time_series.schema import (
     ColumnSpec,
     merge_schema_specs,
     schema_specs,

@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Changed
 
+- **Breaking:** Reorganized the Python package into domain subpackages. Imports that pointed at former top-level modules must be updated (for example `stacksats.model_development_helpers` → `stacksats.model_development.helpers`, `stacksats.runner_helpers` → `stacksats.runner.helpers`, `stacksats.execution_state` → `stacksats.execution.state`, `stacksats.prelude` → `stacksats.data.prelude`, `stacksats.feature_registry` → `stacksats.features.registry`, plot CLIs use `stacksats.viz.plot_mvrv` / `stacksats.viz.plot_weights`, and `export_weights_*` modules live under `stacksats.export_weights`). The curated public API in `stacksats` `__init__` is unchanged.
 - Documentation: shortened the PyPI-facing README with deeper links into MkDocs; added a system overview page and troubleshooting hub; moved What's New into the docs Start nav; linked security reporting from agent and decide-daily docs; documented pytest marker defaults in `CONTRIBUTING.md`.
 
 ### Fixed
@@ -233,7 +234,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Runtime modules no longer execute dotenv or matplotlib backend/style setup at import time.
 
 ### Removed
-- Compatibility API `stacksats.model_development.softmax(...)` (use `stacksats.model_development_helpers.softmax(...)`).
+- Compatibility API `stacksats.model_development.softmax(...)` (use `stacksats.model_development.helpers.softmax(...)`).
 - Compatibility API `BaseStrategy.export_weights(...)` (use `BaseStrategy.export(...)`).
 
 ## [0.4.0] - 2026-02-18
@@ -259,7 +260,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
   - `stacksats.backtest.compute_weights_shared(...)`
   - `stacksats.backtest._FEATURES_DF`
 - Legacy fixed-end constant was removed:
-  - `stacksats.prelude.BACKTEST_END` (use `get_backtest_end()`).
+  - `stacksats.data.prelude.BACKTEST_END` (use `get_backtest_end()`).
 - Legacy export module defaults were removed:
   - `RANGE_START`, `RANGE_END`, `MIN_RANGE_LENGTH_DAYS`.
 

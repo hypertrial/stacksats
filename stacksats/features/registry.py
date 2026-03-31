@@ -8,8 +8,8 @@ import json
 
 import polars as pl
 
-from .feature_materialization import hash_dataframe, normalize_timestamp
-from .feature_providers import (
+from .materialization import hash_dataframe, normalize_timestamp
+from .providers import (
     BRKOverlayFeatureProvider,
     CoreModelFeatureProvider,
     FeatureProvider,

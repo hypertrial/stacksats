@@ -9,8 +9,8 @@ from typing import Protocol
 import numpy as np
 import polars as pl
 
-from .feature_materialization import build_observed_frame, hash_dataframe
-from .model_development_features import precompute_features_lazy
+from .materialization import build_observed_frame, hash_dataframe
+from ..model_development.features import precompute_features_lazy
 
 DATE_COL = "date"
 BRK_OPTIONAL_SOURCE_COLUMNS = (

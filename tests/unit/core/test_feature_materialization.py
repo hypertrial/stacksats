@@ -5,12 +5,12 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from stacksats.feature_materialization import (
+from stacksats.features.materialization import (
     build_observed_frame,
     hash_dataframe,
     materialize_versioned_observations,
 )
-from stacksats.prelude import date_range_list
+from stacksats.data.prelude import date_range_list
 
 
 def test_build_observed_frame_restricts_to_observed_prefix() -> None:

@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from stacksats.column_map_provider import ColumnMapDataProvider, ColumnMapError
+from stacksats.features.column_map_provider import ColumnMapDataProvider, ColumnMapError
 from stacksats.runner import StrategyRunner
 
 

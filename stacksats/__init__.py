@@ -11,12 +11,12 @@ from .api import (
     ExecutionStatusResult,
     ValidationResult,
 )
-from .column_map_provider import ColumnMapDataProvider, ColumnMapError
+from .features.column_map_provider import ColumnMapDataProvider, ColumnMapError
 from .eda import MergedMetricsDataset, MetricCatalog, load_metric_catalog, open_merged_metrics
-from .feature_time_series import FeatureTimeSeries
+from .features.time_series import FeatureTimeSeries
 from .loader import load_strategy
 from .model_development import precompute_features
-from .prelude import load_data
+from .data.prelude import load_data
 from .runner import StrategyRunner
 from .service import create_agent_service_app
 from .strategy_time_series import (

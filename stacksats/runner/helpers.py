@@ -8,9 +8,9 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
-from .feature_materialization import hash_dataframe
-from .framework_contract import ALLOCATION_SPAN_DAYS
-from .strategy_types import TargetProfile
+from ..features.materialization import hash_dataframe
+from ..framework_contract import ALLOCATION_SPAN_DAYS
+from ..strategy_types import TargetProfile
 
 DATE_COL = "date"
 

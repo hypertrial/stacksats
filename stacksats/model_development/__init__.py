@@ -1,10 +1,9 @@
 """Dynamic DCA feature/weight public facade.
 
-This module keeps the historical public API while delegating implementation to
-smaller internal modules:
-- model_development_features.py
-- model_development_allocation.py
-- model_development_weights.py
+Implementation modules:
+- model_development.features
+- model_development.allocation
+- model_development.weights
 """
 
 from __future__ import annotations
@@ -14,25 +13,25 @@ import datetime as dt
 import numpy as np
 import polars as pl
 
-from .framework_contract import (
+from ..framework_contract import (
     MIN_DAILY_WEIGHT,
     assert_final_invariants,
     validate_span_length,
 )
-from .model_development_allocation import (
+from .allocation import (
     _compute_stable_signal,
     allocate_sequential_stable,
     allocate_from_proposals,
     compute_weights_from_proposals as _compute_weights_from_proposals_impl,
     compute_weights_from_target_profile as _compute_weights_from_target_profile_impl,
 )
-from .model_development_features import (
+from .features import (
     _clean_array,
     compute_dynamic_multiplier as _compute_dynamic_multiplier_impl,
     compute_preference_scores as _compute_preference_scores_impl,
     precompute_features as _precompute_features_impl,
 )
-from .model_development_helpers import (
+from .helpers import (
     classify_mvrv_zone,
     compute_acceleration_modifier,
     compute_adaptive_trend_modifier,
@@ -43,7 +42,7 @@ from .model_development_helpers import (
     rolling_percentile,
     zscore,
 )
-from .model_development_weights import (
+from .weights import (
     compute_weights_fast as _compute_weights_fast_impl,
     compute_window_weights as _compute_window_weights_impl,
 )

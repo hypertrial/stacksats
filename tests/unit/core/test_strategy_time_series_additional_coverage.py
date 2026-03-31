@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from stacksats.strategy_time_series import StrategySeriesMetadata, WeightTimeSeries
-from stacksats.strategy_time_series_schema import ColumnSpec
+from stacksats.strategy_time_series.schema import ColumnSpec
 
 
 def _metadata() -> StrategySeriesMetadata:
@@ -143,7 +143,7 @@ def test_strategy_time_series_date_contract_direct_edge_paths(monkeypatch: pytes
 
     with monkeypatch.context() as patcher:
         patcher.setattr(
-            "stacksats.prelude.date_range_list",
+            "stacksats.data.prelude.date_range_list",
             lambda start, end: [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 3)],
         )
         with pytest.raises(ValueError, match="unexpected dates detected"):
@@ -167,7 +167,7 @@ def test_strategy_time_series_date_contract_direct_edge_paths(monkeypatch: pytes
 
     with monkeypatch.context() as patcher:
         patcher.setattr(
-            "stacksats.prelude.date_range_list",
+            "stacksats.data.prelude.date_range_list",
             lambda start, end: [
                 dt.datetime(2024, 1, 1),
                 dt.datetime(2024, 1, 2),

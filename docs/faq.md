@@ -76,7 +76,7 @@ Use explicit replacements from [Migration Guide](migration.md):
 
 Both compatibility APIs were removed:
 
-- `stacksats.model_development.softmax(...)` -> `stacksats.model_development_helpers.softmax(...)`
+- `stacksats.model_development.softmax(...)` -> `stacksats.model_development.helpers.softmax(...)`
 - `BaseStrategy.export_weights(...)` -> `BaseStrategy.export(...)`
 
 See: [Migration Guide](migration.md).

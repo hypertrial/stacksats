@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from stacksats.api import DailyOrderReceipt, DailyOrderRequest
-from stacksats.execution_adapters import (
+from stacksats.execution.adapters import (
     PaperExecutionAdapter,
     load_execution_adapter,
 )

@@ -21,16 +21,16 @@ sys.path.insert(0, str(ROOT))
 
 from run_all_strategies import ROOT as AUDIT_ROOT
 from run_all_strategies import STRATEGY_SPECS, _load_audit_dataset
-from stacksats.feature_providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
-from stacksats.feature_registry import DEFAULT_FEATURE_REGISTRY
+from stacksats.features.providers import BRKOverlayFeatureProvider, CoreModelFeatureProvider
+from stacksats.features.registry import DEFAULT_FEATURE_REGISTRY
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
 from stacksats.loader import load_strategy
 from stacksats.model_development import precompute_features
-from stacksats.model_development_allocation import (
+from stacksats.model_development.allocation import (
     _compute_stable_signal,
     allocate_sequential_stable,
 )
-from stacksats.prelude import DATE_COL, WINDOW_DAYS, compute_cycle_spd
+from stacksats.data.prelude import DATE_COL, WINDOW_DAYS, compute_cycle_spd
 from stacksats.runner import StrategyRunner
 from stacksats.strategy_types import ValidationConfig
 from stacksats.framework_contract import apply_clipped_weight

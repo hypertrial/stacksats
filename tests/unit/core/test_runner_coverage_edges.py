@@ -55,7 +55,7 @@ def test_framework_backtest_adapter_batch_all_windows_skipped_returns_empty_sche
 ) -> None:
     """Batch returns empty schema when all windows hit continue (height mismatch or empty weights)."""
     from stacksats.runner import _FrameworkBacktestAdapter
-    from stacksats.runner_helpers import build_window_bounds, build_window_index
+    from stacksats.runner.helpers import build_window_bounds, build_window_index
 
     runner = StrategyRunner()
     strategy = _UniformStrategy()
@@ -108,7 +108,7 @@ def test_framework_backtest_adapter_batch_uses_slice_window_or_filter_when_can_s
     but the filter returns exactly expected_days rows.
     """
     from stacksats.runner import _FrameworkBacktestAdapter
-    from stacksats.runner_helpers import build_window_bounds, build_window_index
+    from stacksats.runner.helpers import build_window_bounds, build_window_index
 
     runner = StrategyRunner()
     strategy = _UniformStrategy()
@@ -213,7 +213,7 @@ def test_build_fold_ranges_handles_short_and_valid_history(
     assert folds == []
 
     monkeypatch.setattr(
-        "stacksats.runner_helpers.np.linspace",
+        "stacksats.runner.helpers.np.linspace",
         lambda *args, **kwargs: np.array([0, 0, 10, 20, 30], dtype=int),
     )
     skipped = StrategyRunner._build_fold_ranges(

@@ -42,6 +42,7 @@ Use this page as the current-release landing pointer.
 
 ## Upgrade notes
 
+- If you relied on **direct imports** of internal modules (paths like `stacksats.runner_helpers` or `stacksats.prelude`), see [Python package layout (internal imports)](migration.md#python-package-layout-internal-imports) in the Migration Guide and the **Unreleased** section of [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md).
 - The main CLI onboarding path is now `stacksats demo backtest`, not a manually prepared runtime parquet.
 - Source-contract posture remains strict: canonical source dataset is `merged_metrics*.parquet`, while runtime workflows consume a derived BRK-wide parquet (or user-supplied Polars DataFrame).
 - If you maintain release workflows, rebuild publishable artifacts only after creating the annotated release tag.

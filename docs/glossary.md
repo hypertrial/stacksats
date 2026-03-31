@@ -78,4 +78,4 @@ Common artifacts include `backtest_result.json`, `metrics.json`, `weights.csv`, 
 Stable interfaces documented in top-level `stacksats` exports, documented artifact payloads, and the documented CLI subset.
 
 ### Internal Modules
-Lower-level implementation modules that may change between releases (for example `stacksats.runner`, `stacksats.strategy_types`, `stacksats.backtest`, `stacksats.prelude`, and `stacksats.export_weights`). Prefer top-level public API surfaces for long-term integrations.
+Lower-level implementation modules that may change between releases (for example `stacksats.runner`, `stacksats.strategy_types`, `stacksats.backtest`, `stacksats.data.prelude`, and `stacksats.export_weights`). Prefer top-level public API surfaces for long-term integrations.

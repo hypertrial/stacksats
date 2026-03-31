@@ -106,7 +106,7 @@ def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -
                 [
                     "from pathlib import Path",
                     "import stacksats",
-                    "from stacksats.data_setup import packaged_demo_parquet_path, packaged_text",
+                    "from stacksats.data.data_setup import packaged_demo_parquet_path, packaged_text",
                     "from stacksats.eda import load_metric_catalog, open_merged_metrics",
                     "import polars as pl",
                     "print(Path(stacksats.__file__).resolve())",

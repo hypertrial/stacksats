@@ -21,7 +21,7 @@ from stacksats.export_weights import (
     today_data_exists,
 )
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS
-from stacksats.prelude import DATE_FREQ, date_range_list
+from stacksats.data.prelude import DATE_FREQ, date_range_list
 from tests.test_helpers import PRICE_COL
 
 

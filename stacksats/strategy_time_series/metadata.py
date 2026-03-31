@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 
-from ._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
+from .._contract import PUBLIC_ARTIFACT_SCHEMA_VERSION
 
 
 def _utc_now() -> dt.datetime:

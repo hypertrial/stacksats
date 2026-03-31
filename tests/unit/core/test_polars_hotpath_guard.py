@@ -30,9 +30,9 @@ def test_find_hotpath_refs_passes_for_current_repo() -> None:
 
 
 def test_find_hotpath_refs_reports_non_allowlisted_escape(tmp_path: Path) -> None:
-    target = tmp_path / "stacksats"
-    target.mkdir()
-    hotpath = target / "feature_registry.py"
+    target = tmp_path / "stacksats" / "features"
+    target.mkdir(parents=True)
+    hotpath = target / "registry.py"
     hotpath.write_text(
         'frame = pl.read_parquet("x.parquet")\nvalue = df.to_numpy()\n',
         encoding="utf-8",
@@ -41,15 +41,15 @@ def test_find_hotpath_refs_reports_non_allowlisted_escape(tmp_path: Path) -> Non
     matches = guard.find_hotpath_refs(tmp_path)
 
     assert [(match.path, match.line) for match in matches] == [
-        ("stacksats/feature_registry.py", 1),
-        ("stacksats/feature_registry.py", 2),
+        ("stacksats/features/registry.py", 1),
+        ("stacksats/features/registry.py", 2),
     ]
 
 
 def test_find_hotpath_refs_reports_rolling_map(tmp_path: Path) -> None:
-    target = tmp_path / "stacksats"
-    target.mkdir()
-    hotpath = target / "model_development_helpers.py"
+    target = tmp_path / "stacksats" / "model_development"
+    target.mkdir(parents=True)
+    hotpath = target / "helpers.py"
     hotpath.write_text(
         "expr.rolling_map(func, window_size=10)\n",
         encoding="utf-8",
@@ -58,14 +58,14 @@ def test_find_hotpath_refs_reports_rolling_map(tmp_path: Path) -> None:
     matches = guard.find_hotpath_refs(tmp_path)
 
     assert [(match.path, match.line) for match in matches] == [
-        ("stacksats/model_development_helpers.py", 1),
+        ("stacksats/model_development/helpers.py", 1),
     ]
 
 
 def test_find_hotpath_refs_allows_explicit_allowlisted_lines(tmp_path: Path) -> None:
-    target = tmp_path / "stacksats"
-    target.mkdir()
-    hotpath = target / "model_development_weights.py"
+    target = tmp_path / "stacksats" / "model_development"
+    target.mkdir(parents=True)
+    hotpath = target / "weights.py"
     hotpath.write_text(
         'raw = merged["_raw"].to_numpy()\n'
         'assert_final_invariants_fn(weights["weight"].to_numpy().astype(float))\n',

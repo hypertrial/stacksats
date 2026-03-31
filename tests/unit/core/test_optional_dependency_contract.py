@@ -10,9 +10,9 @@ import polars as pl
 import pytest
 
 import stacksats._optional as optional
-import stacksats.btc_price_fetcher as btc_price_fetcher
-import stacksats.plot_mvrv as plot_mvrv
-import stacksats.plot_weights as plot_weights
+import stacksats.data.btc_price_fetcher as btc_price_fetcher
+import stacksats.viz.plot_mvrv as plot_mvrv
+import stacksats.viz.plot_weights as plot_weights
 from stacksats.service import create_agent_service_app
 from stacksats.strategy_types import AgentServiceConfig
 
@@ -225,9 +225,9 @@ def test_plot_weights_list_does_not_require_viz_extra(
             feature="plotting commands",
         ),
     )
-    monkeypatch.setattr("stacksats.plot_weights.get_db_connection", lambda: mock_conn)
+    monkeypatch.setattr("stacksats.viz.plot_weights.get_db_connection", lambda: mock_conn)
     monkeypatch.setattr(
-        "stacksats.plot_weights.get_date_range_options",
+        "stacksats.viz.plot_weights.get_date_range_options",
         lambda _conn: pl.DataFrame(
             {
                 "start_date": [pl.datetime(2024, 1, 1, 0, 0, 0, time_unit="us")],

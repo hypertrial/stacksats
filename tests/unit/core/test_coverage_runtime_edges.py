@@ -13,12 +13,12 @@ import polars as pl
 import pytest
 
 from stacksats.api import BacktestResult, DailyRunResult, ValidationResult
-from stacksats.execution_adapters import load_execution_adapter
-from stacksats.export_weights_runtime import insert_all_data
-from stacksats.execution_state import IdempotencyConflictError, SQLiteExecutionStateStore
-from stacksats.prelude import compute_cycle_spd
+from stacksats.execution.adapters import load_execution_adapter
+from stacksats.export_weights.runtime import insert_all_data
+from stacksats.execution.state import IdempotencyConflictError, SQLiteExecutionStateStore
+from stacksats.data.prelude import compute_cycle_spd
 from stacksats.runner import StrategyRunner
-from stacksats.runner_validation import _ValidationState
+from stacksats.runner.validation import _ValidationState
 from stacksats.strategy_types import BaseStrategy, RunDailyConfig, ValidationConfig
 
 
@@ -139,7 +139,7 @@ def test_execution_adapter_error_branches(tmp_path: Path, monkeypatch) -> None:
         load_execution_adapter(f"{boom_module}:Any")
 
     monkeypatch.setattr(
-        "stacksats.execution_adapters.importlib.util.spec_from_file_location",
+        "stacksats.execution.adapters.importlib.util.spec_from_file_location",
         lambda *a, **k: type("Spec", (), {"loader": None})(),
     )
     fake = tmp_path / "fake.py"
@@ -416,7 +416,7 @@ def test_runner_run_daily_uncovered_paths(tmp_path: Path, monkeypatch) -> None:
     assert "DailyOrderReceipt" in bad_receipt.message
 
     monkeypatch.setattr(
-        "stacksats.execution_adapters.PaperExecutionAdapter.submit_order",
+        "stacksats.execution.adapters.PaperExecutionAdapter.submit_order",
         lambda self, request, idempotency_key: (_ for _ in ()).throw(
             IdempotencyConflictError("conflict")
         ),
@@ -560,9 +560,9 @@ def test_runner_locked_prefix_check_empty_weights_early_return(monkeypatch) -> N
 
 def test_plot_and_export_importerror_fallbacks(monkeypatch) -> None:
     import stacksats.export_weights as export_weights
-    import stacksats.plot_mvrv as plot_mvrv
-    import stacksats.plot_weights as plot_weights
-    from stacksats.export_weights_db import sql_quote
+    import stacksats.viz.plot_mvrv as plot_mvrv
+    import stacksats.viz.plot_weights as plot_weights
+    from stacksats.export_weights.db import sql_quote
 
     # plot_mvrv backend fallback
     monkeypatch.setattr(plot_mvrv.plt, "switch_backend", lambda *_: (_ for _ in ()).throw(RuntimeError("no backend")))

@@ -9,7 +9,7 @@ import pytest
 
 from stacksats.framework_contract import ALLOCATION_SPAN_DAYS, MAX_DAILY_WEIGHT, MIN_DAILY_WEIGHT
 from stacksats.runner import StrategyRunner
-from stacksats.runner_validation import _ValidationState
+from stacksats.runner.validation import _ValidationState
 from stacksats.strategy_types import StrategyContext, ValidationConfig
 from tests.unit.core.runner_validation_testkit import (
     MutatingProposeStrategy,
@@ -291,19 +291,19 @@ def test_strict_statistical_checks_emits_failures_and_drift_diagnostics(
     strategy = _RequiredFeatureStrategy()
 
     monkeypatch.setattr(
-        "stacksats.runner_validation.anchored_window_excess",
+        "stacksats.runner.validation.anchored_window_excess",
         lambda *args, **kwargs: pl.Series("excess", [0.5, -0.2, 0.1]),
     )
     monkeypatch.setattr(
-        "stacksats.runner_validation.block_bootstrap_confidence_interval",
+        "stacksats.runner.validation.block_bootstrap_confidence_interval",
         lambda *args, **kwargs: SimpleNamespace(lower=-0.05, upper=0.25),
     )
     monkeypatch.setattr(
-        "stacksats.runner_validation.paired_block_permutation_pvalue",
+        "stacksats.runner.validation.paired_block_permutation_pvalue",
         lambda *args, **kwargs: 0.9,
     )
     monkeypatch.setattr(
-        "stacksats.runner_validation.build_purged_walk_forward_folds",
+        "stacksats.runner.validation.build_purged_walk_forward_folds",
         lambda *args, **kwargs: [(start_ts, test_start - dt.timedelta(days=1), test_start, test_end)],
     )
 
@@ -316,11 +316,11 @@ def test_strict_statistical_checks_emits_failures_and_drift_diagnostics(
 
     monkeypatch.setattr(runner, "_materialize_strategy_features", _materialize)
     monkeypatch.setattr(
-        "stacksats.runner_validation.population_stability_index",
+        "stacksats.runner.validation.population_stability_index",
         lambda *args, **kwargs: 0.5,
     )
     monkeypatch.setattr(
-        "stacksats.runner_validation.ks_statistic",
+        "stacksats.runner.validation.ks_statistic",
         lambda *args, **kwargs: 0.6,
     )
 

@@ -36,6 +36,8 @@ venv/bin/python scripts/check_release_docs_sync.py
 venv/bin/python scripts/sync_objects_schema_docs.py --check
 venv/bin/python scripts/generate_merged_metrics_taxonomy.py --check
 venv/bin/python scripts/check_no_coinmetrics_refs.py
+venv/bin/python scripts/check_polars_only_refs.py
+venv/bin/python scripts/check_polars_hotpath_refs.py
 venv/bin/python -m mkdocs build --strict
 ```
 

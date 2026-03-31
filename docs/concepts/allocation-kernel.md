@@ -45,8 +45,8 @@ def allocate_from_proposals(proposals, n_past, n_total, locked_weights=None):
 ## Enforcement modules
 
 - `stacksats/framework_contract.py`
-- `stacksats/model_development.py`
-- `stacksats/prelude.py`
+- `stacksats/model_development/` (package; facade in `__init__.py`)
+- `stacksats/data/prelude.py`
 
 ## Related docs
 

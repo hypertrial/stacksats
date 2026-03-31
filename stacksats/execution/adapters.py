@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from .api import DailyOrderReceipt, DailyOrderRequest
+from ..api import DailyOrderReceipt, DailyOrderRequest
 
 
 @runtime_checkable

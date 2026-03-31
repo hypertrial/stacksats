@@ -7,7 +7,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from stacksats import data_setup
+from stacksats.data import data_setup
 
 
 def _valid_manifest_base() -> dict:

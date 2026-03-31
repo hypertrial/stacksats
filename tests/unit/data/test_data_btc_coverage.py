@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from stacksats.data_btc import BTCDataProvider, DataLoadError, _resolve_parquet_path
+from stacksats.data.data_btc import BTCDataProvider, DataLoadError, _resolve_parquet_path
 
 
 def _write_parquet(

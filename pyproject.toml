@@ -115,8 +115,8 @@ exclude_lines = [
 
 [project.scripts]
 stacksats = "stacksats.cli:main"
-stacksats-plot-mvrv = "stacksats.plot_mvrv:main"
-stacksats-plot-weights = "stacksats.plot_weights:main"
+stacksats-plot-mvrv = "stacksats.viz.plot_mvrv:main"
+stacksats-plot-weights = "stacksats.viz.plot_weights:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -224,7 +224,7 @@ def test_validate_reports_win_rate_threshold_failure_message(
 def test_export_raises_when_no_ranges_generated(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = StrategyRunner()
     strategy = UniformProposeStrategy()
-    monkeypatch.setattr("stacksats.prelude.generate_date_ranges", lambda *args, **kwargs: [])
+    monkeypatch.setattr("stacksats.data.prelude.generate_date_ranges", lambda *args, **kwargs: [])
 
     with pytest.raises(ValueError, match="No export ranges generated"):
         runner.export(
@@ -476,7 +476,7 @@ def test_reconcile_daily_run_raises_when_no_stored_run(
             del kwargs
             return None
 
-    monkeypatch.setattr("stacksats.execution_state.SQLiteExecutionStateStore", _Store)
+    monkeypatch.setattr("stacksats.execution.state.SQLiteExecutionStateStore", _Store)
 
     runner = StrategyRunner()
     with pytest.raises(ValueError, match="No stored daily run exists"):

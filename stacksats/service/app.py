@@ -39,7 +39,7 @@ except ModuleNotFoundError as exc:
 from fastapi.responses import JSONResponse
 
 from ..api import ExecutionReceiptEvent
-from ..execution_state import ReceiptConflictError, SQLiteExecutionStateStore
+from ..execution.state import ReceiptConflictError, SQLiteExecutionStateStore
 from ..loader import load_strategy
 from ..runner import StrategyRunner
 from ..strategy_types import AgentServiceConfig, DecideDailyConfig

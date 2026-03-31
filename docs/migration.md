@@ -33,7 +33,7 @@ This page covers migration for:
 | hardcoded backtest end constants | `get_backtest_end()` |
 | `generate_date_ranges(start, end, min_length_days)` | `generate_date_ranges(start, end)` |
 | `RANGE_START` / `RANGE_END` / `MIN_RANGE_LENGTH_DAYS` module defaults | set explicit app-level defaults in your own code/config |
-| `stacksats.model_development.softmax(...)` | `stacksats.model_development_helpers.softmax(...)` |
+| `stacksats.model_development.softmax(...)` | `stacksats.model_development.helpers.softmax(...)` |
 | `BaseStrategy.export_weights(config=None, **kwargs)` | `BaseStrategy.export(config=None, **kwargs)` |
 | `stacksats.load_data(cache_dir=..., max_age_hours=...)` | `stacksats.load_data(parquet_path=..., max_staleness_days=..., end_date=...)` |
 | `coinmetrics_overlay_v1` provider ID | `brk_overlay_v1` provider ID |
@@ -47,6 +47,42 @@ This page covers migration for:
 | `stacksats.strategies.model_example:ExampleMVRVStrategy` | `stacksats.strategies.experimental.model_example:ExampleMVRVStrategy` |
 | `stacksats.strategies.model_mvrv_plus:MVRVPlusStrategy` | `stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy` |
 | importing advanced BRK overlay models from top-level `stacksats` | use the experimental namespace directly |
+
+## Python package layout (internal imports)
+
+If you imported **implementation modules** directly (not the stable top-level [`stacksats`](reference/public-api.md) surface), update paths after the domain package reorganization:
+
+| Old | New |
+| --- | --- |
+| `stacksats.model_development_helpers` | `stacksats.model_development.helpers` |
+| `stacksats.model_development_allocation` | `stacksats.model_development.allocation` |
+| `stacksats.model_development_features` | `stacksats.model_development.features` |
+| `stacksats.model_development_weights` | `stacksats.model_development.weights` |
+| `stacksats.feature_registry` | `stacksats.features.registry` |
+| `stacksats.feature_providers` | `stacksats.features.providers` |
+| `stacksats.feature_materialization` | `stacksats.features.materialization` |
+| `stacksats.feature_time_series` | `stacksats.features.time_series` |
+| `stacksats.column_map_provider` | `stacksats.features.column_map_provider` |
+| `stacksats.data_btc` | `stacksats.data.data_btc` |
+| `stacksats.data_setup` | `stacksats.data.data_setup` |
+| `stacksats.btc_price_fetcher` | `stacksats.data.btc_price_fetcher` |
+| `stacksats.prelude` | `stacksats.data.prelude` |
+| `stacksats.plot_mvrv` / `plot_weights` / `animation_render` / `animation_data` / `matplotlib_setup` | `stacksats.viz.<module>` |
+| `stacksats.export_weights_core` | `stacksats.export_weights.core` |
+| `stacksats.export_weights_db` | `stacksats.export_weights.db` |
+| `stacksats.export_weights_runtime` | `stacksats.export_weights.runtime` |
+| `stacksats.export_weights_sql` | `stacksats.export_weights.sql` |
+| `stacksats.strategy_time_series_batch` | `stacksats.strategy_time_series.batch` |
+| `stacksats.strategy_time_series_schema` | `stacksats.strategy_time_series.schema` |
+| `stacksats.strategy_time_series_metadata` | `stacksats.strategy_time_series.metadata` |
+| `stacksats.strategy_time_series_analysis` | `stacksats.strategy_time_series.analysis` |
+| `stacksats.strategy_time_series_diagnostics` | `stacksats.strategy_time_series.diagnostics` |
+| `stacksats.runner_helpers` | `stacksats.runner.helpers` |
+| `stacksats.runner_validation` | `stacksats.runner.validation` |
+| `stacksats.execution_state` | `stacksats.execution.state` |
+| `stacksats.execution_adapters` | `stacksats.execution.adapters` |
+
+These remain valid **import paths** as packages: `stacksats.runner`, `stacksats.strategy_time_series`, `stacksats.export_weights`, `stacksats.model_development`. Plotting console scripts target `stacksats.viz.plot_mvrv` and `stacksats.viz.plot_weights` (see `pyproject.toml` `[project.scripts]`).
 
 ## Polars migration (core objects)
 
@@ -102,7 +138,7 @@ ranges = generate_date_ranges("2025-12-01", "2027-12-31")
 from stacksats.model_development import softmax
 
 # new
-from stacksats.model_development_helpers import softmax
+from stacksats.model_development.helpers import softmax
 ```
 
 ### 5) Strategy export helper

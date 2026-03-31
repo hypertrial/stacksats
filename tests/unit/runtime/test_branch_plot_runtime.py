@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import polars as pl
 
-from stacksats.plot_mvrv import main as plot_mvrv_main
-from stacksats.plot_weights import main as plot_weights_main, plot_dca_weights
+from stacksats.viz.plot_mvrv import main as plot_mvrv_main
+from stacksats.viz.plot_weights import main as plot_weights_main, plot_dca_weights
 
 
 def test_plot_mvrv_main_returns_nonzero_on_value_error(
@@ -19,7 +19,7 @@ def test_plot_mvrv_main_returns_nonzero_on_value_error(
             "price_usd": [100.0, 101.0],
         }
     )
-    monkeypatch.setattr("stacksats.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: bad_df)
+    monkeypatch.setattr("stacksats.viz.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: bad_df)
     monkeypatch.setattr(sys, "argv", ["plot_mvrv.py"])
 
     assert plot_mvrv_main() == 1
@@ -31,7 +31,7 @@ def test_plot_mvrv_main_returns_nonzero_on_unexpected_error(
     def _boom():
         raise RuntimeError("unexpected")
 
-    monkeypatch.setattr("stacksats.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: _boom())
+    monkeypatch.setattr("stacksats.viz.plot_mvrv.BTCDataProvider.load", lambda *_args, **_kwargs: _boom())
     monkeypatch.setattr(sys, "argv", ["plot_mvrv.py"])
 
     assert plot_mvrv_main() == 1
@@ -50,7 +50,7 @@ def test_plot_weights_handles_future_only_data_and_normalizes(
             "day_index": [0, 1, 2],
         }
     )
-    monkeypatch.setattr("stacksats.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("stacksats.viz.plot_weights.plt.savefig", lambda *_args, **_kwargs: None)
 
     plot_dca_weights(
         df,
@@ -75,13 +75,13 @@ def test_plot_weights_main_uses_oldest_range_when_no_args(
         captured["start_date"] = start_date
         captured["end_date"] = end_date
 
-    monkeypatch.setattr("stacksats.plot_weights.get_db_connection", lambda: conn)
+    monkeypatch.setattr("stacksats.viz.plot_weights.get_db_connection", lambda: conn)
     monkeypatch.setattr(
-        "stacksats.plot_weights.get_oldest_date_range",
+        "stacksats.viz.plot_weights.get_oldest_date_range",
         lambda _conn: ("2024-01-01", "2024-12-31"),
     )
     monkeypatch.setattr(
-        "stacksats.plot_weights.fetch_weights_for_date_range",
+        "stacksats.viz.plot_weights.fetch_weights_for_date_range",
         lambda _conn, _start, _end: pl.DataFrame(
             {
                 "date": [dt.datetime(2024, 1, 1), dt.datetime(2024, 1, 2)],
@@ -91,7 +91,7 @@ def test_plot_weights_main_uses_oldest_range_when_no_args(
             }
         ),
     )
-    monkeypatch.setattr("stacksats.plot_weights.plot_dca_weights", _fake_plot)
+    monkeypatch.setattr("stacksats.viz.plot_weights.plot_dca_weights", _fake_plot)
     monkeypatch.setattr(sys, "argv", ["plot_weights.py"])
 
     plot_weights_main()

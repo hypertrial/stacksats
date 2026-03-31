@@ -20,7 +20,7 @@ from stacksats.model_development import (
     precompute_features,
     zscore,
 )
-from stacksats.model_development_helpers import softmax
+from stacksats.model_development.helpers import softmax
 
 # -----------------------------------------------------------------------------
 # Given Steps - Weight-specific Setup

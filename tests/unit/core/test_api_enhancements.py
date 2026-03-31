@@ -144,7 +144,7 @@ def test_backtest_result_animate_writes_manifest_and_returns_paths(
             "height": height,
         }
 
-    mocker.patch("stacksats.animation_render.render_strategy_vs_uniform_gif", _fake_render)
+    mocker.patch("stacksats.viz.animation_render.render_strategy_vs_uniform_gif", _fake_render)
 
     paths = result.animate(
         output_dir=str(tmp_path),
@@ -193,7 +193,7 @@ def test_backtest_result_animate_records_null_source_backtest_json(
             "height": 600,
         }
 
-    mocker.patch("stacksats.animation_render.render_strategy_vs_uniform_gif", _fake_render)
+    mocker.patch("stacksats.viz.animation_render.render_strategy_vs_uniform_gif", _fake_render)
 
     paths = result.animate(output_dir=str(tmp_path))
     manifest = json.loads(Path(paths["manifest_json"]).read_text(encoding="utf-8"))
