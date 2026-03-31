@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - "docs/**"
+      # Do not ignore docs/** — tests assert on docs content (see package-check.yml).
       - "mkdocs.yml"
       - ".github/workflows/docs-*.yml"
       - ".github/workflows/docs-*.yaml"

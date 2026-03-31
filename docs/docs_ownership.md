@@ -58,6 +58,7 @@ Update docs in the same PR when any of these change:
 - BRK data distribution changes (`stacksats/assets/brk_data_manifest.json`, `data/brk_data_manifest.json`, `scripts/fetch_brk_data.py`, `stacksats/data_setup.py`, Drive workflow): update `docs/data-source.md`, `README.md`, and relevant task/command pages.
 - merged-metrics namespace changes (`merged_metrics*.parquet`, `scripts/generate_merged_metrics_taxonomy.py`): regenerate `data/brk_merged_metrics_taxonomy.json`, `data/brk_merged_metrics_catalog.json`, `docs/reference/merged-metrics-data-guide.md`, `docs/reference/merged-metrics-taxonomy.md`, and update `docs/reference/merged-metrics-parquet-schema.md` if the physical contract changes.
 - Docs IA changes (`mkdocs.yml`, `docs/commands.md`, `docs/run/*`): update `scripts/check_docs_ux.py` rules in the same PR.
+- `package-check` / `package-check-pr` path filters (`.github/workflows/package-check.yml`, `.github/workflows/package-check-pr.yml`): if you change which paths trigger the workflow, update `docs/release.md` when maintainer expectations change (for example skipping doc contract tests).
 
 ## Periodic review
 

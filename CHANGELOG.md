@@ -10,6 +10,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - Documentation: shortened the PyPI-facing README with deeper links into MkDocs; added a system overview page and troubleshooting hub; moved What's New into the docs Start nav; linked security reporting from agent and decide-daily docs; documented pytest marker defaults in `CONTRIBUTING.md`.
 
+### Fixed
+
+- CI: `package-check` and `package-check-pr` no longer skip when only files under `docs/` change, so pytest doc contract tests (for example `test_agent_service_docs.py`) run alongside run-page markdown edits.
+
 ## [1.1.1] - 2026-03-29
 
 ### Changed

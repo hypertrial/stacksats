@@ -164,8 +164,9 @@ bash scripts/publish_pypi_manual.sh
 - `release-gate.yml` is the release-grade blocking workflow for `release/*` branches and `v*` tags.
 - `release-gate.yml` now validates the built wheel in isolated virtual environments. It does not rely on inherited site-packages.
 - `release-gate.yml` covers the stable `stacksats` CLI path plus the optional `stacksats-plot-mvrv` helper; it does not attempt database-backed `stacksats-plot-weights` smoke in CI.
-- Pull requests run fast confidence checks (`package-check-pr.yml`) and docs checks. They are intentionally faster than the release gate and are not release sign-off.
+- Pull requests run fast confidence checks (`package-check-pr.yml`) and docs checks. They are intentionally faster than the release gate and are not release sign-off. `package-check-pr.yml` includes `docs/**` so doc contract tests run on doc-only PRs.
 - Pushes to `main` run `package-check.yml` for ongoing confidence, not release approval.
+- `package-check.yml` includes `docs/**` (not only code paths), so pytest doc contract tests stay aligned with `docs/run/*.md` pages.
 - Full non-performance branch-aware coverage also runs in `release-gate.yml`; `coverage-report.yml` remains scheduled/manual maintenance visibility.
 - Coverage fail-under is `100%` line and branch coverage for `stacksats/` and should not be lowered in routine maintenance PRs.
 - CLI docs examples are smoke-tested in scheduled/manual `example-commands-smoke.yml` via `scripts/test_example_commands.py`.
