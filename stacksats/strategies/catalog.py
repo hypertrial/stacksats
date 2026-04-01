@@ -10,10 +10,11 @@ from dataclasses import dataclass
 import importlib
 from typing import Literal
 
-from ..strategy_types import BaseStrategy
+from ..strategy_types import BacktestConfig, BaseStrategy, ValidationConfig
 
 
 StrategyTier = Literal["stable", "experimental", "private"]
+PromotionStage = Literal["research", "candidate", "promoted"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +32,9 @@ class StrategyCatalogEntry:
     description: str
     docs_slug: str
     tags: tuple[str, ...]
+    owner: str
+    benchmark_strategy_ids: tuple[str, ...]
+    promotion_stage: PromotionStage
     default_validation_config: dict[str, object]
     default_backtest_config: dict[str, object]
 
@@ -48,6 +52,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Uniform baseline allocation across each window.",
         docs_slug="uniform",
         tags=("baseline", "sanity-check"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=(),
+        promotion_stage="promoted",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -72,6 +79,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         ),
         docs_slug="run-daily-paper",
         tags=("agent", "daily", "paper"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform",),
+        promotion_stage="promoted",
         default_validation_config={"min_win_rate": 0.0, "strict": False},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -93,6 +103,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Preference tilts toward lower mvrv_zscore values.",
         docs_slug="simple-zscore",
         tags=("toy", "profile", "value"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform", "mvrv"),
+        promotion_stage="promoted",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -111,6 +124,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Contrarian 30-day momentum preference model.",
         docs_slug="momentum",
         tags=("toy", "profile", "momentum"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform", "mvrv"),
+        promotion_stage="promoted",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -129,6 +145,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Core package MVRV and MA preference model.",
         docs_slug="mvrv",
         tags=("baseline", "mvrv", "production"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform",),
+        promotion_stage="promoted",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -150,6 +169,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Experimental MVRV model with multi-horizon BRK overlays.",
         docs_slug="example-mvrv",
         tags=("experimental", "overlay", "brk"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform", "mvrv"),
+        promotion_stage="research",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -171,6 +193,9 @@ _CATALOG: tuple[StrategyCatalogEntry, ...] = (
         description="Experimental MVRV baseline with BRK-aware regime gating.",
         docs_slug="mvrv-plus",
         tags=("experimental", "overlay", "risk"),
+        owner="StackSats Maintainers",
+        benchmark_strategy_ids=("uniform", "mvrv"),
+        promotion_stage="candidate",
         default_validation_config={"min_win_rate": 50.0, "strict": True},
         default_backtest_config={
             "start_date": "2018-01-01",
@@ -204,6 +229,38 @@ def get_strategy_catalog_entry(strategy_id: str) -> StrategyCatalogEntry:
         raise KeyError(f"Unknown built-in strategy_id: {strategy_id}") from exc
 
 
+def find_strategy_catalog_entry(strategy_id: str) -> StrategyCatalogEntry | None:
+    """Return the catalog entry for a built-in strategy ID when present."""
+    return _CATALOG_BY_ID.get(strategy_id)
+
+
+def _coerce_validation_config(payload: dict[str, object]) -> ValidationConfig:
+    return ValidationConfig(**payload)
+
+
+def _coerce_backtest_config(payload: dict[str, object]) -> BacktestConfig:
+    return BacktestConfig(**payload)
+
+
+def validation_config_for_strategy(strategy_id: str) -> ValidationConfig:
+    """Return the typed validation defaults declared in the catalog."""
+    return _coerce_validation_config(
+        get_strategy_catalog_entry(strategy_id).default_validation_config
+    )
+
+
+def backtest_config_for_strategy(strategy_id: str) -> BacktestConfig:
+    """Return the typed backtest defaults declared in the catalog."""
+    return _coerce_backtest_config(
+        get_strategy_catalog_entry(strategy_id).default_backtest_config
+    )
+
+
+def model_card_path_for_entry(entry: StrategyCatalogEntry) -> str:
+    """Return the relative docs path for a built-in model card."""
+    return f"reference/models/{entry.docs_slug}.md"
+
+
 def resolve_catalog_strategy_spec(strategy_id: str) -> str:
     """Return the canonical `module:Class` spec for a built-in strategy ID."""
     return get_strategy_catalog_entry(strategy_id).strategy_spec
@@ -235,9 +292,13 @@ def iter_catalog_strategy_classes(
 
 __all__ = [
     "StrategyCatalogEntry",
+    "backtest_config_for_strategy",
+    "find_strategy_catalog_entry",
     "get_strategy_catalog_entry",
     "iter_catalog_strategy_classes",
     "list_strategies",
     "load_catalog_strategy_class",
+    "model_card_path_for_entry",
     "resolve_catalog_strategy_spec",
+    "validation_config_for_strategy",
 ]

@@ -32,8 +32,11 @@ The scaffold creates:
 
 - the strategy module under `stacksats/strategies/<tier>/<family>/`
 - the matching unit test stub under `tests/unit/strategies/`
+- a model card stub under `docs/reference/models/`
 - missing package `__init__.py` markers for the new family chain
 - a catalog stub in `stacksats/strategies/catalog.py`
+
+Model cards under `docs/reference/models/` are intentionally built outside the main docs nav. They stay linked from the generated [Strategies](../reference/strategies.md) page, so adding a new built-in does not require a manual `mkdocs.yml` nav edit.
 
 ## Choose the inputs deliberately
 
@@ -48,18 +51,23 @@ The scaffold creates:
 After scaffolding:
 
 1. Implement the strategy logic and required feature declarations.
-2. Replace placeholder description text in the class and catalog entry.
+2. Replace placeholder description text in the class, model card, and catalog entry.
 3. Set any durable configuration as public attrs or via `params()`.
-4. Add or expand unit tests beyond the generated metadata smoke test.
+4. Add or expand unit tests beyond the generated smoke coverage.
 5. Review catalog metadata:
    - `tier`
    - `public_export`
    - `audit_enabled`
    - `family`
    - `tags`
+   - `owner`
+   - `benchmark_strategy_ids`
+   - `promotion_stage`
    - docs/backtest/validation defaults
 
 Keep class-level runtime metadata (`strategy_id`, `version`, `description`) authoritative for runtime identity. The catalog is for library-management metadata such as tier, exports, docs grouping, and audit inclusion.
+
+For reusable feature and allocation helpers, use [Model Development Helpers](../concepts/model-development-helpers.md) instead of reimplementing common transforms inline.
 
 ## Regenerate docs and verify behavior
 
@@ -67,6 +75,15 @@ Regenerate the built-in strategy reference after changing catalog entries:
 
 ```bash
 python scripts/generate_strategy_docs.py
+```
+
+Compare a candidate against baselines on the shared default window:
+
+```bash
+python scripts/compare_strategies.py \
+  --strategy alpha-beta \
+  --strategy mvrv \
+  --baseline uniform
 ```
 
 Recommended checks before merging:
@@ -88,11 +105,13 @@ Run any additional targeted backtest or validation checks needed for the new mod
 - Custom strategies are loaded by `module_or_path:ClassName`.
 - Support tier is defined by the catalog entry, not by the implementation module path.
 - Promoting a strategy from experimental to stable is a catalog metadata change first.
+- Promotion stage should move deliberately from `research` to `candidate` to `promoted`.
 - Moving the implementation module to a different directory is optional cleanup, not the source of truth for support status.
 
 ## Related references
 
 - [Strategies](../reference/strategies.md)
+- [Model Development Helpers](../concepts/model-development-helpers.md)
 - [Create a Strategy](../recipes/create-strategy.md)
 - [First Strategy Run](../start/first-strategy-run.md)
 - [Agent API Service](../run/agent-api.md)

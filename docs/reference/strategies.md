@@ -14,11 +14,22 @@ Built-in support tier is defined by catalog metadata, not by the implementation 
 Use this page for:
 
 - built-in behavior and intent mode
+- model card links, owners, and promotion stage
 - required feature sets/columns
 - exposed tuning parameters and defaults
 - canonical validate/backtest/audit commands
 - reasonableness expectations when interpreting model results
 - support tier for stable versus experimental reference strategies
+
+Model cards for all cataloged built-ins:
+
+- [`uniform` model card](models/uniform.md)
+- [`run-daily-paper` model card](models/run-daily-paper.md)
+- [`simple-zscore` model card](models/simple-zscore.md)
+- [`momentum` model card](models/momentum.md)
+- [`mvrv` model card](models/mvrv.md)
+- [`example-mvrv` model card](models/example-mvrv.md)
+- [`mvrv-plus` model card](models/mvrv-plus.md)
 
 ## Purpose and Scope
 
@@ -62,22 +73,22 @@ Scoring defaults used by runtime and strategy audits:
 
 These strategies are part of the stable `1.x` contract because their catalog entries are marked `tier=stable`. Stable built-in strategy IDs: `uniform`, `run-daily-paper`, `simple-zscore`, `momentum`, `mvrv`.
 
-| Strategy | `strategy_id` | Import spec | Tier | Family | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Description / use case |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `UniformStrategy` | `uniform` | `stacksats.strategies.stable.baselines.uniform:UniformStrategy` | `stable` | `baseline` | `propose` | `core_model_features_v1` | none | none | Uniform baseline allocation across each window. Tags: baseline, sanity-check. |
-| `RunDailyPaperStrategy` | `run-daily-paper` | `stacksats.strategies.stable.baselines.run_daily_paper:RunDailyPaperStrategy` | `stable` | `baseline` | `propose` | `core_model_features_v1` | none | none | Canonical agent-facing daily decision example with relaxed daily validation defaults. Tags: agent, daily, paper. |
-| `SimpleZScoreStrategy` | `simple-zscore` | `stacksats.strategies.stable.signals.simple_zscore:SimpleZScoreStrategy` | `stable` | `signal` | `profile` | `core_model_features_v1` | none | none | Preference tilts toward lower mvrv_zscore values. Tags: toy, profile, value. |
-| `MomentumStrategy` | `momentum` | `stacksats.strategies.stable.signals.momentum:MomentumStrategy` | `stable` | `signal` | `profile` | `core_model_features_v1` | `price_usd` | none | Contrarian 30-day momentum preference model. Tags: toy, profile, momentum. |
-| `MVRVStrategy` | `mvrv` | `stacksats.strategies.stable.mvrv.core:MVRVStrategy` | `stable` | `mvrv` | `profile` | `core_model_features_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence` | none | Core package MVRV and MA preference model. Tags: baseline, mvrv, production. |
+| Strategy | `strategy_id` | Model card | Tier | Promotion | Family | Owner | Benchmarks | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Validation defaults | Backtest defaults | Description / use case |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `UniformStrategy` | `uniform` | [card](models/uniform.md) | `stable` | `promoted` | `baseline` | `StackSats Maintainers` | none | `stacksats.strategies.stable.baselines.uniform:UniformStrategy` | `propose` | `core_model_features_v1` | none | none | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Uniform baseline allocation across each window. Tags: baseline, sanity-check. |
+| `RunDailyPaperStrategy` | `run-daily-paper` | [card](models/run-daily-paper.md) | `stable` | `promoted` | `baseline` | `StackSats Maintainers` | `uniform` | `stacksats.strategies.stable.baselines.run_daily_paper:RunDailyPaperStrategy` | `propose` | `core_model_features_v1` | none | none | `min_win_rate=0.0`, `strict=False` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Canonical agent-facing daily decision example with relaxed daily validation defaults. Tags: agent, daily, paper. |
+| `SimpleZScoreStrategy` | `simple-zscore` | [card](models/simple-zscore.md) | `stable` | `promoted` | `signal` | `StackSats Maintainers` | `uniform`, `mvrv` | `stacksats.strategies.stable.signals.simple_zscore:SimpleZScoreStrategy` | `profile` | `core_model_features_v1` | none | none | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Preference tilts toward lower mvrv_zscore values. Tags: toy, profile, value. |
+| `MomentumStrategy` | `momentum` | [card](models/momentum.md) | `stable` | `promoted` | `signal` | `StackSats Maintainers` | `uniform`, `mvrv` | `stacksats.strategies.stable.signals.momentum:MomentumStrategy` | `profile` | `core_model_features_v1` | `price_usd` | none | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Contrarian 30-day momentum preference model. Tags: toy, profile, momentum. |
+| `MVRVStrategy` | `mvrv` | [card](models/mvrv.md) | `stable` | `promoted` | `mvrv` | `StackSats Maintainers` | `uniform` | `stacksats.strategies.stable.mvrv.core:MVRVStrategy` | `profile` | `core_model_features_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence` | none | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Core package MVRV and MA preference model. Tags: baseline, mvrv, production. |
 
 ## Experimental Reference Strategies
 
 These strategies are cataloged as `tier=experimental` and are not part of the stable `1.x` contract. Their current implementation modules may live under `stacksats.strategies.experimental.*`, but support status comes from the catalog entry. Experimental built-in strategy IDs: `example-mvrv`, `mvrv-plus`.
 
-| Strategy | `strategy_id` | Import spec | Tier | Family | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Description / use case |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ExampleMVRVStrategy` | `example-mvrv` | `stacksats.strategies.experimental.overlays.example_mvrv:ExampleMVRVStrategy` | `experimental` | `overlay` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence`, `brk_netflow_fast`, `brk_netflow_slow`, `brk_netflow_slope`, `brk_activity_level`, `brk_activity_div_fast`, `brk_activity_div_slow`, `brk_liquidity_level`, `brk_liquidity_impulse`, `brk_exchange_share_level`, `brk_exchange_share_delta`, `brk_miner_pressure`, `brk_hash_momentum`, `brk_roi30`, `brk_roi1y` | `activity_weight=0.3`, `base_temperature=0.58`, `exchange_share_weight=0.08`, `interaction_weight=0.12`, `liquidity_weight=0.1`, `miner_pressure_weight=0.12`, `momentum_follow_weight=0.18`, `netflow_weight=0.22`, `overlay_features=['brk_netflow_fast', 'brk_netflow_slow', 'brk_netflow_slope', 'brk_activity_level', 'brk_activity_div_fast', 'brk_activity_div_slow', 'brk_liquidity_level', 'brk_liquidity_impulse', 'brk_exchange_share_level', 'brk_exchange_share_delta', 'brk_miner_pressure', 'brk_hash_momentum', 'brk_roi30', 'brk_roi1y']`, `overlay_scale=0.75`, `roi_weight=0.12`, `temperature_confidence_boost=0.55`, `temperature_volatility_penalty=0.35`, `temperature_zone_boost=0.14` | Experimental MVRV model with multi-horizon BRK overlays. Tags: experimental, overlay, brk. |
-| `MVRVPlusStrategy` | `mvrv-plus` | `stacksats.strategies.experimental.overlays.mvrv_plus:MVRVPlusStrategy` | `experimental` | `overlay` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_usd`, `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence`, `brk_netflow`, `brk_exchange_share`, `brk_exchange_share_delta`, `brk_activity_div`, `brk_roi_context`, `brk_liquidity_impulse`, `brk_miner_pressure`, `brk_hash_momentum` | `confidence_boost=0.16`, `deep_value_boost=1.18`, `derived_features=['plus_vol21', 'plus_drawdown90']`, `disagreement_penalty=0.2`, `drawdown_penalty=0.24`, `hash_momentum_weight=0.12`, `high_vol_penalty=0.34`, `miner_pressure_weight=0.2`, `neutral_scale=1.0`, `overheat_dampen=0.62`, `overlay_features=['brk_netflow', 'brk_exchange_share', 'brk_exchange_share_delta', 'brk_activity_div', 'brk_roi_context', 'brk_liquidity_impulse', 'brk_miner_pressure', 'brk_hash_momentum']`, `overlay_scale=0.2`, `risk_budget_base=1.02`, `risk_budget_max=1.22`, `risk_budget_min=0.72`, `smooth_alpha=0.1` | Experimental MVRV baseline with BRK-aware regime gating. Tags: experimental, overlay, risk. |
+| Strategy | `strategy_id` | Model card | Tier | Promotion | Family | Owner | Benchmarks | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Validation defaults | Backtest defaults | Description / use case |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `ExampleMVRVStrategy` | `example-mvrv` | [card](models/example-mvrv.md) | `experimental` | `research` | `overlay` | `StackSats Maintainers` | `uniform`, `mvrv` | `stacksats.strategies.experimental.overlays.example_mvrv:ExampleMVRVStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence`, `brk_netflow_fast`, `brk_netflow_slow`, `brk_netflow_slope`, `brk_activity_level`, `brk_activity_div_fast`, `brk_activity_div_slow`, `brk_liquidity_level`, `brk_liquidity_impulse`, `brk_exchange_share_level`, `brk_exchange_share_delta`, `brk_miner_pressure`, `brk_hash_momentum`, `brk_roi30`, `brk_roi1y` | `activity_weight=0.3`, `base_temperature=0.58`, `exchange_share_weight=0.08`, `interaction_weight=0.12`, `liquidity_weight=0.1`, `miner_pressure_weight=0.12`, `momentum_follow_weight=0.18`, `netflow_weight=0.22`, `overlay_features=['brk_netflow_fast', 'brk_netflow_slow', 'brk_netflow_slope', 'brk_activity_level', 'brk_activity_div_fast', 'brk_activity_div_slow', 'brk_liquidity_level', 'brk_liquidity_impulse', 'brk_exchange_share_level', 'brk_exchange_share_delta', 'brk_miner_pressure', 'brk_hash_momentum', 'brk_roi30', 'brk_roi1y']`, `overlay_scale=0.75`, `roi_weight=0.12`, `temperature_confidence_boost=0.55`, `temperature_volatility_penalty=0.35`, `temperature_zone_boost=0.14` | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Experimental MVRV model with multi-horizon BRK overlays. Tags: experimental, overlay, brk. |
+| `MVRVPlusStrategy` | `mvrv-plus` | [card](models/mvrv-plus.md) | `experimental` | `candidate` | `overlay` | `StackSats Maintainers` | `uniform`, `mvrv` | `stacksats.strategies.experimental.overlays.mvrv_plus:MVRVPlusStrategy` | `profile` | `core_model_features_v1`, `brk_overlay_v1` | `price_usd`, `price_vs_ma`, `mvrv_zscore`, `mvrv_gradient`, `mvrv_percentile`, `mvrv_acceleration`, `mvrv_zone`, `mvrv_volatility`, `signal_confidence`, `brk_netflow`, `brk_exchange_share`, `brk_exchange_share_delta`, `brk_activity_div`, `brk_roi_context`, `brk_liquidity_impulse`, `brk_miner_pressure`, `brk_hash_momentum` | `confidence_boost=0.16`, `deep_value_boost=1.18`, `derived_features=['plus_vol21', 'plus_drawdown90']`, `disagreement_penalty=0.2`, `drawdown_penalty=0.24`, `hash_momentum_weight=0.12`, `high_vol_penalty=0.34`, `miner_pressure_weight=0.2`, `neutral_scale=1.0`, `overheat_dampen=0.62`, `overlay_features=['brk_netflow', 'brk_exchange_share', 'brk_exchange_share_delta', 'brk_activity_div', 'brk_roi_context', 'brk_liquidity_impulse', 'brk_miner_pressure', 'brk_hash_momentum']`, `overlay_scale=0.2`, `risk_budget_base=1.02`, `risk_budget_max=1.22`, `risk_budget_min=0.72`, `smooth_alpha=0.1` | `min_win_rate=50.0`, `strict=True` | `start_date='2018-01-01'`, `end_date='2025-12-31'` | Experimental MVRV baseline with BRK-aware regime gating. Tags: experimental, overlay, risk. |
 
 Built-in intent is explicit by implementation shape:
 
@@ -119,6 +130,15 @@ Run the built-in strategy audit matrix (uses local workspace code and emits `out
 
 ```bash
 python scripts/run_all_strategies.py
+```
+
+Compare a candidate against baselines on a shared window (uses `strategy_id` for built-ins and `module_or_path:ClassName` for customs):
+
+```bash
+python scripts/compare_strategies.py \
+  --strategy mvrv \
+  --strategy simple-zscore \
+  --baseline uniform
 ```
 
 Profile hot paths for strategy runtime:
@@ -208,6 +228,7 @@ Related references:
 
 - [Strategy Object](strategy-object.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
+- [Model Development Helpers](../concepts/model-development-helpers.md)
 - [Backtest Runtime](../model_backtest.md)
 - [Validation Checklist](../validation_checklist.md)
 - [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md)

@@ -6,7 +6,9 @@ description: Copyable minimal strategy templates for both propose_weight and bui
 # Minimal Strategy Examples
 
 This page contains copyable minimal strategy templates for both supported intent styles in one place.
-For built-in strategy behavior and tuning defaults, use [Strategies](../reference/strategies.md).
+For built-in strategy behavior and tuning defaults, use [Strategies](../reference/strategies.md). For reusable helper functions, use [Model Development Helpers](../concepts/model-development-helpers.md).
+
+The repo also ships copyable research templates under `stacksats/strategies/templates/minimal_propose.py` and `stacksats/strategies/templates/minimal_profile.py`.
 
 ## Choose a style
 
@@ -136,6 +138,7 @@ A successful run for either style should show:
 - Run a full backtest: [Backtest Command](../run/backtest.md)
 - Export weights: [Export Command](../run/export.md)
 - Validate quickly: [Validate Command](../run/validate.md)
+- Reuse supported feature/allocation helpers: [Model Development Helpers](../concepts/model-development-helpers.md)
 - Compare built-ins and expected model behavior: [Strategies](../reference/strategies.md)
 - Compare styles and internals: [Framework Boundary](../framework.md)
 

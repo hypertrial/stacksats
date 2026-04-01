@@ -7,7 +7,7 @@ import inspect
 import math
 import types as pytypes
 from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -768,10 +768,24 @@ class BaseStrategy(ABC):
         )
 
     def default_backtest_config(self) -> BacktestConfig:
-        return BacktestConfig(strategy_label=self.metadata().strategy_id)
+        from ..strategies.catalog import backtest_config_for_strategy, find_strategy_catalog_entry
+
+        strategy_id = self.metadata().strategy_id
+        if find_strategy_catalog_entry(strategy_id) is None:
+            return BacktestConfig(strategy_label=strategy_id)
+        config = backtest_config_for_strategy(strategy_id)
+        return replace(config, strategy_label=config.strategy_label or strategy_id)
 
     def default_validation_config(self) -> ValidationConfig:
-        return ValidationConfig()
+        from ..strategies.catalog import (
+            find_strategy_catalog_entry,
+            validation_config_for_strategy,
+        )
+
+        strategy_id = self.metadata().strategy_id
+        if find_strategy_catalog_entry(strategy_id) is None:
+            return ValidationConfig()
+        return validation_config_for_strategy(strategy_id)
 
     def default_run_daily_validation_config(self) -> ValidationConfig:
         return ValidationConfig(min_win_rate=50.0, strict=True)

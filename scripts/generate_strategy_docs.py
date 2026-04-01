@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 import sys
 
@@ -11,7 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from stacksats.loader import load_strategy
-from stacksats.strategies.catalog import StrategyCatalogEntry, list_strategies
+from stacksats.strategies.catalog import (
+    StrategyCatalogEntry,
+    backtest_config_for_strategy,
+    list_strategies,
+    model_card_path_for_entry,
+    validation_config_for_strategy,
+)
 
 TEMPLATE_PATH = ROOT / "scripts" / "strategies.template.md"
 OUTPUT_PATH = ROOT / "docs" / "reference" / "strategies.md"
@@ -29,10 +36,36 @@ def _format_params(params: dict[str, object]) -> str:
     return ", ".join(f"`{key}={value!r}`" for key, value in params.items())
 
 
+def _format_config_values(values: dict[str, object]) -> str:
+    if not values:
+        return "none"
+    return ", ".join(f"`{key}={value!r}`" for key, value in values.items())
+
+
+def _format_catalog_validation_defaults(entry: StrategyCatalogEntry) -> str:
+    config = asdict(validation_config_for_strategy(entry.strategy_id))
+    filtered = {
+        key: config[key]
+        for key in entry.default_validation_config
+        if key in config
+    }
+    return _format_config_values(filtered)
+
+
+def _format_catalog_backtest_defaults(entry: StrategyCatalogEntry) -> str:
+    config = asdict(backtest_config_for_strategy(entry.strategy_id))
+    filtered = {
+        key: config[key]
+        for key in entry.default_backtest_config
+        if key in config
+    }
+    return _format_config_values(filtered)
+
+
 def _render_table(entries: tuple[StrategyCatalogEntry, ...]) -> str:
     lines = [
-        "| Strategy | `strategy_id` | Import spec | Tier | Family | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Description / use case |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Strategy | `strategy_id` | Model card | Tier | Promotion | Family | Owner | Benchmarks | Import spec | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Validation defaults | Backtest defaults | Description / use case |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for entry in entries:
         strategy = load_strategy(entry.strategy_id)
@@ -42,13 +75,19 @@ def _render_table(entries: tuple[StrategyCatalogEntry, ...]) -> str:
             "| "
             f"`{entry.class_name}` | "
             f"`{entry.strategy_id}` | "
-            f"`{entry.strategy_spec}` | "
+            f"[card](models/{Path(model_card_path_for_entry(entry)).name}) | "
             f"`{entry.tier}` | "
+            f"`{entry.promotion_stage}` | "
             f"`{entry.family}` | "
+            f"`{entry.owner}` | "
+            f"{_format_tuple(entry.benchmark_strategy_ids)} | "
+            f"`{entry.strategy_spec}` | "
             f"`{spec.intent_mode}` | "
             f"{_format_tuple(spec.required_feature_sets)} | "
             f"{_format_tuple(spec.required_feature_columns)} | "
             f"{_format_params(spec.params)} | "
+            f"{_format_catalog_validation_defaults(entry)} | "
+            f"{_format_catalog_backtest_defaults(entry)} | "
             f"{use_case} |"
         )
     return "\n".join(lines)
@@ -68,6 +107,10 @@ def generate_strategy_docs(template_text: str | None = None) -> str:
         f"- `{entry.class_name}` uses `{load_strategy(entry.strategy_id).spec().intent_mode}` mode."
         for entry in stable_entries
     )
+    model_card_links = "\n".join(
+        f"- [`{entry.strategy_id}` model card](models/{Path(model_card_path_for_entry(entry)).name})"
+        for entry in list_strategies(public_only=False)
+    )
 
     rendered = template
     replacements = {
@@ -76,6 +119,7 @@ def generate_strategy_docs(template_text: str | None = None) -> str:
         "{{stable_table}}": _render_table(stable_entries),
         "{{experimental_table}}": _render_table(experimental_entries),
         "{{stable_intent_bullets}}": stable_intent,
+        "{{model_card_links}}": model_card_links,
     }
     for token, value in replacements.items():
         rendered = rendered.replace(token, value)

@@ -17,6 +17,7 @@ If you are extending the built-in StackSats library rather than creating a one-o
 2. Declare `required_feature_sets()` so the framework materializes the feature providers your strategy needs.
 3. Implement `transform_features`, `build_signals`, and one intent hook.
    - Use copyable templates: [Minimal Strategy Examples](../start/minimal-strategy-examples.md).
+   - Use reusable helpers: [Model Development Helpers](../concepts/model-development-helpers.md).
    - Use built-in reference models: [Strategies](../reference/strategies.md).
 4. Declare any hard-required transformed columns with `required_feature_columns()`.
 5. Keep durable config in public attrs or `params()`, and keep runtime caches private.
@@ -28,6 +29,7 @@ If you are extending the built-in StackSats library rather than creating a one-o
 
 - `ctx.features_df` is already an observed-only, as-of-materialized frame. Do not assume rows after `current_date` exist.
 - Strategy classes should avoid direct file, database, or network access. StackSats applies best-effort static lint checks for these patterns, but the lint is heuristic rather than a runtime sandbox. Use provider-backed feature sets instead.
+- For fast research inside the repo, start from `stacksats/strategies/templates/` before deciding whether the model belongs in the built-in catalog.
 - Strict validation is the default CLI path and the same strict checks gate `run_daily` paper/live execution.
 
 ## Expected output

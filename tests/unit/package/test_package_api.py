@@ -142,3 +142,11 @@ def test_decision_types_are_top_level_exports() -> None:
 def test_experimental_strategies_are_not_top_level_exports() -> None:
     assert not hasattr(stacksats, "ExampleMVRVStrategy")
     assert not hasattr(stacksats, "MVRVPlusStrategy")
+
+
+def test_templates_are_not_cataloged_or_top_level_exports() -> None:
+    catalog_ids = {entry.strategy_id for entry in list_strategies(public_only=False)}
+    assert "minimal-propose-template" not in catalog_ids
+    assert "minimal-profile-template" not in catalog_ids
+    assert not hasattr(stacksats, "MinimalProposeTemplateStrategy")
+    assert not hasattr(stacksats, "MinimalProfileTemplateStrategy")

@@ -57,7 +57,7 @@ def test_scaffold_strategy_creates_module_test_catalog_and_package_markers(
 ) -> None:
     catalog_path = _write_catalog_stub(tmp_path)
 
-    module_path, test_path = new_strategy.scaffold_strategy(
+    module_path, test_path, model_card_path = new_strategy.scaffold_strategy(
         root=tmp_path,
         tier="experimental",
         family="research_models",
@@ -68,6 +68,7 @@ def test_scaffold_strategy_creates_module_test_catalog_and_package_markers(
 
     assert module_path.exists()
     assert test_path.exists()
+    assert model_card_path.exists()
     assert (tmp_path / "stacksats" / "__init__.py").exists()
     assert (tmp_path / "stacksats" / "strategies" / "__init__.py").exists()
     assert (tmp_path / "stacksats" / "strategies" / "experimental" / "__init__.py").exists()
@@ -87,6 +88,23 @@ def test_scaffold_strategy_creates_module_test_catalog_and_package_markers(
     assert 'strategy_id="alpha-beta"' in text
     assert 'class_name="AlphaBetaStrategy"' in text
     assert 'family="research_models"' in text
+    assert 'owner="TODO: set owner"' in text
+    assert 'promotion_stage="research"' in text
+
+    module_text = module_path.read_text(encoding="utf-8")
+    assert "def required_feature_sets" in module_text
+    assert "def transform_features" in module_text
+    assert "def build_signals" in module_text
+    assert "def build_target_profile" in module_text
+
+    test_text = test_path.read_text(encoding="utf-8")
+    assert "import_smoke" in test_text
+    assert "intent_smoke" in test_text
+    assert 'load_strategy("alpha-beta")' in test_text
+
+    model_card_text = model_card_path.read_text(encoding="utf-8")
+    assert "## Why this model exists" in model_card_text
+    assert "promotion stage" in model_card_text
 
 
 def test_scaffold_strategy_supports_import_for_new_family(
@@ -137,6 +155,35 @@ def test_scaffolded_family_is_discoverable_by_setuptools(tmp_path: Path) -> None
 
     packages = find_packages(where=str(tmp_path), include=["stacksats", "stacksats.*"])
     assert "stacksats.strategies.stable.research_models" in packages
+
+
+def test_scaffold_strategy_generates_propose_mode_hooks_and_model_card(tmp_path: Path) -> None:
+    _write_catalog_stub(tmp_path)
+
+    module_path, test_path, model_card_path = new_strategy.scaffold_strategy(
+        root=tmp_path,
+        tier="stable",
+        family="signals",
+        strategy_id="alpha-beta",
+        class_name="AlphaBetaStrategy",
+        intent="propose",
+    )
+
+    module_text = module_path.read_text(encoding="utf-8")
+    assert "def required_feature_sets" in module_text
+    assert "def required_feature_columns" in module_text
+    assert "def transform_features" in module_text
+    assert "def propose_weight" in module_text
+    assert "build_target_profile" not in module_text
+
+    test_text = test_path.read_text(encoding="utf-8")
+    assert 'assert strategy.intent_mode() == "propose"' in test_text
+    assert 'load_strategy("alpha-beta")' in test_text
+
+    model_card_text = model_card_path.read_text(encoding="utf-8")
+    assert "`strategy_id`: `alpha-beta`" in model_card_text
+    assert "- intent mode: `propose`" in model_card_text
+    assert "- support tier: `stable`" in model_card_text
 
 
 def test_scaffold_strategy_rejects_existing_targets(tmp_path: Path) -> None:

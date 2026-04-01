@@ -12,11 +12,16 @@ Built-in support tier is defined by catalog metadata, not by the implementation 
 Use this page for:
 
 - built-in behavior and intent mode
+- model card links, owners, and promotion stage
 - required feature sets/columns
 - exposed tuning parameters and defaults
 - canonical validate/backtest/audit commands
 - reasonableness expectations when interpreting model results
 - support tier for stable versus experimental reference strategies
+
+Model cards for all cataloged built-ins:
+
+{{model_card_links}}
 
 ## Purpose and Scope
 
@@ -106,6 +111,15 @@ Run the built-in strategy audit matrix (uses local workspace code and emits `out
 python scripts/run_all_strategies.py
 ```
 
+Compare a candidate against baselines on a shared window (uses `strategy_id` for built-ins and `module_or_path:ClassName` for customs):
+
+```bash
+python scripts/compare_strategies.py \
+  --strategy mvrv \
+  --strategy simple-zscore \
+  --baseline uniform
+```
+
 Profile hot paths for strategy runtime:
 
 ```bash
@@ -193,6 +207,7 @@ Related references:
 
 - [Strategy Object](strategy-object.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
+- [Model Development Helpers](../concepts/model-development-helpers.md)
 - [Backtest Runtime](../model_backtest.md)
 - [Validation Checklist](../validation_checklist.md)
 - [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md)

@@ -9,6 +9,8 @@ This walkthrough gets a custom strategy running with minimal code.
 
 This page is for custom strategies loaded with `my_strategy.py:MyStrategy`. If you want to add a maintained built-in to the StackSats library, use [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md) and the cataloged `strategy_id` workflow instead.
 
+For copyable research starters inside the repo, see `stacksats/strategies/templates/minimal_propose.py` and `stacksats/strategies/templates/minimal_profile.py`, plus [Model Development Helpers](../concepts/model-development-helpers.md).
+
 ## 1) Create a strategy file
 
 Create `my_strategy.py`:
@@ -116,6 +118,7 @@ output/<strategy_id>/<version>/<run_id>/
 - If outputs look unexpected, compare runs with [CLI Commands](../commands.md).
 - If upgrading older code, use [Migration Guide](../migration.md).
 - If you want copyable templates for both hook styles, use [Minimal Strategy Examples](minimal-strategy-examples.md).
+- If you want reusable signal/allocation helpers, use [Model Development Helpers](../concepts/model-development-helpers.md).
 
 ## 6) Keep strategy responsibilities clean
 
@@ -136,6 +139,7 @@ A successful first run should include:
 
 - Use [Task Hub](../tasks.md) for focused workflows.
 - Use [Minimal Strategy Examples](minimal-strategy-examples.md) to compare `propose_weight` vs `build_target_profile`.
+- Use [Model Development Helpers](../concepts/model-development-helpers.md) to reuse framework-compatible transforms and allocation helpers.
 - Use [Strategies](../reference/strategies.md) to compare built-in models and expected behavior.
 - Use [Interpret Backtest Metrics](../recipes/interpret-backtest.md) for comparison discipline.
 - Use [FAQ](../faq.md) for recurring setup and integration questions.

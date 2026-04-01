@@ -65,6 +65,10 @@ extra:
 extra_css:
   - stylesheets/extra.css
 
+not_in_nav: |
+  /reference/models/*.md
+  !/reference/models/index.md
+
 markdown_extensions:
   - admonition
   - attr_list
@@ -113,6 +117,7 @@ nav:
       - Framework Boundary: framework.md
       - Model Overview: model.md
       - Signals and Features: concepts/model-signals-features.md
+      - Model Development Helpers: concepts/model-development-helpers.md
       - Allocation Kernel: concepts/allocation-kernel.md
       - Backtest Runtime: model_backtest.md
       - Create a Strategy: recipes/create-strategy.md
@@ -130,6 +135,7 @@ nav:
       - Runtime Objects Overview: objects.md
       - Strategy Object: reference/strategy-object.md
       - Strategies: reference/strategies.md
+      - Model Cards: reference/models/index.md
       - FeatureTimeSeries: reference/feature-timeseries.md
       - WeightTimeSeries: reference/strategy-timeseries.md
       - WeightTimeSeries Schema: reference/strategy-timeseries-schema.md
