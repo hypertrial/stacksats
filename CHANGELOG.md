@@ -6,6 +6,24 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-01
+
+### Added
+
+- Added a built-in strategy catalog with stable public helpers `StrategyCatalogEntry`, `list_strategies(...)`, and `get_strategy_catalog_entry(...)`, plus generated model-card docs for cataloged strategies.
+- Added a Python-first custom-model research loop via `scripts/research_strategy.py`, committed example strategy-config assets, a copyable custom-strategy smoke-test template, and tests covering the helper workflow.
+- Added `scripts/new_strategy.py`, minimal template strategies, generated strategy docs tooling, and maintainer guidance for adding built-in strategies.
+- Added targeted onboarding regression coverage that executes the documented starter strategy examples against `StrategyRunner.from_dataframe(...)`.
+
+### Changed
+
+- Reorganized built-in strategies behind catalog metadata, stable/experimental family modules, and generated strategy reference pages while preserving the documented stable built-ins.
+- Updated model-development docs to recommend a coherent custom-strategy workflow spanning onboarding, comparison, notebooks, and recipe pages.
+
+### Fixed
+
+- Repaired the documented starter strategy snippets so they match the current Polars/runtime API, including `clone()` usage and explicit Python strict-validation guidance.
+
 ## [1.1.2] - 2026-03-31
 
 ### Changed
