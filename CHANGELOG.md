@@ -6,7 +6,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-04-01
+## [1.2.1] - 2026-04-01
 
 ### Added
 
@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Fixed
 
 - Repaired the documented starter strategy snippets so they match the current Polars/runtime API, including `clone()` usage and explicit Python strict-validation guidance.
+- Restored the release-gate coverage path to `100%` after adding direct regression coverage for the new strategy templates, compatibility wrapper, malformed loader spec path, and service registry catalog-id validation.
 
 ## [1.1.2] - 2026-03-31
 

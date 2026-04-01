@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
 from importlib import import_module
 
 from stacksats.loader import load_strategy
@@ -87,3 +91,36 @@ def test_catalog_benchmark_ids_reference_known_entries() -> None:
     for entry in list_strategies(public_only=False):
         for benchmark_id in entry.benchmark_strategy_ids:
             assert benchmark_id in all_ids
+
+
+def test_load_catalog_strategy_class_rejects_non_strategy_exports(monkeypatch) -> None:
+    monkeypatch.setattr(
+        catalog,
+        "get_strategy_catalog_entry",
+        lambda strategy_id: StrategyCatalogEntry(
+            strategy_id=strategy_id,
+            strategy_spec="fake.module:NotAStrategy",
+            class_name="NotAStrategy",
+            module_path="fake.module",
+            tier="experimental",
+            public_export=False,
+            audit_enabled=False,
+            family="test",
+            description="Invalid strategy export for contract coverage.",
+            docs_slug="fake",
+            tags=("test",),
+            owner="StackSats Maintainers",
+            benchmark_strategy_ids=(),
+            promotion_stage="research",
+            default_validation_config={"min_win_rate": 50.0, "strict": True},
+            default_backtest_config={"start_date": "2018-01-01", "end_date": "2025-12-31"},
+        ),
+    )
+    monkeypatch.setattr(
+        catalog.importlib,
+        "import_module",
+        lambda _module_path: SimpleNamespace(NotAStrategy=object()),
+    )
+
+    with pytest.raises(TypeError, match="does not resolve to a BaseStrategy subclass"):
+        catalog.load_catalog_strategy_class("broken")

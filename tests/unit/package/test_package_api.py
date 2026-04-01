@@ -10,6 +10,7 @@ import numpy as np
 import stacksats
 import stacksats.export_weights as export_weights
 import stacksats.export_weights as pkg_export_weights
+import stacksats.strategies.mvrv as compat_mvrv
 import stacksats.strategy_time_series as strategy_time_series
 from stacksats import (
     AgentServiceConfig,
@@ -127,6 +128,11 @@ def test_strategy_catalog_helpers_are_top_level_exports() -> None:
     entry = get_strategy_catalog_entry("simple-zscore")
     assert entry.strategy_id == "simple-zscore"
     assert any(item.strategy_id == "mvrv-plus" for item in list_strategies(public_only=False))
+
+
+def test_mvrv_compat_module_reexports_stable_strategy() -> None:
+    assert compat_mvrv.MVRVStrategy is MVRVStrategy
+    assert compat_mvrv.__all__ == ["MVRVStrategy"]
 
 
 def test_decision_types_are_top_level_exports() -> None:

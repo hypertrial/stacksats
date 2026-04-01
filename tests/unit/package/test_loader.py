@@ -61,6 +61,11 @@ def test_load_strategy_invalid_spec_raises_value_error() -> None:
         load_strategy("invalid-spec")
 
 
+def test_load_strategy_malformed_module_class_spec_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="Invalid strategy spec"):
+        load_strategy("module_only:")
+
+
 def test_load_strategy_from_built_in_strategy_id() -> None:
     strategy = load_strategy("simple-zscore")
     assert isinstance(strategy, BaseStrategy)

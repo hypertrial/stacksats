@@ -7,11 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
-## 1.2.0 highlights
+## 1.2.1 highlights
 
 - Added a built-in strategy catalog with model cards, generated strategy reference pages, and stable public helpers for discovering cataloged strategies from Python.
 - Added a Python-first research workflow for custom model development, including `scripts/research_strategy.py`, committed example strategy-config assets, and a copyable smoke-test template.
 - Fixed the starter custom-strategy docs and locked them down with executable onboarding regression coverage so copy-paste model authoring flows stay runnable.
+- Restored the release-gate coverage lane to `100%` for the new model-development scaffolding surfaces.
 
 ## 1.1.2 highlights
 

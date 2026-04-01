@@ -184,6 +184,14 @@ def test_load_strategy_registry_validation_errors(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown 'catalog_strategy_id'"):
         load_strategy_registry(invalid_catalog_id_path)
 
+    invalid_catalog_id_type_path = tmp_path / "invalid-catalog-id-type.json"
+    invalid_catalog_id_type_path.write_text(
+        json.dumps({"svc": {"catalog_strategy_id": 1}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid 'catalog_strategy_id'"):
+        load_strategy_registry(invalid_catalog_id_type_path)
+
     both_fields_path = tmp_path / "both-fields.json"
     both_fields_path.write_text(
         json.dumps(
