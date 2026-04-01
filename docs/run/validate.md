@@ -25,7 +25,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 ## Expected output
 
 - Summary line with pass/fail and gate statuses.
-- Strict validation is enabled by default.
+- Strict validation is enabled by default for this CLI command.
 
 ## Key options
 

@@ -30,7 +30,7 @@ class MyStrategy(BaseStrategy):
         return ("core_model_features_v1",)
 
     def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
-        return ctx.features_df.copy()
+        return ctx.features_df.clone()
 
     def build_signals(
         self, ctx: StrategyContext, features_df: pl.DataFrame
@@ -76,7 +76,7 @@ Expected output:
 
 - A validation summary line including pass/fail and gate results.
 - The leakage gate now prints as `No Forward Leakage: True/False` to make pass/fail semantics explicit.
-- Strict validation is enabled by default. Use `--no-strict` only if you intentionally want the lighter path.
+- Strict validation is enabled by default in the CLI. In Python, opt in with `ValidationConfig(strict=True, ...)`.
 
 ## 4) Run backtest and export
 
@@ -94,7 +94,11 @@ from stacksats import BacktestConfig, ValidationConfig
 strategy = MyStrategy()
 
 run = strategy.run(
-    validation_config=ValidationConfig(start_date="2024-01-01", end_date="2024-12-31"),
+    validation_config=ValidationConfig(
+        start_date="2024-01-01",
+        end_date="2024-12-31",
+        strict=True,
+    ),
     backtest_config=BacktestConfig(start_date="2024-01-01", end_date="2024-12-31"),
     include_export=False,
     save_backtest_artifacts=True,

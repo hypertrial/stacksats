@@ -37,11 +37,15 @@ class MinimalProposeWeightStrategy(BaseStrategy):
         return ()
 
     def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
-        return ctx.features_df.copy()
+        return ctx.features_df.clone()
 
     def propose_weight(self, state: DayState) -> float:
         # Simple bias: buy slightly more when MVRV is lower.
-        mvrv = float(state.features.get("mvrv_zscore", 0.0))
+        mvrv = (
+            float(state.features["mvrv_zscore"][0])
+            if "mvrv_zscore" in state.features.columns
+            else 0.0
+        )
         scale = 1.0 + (-0.05 * mvrv)
         proposal = state.uniform_weight * scale
         return max(0.0, min(state.remaining_budget, proposal))
@@ -78,7 +82,7 @@ class MinimalTargetProfileStrategy(BaseStrategy):
         return ("mvrv_zscore", "price_vs_ma")
 
     def transform_features(self, ctx: StrategyContext) -> pl.DataFrame:
-        return ctx.features_df.copy()
+        return ctx.features_df.clone()
 
     def build_signals(
         self, ctx: StrategyContext, features_df: pl.DataFrame
@@ -97,10 +101,10 @@ class MinimalTargetProfileStrategy(BaseStrategy):
         features_df: pl.DataFrame,
         signals: dict[str, pl.Series],
     ) -> TargetProfile:
-        del ctx, features_df
+        del ctx
         preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
         return TargetProfile(
-            values=pl.DataFrame({"date": ctx.features_df["date"], "value": preference}),
+            values=pl.DataFrame({"date": features_df["date"], "value": preference}),
             mode="preference",
         )
 ```
@@ -114,7 +118,7 @@ stacksats strategy validate \
   --end-date 2024-12-31
 ```
 
-Strict validation runs by default in both examples. Use `--no-strict` only when you intentionally want the lighter validation path.
+Strict validation runs by default in the CLI examples above. In Python, opt in with `ValidationConfig(strict=True, ...)`.
 
 ## Success Criteria
 

@@ -31,7 +31,7 @@ stacksats strategy validate \
 
 - Terminal summary includes `Validation PASSED` or `Validation FAILED`.
 - Win-rate and leakage/constraint checks are reported.
-- Strict validation runs by default; use `--no-strict` only when you intentionally want the lighter path.
+- Strict validation runs by default in this CLI flow; use `--no-strict` only when you intentionally want the lighter path.
 
 ### Troubleshooting
 
