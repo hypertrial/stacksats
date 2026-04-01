@@ -136,7 +136,7 @@ These payloads carry `schema_version` and are part of the stable `1.x` artifact 
 | documented artifact payloads | stable | frozen `1.x` JSON contract |
 | generated module pages under API Reference | internal | useful for reading internals; not stable by default |
 | lower-level modules such as `stacksats.runner` or `stacksats.strategy_types` | internal | may change even when still documented |
-| `stacksats.strategies.experimental.*` | experimental | outside the `1.x` compatibility promise |
+| catalog entries with `tier="experimental"` (including the current `stacksats.strategies.experimental.*` modules) | experimental | outside the `1.x` compatibility promise |
 | helper scripts such as `stacksats-plot-mvrv` and `stacksats-plot-weights` | documented but outside stable CLI | useful tools, but not part of the frozen CLI subset |
 
 ## Where to go next

@@ -42,7 +42,7 @@ Use this page as the current-release landing pointer.
 - Froze the stable `1.x` contract around top-level `stacksats` exports, documented artifact payloads, and the documented `stacksats` CLI subtree.
 - Added `schema_version = "1.0.0"` to stable JSON artifact payloads and locked those shapes in snapshot coverage.
 - Split optional dependencies into `viz`, `network`, and `deploy` extras while keeping base installs focused on the stable core runtime.
-- Moved advanced BRK overlay models under `stacksats.strategies.experimental.*` and kept them outside the stable `1.x` compatibility promise.
+- Moved advanced BRK overlay models under `stacksats.strategies.experimental.*` and kept them outside the stable `1.x` compatibility promise via catalog-tier metadata.
 - Added a release-grade gate with isolated built-wheel smoke checks plus macOS supported-platform smoke coverage.
 - Published the formal stability policy and aligned docs with best-effort causal linting rather than sandbox claims.
 

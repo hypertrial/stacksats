@@ -141,6 +141,7 @@ nav:
           - api module: reference/api/api-module.md
       - Validation Checklist: validation_checklist.md
   - Maintainers:
+      - Add Built-in Strategy: maintainers/add-built-in-strategy.md
       - Release Guide: release.md
       - Docs Ownership: docs_ownership.md
       - Docs UX Plan: ux-plan.md

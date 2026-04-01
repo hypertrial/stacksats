@@ -9,6 +9,8 @@ description: Canonical reference for built-in StackSats strategies, contracts, a
 
 This is the canonical strategy catalog for StackSats built-ins. The published page is generated from the in-repo strategy catalog.
 
+Built-in support tier is defined by catalog metadata, not by the implementation module path. For the maintainer workflow that adds new cataloged strategies, use [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md).
+
 Use this page for:
 
 - built-in behavior and intent mode
@@ -58,7 +60,7 @@ Scoring defaults used by runtime and strategy audits:
 
 ## Stable Supported Built-ins
 
-These strategies are part of the stable `1.x` contract. Stable built-in strategy IDs: `uniform`, `run-daily-paper`, `simple-zscore`, `momentum`, `mvrv`.
+These strategies are part of the stable `1.x` contract because their catalog entries are marked `tier=stable`. Stable built-in strategy IDs: `uniform`, `run-daily-paper`, `simple-zscore`, `momentum`, `mvrv`.
 
 | Strategy | `strategy_id` | Import spec | Tier | Family | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Description / use case |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -70,7 +72,7 @@ These strategies are part of the stable `1.x` contract. Stable built-in strategy
 
 ## Experimental Reference Strategies
 
-These strategies live under `stacksats.strategies.experimental.*` and are not part of the stable `1.x` contract. Experimental built-in strategy IDs: `example-mvrv`, `mvrv-plus`.
+These strategies are cataloged as `tier=experimental` and are not part of the stable `1.x` contract. Their current implementation modules may live under `stacksats.strategies.experimental.*`, but support status comes from the catalog entry. Experimental built-in strategy IDs: `example-mvrv`, `mvrv-plus`.
 
 | Strategy | `strategy_id` | Import spec | Tier | Family | Intent mode | Required feature sets | Required columns | Configurable params (defaults) | Description / use case |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -196,9 +198,16 @@ When adding a custom strategy, keep this contract:
 5. Keep external data access out of strategy methods; use framework providers.
 6. Validate and backtest on explicit date bounds before claiming model deltas.
 
+Selector rules:
+
+- built-in strategies use `strategy_id`
+- custom strategies use `module_or_path:ClassName`
+- service registry built-ins use `catalog_strategy_id`
+
 Related references:
 
 - [Strategy Object](strategy-object.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
 - [Backtest Runtime](../model_backtest.md)
 - [Validation Checklist](../validation_checklist.md)
+- [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md)

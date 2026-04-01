@@ -1,4 +1,8 @@
-"""Built-in strategy catalog."""
+"""Built-in strategy catalog.
+
+Support tier, public exports, audit inclusion, and docs grouping are defined here
+rather than inferred from implementation module paths.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +18,7 @@ StrategyTier = Literal["stable", "experimental", "private"]
 
 @dataclass(frozen=True, slots=True)
 class StrategyCatalogEntry:
-    """Catalog metadata for a built-in strategy."""
+    """Library-management metadata for a built-in strategy."""
 
     strategy_id: str
     strategy_spec: str

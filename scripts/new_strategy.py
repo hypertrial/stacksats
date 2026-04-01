@@ -5,12 +5,37 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
+_VALID_TIERS = frozenset({"stable", "experimental"})
+_STRATEGY_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+_CLASS_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+_FAMILY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _snake_name(value: str) -> str:
     return value.replace("-", "_")
+
+
+def _validate_inputs(*, tier: str, family: str, strategy_id: str, class_name: str) -> None:
+    if tier not in _VALID_TIERS:
+        raise ValueError(
+            f"Unsupported tier '{tier}'. Expected one of: {', '.join(sorted(_VALID_TIERS))}."
+        )
+    if not family or not _FAMILY_RE.fullmatch(family):
+        raise ValueError(
+            "family must be a non-empty snake_case identifier using only lowercase "
+            "letters, digits, and underscores."
+        )
+    if not _STRATEGY_ID_RE.fullmatch(strategy_id):
+        raise ValueError(
+            "strategy_id must match ^[a-z][a-z0-9-]*$ and use lowercase kebab-case."
+        )
+    if not _CLASS_NAME_RE.fullmatch(class_name):
+        raise ValueError(
+            "class_name must be a valid PascalCase Python class name."
+        )
 
 
 def module_path_for(*, root: Path, tier: str, family: str, strategy_id: str) -> Path:
@@ -19,6 +44,20 @@ def module_path_for(*, root: Path, tier: str, family: str, strategy_id: str) -> 
 
 def test_path_for(*, root: Path, strategy_id: str) -> Path:
     return root / "tests" / "unit" / "strategies" / f"test_{_snake_name(strategy_id)}_strategy.py"
+
+
+def _ensure_package_chain(path: Path, *, stop_at: Path) -> None:
+    current = path
+    while True:
+        current.mkdir(parents=True, exist_ok=True)
+        init_path = current / "__init__.py"
+        if not init_path.exists():
+            init_path.write_text("", encoding="utf-8")
+        if current == stop_at:
+            return
+        if stop_at not in current.parents:
+            raise ValueError(f"{stop_at} is not an ancestor of {path}")
+        current = current.parent
 
 
 def catalog_entry_stub(
@@ -129,15 +168,30 @@ def scaffold_strategy(
     class_name: str,
     intent: str,
 ) -> tuple[Path, Path]:
+    _validate_inputs(
+        tier=tier,
+        family=family,
+        strategy_id=strategy_id,
+        class_name=class_name,
+    )
     module_path = module_path_for(root=root, tier=tier, family=family, strategy_id=strategy_id)
-    module_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path = test_path_for(root=root, strategy_id=strategy_id)
+    if module_path.exists():
+        raise FileExistsError(f"Strategy module already exists: {module_path}")
+    if test_path.exists():
+        raise FileExistsError(f"Strategy test already exists: {test_path}")
+
+    strategy_root = root / "stacksats"
+    family_package = module_path.parent
+    _ensure_package_chain(family_package, stop_at=strategy_root)
     module_path.write_text(
         module_source(class_name=class_name, strategy_id=strategy_id, intent=intent),
         encoding="utf-8",
     )
 
-    test_path = test_path_for(root=root, strategy_id=strategy_id)
     test_path.parent.mkdir(parents=True, exist_ok=True)
+    test_package = root / "tests"
+    _ensure_package_chain(test_path.parent, stop_at=test_package)
     test_path.write_text(
         test_source(
             module_import=(
@@ -149,8 +203,12 @@ def scaffold_strategy(
         encoding="utf-8",
     )
 
+    catalog_path = root / "stacksats" / "strategies" / "catalog.py"
+    if not catalog_path.exists():
+        raise FileNotFoundError(f"Missing strategy catalog: {catalog_path}")
+
     insert_catalog_stub(
-        root / "stacksats" / "strategies" / "catalog.py",
+        catalog_path,
         catalog_entry_stub(
             tier=tier,
             family=family,

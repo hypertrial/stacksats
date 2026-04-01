@@ -9,6 +9,8 @@ description: Task-focused recipe for creating and running a custom StackSats str
 
 Create a custom strategy file and run it end-to-end.
 
+If you are extending the built-in StackSats library rather than creating a one-off local model, use [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md) instead. Built-ins are cataloged and selected by `strategy_id`; custom strategies keep using `module_or_path:ClassName`.
+
 ## Steps
 
 1. Create `my_strategy.py` with a `BaseStrategy` subclass.

@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import os
 import subprocess
 import sys
+
+from setuptools import find_packages
+
+
+def _load_script_module(name: str):
+    repo_root = Path(__file__).resolve().parents[3]
+    path = repo_root / "scripts" / f"{name}.py"
+    spec = spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _venv_bin_dir(venv_dir: Path) -> Path:
@@ -28,6 +43,28 @@ def _run_checked(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> subproces
             f"stderr:\n{result.stderr}"
         )
     return result
+
+
+def test_package_finder_includes_scaffolded_strategy_family(tmp_path: Path) -> None:
+    new_strategy = _load_script_module("new_strategy")
+    catalog_path = tmp_path / "stacksats" / "strategies" / "catalog.py"
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog_path.write_text(
+        "from dataclasses import dataclass\n\n_CATALOG = (\n)\n\n_CATALOG_BY_ID = {}\n",
+        encoding="utf-8",
+    )
+
+    new_strategy.scaffold_strategy(
+        root=tmp_path,
+        tier="stable",
+        family="future_models",
+        strategy_id="alpha-beta",
+        class_name="AlphaBetaStrategy",
+        intent="propose",
+    )
+
+    packages = find_packages(where=str(tmp_path), include=["stacksats", "stacksats.*"])
+    assert "stacksats.strategies.stable.future_models" in packages
 
 
 def test_built_wheel_supports_demo_backtest_via_console_script(tmp_path: Path) -> None:

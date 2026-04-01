@@ -35,7 +35,7 @@ Lower-level modules are allowed to change between releases unless they are re-ex
 ## Internal and experimental surfaces
 
 - Internal reference modules include generated API pages such as `stacksats.runner`, `stacksats.strategy_types`, `stacksats.eda`, `stacksats.backtest`, and `stacksats.export_weights`.
-- Experimental/reference strategies live under `stacksats.strategies.experimental.*`.
+- Experimental/reference strategies are defined by catalog entries marked `tier="experimental"`. Their current implementation modules may live under `stacksats.strategies.experimental.*`.
 - Experimental surfaces may change without SemVer stability guarantees.
 
 ## Built-in strategy tiers

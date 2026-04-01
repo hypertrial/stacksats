@@ -7,6 +7,8 @@ description: Build, validate, and backtest your first custom StackSats strategy.
 
 This walkthrough gets a custom strategy running with minimal code.
 
+This page is for custom strategies loaded with `my_strategy.py:MyStrategy`. If you want to add a maintained built-in to the StackSats library, use [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md) and the cataloged `strategy_id` workflow instead.
+
 ## 1) Create a strategy file
 
 Create `my_strategy.py`:

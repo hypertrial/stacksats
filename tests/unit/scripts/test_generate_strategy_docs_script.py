@@ -35,3 +35,11 @@ def test_generate_strategy_docs_mentions_catalog_ids() -> None:
     rendered = generate_strategy_docs.generate_strategy_docs()
     assert "`simple-zscore`" in rendered
     assert "`mvrv-plus`" in rendered
+
+
+def test_generate_strategy_docs_mentions_maintainer_workflow_and_selectors() -> None:
+    rendered = generate_strategy_docs.generate_strategy_docs()
+    assert "[Add a Built-in Strategy](../maintainers/add-built-in-strategy.md)" in rendered
+    assert "built-in strategies use `strategy_id`" in rendered
+    assert "custom strategies use `module_or_path:ClassName`" in rendered
+    assert "service registry built-ins use `catalog_strategy_id`" in rendered
