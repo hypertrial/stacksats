@@ -77,13 +77,16 @@ Regenerate the built-in strategy reference after changing catalog entries:
 python scripts/generate_strategy_docs.py
 ```
 
-Compare a candidate against baselines on the shared default window:
+Compare a candidate against baselines on a shared fixed window:
 
 ```bash
 python scripts/compare_strategies.py \
   --strategy alpha-beta \
   --strategy mvrv \
-  --baseline uniform
+  --baseline uniform \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --strict
 ```
 
 Recommended checks before merging:

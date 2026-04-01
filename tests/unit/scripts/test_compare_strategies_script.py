@@ -68,6 +68,8 @@ class _FakeStrategy:
         )
         self.validation_calls: list[ValidationConfig] = []
         self.backtest_calls: list[BacktestConfig] = []
+        self.validation_kwargs: list[dict[str, object]] = []
+        self.backtest_kwargs: list[dict[str, object]] = []
 
     def metadata(self):
         return SimpleNamespace(strategy_id=self._strategy_id)
@@ -75,12 +77,14 @@ class _FakeStrategy:
     def spec(self):
         return SimpleNamespace(intent_mode=self._intent_mode)
 
-    def validate(self, config: ValidationConfig):
+    def validate(self, config: ValidationConfig, **kwargs):
         self.validation_calls.append(config)
+        self.validation_kwargs.append(dict(kwargs))
         return self._validation_result
 
-    def backtest(self, config: BacktestConfig):
+    def backtest(self, config: BacktestConfig, **kwargs):
         self.backtest_calls.append(config)
+        self.backtest_kwargs.append(dict(kwargs))
         return self._backtest_result
 
 
@@ -153,7 +157,11 @@ def test_compare_strategies_derives_shared_defaults_for_builtins(
         "beta": ValidationConfig(min_win_rate=60.0, strict=True),
     }
 
-    monkeypatch.setattr(compare_strategies, "load_strategy", lambda selector: strategies[selector])
+    monkeypatch.setattr(
+        compare_strategies,
+        "load_strategy",
+        lambda selector, config_path=None: strategies[selector],
+    )
     monkeypatch.setattr(
         compare_strategies,
         "find_strategy_catalog_entry",
@@ -228,7 +236,11 @@ def test_compare_strategies_uses_explicit_dates_for_mixed_runs(
             exp_decay_percentile=61.0,
         ),
     }
-    monkeypatch.setattr(compare_strategies, "load_strategy", lambda selector: strategies[selector])
+    monkeypatch.setattr(
+        compare_strategies,
+        "load_strategy",
+        lambda selector, config_path=None: strategies[selector],
+    )
     monkeypatch.setattr(
         compare_strategies,
         "find_strategy_catalog_entry",
@@ -281,3 +293,44 @@ def test_render_table_includes_expected_headers() -> None:
     assert "Selector" in rendered
     assert "Vs Uniform" in rendered
     assert "uniform" in rendered
+
+
+def test_compare_strategies_supports_selector_config_paths_and_btc_df(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    strategy = _FakeStrategy(
+        strategy_id="custom-strategy",
+        intent_mode="profile",
+        win_rate=52.0,
+        score=53.0,
+        exp_decay_percentile=54.0,
+    )
+    loaded: list[tuple[str, str | None]] = []
+    btc_df = pl.DataFrame({"date": [], "price_usd": []})
+
+    def _fake_load(selector: str, *, config_path: str | None = None):
+        loaded.append((selector, config_path))
+        return strategy
+
+    monkeypatch.setattr(compare_strategies, "load_strategy", _fake_load)
+    monkeypatch.setattr(compare_strategies, "find_strategy_catalog_entry", lambda selector: None)
+
+    payload = compare_strategies.compare_strategies(
+        selectors=["custom.py:CustomStrategy"],
+        start_date="2024-01-01",
+        end_date="2024-12-31",
+        strict=True,
+        min_win_rate=0.0,
+        output_path=None,
+        btc_df=btc_df,
+        selector_config_paths={"custom.py:CustomStrategy": str(tmp_path / "strategy.json")},
+    )
+
+    assert payload["rows"][1]["selector"] == "custom.py:CustomStrategy"
+    assert loaded == [
+        ("uniform", None),
+        ("custom.py:CustomStrategy", str(tmp_path / "strategy.json")),
+    ]
+    assert strategy.validation_kwargs[-1]["btc_df"] is btc_df
+    assert strategy.backtest_kwargs[-1]["btc_df"] is btc_df

@@ -25,3 +25,4 @@ def test_notebook_demo_points_to_maintained_workflow_docs() -> None:
     markdown = _notebook_demo_markdown(_repo_root())
     assert "[Quickstart](quickstart.md)" in markdown
     assert "(../commands.md)" in markdown
+    assert "python scripts/research_strategy.py" in markdown

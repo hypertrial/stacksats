@@ -50,10 +50,24 @@ Use these functions when you already know the intent surface you want to constru
 ## Recommended workflow
 
 1. Start from `stacksats/strategies/templates/minimal_propose.py` or `stacksats/strategies/templates/minimal_profile.py`.
-2. Use `precompute_features(...)` or the signal helpers where they simplify your model.
-3. Validate with a custom selector such as `my_strategy.py:MyStrategy`.
-4. Compare against built-ins with `python scripts/compare_strategies.py`.
-5. Only move to the built-in scaffold once the model is worth maintaining in the library.
+2. Parameterize durable knobs as public attrs so you can drive them with `--strategy-config` JSON.
+3. Use `python scripts/research_strategy.py` for the fast local loop, including dataframe-backed runs through `StrategyRunner.from_dataframe(...)`.
+4. Use `precompute_features(...)` or the signal helpers where they simplify your model.
+5. Compare against built-ins on a fixed window with explicit strictness, for example:
+
+```bash
+python scripts/compare_strategies.py \
+  --strategy my_strategy.py:MyStrategy \
+  --strategy simple-zscore \
+  --strategy mvrv \
+  --baseline uniform \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --strict
+```
+
+6. Add a custom smoke test early using `examples/tests/custom_strategy_smoke.example.py`.
+7. Only move to the built-in scaffold once the model is worth maintaining in the library.
 
 ## Related references
 

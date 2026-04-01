@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import json
 from pathlib import Path
 
 import polars as pl
@@ -21,6 +22,12 @@ FIRST_STRATEGY_RUN_DOC = REPO_ROOT / "docs" / "start" / "first-strategy-run.md"
 MINIMAL_STRATEGY_EXAMPLES_DOC = REPO_ROOT / "docs" / "start" / "minimal-strategy-examples.md"
 TASKS_DOC = REPO_ROOT / "docs" / "tasks.md"
 VALIDATE_COMMAND_DOC = REPO_ROOT / "docs" / "run" / "validate.md"
+MODEL_HELPERS_DOC = REPO_ROOT / "docs" / "concepts" / "model-development-helpers.md"
+NOTEBOOK_DEMO_DOC = REPO_ROOT / "docs" / "start" / "notebook-demo.md"
+CREATE_STRATEGY_DOC = REPO_ROOT / "docs" / "recipes" / "create-strategy.md"
+RESEARCH_SCRIPT = REPO_ROOT / "scripts" / "research_strategy.py"
+EXAMPLE_CONFIG = REPO_ROOT / "examples" / "strategy_configs" / "first_strategy_run.example.json"
+EXAMPLE_SMOKE_TEST = REPO_ROOT / "examples" / "tests" / "custom_strategy_smoke.example.py"
 
 
 def _onboarding_btc_df() -> pl.DataFrame:
@@ -36,6 +43,8 @@ class FirstStrategyRunStrategy(BaseStrategy):
     strategy_id = "my-strategy"
     version = "1.0.0"
     description = "First custom strategy."
+    value_weight = 0.7
+    trend_weight = 0.3
 
     def required_feature_sets(self) -> tuple[str, ...]:
         return ("core_model_features_v1",)
@@ -60,7 +69,11 @@ class FirstStrategyRunStrategy(BaseStrategy):
         signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx
-        preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
+        preference = (
+            self.value_weight * signals["value"]
+        ) + (
+            self.trend_weight * signals["trend"]
+        )
         return TargetProfile(
             values=pl.DataFrame({"date": features_df["date"], "value": preference}),
             mode="preference",
@@ -185,7 +198,11 @@ def test_onboarding_docs_use_runnable_polars_and_explicit_python_strict_mode() -
     minimal_examples_text = MINIMAL_STRATEGY_EXAMPLES_DOC.read_text(encoding="utf-8")
 
     assert "return ctx.features_df.clone()" in first_strategy_text
+    assert "value_weight = 0.7" in first_strategy_text
+    assert "trend_weight = 0.3" in first_strategy_text
     assert "strict=True" in first_strategy_text
+    assert "python scripts/research_strategy.py" in first_strategy_text
+    assert "examples/strategy_configs/first_strategy_run.example.json" in first_strategy_text
     assert ".copy()" not in first_strategy_text
 
     assert "return ctx.features_df.clone()" in minimal_examples_text
@@ -203,3 +220,34 @@ def test_cli_docs_qualify_strict_default_as_cli_behavior() -> None:
     assert "Strict validation is enabled by default for this CLI command." in (
         validate_command_text
     )
+
+
+def test_research_workflow_docs_reference_helper_and_examples() -> None:
+    model_helpers_text = MODEL_HELPERS_DOC.read_text(encoding="utf-8")
+    notebook_demo_text = NOTEBOOK_DEMO_DOC.read_text(encoding="utf-8")
+    create_strategy_text = CREATE_STRATEGY_DOC.read_text(encoding="utf-8")
+
+    assert "python scripts/research_strategy.py" in model_helpers_text
+    assert "--strict" in model_helpers_text
+    assert "examples/tests/custom_strategy_smoke.example.py" in model_helpers_text
+
+    assert "python scripts/research_strategy.py" in notebook_demo_text
+    assert "examples/strategy_configs/first_strategy_run.example.json" in notebook_demo_text
+
+    assert "python scripts/research_strategy.py" in create_strategy_text
+    assert "examples/tests/custom_strategy_smoke.example.py" in create_strategy_text
+
+
+def test_research_workflow_assets_exist_and_are_valid() -> None:
+    config_payload = json.loads(EXAMPLE_CONFIG.read_text(encoding="utf-8"))
+    smoke_text = EXAMPLE_SMOKE_TEST.read_text(encoding="utf-8")
+    research_script_text = RESEARCH_SCRIPT.read_text(encoding="utf-8")
+
+    assert config_payload == {"value_weight": 0.65, "trend_weight": 0.35}
+    compile(smoke_text, str(EXAMPLE_SMOKE_TEST), "exec")
+    assert 'STRATEGY_PATH = Path("my_strategy.py")' in smoke_text
+    assert 'STRATEGY_CLASS_NAME = "MyStrategy"' in smoke_text
+    assert "StrategyRunner.from_dataframe" in smoke_text
+    assert "strict=True" in smoke_text
+    assert "--compare-strategy" in research_script_text
+    assert "--column-map-config requires --dataframe-parquet" in research_script_text

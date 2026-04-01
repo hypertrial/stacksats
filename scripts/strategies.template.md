@@ -115,9 +115,13 @@ Compare a candidate against baselines on a shared window (uses `strategy_id` for
 
 ```bash
 python scripts/compare_strategies.py \
-  --strategy mvrv \
+  --strategy my_strategy.py:MyStrategy \
   --strategy simple-zscore \
-  --baseline uniform
+  --strategy mvrv \
+  --baseline uniform \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --strict
 ```
 
 Profile hot paths for strategy runtime:

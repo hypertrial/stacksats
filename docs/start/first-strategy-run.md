@@ -25,6 +25,8 @@ class MyStrategy(BaseStrategy):
     strategy_id = "my-strategy"
     version = "1.0.0"
     description = "First custom strategy."
+    value_weight = 0.7
+    trend_weight = 0.3
 
     def required_feature_sets(self) -> tuple[str, ...]:
         return ("core_model_features_v1",)
@@ -47,14 +49,66 @@ class MyStrategy(BaseStrategy):
         signals: dict[str, pl.Series],
     ) -> TargetProfile:
         del ctx
-        preference = (0.7 * signals["value"]) + (0.3 * signals["trend"])
+        preference = (
+            self.value_weight * signals["value"]
+        ) + (
+            self.trend_weight * signals["trend"]
+        )
         return TargetProfile(
             values=pl.DataFrame({"date": features_df["date"], "value": preference}),
             mode="preference",
         )
 ```
 
-## 2) Make canonical data available
+This example is intentionally parameterized with public attrs so you can drive it through
+`--strategy-config`. The repo ships a matching starter config at
+`examples/strategy_configs/first_strategy_run.example.json`.
+
+## 2) Run the fast local research loop
+
+Config-driven research run:
+
+```bash
+python scripts/research_strategy.py \
+  --strategy my_strategy.py:MyStrategy \
+  --strategy-config examples/strategy_configs/first_strategy_run.example.json \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --compare-strategy simple-zscore \
+  --compare-strategy mvrv
+```
+
+Expected output:
+
+- strict validation is enabled by default for this helper
+- validation and backtest summaries print to the terminal
+- `output/research_strategy.json` captures the run plus optional comparison rows
+
+## 3) Try the same strategy on a custom dataframe
+
+If your local research data does not use canonical StackSats column names, pass a column-map JSON:
+
+```json
+{
+  "price_usd": "Close",
+  "mvrv": "MVRV_Ratio"
+}
+```
+
+Run:
+
+```bash
+python scripts/research_strategy.py \
+  --strategy my_strategy.py:MyStrategy \
+  --strategy-config examples/strategy_configs/first_strategy_run.example.json \
+  --dataframe-parquet my_data.parquet \
+  --column-map-config my_column_map.json \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --compare-strategy uniform
+```
+
+## 4) Make canonical data available
 
 Use [BRK Data Source](../data-source.md) and [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md) before validation/backtest.
 
@@ -66,7 +120,7 @@ stacksats data prepare
 This prepares the managed runtime parquet at `~/.stacksats/data/bitcoin_analytics.parquet`.
 If you already have a runtime-compatible parquet elsewhere, you can still export `STACKSATS_ANALYTICS_PARQUET` explicitly.
 
-## 3) Validate your strategy
+## 5) Validate your strategy on canonical runtime data
 
 ```bash
 stacksats strategy validate --strategy my_strategy.py:MyStrategy
@@ -78,7 +132,7 @@ Expected output:
 - The leakage gate now prints as `No Forward Leakage: True/False` to make pass/fail semantics explicit.
 - Strict validation is enabled by default in the CLI. In Python, opt in with `ValidationConfig(strict=True, ...)`.
 
-## 4) Run backtest and export
+## 6) Run backtest and export
 
 Use the canonical command reference for full option sets:
 
@@ -115,16 +169,17 @@ Expected output location:
 output/<strategy_id>/<version>/<run_id>/
 ```
 
-## 5) Troubleshooting
+## 7) Troubleshooting
 
 - If validation fails on constraints, check [Validation Checklist](../validation_checklist.md).
 - If validation fails on lint or feature sourcing, confirm `required_feature_sets()` is provider-backed and remove direct file/network access from the strategy class.
 - If outputs look unexpected, compare runs with [CLI Commands](../commands.md).
+- If you want a copyable smoke test for your custom strategy, start from `examples/tests/custom_strategy_smoke.example.py`.
 - If upgrading older code, use [Migration Guide](../migration.md).
 - If you want copyable templates for both hook styles, use [Minimal Strategy Examples](minimal-strategy-examples.md).
 - If you want reusable signal/allocation helpers, use [Model Development Helpers](../concepts/model-development-helpers.md).
 
-## 6) Keep strategy responsibilities clean
+## 8) Keep strategy responsibilities clean
 
 !!! info "Contract summary"
     You own transforms, signals, and intent over observed data only. The framework owns feature sourcing, as-of materialization, iteration, clipping, and lock semantics.

@@ -21,7 +21,10 @@ If you are extending the built-in StackSats library rather than creating a one-o
    - Use built-in reference models: [Strategies](../reference/strategies.md).
 4. Declare any hard-required transformed columns with `required_feature_columns()`.
 5. Keep durable config in public attrs or `params()`, and keep runtime caches private.
-6. Validate and backtest with CLI from the canonical command guide:
+   - For starter configs, mirror the pattern in `examples/strategy_configs/first_strategy_run.example.json`.
+6. Run the fast local loop with `python scripts/research_strategy.py ...`.
+7. Add a smoke test early using `examples/tests/custom_strategy_smoke.example.py`.
+8. Validate and backtest with CLI from the canonical command guide:
    - [Validate](../run/validate.md)
    - [Backtest](../run/backtest.md)
 
@@ -30,6 +33,7 @@ If you are extending the built-in StackSats library rather than creating a one-o
 - `ctx.features_df` is already an observed-only, as-of-materialized frame. Do not assume rows after `current_date` exist.
 - Strategy classes should avoid direct file, database, or network access. StackSats applies best-effort static lint checks for these patterns, but the lint is heuristic rather than a runtime sandbox. Use provider-backed feature sets instead.
 - For fast research inside the repo, start from `stacksats/strategies/templates/` before deciding whether the model belongs in the built-in catalog.
+- For custom comparison runs, keep `start_date`, `end_date`, and strictness explicit so baselines stay comparable.
 - Strict validation is the default CLI path and the same strict checks gate `run_daily` paper/live execution.
 
 ## Expected output

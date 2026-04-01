@@ -115,7 +115,9 @@ def compare_strategies(
     end_date: str | None = None,
     strict: bool | None = None,
     min_win_rate: float | None = None,
-    output_path: str | Path = DEFAULT_OUTPUT_PATH,
+    output_path: str | Path | None = DEFAULT_OUTPUT_PATH,
+    btc_df=None,
+    selector_config_paths: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """Run validate+backtest for a set of strategies on a shared comparison window."""
     if not selectors:
@@ -138,8 +140,12 @@ def compare_strategies(
     rows: list[dict[str, object]] = []
     baseline_score: float | None = None
     baseline_exp_decay: float | None = None
+    selector_config_paths = dict(selector_config_paths or {})
     for selector in ordered_selectors:
-        strategy = load_strategy(selector)
+        strategy = load_strategy(
+            selector,
+            config_path=selector_config_paths.get(selector),
+        )
         metadata = strategy.metadata()
         catalog_entry = find_strategy_catalog_entry(metadata.strategy_id)
         validation = strategy.validate(
@@ -148,14 +154,16 @@ def compare_strategies(
                 end_date=resolved_end_date,
                 strict=resolved_strict,
                 min_win_rate=resolved_min_win_rate,
-            )
+            ),
+            btc_df=btc_df,
         )
         backtest = strategy.backtest(
             _build_backtest_config(
                 start_date=resolved_start_date,
                 end_date=resolved_end_date,
                 strategy_label=metadata.strategy_id,
-            )
+            ),
+            btc_df=btc_df,
         )
         if selector == baseline:
             baseline_score = float(backtest.score)
@@ -205,11 +213,12 @@ def compare_strategies(
         "rows": rows,
     }
 
-    destination = Path(output_path).expanduser()
-    if not destination.is_absolute():
-        destination = ROOT / destination
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if output_path is not None:
+        destination = Path(output_path).expanduser()
+        if not destination.is_absolute():
+            destination = ROOT / destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
 
 
