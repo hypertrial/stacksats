@@ -137,6 +137,20 @@ def test_load_strategy_registry_resolves_relative_paths(tmp_path: Path) -> None:
     assert relative_registry["svc"].strategy_spec.endswith("strategies/demo.py:DemoStrategy")
 
 
+def test_load_strategy_registry_accepts_catalog_strategy_id(tmp_path: Path) -> None:
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text(
+        json.dumps({"svc": {"catalog_strategy_id": "run-daily-paper", "enabled": True}}),
+        encoding="utf-8",
+    )
+    registry = load_strategy_registry(registry_path)
+
+    assert registry["svc"].catalog_strategy_id == "run-daily-paper"
+    assert registry["svc"].strategy_spec.endswith(
+        "stacksats.strategies.stable.baselines.run_daily_paper:RunDailyPaperStrategy"
+    )
+
+
 def test_load_strategy_registry_validation_errors(tmp_path: Path) -> None:
     missing_path = tmp_path / "missing.json"
     with pytest.raises(FileNotFoundError):
@@ -159,8 +173,31 @@ def test_load_strategy_registry_validation_errors(tmp_path: Path) -> None:
 
     invalid_spec_path = tmp_path / "invalid-spec.json"
     invalid_spec_path.write_text(json.dumps({"svc": {"enabled": True}}), encoding="utf-8")
-    with pytest.raises(ValueError, match="strategy_spec"):
+    with pytest.raises(ValueError, match="exactly one"):
         load_strategy_registry(invalid_spec_path)
+
+    invalid_catalog_id_path = tmp_path / "invalid-catalog-id.json"
+    invalid_catalog_id_path.write_text(
+        json.dumps({"svc": {"catalog_strategy_id": "not-a-strategy"}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unknown 'catalog_strategy_id'"):
+        load_strategy_registry(invalid_catalog_id_path)
+
+    both_fields_path = tmp_path / "both-fields.json"
+    both_fields_path.write_text(
+        json.dumps(
+            {
+                "svc": {
+                    "catalog_strategy_id": "run-daily-paper",
+                    "strategy_spec": "demo",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="exactly one"):
+        load_strategy_registry(both_fields_path)
 
     invalid_config_path = tmp_path / "invalid-config.json"
     invalid_config_path.write_text(

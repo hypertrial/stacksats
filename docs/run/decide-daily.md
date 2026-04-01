@@ -21,7 +21,7 @@ Decision payloads can include execution-relevant fields (for example sizing, has
 
 ```bash
 stacksats strategy decide-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --strategy run-daily-paper \
   --total-window-budget-usd 1000
 ```
 

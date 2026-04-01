@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from stacksats.strategies.experimental import model_mvrv_plus
-from stacksats.strategies.experimental.model_mvrv_plus import MVRVPlusStrategy, main
+from stacksats.strategies.experimental.overlays import mvrv_plus as model_mvrv_plus
+from stacksats.strategies.experimental.overlays.mvrv_plus import MVRVPlusStrategy, main
 from stacksats.strategy_types import (
     BaseStrategy,
     validate_strategy_contract,

@@ -327,7 +327,7 @@ def _service_smoke(root: Path, wheel_path: Path) -> None:
         json.dumps(
             {
                 "btc-dca-paper": {
-                    "strategy_spec": "stacksats.strategies.examples:RunDailyPaperStrategy",
+                    "catalog_strategy_id": "run-daily-paper",
                     "enabled": True,
                     "btc_price_col": "price_usd",
                 }

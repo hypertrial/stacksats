@@ -33,7 +33,7 @@ stacksats serve agent-api \
 ```json
 {
   "btc-dca-paper": {
-    "strategy_spec": "stacksats.strategies.examples:RunDailyPaperStrategy",
+    "catalog_strategy_id": "run-daily-paper",
     "enabled": true,
     "btc_price_col": "price_usd"
   }

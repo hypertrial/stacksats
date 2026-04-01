@@ -100,7 +100,7 @@ def test_example_commands_main_uses_venv_python_when_available(
         "strategy",
         "decide-daily",
         "--strategy",
-        "stacksats.strategies.examples:RunDailyPaperStrategy",
+        "run-daily-paper",
         "--run-date",
         "2026-03-28",
         "--total-window-budget-usd",

@@ -173,7 +173,7 @@ def test_run_lifecycle_command_unsupported_raises() -> None:
 
     parser = cli._build_parser()
     args = parser.parse_args(
-        ["strategy", "validate", "--strategy", "stacksats.strategies.examples:SimpleZScoreStrategy"]
+        ["strategy", "validate", "--strategy", "simple-zscore"]
     )
     with pytest.raises(ValueError, match="Unsupported lifecycle command"):
         cli._run_lifecycle_command("unsupported", args, StrategyRunner())

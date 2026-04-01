@@ -22,15 +22,13 @@ from stacksats.loader import load_strategy
 from stacksats.data.prelude import BACKTEST_END
 from stacksats.runner import StrategyRunner
 from stacksats.runner.helpers import weights_match
+from stacksats.strategies.catalog import list_strategies
 from stacksats.strategy_types import BacktestConfig, ValidationConfig
 
 STRATEGY_SPECS = [
-    "stacksats.strategies.examples:UniformStrategy",
-    "stacksats.strategies.examples:SimpleZScoreStrategy",
-    "stacksats.strategies.examples:MomentumStrategy",
-    "stacksats.strategies.mvrv:MVRVStrategy",
-    "stacksats.strategies.experimental.model_example:ExampleMVRVStrategy",
-    "stacksats.strategies.experimental.model_mvrv_plus:MVRVPlusStrategy",
+    entry.strategy_id
+    for entry in list_strategies(public_only=False)
+    if entry.audit_enabled
 ]
 
 MERGED_METRICS = (

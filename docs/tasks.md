@@ -15,7 +15,7 @@ For canonical source dataset details, use [BRK Data Source](data-source.md) and 
 
 ### Prerequisites
 
-- Strategy file exists and can be loaded (`module_or_path:ClassName`).
+- Strategy selector is valid (`strategy_id` for built-ins or `module_or_path:ClassName` for custom strategies).
 - StackSats is installed and the command is importable.
 
 ### Command
@@ -35,7 +35,7 @@ stacksats strategy validate \
 
 ### Troubleshooting
 
-- Check strategy spec format: `module_or_path:ClassName`.
+- Check strategy selector format: built-in `strategy_id` or `module_or_path:ClassName`.
 - Check `NaN`/`inf` in custom features or signals.
 - Use [Validation Checklist](validation_checklist.md) for strict-gate failures.
 
@@ -158,7 +158,7 @@ stacksats strategy export \
 
 ```bash
 stacksats strategy decide-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --strategy run-daily-paper \
   --total-window-budget-usd 1000
 ```
 
@@ -192,12 +192,12 @@ stacksats strategy decide-daily \
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --strategy run-daily-paper \
   --total-window-budget-usd 1000 \
   --mode paper
 ```
 
-Replace `stacksats.strategies.examples:RunDailyPaperStrategy` with your own strategy spec once you move past the canonical paper-flow example.
+Replace `run-daily-paper` with your own built-in `strategy_id` or custom strategy spec once you move past the canonical paper-flow example.
 
 ### Expected output
 

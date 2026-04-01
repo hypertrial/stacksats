@@ -38,6 +38,7 @@ Common stable imports include:
 - configs and results: `AgentServiceConfig`, `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyDecisionResult`, `DailyRunResult`, `ExecutionReceiptEvent`, `ExecutionReceiptHistoryResult`, `ExecutionStatusResult`
 - metadata and schema types: `StrategyMetadata`, `StrategySpec`, `StrategySeriesMetadata`, `StrategyArtifactSet`, `ColumnSpec`
 - runners and loaders: `StrategyRunner`, `create_agent_service_app`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
+- catalog helpers: `StrategyCatalogEntry`, `list_strategies`, `get_strategy_catalog_entry`
 - stable built-ins: `UniformStrategy`, `RunDailyPaperStrategy`, `SimpleZScoreStrategy`, `MomentumStrategy`, `MVRVStrategy`
 
 See [Stability Policy](../stability.md) for the canonical support and deprecation rules.
@@ -90,6 +91,16 @@ app = create_agent_service_app(
 ```
 
 The hosted HTTP service also includes stable liveness and discovery routes plus request-ID behavior documented on [Agent API Service](../run/agent-api.md).
+
+Inspect the built-in strategy catalog:
+
+```python
+from stacksats import get_strategy_catalog_entry, list_strategies
+
+entry = get_strategy_catalog_entry("simple-zscore")
+print(entry.strategy_spec)
+print([item.strategy_id for item in list_strategies(public_only=False)])
+```
 
 Reload exported artifacts:
 

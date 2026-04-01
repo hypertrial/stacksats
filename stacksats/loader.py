@@ -10,6 +10,7 @@ import inspect
 import sys
 from pathlib import Path
 
+from .strategies.catalog import resolve_catalog_strategy_spec
 from .strategy_types import BaseStrategy, validate_strategy_contract
 
 
@@ -46,16 +47,26 @@ def load_strategy(
     config: dict | None = None,
     config_path: str | None = None,
 ) -> BaseStrategy:
-    """Load and instantiate a strategy from `module_or_path:ClassName`.
+    """Load and instantiate a strategy from `strategy_id` or `module_or_path:ClassName`.
 
     Examples:
+    - `simple-zscore`
     - `my_strategy.py:MyStrategy`
     - `my_package.strategies:MyStrategy`
     """
+    if ":" not in spec:
+        try:
+            spec = resolve_catalog_strategy_spec(spec)
+        except KeyError as exc:
+            raise ValueError(
+                "Invalid strategy spec. Use a built-in strategy_id or format "
+                "'module_or_path:ClassName'."
+            ) from exc
     module_or_path, sep, class_name = spec.rpartition(":")
     if not sep or not module_or_path or not class_name:
         raise ValueError(
-            "Invalid strategy spec. Use format 'module_or_path:ClassName'."
+            "Invalid strategy spec. Use a built-in strategy_id or format "
+            "'module_or_path:ClassName'."
         )
 
     module = _load_module(module_or_path)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import polars as pl
 
-EXAMPLE_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
+EXAMPLE_SPEC = "simple-zscore"
 
 
 def _write_synthetic_brk_parquet(
@@ -223,7 +223,7 @@ def main() -> int:
                     "strategy",
                     "decide-daily",
                     "--strategy",
-                    "stacksats.strategies.examples:RunDailyPaperStrategy",
+                    "run-daily-paper",
                     "--run-date",
                     end_date,
                     "--total-window-budget-usd",

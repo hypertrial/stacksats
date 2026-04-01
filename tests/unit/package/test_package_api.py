@@ -28,7 +28,9 @@ from stacksats import (
     UniformStrategy,
     WeightTimeSeries,
     WeightTimeSeriesBatch,
+    get_strategy_catalog_entry,
     load_metric_catalog,
+    list_strategies,
     open_merged_metrics,
 )
 from tests.test_helpers import btc_frame
@@ -107,11 +109,24 @@ def test_public_api_snapshot_matches_contract() -> None:
 
 
 def test_stable_strategies_are_top_level_exports() -> None:
+    expected = [
+        entry.class_name
+        for entry in list_strategies(tier="stable")
+        if entry.public_export
+    ]
+    observed = [name for name in expected if hasattr(stacksats, name)]
+    assert observed == expected
     assert UniformStrategy is stacksats.UniformStrategy
     assert RunDailyPaperStrategy is stacksats.RunDailyPaperStrategy
     assert SimpleZScoreStrategy is stacksats.SimpleZScoreStrategy
     assert MomentumStrategy is stacksats.MomentumStrategy
     assert MVRVStrategy is stacksats.MVRVStrategy
+
+
+def test_strategy_catalog_helpers_are_top_level_exports() -> None:
+    entry = get_strategy_catalog_entry("simple-zscore")
+    assert entry.strategy_id == "simple-zscore"
+    assert any(item.strategy_id == "mvrv-plus" for item in list_strategies(public_only=False))
 
 
 def test_decision_types_are_top_level_exports() -> None:

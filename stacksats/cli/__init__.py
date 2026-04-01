@@ -22,6 +22,7 @@ from ..data.data_setup import (
 )
 from ..loader import load_strategy
 from ..runner import StrategyRunner
+from ..strategies.catalog import list_strategies
 from ..strategy_types import (
     AgentServiceConfig,
     BacktestConfig,
@@ -31,7 +32,7 @@ from ..strategy_types import (
     ValidationConfig,
 )
 
-DEMO_STRATEGY_SPEC = "stacksats.strategies.examples:SimpleZScoreStrategy"
+DEMO_STRATEGY_SPEC = "simple-zscore"
 DEMO_START_DATE = "2018-01-01"
 DEMO_END_DATE = "2025-12-31"
 
@@ -64,7 +65,7 @@ def _add_strategy_spec_arguments(command, *, required: bool, default: str | None
         "--strategy",
         required=required,
         default=default,
-        help="module_or_path:ClassName",
+        help="built-in strategy_id or module_or_path:ClassName",
     )
     command.add_argument(
         "--strategy-config",
@@ -185,19 +186,22 @@ def _start_agent_service_from_args(args) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    stable_ids = ", ".join(entry.strategy_id for entry in list_strategies(tier="stable"))
     parser = argparse.ArgumentParser(
         prog="stacksats",
         description="StackSats CLI",
         formatter_class=_HelpFormatter,
         epilog=(
+            "Built-in strategies accept strategy_id values such as simple-zscore "
+            "and run-daily-paper.\n\n"
             "Examples:\n"
             "  stacksats demo backtest\n"
             "  stacksats data fetch\n"
             "  stacksats data prepare\n"
             "  stacksats strategy backtest --strategy "
-            "stacksats.strategies.examples:SimpleZScoreStrategy --output-dir output\n"
+            "simple-zscore --output-dir output\n"
             "  stacksats strategy decide-daily --strategy "
-            "stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000\n"
+            "run-daily-paper --total-window-budget-usd 1000\n"
             "  stacksats serve agent-api --registry-path .stacksats/agent_service_registry.json\n"
             "  stacksats strategy animate --backtest-json "
             "output/my_strategy/1.0.0/run-1/backtest_result.json"
@@ -210,10 +214,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Strategy lifecycle commands",
         formatter_class=_HelpFormatter,
         epilog=(
-            "Strategy spec format:\n"
+            "Strategy selector formats:\n"
+            "  built-in strategy_id\n"
             "  module_or_path:ClassName\n\n"
-            "Example:\n"
-            "  stacksats.strategies.examples:SimpleZScoreStrategy"
+            f"Stable built-ins:\n  {stable_ids}\n\n"
+            "Examples:\n"
+            "  simple-zscore\n"
+            "  my_strategy.py:MyStrategy"
         ),
     )
     strategy_sub = strategy_parser.add_subparsers(dest="strategy_command", required=True)

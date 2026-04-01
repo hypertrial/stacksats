@@ -1,21 +1,23 @@
-"""Strategy interfaces and built-ins."""
+"""Strategy interfaces, catalog helpers, and stable built-ins."""
 
 from .base import BaseStrategy, DayState, StrategyContext
-from .examples import (
-    MomentumStrategy,
-    RunDailyPaperStrategy,
-    SimpleZScoreStrategy,
-    UniformStrategy,
+from .catalog import (
+    StrategyCatalogEntry,
+    get_strategy_catalog_entry,
+    iter_catalog_strategy_classes,
+    list_strategies,
 )
-from .mvrv import MVRVStrategy
+
+_STABLE_PUBLIC_CLASSES = iter_catalog_strategy_classes(tier="stable", public_only=True)
+for _strategy_cls in _STABLE_PUBLIC_CLASSES:
+    globals()[_strategy_cls.__name__] = _strategy_cls
 
 __all__ = [
     "BaseStrategy",
     "DayState",
-    "MomentumStrategy",
-    "MVRVStrategy",
-    "RunDailyPaperStrategy",
-    "SimpleZScoreStrategy",
+    "StrategyCatalogEntry",
     "StrategyContext",
-    "UniformStrategy",
+    "get_strategy_catalog_entry",
+    "list_strategies",
 ]
+__all__.extend(_strategy_cls.__name__ for _strategy_cls in _STABLE_PUBLIC_CLASSES)

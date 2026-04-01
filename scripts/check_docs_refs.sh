@@ -92,7 +92,7 @@ if [[ -s "${blob_links_tmp}" ]]; then
 fi
 
 if command -v rg >/dev/null 2>&1; then
-  rg -n 'stacksats strategy (validate|backtest|export) --strategy stacksats\.strategies\.examples:SimpleZScoreStrategy' \
+  rg -n 'stacksats strategy (validate|backtest|export) --strategy simple-zscore' \
     README.md docs \
     > "${dup_cli_tmp}" || true
 fi

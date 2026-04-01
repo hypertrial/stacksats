@@ -19,19 +19,18 @@ from .model_development import precompute_features
 from .data.prelude import load_data
 from .runner import StrategyRunner
 from .service import create_agent_service_app
+from .strategies.catalog import (
+    StrategyCatalogEntry,
+    get_strategy_catalog_entry,
+    iter_catalog_strategy_classes,
+    list_strategies,
+)
 from .strategy_time_series import (
     ColumnSpec,
     StrategySeriesMetadata,
     WeightTimeSeries,
     WeightTimeSeriesBatch,
 )
-from .strategies.examples import (
-    MomentumStrategy,
-    RunDailyPaperStrategy,
-    SimpleZScoreStrategy,
-    UniformStrategy,
-)
-from .strategies.mvrv import MVRVStrategy
 from .strategy_types import (
     AgentServiceConfig,
     BacktestConfig,
@@ -50,6 +49,10 @@ from .strategy_types import (
     ValidationConfig,
     strategy_context_from_features_df,
 )
+
+_STABLE_PUBLIC_CLASSES = iter_catalog_strategy_classes(tier="stable", public_only=True)
+for _strategy_cls in _STABLE_PUBLIC_CLASSES:
+    globals()[_strategy_cls.__name__] = _strategy_cls
 
 __all__ = [
     # Primary objects
@@ -81,25 +84,24 @@ __all__ = [
     "DailyOrderReceipt",
     "DailyOrderRequest",
     "DayState",
-    "MomentumStrategy",
-    "MVRVStrategy",
-    "RunDailyPaperStrategy",
-    "SimpleZScoreStrategy",
     "StrategyRunner",
     "StrategySeriesMetadata",
     "StrategyArtifactSet",
+    "StrategyCatalogEntry",
     "StrategyContext",
     "StrategyLazyContext",
     "StrategyMetadata",
     "StrategyRunResult",
     "StrategySpec",
     "TargetProfile",
-    "UniformStrategy",
     "create_agent_service_app",
+    "get_strategy_catalog_entry",
     "load_strategy",
     "load_metric_catalog",
     "load_data",
+    "list_strategies",
     "open_merged_metrics",
     "precompute_features",
     "strategy_context_from_features_df",
 ]
+__all__.extend(_strategy_cls.__name__ for _strategy_cls in _STABLE_PUBLIC_CLASSES)

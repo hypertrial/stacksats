@@ -15,7 +15,7 @@ description: Reference for `stacksats strategy export`.
 
 ```bash
 stacksats strategy export \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --strategy simple-zscore \
   --start-date 2024-01-01 \
   --end-date 2024-12-31 \
   --output-dir output

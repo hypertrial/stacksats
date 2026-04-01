@@ -18,7 +18,7 @@ If you only need a machine-consumable decision for an external AI agent, use [De
 
 ```bash
 stacksats strategy run-daily \
-  --strategy stacksats.strategies.examples:RunDailyPaperStrategy \
+  --strategy run-daily-paper \
   --total-window-budget-usd 1000 \
   --mode paper
 ```

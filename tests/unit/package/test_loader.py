@@ -61,6 +61,12 @@ def test_load_strategy_invalid_spec_raises_value_error() -> None:
         load_strategy("invalid-spec")
 
 
+def test_load_strategy_from_built_in_strategy_id() -> None:
+    strategy = load_strategy("simple-zscore")
+    assert isinstance(strategy, BaseStrategy)
+    assert strategy.strategy_id == "simple-zscore"
+
+
 def test_load_strategy_missing_file_raises_file_not_found() -> None:
     with pytest.raises(FileNotFoundError, match="Strategy file not found"):
         load_strategy("/tmp/does-not-exist.py:Missing")
@@ -445,6 +451,12 @@ def test_load_strategy_supports_packaged_example_mvrv_strategy() -> None:
     strategy = load_strategy("stacksats.strategies.experimental.model_example:ExampleMVRVStrategy")
     assert isinstance(strategy, BaseStrategy)
     assert strategy.strategy_id == "example-mvrv"
+
+
+def test_load_strategy_supports_legacy_stable_example_path() -> None:
+    strategy = load_strategy("stacksats.strategies.examples:SimpleZScoreStrategy")
+    assert isinstance(strategy, BaseStrategy)
+    assert strategy.strategy_id == "simple-zscore"
 
 
 def test_load_strategy_supports_packaged_mvrv_plus_strategy() -> None:

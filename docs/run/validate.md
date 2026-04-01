@@ -7,7 +7,7 @@ description: Reference for `stacksats strategy validate`.
 
 ## Prerequisites
 
-- Strategy spec format: `module_or_path:ClassName`
+- Strategy selector format: built-in `strategy_id` or `module_or_path:ClassName`
 - Canonical source dataset is `merged_metrics*.parquet` (see [Merged Metrics Parquet Schema](../reference/merged-metrics-parquet-schema.md)).
 - Runtime BRK-wide parquet available (`STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or `./bitcoin_analytics.parquet`).
 
@@ -15,7 +15,7 @@ description: Reference for `stacksats strategy validate`.
 
 ```bash
 stacksats strategy validate \
-  --strategy stacksats.strategies.examples:SimpleZScoreStrategy \
+  --strategy simple-zscore \
   --start-date 2024-01-01 \
   --end-date 2024-12-31
 ```
@@ -36,7 +36,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Troubleshooting
 
-- If strategy import fails, verify module path and editable install.
+- If strategy import fails, verify the built-in `strategy_id` or custom module path and editable install.
 - If strict gates fail, inspect diagnostics with [Validation Checklist](../validation_checklist.md).
 
 ## Next step

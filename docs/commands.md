@@ -16,12 +16,12 @@ stacksats demo backtest
 stacksats data fetch
 stacksats data prepare
 stacksats data doctor
-stacksats strategy validate --strategy stacksats.strategies.examples:SimpleZScoreStrategy
-stacksats strategy backtest --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
-stacksats strategy export --strategy stacksats.strategies.examples:SimpleZScoreStrategy --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
-stacksats strategy decide-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000
+stacksats strategy validate --strategy simple-zscore
+stacksats strategy backtest --strategy simple-zscore --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
+stacksats strategy export --strategy simple-zscore --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
+stacksats strategy decide-daily --strategy run-daily-paper --total-window-budget-usd 1000
 stacksats serve agent-api --registry-path .stacksats/agent_service_registry.json
-stacksats strategy run-daily --strategy stacksats.strategies.examples:RunDailyPaperStrategy --total-window-budget-usd 1000 --mode paper
+stacksats strategy run-daily --strategy run-daily-paper --total-window-budget-usd 1000 --mode paper
 stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json
 ```
 

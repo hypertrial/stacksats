@@ -16,7 +16,7 @@ stacksats demo backtest
 This uses:
 
 - packaged demo parquet bundled with the wheel
-- default strategy `stacksats.strategies.examples:SimpleZScoreStrategy`
+- default strategy `simple-zscore`
 - default date bounds `2018-01-01` to `2025-12-31`
 
 ## Commands
