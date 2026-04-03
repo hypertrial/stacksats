@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## 1.2.2 highlights
+
+- Clarified that StackSats supports the Bitcoin Research Kit (BRK) project at the project and data-workflow level while keeping the stable StackSats Python support boundary explicit.
+- Added official BRK project links in the README and canonical BRK data docs so users can find the upstream project, crate, and rustdoc surfaces from the hosted docs.
+- Tightened BRK wording across onboarding, API, stability, FAQ, glossary, and migration pages so the docs consistently distinguish the upstream BRK project, the canonical BRK source dataset, and the StackSats-derived runtime parquet.
+
 ## 1.2.1 highlights
 
 - Added a built-in strategy catalog with model cards, generated strategy reference pages, and stable public helpers for discovering cataloged strategies from Python.

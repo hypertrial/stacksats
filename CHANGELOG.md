@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-04-03
+
+### Changed
+
+- Clarified StackSats documentation to explicitly support the Bitcoin Research Kit (BRK) project at the project and data-workflow level without implying Rust crate API compatibility.
+- Added official BRK project, crates.io, and docs.rs links in the canonical BRK data docs and aligned README, onboarding, public API, stability, FAQ, glossary, and migration wording around the same support boundary.
+- Added docs-ownership guidance that keeps BRK support wording synchronized across the primary user-facing docs surfaces.
+
 ## [1.2.1] - 2026-04-01
 
 ### Added
