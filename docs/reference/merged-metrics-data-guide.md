@@ -7,7 +7,7 @@ description: What data a new user can access in the canonical BRK merged_metrics
 
 > Generated from `scripts/generate_merged_metrics_taxonomy.py` against `merged_metrics_2026-03-15_04-29-57.parquet`.
 
-Use this page first if you want to understand what data you actually have access to through the canonical Bitcoin Research Kit (BRK) `merged_metrics*.parquet` dataset consumed by StackSats.
+Use this page first if you want to understand what data you actually have access to through `merged_metrics*.parquet`.
 
 Reading order:
 
@@ -17,7 +17,7 @@ Reading order:
 
 ## What This Dataset Is
 
-The canonical BRK dataset consumed by StackSats is a long-format daily fact table with exactly three columns:
+The canonical BRK dataset is a long-format daily fact table with exactly three columns:
 
 - `day_utc`: UTC calendar day
 - `metric`: metric key
@@ -93,7 +93,7 @@ These runtime-critical metrics are the minimum projection used by built-in strat
 | `realized_cap_growth_rate` | `5,324` | `2011-08-16` | `2026-03-13` |
 | `market_cap_growth_rate` | `5,324` | `2011-08-16` | `2026-03-13` |
 
-The runtime projection renames `day_utc` to `date` and derives `price_usd` from `market_cap / supply_btc`. This runtime projection is a StackSats-derived artifact built from canonical BRK source data. See [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md) and [BRK Data Source](../data-source.md).
+The runtime projection renames `day_utc` to `date` and derives `price_usd` from `market_cap / supply_btc`. See [Merged Metrics Parquet Schema](merged-metrics-parquet-schema.md) and [BRK Data Source](../data-source.md).
 
 ## How To Search The Catalog And Taxonomy
 
