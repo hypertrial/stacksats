@@ -12,6 +12,8 @@ Use this guide when upgrading code that depended on removed compatibility helper
 `0.7.0+` is BRK-only for strategy metrics/runtime data sourcing.
 Legacy CoinMetrics source paths are removed from active runtime and docs workflows.
 
+Here "BRK" means Bitcoin Research Kit (BRK) as the upstream project and canonical data source ecosystem. This migration boundary does not mean StackSats exposes or guarantees Rust crate APIs from BRK itself.
+
 ## Scope
 
 This page covers migration for:

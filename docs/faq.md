@@ -94,6 +94,18 @@ The canonical source dataset is long-format `merged_metrics*.parquet` (see [Merg
 
 If you need a lazy integration point before the final execution boundary, use `BTCDataProvider.load_lazy(...)` or `ColumnMapDataProvider.load_lazy(...)`. Strategy hooks themselves still receive eager `pl.DataFrame` inputs.
 
+### Does StackSats support the BRK project or Rust crate directly?
+
+StackSats explicitly supports the Bitcoin Research Kit (BRK) project at the project and data-workflow level. That means StackSats documents BRK as the upstream project, links to the official BRK project surfaces, and supports BRK-derived canonical data workflows built around `merged_metrics*.parquet`.
+
+That does **not** mean StackSats is a Rust wrapper, a BRK crate dependency contract, or a guarantee of crate-level API compatibility. The stable support promise remains the StackSats Python API, documented CLI subset, and documented hosted HTTP service.
+
+Official BRK links:
+
+- [bitcoinresearchkit/brk](https://github.com/bitcoinresearchkit/brk)
+- [`brk` on crates.io](https://crates.io/crates/brk)
+- [`brk` on docs.rs](https://docs.rs/crate/brk/latest)
+
 ### Which modules are stable public API?
 
 Use top-level `stacksats` exports, documented artifact payloads, the documented CLI subset, and the documented hosted `/v1` HTTP service. Generated module pages are reference material, not a promise that the module import path is stable.

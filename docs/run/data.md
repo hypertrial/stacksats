@@ -5,7 +5,9 @@ description: Reference for explicit BRK data setup and diagnostics commands.
 
 # Data Command
 
-Use the `data` command group for canonical BRK setup and runtime diagnostics.
+Use the `data` command group for canonical Bitcoin Research Kit (BRK) setup and runtime diagnostics.
+
+This command group supports StackSats' BRK-derived data workflow. Use [BRK Data Source](../data-source.md) for the canonical upstream links and support boundary.
 
 ## Fetch source data
 

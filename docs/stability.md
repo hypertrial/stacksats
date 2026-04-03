@@ -14,6 +14,10 @@ StackSats uses SemVer for its documented stable surface.
   - `release-gate.yml` enforces Linux full-suite validation and a macOS supported-platform smoke lane before release tags are publishable.
 - Windows: best-effort only until dedicated CI coverage is added
 
+## BRK compatibility note
+
+StackSats also documents compatibility with the Bitcoin Research Kit (BRK) project and BRK-derived canonical data workflows. This is a project and data-workflow support statement only; it is not a guarantee of Rust crate API compatibility or crate re-exports. Use [BRK Data Source](data-source.md) for the canonical upstream links and data-contract wording.
+
 ## Stable public API
 
 The stable `1.x` contract is intentionally narrow:

@@ -51,7 +51,10 @@ Use [Task Hub](tasks.md) for the shortest path into `decide-daily` or the Python
 
 ## Canonical Dataset
 
-StackSats is anchored on the canonical BRK `merged_metrics*.parquet` dataset.
+StackSats is anchored on the canonical Bitcoin Research Kit (BRK) `merged_metrics*.parquet` dataset. StackSats supports BRK at the project and data-workflow level and documents BRK as the upstream project. See [bitcoinresearchkit/brk](https://github.com/bitcoinresearchkit/brk), [`brk` on crates.io](https://crates.io/crates/brk), and [`brk` on docs.rs](https://docs.rs/crate/brk/latest).
+
+This does not mean StackSats embeds the Rust BRK crates or promises crate-level API compatibility. StackSats remains a Python package that consumes documented BRK-derived data artifacts.
+
 Current coverage and scale are documented in the dataset-specific reference pages:
 
 - [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md)

@@ -7,6 +7,8 @@ description: Stable StackSats 1.x imports, CLI subset, and artifact contracts.
 
 Use this page when you want the supported `1.x` library surface rather than the broader internal/generated module reference.
 
+StackSats documents compatibility with the Bitcoin Research Kit (BRK) project and BRK-derived canonical data workflows, but the stable public API described here is the StackSats Python surface. It is not a promise that StackSats embeds BRK, re-exports Rust crates, or tracks BRK crate APIs version-by-version.
+
 ## Stable `1.x` contract
 
 The stable public contract is intentionally narrow:
@@ -68,6 +70,8 @@ dataset = open_merged_metrics()
 print(btc_df.columns)
 print(dataset.summary())
 ```
+
+These helpers support StackSats' Python access to BRK-derived data artifacts. Use [BRK Data Source](../data-source.md) for the canonical upstream links and support boundary.
 
 Generate an agent-facing daily decision payload:
 

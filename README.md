@@ -19,12 +19,18 @@ Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 - [`docs/start/system-overview.md`](docs/start/system-overview.md) — data flow and production paths
 - [`docs/tasks.md`](docs/tasks.md) — task-first workflows
 - [`docs/commands.md`](docs/commands.md) — CLI index
-- [`docs/data-source.md`](docs/data-source.md) — canonical BRK dataset and manifests
+- [`docs/data-source.md`](docs/data-source.md) — Bitcoin Research Kit (BRK) dataset support, canonical source data, and manifests
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — symptom-based links
 - [`docs/reference/public-api.md`](docs/reference/public-api.md) — stable `1.x` library surface
 - [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) — custom strategy walkthrough
 - [`docs/migration.md`](docs/migration.md) — breaking-change mappings
 - [`docs/release.md`](docs/release.md) — maintainer releases
+
+## BRK compatibility
+
+StackSats is a Python library with explicit compatibility for the Bitcoin Research Kit (BRK) project and BRK-derived canonical data workflows. We document BRK as the upstream project and link to the official BRK surfaces: [bitcoinresearchkit/brk](https://github.com/bitcoinresearchkit/brk), [`brk` on crates.io](https://crates.io/crates/brk), and [`brk` on docs.rs](https://docs.rs/crate/brk/latest).
+
+This is a project and data compatibility statement, not a promise that StackSats embeds BRK, re-exports Rust crates, or version-locks BRK crate APIs. StackSats remains a Python package with its own stable `1.x` support boundary.
 
 ## Framework principles
 

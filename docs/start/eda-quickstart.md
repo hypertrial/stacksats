@@ -1,11 +1,13 @@
 ---
 title: EDA Quickstart
-description: Explore the canonical merged_metrics parquet with the stable top-level EDA helpers.
+description: Explore the canonical Bitcoin Research Kit (BRK) merged_metrics parquet with the stable top-level EDA helpers.
 ---
 
 # EDA Quickstart
 
-Use the top-level `open_merged_metrics()` and `load_metric_catalog()` helpers when you want notebook/script-style exploration of the canonical long-format `merged_metrics*.parquet` dataset.
+Use the top-level `open_merged_metrics()` and `load_metric_catalog()` helpers when you want notebook/script-style exploration of the canonical long-format Bitcoin Research Kit (BRK) `merged_metrics*.parquet` dataset.
+
+StackSats supports BRK at the project and data-workflow level, but these helpers are part of the StackSats Python API. Use [BRK Data Source](../data-source.md) for the canonical upstream links and support boundary.
 
 ## Prerequisite
 

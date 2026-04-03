@@ -1,14 +1,32 @@
 ---
 title: BRK Data Source
-description: Canonical merged_metrics parquet contract and runtime projection workflow.
+description: Bitcoin Research Kit (BRK) support, canonical merged_metrics parquet contract, and runtime projection workflow.
 ---
 
-# BRK Data Source (Canonical Merged Metrics + Runtime Projection)
+# BRK Data Source (Bitcoin Research Kit Project + Canonical Merged Metrics + Runtime Projection)
 
-StackSats canonical dataset is the long-format Google Drive parquet:
+StackSats supports the Bitcoin Research Kit (BRK) project as the upstream source ecosystem for its canonical data workflow. Official BRK project links:
+
+- [bitcoinresearchkit/brk](https://github.com/bitcoinresearchkit/brk)
+- [`brk` on crates.io](https://crates.io/crates/brk)
+- [`brk` on docs.rs](https://docs.rs/crate/brk/latest)
+
+Support boundary:
+
+- StackSats supports BRK-derived canonical data workflows and documents BRK as the upstream project.
+- StackSats remains a Python package with its own stable public API and CLI surface.
+- StackSats does not promise Rust crate compatibility, crate re-exports, or subcrate-by-subcrate feature parity.
+
+Within StackSats docs, "BRK" refers to three related but distinct things:
+
+- the upstream Bitcoin Research Kit (BRK) project
+- the canonical BRK long-format `merged_metrics*.parquet` source dataset consumed by StackSats workflows
+- the StackSats runtime-compatible derived BRK-wide parquet built from that canonical source dataset
+
+The StackSats-consumed canonical BRK source dataset is the long-format Google Drive parquet:
 `merged_metrics*.parquet`.
 
-Canonical file link:
+Canonical BRK source artifact link:
 
 - <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>
 
@@ -38,7 +56,7 @@ The canonical parquet has exactly:
 - `metric` (`String`)
 - `value` (`Float64`)
 
-This is the source-of-truth dataset for StackSats documentation and data workflow.
+This canonical BRK parquet is the source-of-truth dataset for StackSats documentation and data workflow.
 The physical long-format schema, user-facing access guide, and semantic metric
 taxonomy are documented separately so new users can first understand what data
 they can access before diving into naming details and projection mechanics.
@@ -60,14 +78,14 @@ Runtime APIs are strict and deterministic:
 - runtime parquet ingestion is lazy-first (`scan_parquet`) and only collects once the eager execution boundary needs a concrete frame
 - framework loaders retain pre-start history by default for feature warmup; scoring windows still respect requested start/end bounds
 
-Runtime expects a BRK-wide parquet (for example columns like `date`, `price_usd`,
+Runtime expects a StackSats runtime-compatible BRK-wide parquet (for example columns like `date`, `price_usd`,
 `mvrv`, and optional overlay features).
 
 Framework-owned feature materialization is also lazy-first. Providers compose
 Polars `LazyFrame` pipelines and the runner/registry collect once after joining
 the observed feature set for eager strategy execution.
 
-That BRK-wide parquet is a derived artifact from canonical `merged_metrics`.
+That BRK-wide parquet is a StackSats-managed derived artifact from canonical BRK `merged_metrics`.
 For direct exploration of the canonical long-format parquet, use the public
 [`stacksats.eda`](reference/api/eda.md) API instead of the runtime loader path.
 
@@ -135,6 +153,9 @@ export STACKSATS_ANALYTICS_PARQUET=$(pwd)/bitcoin_analytics.parquet
 ## Canonical Source of Truth
 
 - Google Drive parquet: <https://drive.google.com/file/d/1jKRRU7l9kOMdGI_hIJGg02X3jWTMPJsw/view?usp=sharing>
+- BRK project: <https://github.com/bitcoinresearchkit/brk>
+- BRK crate: <https://crates.io/crates/brk>
+- BRK rustdoc: <https://docs.rs/crate/brk/latest>
 - Packaged manifest used by `stacksats data fetch`: `stacksats/assets/brk_data_manifest.json`
 - Repo mirror for docs and legacy script usage: `data/brk_data_manifest.json`
 

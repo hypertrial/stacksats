@@ -1,11 +1,13 @@
 ---
 title: Full Data Setup
-description: Fetch canonical BRK source data and prepare the runtime parquet used by StackSats.
+description: Fetch canonical Bitcoin Research Kit (BRK) source data and prepare the runtime parquet used by StackSats.
 ---
 
 # Full Data Setup
 
-Use this path after the offline demo when you want the canonical BRK dataset.
+Use this path after the offline demo when you want the canonical Bitcoin Research Kit (BRK) dataset.
+
+StackSats supports BRK as the upstream project for this data workflow. This page stays focused on the StackSats Python path around BRK-derived data artifacts; use [BRK Data Source](../data-source.md) for the canonical upstream links and support boundary.
 
 ## 1) Fetch the canonical source data
 

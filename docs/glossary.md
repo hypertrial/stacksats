@@ -34,11 +34,14 @@ The amount of new Bitcoin created in each block (approximately every 10 minutes)
 
 ## System Terms
 
+### Bitcoin Research Kit (BRK)
+The upstream Bitcoin analytics project whose canonical `merged_metrics*.parquet` dataset anchors StackSats' documented data workflow. StackSats supports BRK at the project and data-workflow level, but not as a promise of Rust crate API compatibility. See [BRK Data Source](data-source.md) for the canonical upstream links and support boundary.
+
 ### Canonical merged_metrics parquet
-The canonical Bitcoin analytics dataset used by StackSats is the long-format `merged_metrics*.parquet` distribution (`day_utc`, `metric`, `value`). See [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md), [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md), [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md), and [BRK Data Source](data-source.md).
+The canonical Bitcoin analytics dataset used by StackSats is the long-format Bitcoin Research Kit (BRK) `merged_metrics*.parquet` distribution (`day_utc`, `metric`, `value`). See [Merged Metrics Data Guide](reference/merged-metrics-data-guide.md), [Merged Metrics Parquet Schema](reference/merged-metrics-parquet-schema.md), [Merged Metrics Taxonomy](reference/merged-metrics-taxonomy.md), and [BRK Data Source](data-source.md).
 
 ### Runtime BRK parquet
-Runtime commands and `load_data(...)` read a runtime-compatible BRK-wide parquet (for example `bitcoin_analytics.parquet`) via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`. This runtime parquet is a derived artifact from canonical `merged_metrics`. For custom DataFrames, use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe(...)`.
+Runtime commands and `load_data(...)` read a runtime-compatible BRK-wide parquet (for example `bitcoin_analytics.parquet`) via `STACKSATS_ANALYTICS_PARQUET`, managed default `~/.stacksats/data/bitcoin_analytics.parquet`, or legacy local fallback `./bitcoin_analytics.parquet`. This runtime parquet is a StackSats-derived artifact from canonical BRK `merged_metrics`. For custom DataFrames, use `ColumnMapDataProvider` or `StrategyRunner.from_dataframe(...)`.
 
 ### Allocation Span
 The fixed window of time (default: 365 days) over which a fixed budget must be fully allocated. The model solves for the optimal distribution of capital over this rolling window.
