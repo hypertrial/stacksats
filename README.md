@@ -1,5 +1,9 @@
 # StackSats
 
+*Python library for quantitative Bitcoin accumulation via DCA strategies.*
+
+Not a general crypto trading bot or brokerage wrapper—see [What StackSats is](#what-stacksats-is).
+
 ![StackSats Logo](https://raw.githubusercontent.com/hypertrial/stacksats/main/docs/assets/stacking-sats-logo.svg)
 
 [![PyPI version](https://img.shields.io/pypi/v/stacksats.svg)](https://pypi.org/project/stacksats/)
@@ -7,22 +11,41 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats is a **strategy-first backtesting and decision framework** for Bitcoin weight management. It separates **Strategy** intent from validated weight time-series outcomes, providing a strict boundary for causal validation.
+StackSats is a Python library for building, backtesting, and operationalizing quantitative dollar-cost averaging (DCA) strategies for Bitcoin accumulation. It helps you turn research signals and feature pipelines into validated BTC weight schedules and daily allocation decisions.
+
+Use StackSats when you want to:
+
+- build custom Bitcoin accumulation strategies in Python
+- backtest DCA rules against BRK-derived canonical Bitcoin datasets
+- validate causal constraints before shipping a strategy
+- emit daily BTC allocation decisions for agents or external execution systems
+
+StackSats is library-first: the CLI, demo flows, and hosted agent API all sit on top of the same Python package surface.
 
 Learn more at [www.stackingsats.org](https://www.stackingsats.org).
 
 **Hosted documentation:** <https://hypertrial.github.io/stacksats/> — start from [`docs/index.md`](docs/index.md).
 
+## What StackSats is
+
+StackSats is not a general crypto trading bot or brokerage wrapper. It is a research and decision engine for Bitcoin accumulation strategies:
+
+- **Python library:** define strategies with `BaseStrategy`, run them with stable configs, and consume results from Python.
+- **Quantitative DCA toolkit:** model how much BTC to accumulate over time instead of placing exchange-specific orders directly.
+- **Backtesting framework:** compare strategies, validate constraints, and export artifact sets from repeatable runs.
+- **Execution boundary:** StackSats computes decisions; brokerage execution stays outside the package unless you wire in an adapter intentionally.
+
 ## Documentation map
 
-- [`docs/start/quickstart.md`](docs/start/quickstart.md) — packaged demo
+- [`docs/start/quickstart.md`](docs/start/quickstart.md) — first install, demo run, and Python entry points
+- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) — write your first custom Bitcoin DCA strategy
+- [`docs/start/minimal-strategy-examples.md`](docs/start/minimal-strategy-examples.md) — copyable strategy templates
+- [`docs/reference/public-api.md`](docs/reference/public-api.md) — stable `1.x` Python library surface
 - [`docs/start/system-overview.md`](docs/start/system-overview.md) — data flow and production paths
 - [`docs/tasks.md`](docs/tasks.md) — task-first workflows
 - [`docs/commands.md`](docs/commands.md) — CLI index
 - [`docs/data-source.md`](docs/data-source.md) — Bitcoin Research Kit (BRK) dataset support, canonical source data, and manifests
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — symptom-based links
-- [`docs/reference/public-api.md`](docs/reference/public-api.md) — stable `1.x` library surface
-- [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) — custom strategy walkthrough
 - [`docs/migration.md`](docs/migration.md) — breaking-change mappings
 - [`docs/release.md`](docs/release.md) — maintainer releases
 
@@ -68,13 +91,23 @@ venv/bin/python -m pre_commit install -t pre-commit
 
 ## Quick start
 
+Install, import the stable `1.x` surface, then run the packaged demo:
+
+```bash
+pip install stacksats
+```
+
+```python
+from stacksats import BaseStrategy, StrategyRunner, list_strategies
+```
+
 ```bash
 stacksats demo backtest
 ```
 
 Artifacts: `output/<strategy_id>/<version>/<run_id>/`
 
-Next: [`docs/commands.md`](docs/commands.md) for the full CLI, [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md) for BRK data (`stacksats data fetch|prepare|doctor`), [`docs/start/eda-quickstart.md`](docs/start/eda-quickstart.md) for EDA, [`docs/stability.md`](docs/stability.md) for the support boundary. `stacksats strategy validate` is strict by default; use `--no-strict` only when you intend the lighter path.
+If you want to build strategies in Python next, start with [`docs/start/first-strategy-run.md`](docs/start/first-strategy-run.md) and [`docs/start/minimal-strategy-examples.md`](docs/start/minimal-strategy-examples.md). For the full CLI, use [`docs/commands.md`](docs/commands.md). For BRK data setup (`stacksats data fetch|prepare|doctor`), use [`docs/start/full-data-setup.md`](docs/start/full-data-setup.md). For the support boundary, use [`docs/stability.md`](docs/stability.md). `stacksats strategy validate` is strict by default; use `--no-strict` only when you intend the lighter path.
 
 ## Public API
 

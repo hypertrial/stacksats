@@ -1,11 +1,11 @@
 ---
 title: Quickstart
-description: Five-minute setup and first execution path for StackSats.
+description: Install StackSats and run the canonical demo—Python library for quantitative Bitcoin DCA accumulation.
 ---
 
 # Quickstart
 
-Use this page when you want the canonical first-run path for StackSats as a package user.
+StackSats is a Python library for quantitative Bitcoin dollar-cost averaging (DCA) accumulation. Use this page for the canonical first-run path as a package user.
 
 ## 1) Choose your install mode
 

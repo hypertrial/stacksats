@@ -1,15 +1,16 @@
 ---
 title: Welcome
-description: Entry point for StackSats docs, quick navigation, and recommended learning path.
+description: Python library for quantitative Bitcoin DCA accumulation—docs entry, navigation, and learning path.
 ---
 
 # StackSats Documentation
 
 <div class="hero-block">
-  <p class="hero-kicker">Strategy-first Bitcoin DCA toolkit</p>
+  <p class="hero-kicker">Python library for quantitative Bitcoin DCA accumulation</p>
   <h2>Build, validate, and emit agent-consumable Bitcoin dollar cost averaging (DCA) decisions with a sealed allocation framework.</h2>
   <p>
-    StackSats, developed by Hypertrial, is a Python package for strategy-first Bitcoin dollar cost averaging (DCA) research and execution.
+    StackSats, developed by Hypertrial, is a Python library for quantitative Bitcoin accumulation: research, backtesting, and operational daily decisions.
+    It is not a brokerage or generic trading bot.
     Learn more at <a href="https://www.stackingsats.org">www.stackingsats.org</a>.
   </p>
 </div>

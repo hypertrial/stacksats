@@ -5,13 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stacksats"
 dynamic = ["version"]
-description = "Bitcoin DCA model development and backtesting toolkit"
+description = "Python library for building, backtesting, and operationalizing quantitative Bitcoin accumulation strategies with dollar-cost averaging (DCA)."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "StackSats Contributors" }]
 maintainers = [{ name = "StackSats Maintainers", email = "team@hypertrial.ai" }]
-keywords = ["bitcoin", "dca", "backtesting", "quant", "crypto"]
+keywords = [
+  "accumulation",
+  "bitcoin",
+  "backtesting",
+  "crypto",
+  "dca",
+  "quant",
+  "quantitative",
+  "strategy",
+]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Financial and Insurance Industry",

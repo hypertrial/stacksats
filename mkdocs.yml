@@ -1,5 +1,5 @@
 site_name: StackSats Docs
-site_description: Bitcoin dollar cost averaging (DCA) modeling and backtesting documentation.
+site_description: Python library docs for quantitative Bitcoin DCA accumulation—build strategies, backtest, validate, and emit agent-consumable decisions.
 site_url: https://hypertrial.github.io/stacksats/
 repo_url: https://github.com/hypertrial/stacksats
 repo_name: hypertrial/stacksats
