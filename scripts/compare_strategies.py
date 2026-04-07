@@ -6,20 +6,20 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import asdict
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from stacksats.loader import load_strategy
+from stacksats import ComparisonConfig, StrategyRunner, load_strategy
+from stacksats.api import ComparisonResult
 from stacksats.strategies.catalog import (
     backtest_config_for_strategy,
     find_strategy_catalog_entry,
     validation_config_for_strategy,
 )
-from stacksats.strategy_types import BacktestConfig, ValidationConfig
-
 DEFAULT_OUTPUT_PATH = ROOT / "output" / "strategy_compare.json"
 
 
@@ -79,32 +79,24 @@ def _resolve_bounds(
     return start_date, end_date, strict, min_win_rate
 
 
-def _build_validation_config(
-    *,
-    start_date: str,
-    end_date: str,
-    strict: bool,
-    min_win_rate: float,
-) -> ValidationConfig:
-    return ValidationConfig(
-        start_date=start_date,
-        end_date=end_date,
-        strict=strict,
-        min_win_rate=min_win_rate,
-    )
+def _artifact_output_dir(output_path: str | Path | None) -> str:
+    if output_path is None:
+        return str(ROOT / "output")
+    path = Path(output_path).expanduser()
+    return str(path.parent if path.suffix.lower() == ".json" else path)
 
 
-def _build_backtest_config(
-    *,
-    start_date: str,
-    end_date: str,
-    strategy_label: str,
-) -> BacktestConfig:
-    return BacktestConfig(
-        start_date=start_date,
-        end_date=end_date,
-        strategy_label=strategy_label,
-    )
+def _legacy_payload_from_comparison_result(result: ComparisonResult) -> dict[str, object]:
+    rows_out: list[dict[str, object]] = []
+    for row in result.rows:
+        payload_row = dict(asdict(row))
+        payload_row["resolved_strategy_id"] = row.strategy_id
+        rows_out.append(payload_row)
+    return {
+        "baseline_selector": result.baseline_selector,
+        "comparison_window": result.comparison_window,
+        "rows": rows_out,
+    }
 
 
 def compare_strategies(
@@ -137,81 +129,27 @@ def compare_strategies(
         min_win_rate=min_win_rate,
     )
 
-    rows: list[dict[str, object]] = []
-    baseline_score: float | None = None
-    baseline_exp_decay: float | None = None
     selector_config_paths = dict(selector_config_paths or {})
-    for selector in ordered_selectors:
-        strategy = load_strategy(
-            selector,
-            config_path=selector_config_paths.get(selector),
-        )
-        metadata = strategy.metadata()
-        catalog_entry = find_strategy_catalog_entry(metadata.strategy_id)
-        validation = strategy.validate(
-            _build_validation_config(
-                start_date=resolved_start_date,
-                end_date=resolved_end_date,
-                strict=resolved_strict,
-                min_win_rate=resolved_min_win_rate,
-            ),
-            btc_df=btc_df,
-        )
-        backtest = strategy.backtest(
-            _build_backtest_config(
-                start_date=resolved_start_date,
-                end_date=resolved_end_date,
-                strategy_label=metadata.strategy_id,
-            ),
-            btc_df=btc_df,
-        )
-        if selector == baseline:
-            baseline_score = float(backtest.score)
-            baseline_exp_decay = float(backtest.exp_decay_percentile)
-
-        diagnostics = dict(validation.diagnostics or {})
-        judgment = diagnostics.get("judgment")
-        if not isinstance(judgment, str) or not judgment:
-            judgment = "validation-passed" if validation.passed else "validation-failed"
-        rows.append(
-            {
-                "selector": selector,
-                "resolved_strategy_id": metadata.strategy_id,
-                "intent_mode": strategy.spec().intent_mode,
-                "tier": catalog_entry.tier if catalog_entry is not None else None,
-                "promotion_stage": (
-                    catalog_entry.promotion_stage if catalog_entry is not None else None
-                ),
-                "validation_passed": bool(validation.passed),
-                "win_rate": float(backtest.win_rate),
-                "score": float(backtest.score),
-                "exp_decay_percentile": float(backtest.exp_decay_percentile),
-                "multiple_vs_uniform": backtest.exp_decay_multiple_vs_uniform,
-                "judgment_label": judgment,
-                "is_baseline": selector == baseline,
-            }
-        )
-
-    for row in rows:
-        score = float(row["score"])
-        exp_decay = float(row["exp_decay_percentile"])
-        row["score_delta_vs_baseline"] = (
-            None if baseline_score is None else score - baseline_score
-        )
-        row["exp_decay_delta_vs_baseline"] = (
-            None if baseline_exp_decay is None else exp_decay - baseline_exp_decay
-        )
-
-    payload = {
-        "baseline_selector": baseline,
-        "comparison_window": {
-            "start_date": resolved_start_date,
-            "end_date": resolved_end_date,
-            "strict": resolved_strict,
-            "min_win_rate": resolved_min_win_rate,
-        },
-        "rows": rows,
-    }
+    strategies = [
+        load_strategy(sel, config_path=selector_config_paths.get(sel))
+        for sel in ordered_selectors
+    ]
+    runner = StrategyRunner()
+    comparison_cfg = ComparisonConfig(
+        start_date=resolved_start_date,
+        end_date=resolved_end_date,
+        strict=resolved_strict,
+        min_win_rate=resolved_min_win_rate,
+        baseline=baseline,
+        output_dir=_artifact_output_dir(output_path),
+    )
+    result = runner.compare(
+        strategies,
+        comparison_cfg,
+        btc_df=btc_df,
+        selectors=ordered_selectors,
+    )
+    payload = _legacy_payload_from_comparison_result(result)
 
     if output_path is not None:
         destination = Path(output_path).expanduser()

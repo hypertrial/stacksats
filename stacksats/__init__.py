@@ -2,6 +2,8 @@
 
 from .api import (
     BacktestResult,
+    ComparisonResult,
+    ComparisonRow,
     DailyDecisionResult,
     DailyOrderReceipt,
     DailyOrderRequest,
@@ -35,6 +37,7 @@ from .strategy_types import (
     AgentServiceConfig,
     BacktestConfig,
     BaseStrategy,
+    ComparisonConfig,
     DecideDailyConfig,
     DayState,
     ExportConfig,
@@ -63,6 +66,8 @@ __all__ = [
     "BaseStrategy",
     # Results
     "BacktestResult",
+    "ComparisonResult",
+    "ComparisonRow",
     "DailyDecisionResult",
     "ExecutionReceiptEvent",
     "ExecutionReceiptHistoryResult",
@@ -72,6 +77,7 @@ __all__ = [
     # Configs
     "AgentServiceConfig",
     "BacktestConfig",
+    "ComparisonConfig",
     "DecideDailyConfig",
     "ExportConfig",
     "RunDailyConfig",

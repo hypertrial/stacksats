@@ -26,6 +26,7 @@ from ..strategies.catalog import list_strategies
 from ..strategy_types import (
     AgentServiceConfig,
     BacktestConfig,
+    ComparisonConfig,
     DecideDailyConfig,
     ExportConfig,
     RunDailyConfig,
@@ -51,6 +52,19 @@ class _HelpFormatter(
 
 def _is_requests_exception(exc: Exception) -> bool:
     return _requests is not None and isinstance(exc, _requests.RequestException)
+
+
+def _ordered_compare_selectors(baseline: str, selectors: list[str]) -> list[str]:
+    """Return baseline first, then unique selectors (catalog-style ordering)."""
+    ordered = [baseline, *selectors]
+    seen: set[str] = set()
+    unique: list[str] = []
+    for sel in ordered:
+        if sel in seen:
+            continue
+        seen.add(sel)
+        unique.append(sel)
+    return unique
 
 
 def _exit_user_error(message: str, *, hint: str | None = None, code: int = 2) -> None:
@@ -252,6 +266,40 @@ def _build_parser() -> argparse.ArgumentParser:
         default_strategy=None,
         default_start=None,
         default_end=None,
+    )
+    compare_cmd = strategy_sub.add_parser(
+        "compare",
+        help="Compare strategies on a shared validation/backtest window",
+        formatter_class=_HelpFormatter,
+    )
+    compare_cmd.add_argument(
+        "--strategy",
+        action="append",
+        required=True,
+        dest="compare_strategies",
+        help="Built-in strategy_id or module_or_path:ClassName (repeatable)",
+    )
+    compare_cmd.add_argument(
+        "--baseline",
+        default="uniform",
+        dest="compare_baseline",
+        help="Baseline strategy_id used for relative deltas (must appear in the set).",
+    )
+    compare_cmd.add_argument("--start-date", default=None)
+    compare_cmd.add_argument("--end-date", default=None)
+    compare_cmd.add_argument("--min-win-rate", type=float, default=None)
+    compare_cmd.add_argument(
+        "--strict",
+        dest="compare_strict",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override strict validation for the shared comparison run.",
+    )
+    compare_cmd.add_argument("--output-dir", default="output")
+    compare_cmd.add_argument(
+        "--strategy-config",
+        default=None,
+        help="Optional JSON config path applied to each loaded strategy selector.",
     )
     decide_daily_cmd = strategy_sub.add_parser(
         "decide-daily",
@@ -623,6 +671,32 @@ def run(argv: list[str] | None = None) -> int:
 
         if strategy_command in {"validate", "backtest", "export"}:
             return _run_lifecycle_command(strategy_command, args, StrategyRunner())
+
+        if strategy_command == "compare":
+            ordered = _ordered_compare_selectors(
+                args.compare_baseline,
+                args.compare_strategies,
+            )
+            strategies = [
+                load_strategy(sel, config_path=args.strategy_config)
+                for sel in ordered
+            ]
+            runner = StrategyRunner()
+            result = runner.compare(
+                strategies,
+                ComparisonConfig(
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    baseline=args.compare_baseline,
+                    strict=args.compare_strict,
+                    min_win_rate=args.min_win_rate,
+                    output_dir=args.output_dir,
+                ),
+                selectors=ordered,
+            )
+            print(result.render_table())
+            print(f"\nSaved: {result.artifact_path}")
+            return 0
 
         strategy = load_strategy(args.strategy, config_path=args.strategy_config)
         runner = StrategyRunner()

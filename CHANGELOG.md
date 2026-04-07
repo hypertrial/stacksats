@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Added
+
+- First-class strategy comparison API: `ComparisonConfig`, `ComparisonResult`, `ComparisonRow`, `StrategyRunner.compare(...)`, `BaseStrategy.compare_to_benchmarks()`, stable `comparison_result.json` artifact with `schema_version`, and `stacksats strategy compare` CLI.
+- Maintainer script `scripts/compare_strategies.py` now delegates to `StrategyRunner.compare()` for a single implementation path.
+
 ## [1.2.2] - 2026-04-03
 
 ### Changed

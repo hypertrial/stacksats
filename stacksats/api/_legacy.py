@@ -396,3 +396,189 @@ class DailyRunResult:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonRow:
+    """Per-strategy metrics within a comparison run."""
+
+    selector: str
+    strategy_id: str
+    strategy_version: str
+    intent_mode: str
+    tier: str | None
+    promotion_stage: str | None
+    validation_passed: bool
+    judgment_label: str
+    win_rate: float
+    score: float
+    exp_decay_percentile: float
+    multiple_vs_uniform: float | None
+    score_delta_vs_baseline: float | None
+    exp_decay_delta_vs_baseline: float | None
+    is_baseline: bool
+
+
+@dataclass(slots=True)
+class ComparisonResult:
+    """Structured result of a multi-strategy comparison."""
+
+    baseline_selector: str
+    comparison_window: dict[str, object]
+    rows: list[ComparisonRow]
+    run_id: str = ""
+    config_hash: str = ""
+    artifact_path: str | None = None
+
+    def summary(self) -> str:
+        """Return a concise comparison overview."""
+        best = max(self.rows, key=lambda r: r.score, default=None)
+        best_id = best.strategy_id if best else "n/a"
+        return (
+            f"Comparison | strategies={len(self.rows)} | baseline={self.baseline_selector} | "
+            f"window={self.comparison_window.get('start_date')}..{self.comparison_window.get('end_date')} | "
+            f"best_score_strategy={best_id}"
+        )
+
+    def to_dataframe(self) -> pl.DataFrame:
+        """Return row metrics as a Polars DataFrame."""
+        if not self.rows:
+            return pl.DataFrame(
+                schema={
+                    "selector": pl.Utf8,
+                    "strategy_id": pl.Utf8,
+                    "strategy_version": pl.Utf8,
+                    "intent_mode": pl.Utf8,
+                    "tier": pl.Utf8,
+                    "promotion_stage": pl.Utf8,
+                    "validation_passed": pl.Boolean,
+                    "judgment_label": pl.Utf8,
+                    "win_rate": pl.Float64,
+                    "score": pl.Float64,
+                    "exp_decay_percentile": pl.Float64,
+                    "multiple_vs_uniform": pl.Float64,
+                    "score_delta_vs_baseline": pl.Float64,
+                    "exp_decay_delta_vs_baseline": pl.Float64,
+                    "is_baseline": pl.Boolean,
+                }
+            )
+        return pl.DataFrame([asdict(row) for row in self.rows])
+
+    def render_table(self) -> str:
+        """Return a fixed-width text table of comparison rows."""
+        headers = (
+            "Selector",
+            "Intent",
+            "Tier",
+            "Win Rate",
+            "Score",
+            "Exp-Decay",
+            "Vs Uniform",
+            "Judgment",
+        )
+        rendered_rows = [
+            (
+                row.selector,
+                row.intent_mode,
+                str(row.tier or "custom"),
+                f"{row.win_rate:.2f}%",
+                f"{row.score:.2f}%",
+                f"{row.exp_decay_percentile:.2f}%",
+                (
+                    f"{row.multiple_vs_uniform:.3f}x"
+                    if row.multiple_vs_uniform is not None
+                    else "n/a"
+                ),
+                row.judgment_label,
+            )
+            for row in self.rows
+        ]
+        widths = [
+            max(len(headers[index]), *(len(item[index]) for item in rendered_rows))
+            for index in range(len(headers))
+        ]
+        lines = [
+            "  ".join(headers[index].ljust(widths[index]) for index in range(len(headers))),
+            "  ".join("-" * widths[index] for index in range(len(headers))),
+        ]
+        for row in rendered_rows:
+            lines.append(
+                "  ".join(row[index].ljust(widths[index]) for index in range(len(headers)))
+            )
+        return "\n".join(lines)
+
+    def to_json(self, path: str | Path | None = None) -> dict:
+        """Serialize to a JSON-compatible dictionary."""
+        payload: dict[str, object] = {
+            "schema_version": PUBLIC_ARTIFACT_SCHEMA_VERSION,
+            "baseline_selector": self.baseline_selector,
+            "comparison_window": dict(self.comparison_window),
+            "rows": [asdict(row) for row in self.rows],
+            "run_id": self.run_id,
+            "config_hash": self.config_hash,
+            "artifact_path": self.artifact_path,
+        }
+        if path is not None:
+            output_path = Path(path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return payload
+
+    @classmethod
+    def from_json(cls, payload: dict) -> "ComparisonResult":
+        """Load a comparison result from a JSON-compatible dict."""
+        rows_raw = payload.get("rows") or []
+        rows: list[ComparisonRow] = []
+        for item in rows_raw:
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                ComparisonRow(
+                    selector=str(item.get("selector", "")),
+                    strategy_id=str(item.get("strategy_id", "")),
+                    strategy_version=str(item.get("strategy_version", "")),
+                    intent_mode=str(item.get("intent_mode", "")),
+                    tier=item.get("tier") if item.get("tier") is not None else None,
+                    promotion_stage=(
+                        str(item["promotion_stage"])
+                        if item.get("promotion_stage") is not None
+                        else None
+                    ),
+                    validation_passed=bool(item.get("validation_passed", False)),
+                    judgment_label=str(item.get("judgment_label", "")),
+                    win_rate=float(item.get("win_rate", 0.0)),
+                    score=float(item.get("score", 0.0)),
+                    exp_decay_percentile=float(item.get("exp_decay_percentile", 0.0)),
+                    multiple_vs_uniform=(
+                        float(item["multiple_vs_uniform"])
+                        if item.get("multiple_vs_uniform") is not None
+                        else None
+                    ),
+                    score_delta_vs_baseline=(
+                        float(item["score_delta_vs_baseline"])
+                        if item.get("score_delta_vs_baseline") is not None
+                        else None
+                    ),
+                    exp_decay_delta_vs_baseline=(
+                        float(item["exp_decay_delta_vs_baseline"])
+                        if item.get("exp_decay_delta_vs_baseline") is not None
+                        else None
+                    ),
+                    is_baseline=bool(item.get("is_baseline", False)),
+                )
+            )
+        window = payload.get("comparison_window")
+        if not isinstance(window, dict):
+            window = {}
+        return cls(
+            baseline_selector=str(payload.get("baseline_selector", "")),
+            comparison_window=dict(window),
+            rows=rows,
+            run_id=str(payload.get("run_id", "")),
+            config_hash=str(payload.get("config_hash", "")),
+            artifact_path=(
+                str(payload["artifact_path"])
+                if payload.get("artifact_path") is not None
+                else None
+            ),
+        )

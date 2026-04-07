@@ -109,6 +109,7 @@ nav:
       - Validate Command: run/validate.md
       - Backtest Command: run/backtest.md
       - Export Command: run/export.md
+      - Compare Command: run/compare.md
       - Decide Daily Command: run/decide-daily.md
       - Agent API Service: run/agent-api.md
       - Run Daily Command: run/run-daily.md

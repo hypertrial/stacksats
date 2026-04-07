@@ -7,6 +7,9 @@
     "ColumnMapDataProvider",
     "ColumnMapError",
     "ColumnSpec",
+    "ComparisonConfig",
+    "ComparisonResult",
+    "ComparisonRow",
     "DailyDecisionResult",
     "DailyOrderReceipt",
     "DailyOrderRequest",
@@ -171,6 +174,40 @@
       "files": [
         "timeseries_schema_md",
         "weights_csv"
+      ]
+    },
+    "comparison_result": {
+      "top_level": [
+        "artifact_path",
+        "baseline_selector",
+        "comparison_window",
+        "config_hash",
+        "rows",
+        "run_id",
+        "schema_version"
+      ],
+      "comparison_window": [
+        "end_date",
+        "min_win_rate",
+        "start_date",
+        "strict"
+      ],
+      "row": [
+        "exp_decay_delta_vs_baseline",
+        "exp_decay_percentile",
+        "intent_mode",
+        "is_baseline",
+        "judgment_label",
+        "multiple_vs_uniform",
+        "promotion_stage",
+        "score",
+        "score_delta_vs_baseline",
+        "selector",
+        "strategy_id",
+        "strategy_version",
+        "tier",
+        "validation_passed",
+        "win_rate"
       ]
     }
   }

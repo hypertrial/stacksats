@@ -23,11 +23,18 @@ from ..features.column_map_provider import ColumnMapDataProvider
 from ..features.materialization import hash_dataframe
 from ..features.registry import DEFAULT_FEATURE_REGISTRY
 from ..framework_contract import ALLOCATION_SPAN_DAYS, ALLOCATION_WINDOW_OFFSET
+from ..api import ComparisonResult, ComparisonRow
 from ..strategy_lint import lint_strategy_class, summarize_lint_findings
+from ..strategies.catalog import (
+    backtest_config_for_strategy,
+    find_strategy_catalog_entry,
+    validation_config_for_strategy,
+)
 from ..strategy_time_series import WeightTimeSeriesBatch
 from ..strategy_types import (
     BacktestConfig,
     BaseStrategy,
+    ComparisonConfig,
     DecideDailyConfig,
     ExportConfig,
     RunDailyConfig,
@@ -48,6 +55,52 @@ from .validation import (
 )
 
 backtest_dynamic_dca = _backtest_dynamic_dca
+
+
+def _resolve_comparison_window(
+    strategy_ids: tuple[str, ...],
+    *,
+    start_date: str | None,
+    end_date: str | None,
+    strict: bool | None,
+    min_win_rate: float | None,
+) -> tuple[str, str, bool, float]:
+    """Resolve shared comparison bounds (mirrors scripts/compare_strategies logic)."""
+    if (start_date is None) != (end_date is None):
+        raise ValueError("Pass both start_date and end_date together.")
+    catalog_entries = [find_strategy_catalog_entry(sid) for sid in strategy_ids]
+    if any(entry is None for entry in catalog_entries):
+        if start_date is None or end_date is None:
+            raise ValueError(
+                "Comparisons that include non-catalog strategies require explicit "
+                "start_date and end_date on ComparisonConfig."
+            )
+        resolved_strict = True if strict is None else strict
+        resolved_min_win_rate = 50.0 if min_win_rate is None else min_win_rate
+        return start_date, end_date, resolved_strict, resolved_min_win_rate
+
+    typed_entries = [entry for entry in catalog_entries if entry is not None]
+    if start_date is None:
+        start_date = max(
+            str(backtest_config_for_strategy(entry.strategy_id).start_date)
+            for entry in typed_entries
+        )
+    if end_date is None:
+        end_date = min(
+            str(backtest_config_for_strategy(entry.strategy_id).end_date)
+            for entry in typed_entries
+        )
+    if strict is None:
+        strict = any(
+            validation_config_for_strategy(entry.strategy_id).strict
+            for entry in typed_entries
+        )
+    if min_win_rate is None:
+        min_win_rate = max(
+            validation_config_for_strategy(entry.strategy_id).min_win_rate
+            for entry in typed_entries
+        )
+    return start_date, end_date, strict, min_win_rate
 
 
 class _FrameworkBacktestAdapter:
@@ -1577,6 +1630,171 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             "previous_feature_snapshot_hash": previous_feature_snapshot_hash,
             "recomputed_feature_snapshot_hash": feature_snapshot_hash,
         }
+
+    def compare(
+        self,
+        strategies: list[BaseStrategy],
+        config: ComparisonConfig,
+        *,
+        btc_df: pl.DataFrame | None = None,
+        selectors: list[str] | None = None,
+    ) -> ComparisonResult:
+        """Run validate+backtest for each strategy on a shared window.
+
+        When ``selectors`` is provided, it must match ``strategies`` length and is
+        stored as each row's ``selector`` (e.g. CLI ``module:Class`` strings). Otherwise
+        each row uses ``metadata().strategy_id``.
+        """
+        if not strategies:
+            raise ValueError("Provide at least one strategy to compare.")
+        if selectors is not None and len(selectors) != len(strategies):
+            raise ValueError("selectors length must match strategies length.")
+
+        strategy_ids = tuple(strategy.metadata().strategy_id for strategy in strategies)
+        present_ids = set(strategy_ids)
+        if config.baseline not in present_ids:
+            raise ValueError(
+                f"Baseline strategy_id {config.baseline!r} must be one of the "
+                f"strategies in the comparison set: {sorted(present_ids)}."
+            )
+
+        (
+            resolved_start,
+            resolved_end,
+            resolved_strict,
+            resolved_min_win_rate,
+        ) = _resolve_comparison_window(
+            strategy_ids,
+            start_date=config.start_date,
+            end_date=config.end_date,
+            strict=config.strict,
+            min_win_rate=config.min_win_rate,
+        )
+
+        validation_cfg = ValidationConfig(
+            start_date=resolved_start,
+            end_date=resolved_end,
+            strict=resolved_strict,
+            min_win_rate=resolved_min_win_rate,
+        )
+        comparison_window: dict[str, object] = {
+            "start_date": resolved_start,
+            "end_date": resolved_end,
+            "strict": resolved_strict,
+            "min_win_rate": resolved_min_win_rate,
+        }
+
+        run_id = str(uuid4())
+        config_hash = hashlib.sha256(
+            json.dumps(asdict(config), sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:12]
+
+        row_metrics: list[dict[str, object]] = []
+        for idx, strategy in enumerate(strategies):
+            metadata = strategy.metadata()
+            selector_label = (
+                selectors[idx]
+                if selectors is not None
+                else str(metadata.strategy_id)
+            )
+            catalog_entry = find_strategy_catalog_entry(metadata.strategy_id)
+            validation = self.validate(strategy, validation_cfg, btc_df=btc_df)
+            backtest = self.backtest(
+                strategy,
+                BacktestConfig(
+                    start_date=resolved_start,
+                    end_date=resolved_end,
+                    strategy_label=metadata.strategy_id,
+                ),
+                btc_df=btc_df,
+            )
+            diagnostics = dict(validation.diagnostics or {})
+            judgment = diagnostics.get("judgment")
+            if not isinstance(judgment, str) or not judgment:
+                judgment = "validation-passed" if validation.passed else "validation-failed"
+            row_metrics.append(
+                {
+                    "selector": selector_label,
+                    "strategy_id": metadata.strategy_id,
+                    "strategy_version": metadata.version,
+                    "intent_mode": strategy.spec().intent_mode,
+                    "tier": catalog_entry.tier if catalog_entry is not None else None,
+                    "promotion_stage": (
+                        catalog_entry.promotion_stage if catalog_entry is not None else None
+                    ),
+                    "validation_passed": bool(validation.passed),
+                    "judgment_label": judgment,
+                    "win_rate": float(backtest.win_rate),
+                    "score": float(backtest.score),
+                    "exp_decay_percentile": float(backtest.exp_decay_percentile),
+                    "multiple_vs_uniform": backtest.exp_decay_multiple_vs_uniform,
+                    "is_baseline": metadata.strategy_id == config.baseline,
+                }
+            )
+
+        baseline_row = next(
+            (r for r in row_metrics if r["strategy_id"] == config.baseline),
+            None,
+        )
+        if baseline_row is None:
+            raise ValueError("Internal error: baseline row missing after validation.")
+        baseline_score = float(baseline_row["score"])
+        baseline_exp_decay = float(baseline_row["exp_decay_percentile"])
+
+        rows: list[ComparisonRow] = []
+        for r in row_metrics:
+            sid = str(r["strategy_id"])
+            is_base = sid == config.baseline
+            rows.append(
+                ComparisonRow(
+                    selector=str(r["selector"]),
+                    strategy_id=sid,
+                    strategy_version=str(r["strategy_version"]),
+                    intent_mode=str(r["intent_mode"]),
+                    tier=r["tier"] if r["tier"] is not None else None,
+                    promotion_stage=(
+                        str(r["promotion_stage"])
+                        if r["promotion_stage"] is not None
+                        else None
+                    ),
+                    validation_passed=bool(r["validation_passed"]),
+                    judgment_label=str(r["judgment_label"]),
+                    win_rate=float(r["win_rate"]),
+                    score=float(r["score"]),
+                    exp_decay_percentile=float(r["exp_decay_percentile"]),
+                    multiple_vs_uniform=(
+                        float(r["multiple_vs_uniform"])
+                        if r["multiple_vs_uniform"] is not None
+                        else None
+                    ),
+                    score_delta_vs_baseline=float(r["score"]) - baseline_score,
+                    exp_decay_delta_vs_baseline=(
+                        float(r["exp_decay_percentile"]) - baseline_exp_decay
+                    ),
+                    is_baseline=is_base,
+                )
+            )
+
+        artifact_path_obj = (
+            Path(config.output_dir)
+            / config.baseline
+            / "comparison"
+            / run_id
+            / "comparison_result.json"
+        )
+        artifact_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path_str = str(artifact_path_obj)
+
+        result = ComparisonResult(
+            baseline_selector=config.baseline,
+            comparison_window=comparison_window,
+            rows=rows,
+            run_id=run_id,
+            config_hash=config_hash,
+            artifact_path=artifact_path_str,
+        )
+        result.to_json(artifact_path_obj)
+        return result
 
     def export(
         self,

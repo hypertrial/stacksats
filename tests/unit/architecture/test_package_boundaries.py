@@ -86,6 +86,7 @@ def test_domain_packages_respect_import_boundaries() -> None:
 def test_split_module_imports_smoke() -> None:
     modules = [
         "stacksats.api.backtest",
+        "stacksats.api.comparison",
         "stacksats.api.daily",
         "stacksats.api.execution",
         "stacksats.backtest.runtime",

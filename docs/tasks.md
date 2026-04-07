@@ -75,6 +75,44 @@ stacksats strategy backtest \
 - Interpret metrics consistently: [Interpret Backtest Metrics](recipes/interpret-backtest.md).
 - Full flag reference: [Backtest Command](run/backtest.md).
 
+## I want to compare strategies against benchmarks
+
+### Prerequisites
+
+- You have two or more strategy selectors (built-in `strategy_id` or `module_or_path:ClassName`).
+- For custom strategies, pass explicit `--start-date` and `--end-date` together (catalog defaults apply only when every selector resolves to a catalog entry).
+
+### Command
+
+```bash
+stacksats strategy compare \
+  --strategy simple-zscore \
+  --strategy mvrv \
+  --baseline uniform \
+  --start-date 2018-01-01 \
+  --end-date 2025-12-31 \
+  --output-dir output
+```
+
+### Expected output
+
+- Printed comparison table (win rate, score, exp-decay, vs uniform, judgment).
+- `comparison_result.json` under `output/<baseline_strategy_id>/comparison/<run_id>/` with `schema_version`, shared `comparison_window`, and per-strategy rows (including deltas vs baseline).
+
+### Library alternative
+
+- Instantiate `BaseStrategy` objects and call `StrategyRunner().compare(strategies, ComparisonConfig(...))`, or for catalog strategies use `BaseStrategy.compare_to_benchmarks()` (reads `benchmark_strategy_ids` from the catalog entry).
+
+### Troubleshooting
+
+- **Missing dates for custom strategies:** supply both start and end dates.
+- **Baseline not in set:** `--baseline` must match a strategy in the ordered set (baseline is prepended and de-duplicated).
+
+### Next step
+
+- Full flag reference: [Compare Command](run/compare.md).
+- Deep dive on metrics: [Interpret Backtest Metrics](recipes/interpret-backtest.md).
+
 ## I want to create animated performance visuals
 
 ### Prerequisites

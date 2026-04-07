@@ -231,6 +231,36 @@ def test_demo_backtest_smoke(tmp_path: Path) -> None:
     assert str(backtest_json.parent).startswith(str(tmp_path / "demo"))
 
 
+def test_strategy_compare_smoke(tmp_path: Path) -> None:
+    env = _demo_env(tmp_path)
+    output_dir = tmp_path / "compare"
+    proc = _run_cli(
+        "strategy",
+        "compare",
+        "--strategy",
+        "simple-zscore",
+        "--strategy",
+        "mvrv",
+        "--baseline",
+        "uniform",
+        "--start-date",
+        "2024-01-01",
+        "--end-date",
+        "2024-12-31",
+        "--no-strict",
+        "--min-win-rate",
+        "0",
+        "--output-dir",
+        str(output_dir),
+        env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "Selector" in proc.stdout
+    assert "uniform" in proc.stdout
+    assert "Saved:" in proc.stdout
+    assert "comparison_result.json" in proc.stdout
+
+
 def test_strategy_export_round_trip_smoke(tmp_path: Path) -> None:
     env = _demo_env(tmp_path)
     output_dir = tmp_path / "export"

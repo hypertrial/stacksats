@@ -7,7 +7,7 @@ import numpy as np
 
 from stacksats import BacktestConfig, ExportConfig, UniformStrategy
 import stacksats.viz.animation_render as animation_render
-from stacksats.api import DailyDecisionResult
+from stacksats.api import ComparisonResult, ComparisonRow, DailyDecisionResult
 from tests.test_helpers import btc_frame
 
 SNAPSHOT_PATH = Path(__file__).resolve().parents[2] / "snapshots" / "public_contract_snapshots.json"
@@ -92,6 +92,44 @@ def test_public_artifact_contract_snapshots(tmp_path) -> None:
         feature_snapshot_hash="feature-hash",
     ).to_json()
     assert sorted(decision_payload.keys()) == snapshots["decision_result"]["top_level"]
+
+    compare_payload = ComparisonResult(
+        baseline_selector="uniform",
+        comparison_window={
+            "start_date": "2022-01-01",
+            "end_date": "2023-01-01",
+            "strict": True,
+            "min_win_rate": 50.0,
+        },
+        rows=[
+            ComparisonRow(
+                selector="uniform",
+                strategy_id="uniform",
+                strategy_version="1.0.0",
+                intent_mode="propose",
+                tier="stable",
+                promotion_stage="promoted",
+                validation_passed=True,
+                judgment_label="validation-passed",
+                win_rate=55.0,
+                score=60.0,
+                exp_decay_percentile=50.0,
+                multiple_vs_uniform=1.1,
+                score_delta_vs_baseline=0.0,
+                exp_decay_delta_vs_baseline=0.0,
+                is_baseline=True,
+            )
+        ],
+        run_id="compare-run",
+        config_hash="abc123",
+        artifact_path=str(tmp_path / "comparison_result.json"),
+    ).to_json()
+    assert sorted(compare_payload.keys()) == snapshots["comparison_result"]["top_level"]
+    assert (
+        sorted(compare_payload["comparison_window"].keys())
+        == snapshots["comparison_result"]["comparison_window"]
+    )
+    assert sorted(compare_payload["rows"][0].keys()) == snapshots["comparison_result"]["row"]
 
     UniformStrategy().export(
         ExportConfig(

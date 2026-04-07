@@ -15,6 +15,9 @@ import stacksats.strategy_time_series as strategy_time_series
 from stacksats import (
     AgentServiceConfig,
     BacktestConfig,
+    ComparisonConfig,
+    ComparisonResult,
+    ComparisonRow,
     DailyDecisionResult,
     DecideDailyConfig,
     ExecutionReceiptEvent,
@@ -133,6 +136,12 @@ def test_strategy_catalog_helpers_are_top_level_exports() -> None:
 def test_mvrv_compat_module_reexports_stable_strategy() -> None:
     assert compat_mvrv.MVRVStrategy is MVRVStrategy
     assert compat_mvrv.__all__ == ["MVRVStrategy"]
+
+
+def test_comparison_types_are_top_level_exports() -> None:
+    assert ComparisonConfig is stacksats.ComparisonConfig
+    assert ComparisonResult is stacksats.ComparisonResult
+    assert ComparisonRow is stacksats.ComparisonRow
 
 
 def test_decision_types_are_top_level_exports() -> None:

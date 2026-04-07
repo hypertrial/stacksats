@@ -22,6 +22,7 @@ from ..strategy_lint import lint_strategy_class, summarize_lint_findings
 if TYPE_CHECKING:
     from ..api import (  # pragma: no cover
         BacktestResult,
+        ComparisonResult,
         DailyDecisionResult,
         DailyRunResult,
         ValidationResult,
@@ -240,6 +241,18 @@ class AgentServiceConfig:
     output_dir: str = "output"
     auth_token_env: str = "STACKSATS_AGENT_API_TOKEN"
     btc_price_col_default: str = "price_usd"
+
+
+@dataclass(frozen=True)
+class ComparisonConfig:
+    """Shared window and validation settings for multi-strategy comparison."""
+
+    start_date: str | None = None
+    end_date: str | None = None
+    baseline: str = "uniform"
+    strict: bool | None = None
+    min_win_rate: float | None = None
+    output_dir: str = "output"
 
 
 @dataclass(frozen=True)
@@ -936,6 +949,35 @@ class BaseStrategy(ABC):
 
         runner = StrategyRunner()
         return runner.decide_daily(self, config or self.default_decide_daily_config(), **kwargs)
+
+    def compare_to_benchmarks(
+        self,
+        config: ComparisonConfig | None = None,
+        **kwargs,
+    ) -> "ComparisonResult":
+        """Compare this strategy against catalog ``benchmark_strategy_ids`` on a shared window."""
+        from ..runner import StrategyRunner
+        from ..strategies.catalog import find_strategy_catalog_entry, load_catalog_strategy_class
+
+        entry = find_strategy_catalog_entry(self.metadata().strategy_id)
+        if entry is None:
+            raise ValueError(
+                "compare_to_benchmarks requires a built-in catalog strategy_id. "
+                "Use StrategyRunner.compare(...) with explicit BaseStrategy instances."
+            )
+        if not entry.benchmark_strategy_ids:
+            raise ValueError(
+                f"Strategy {entry.strategy_id!r} has no benchmark_strategy_ids in the catalog."
+            )
+        benchmarks = [
+            load_catalog_strategy_class(bid)() for bid in entry.benchmark_strategy_ids
+        ]
+        runner = StrategyRunner()
+        return runner.compare(
+            [self, *benchmarks],
+            config or ComparisonConfig(),
+            **kwargs,
+        )
 
 
 def strategy_hook_status(strategy_cls: type[BaseStrategy]) -> tuple[bool, bool]:

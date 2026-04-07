@@ -18,7 +18,7 @@ The stable public contract is intentionally narrow:
 - documented CLI commands:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
-  - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
+  - `stacksats strategy validate|backtest|export|compare|decide-daily|run-daily|animate`
   - `stacksats serve agent-api`
 - documented hosted HTTP service:
   - `GET /healthz`
@@ -37,7 +37,7 @@ Common stable imports include:
 
 - runtime objects: `FeatureTimeSeries`, `WeightTimeSeries`, `WeightTimeSeriesBatch`
 - strategy contract types: `BaseStrategy`, `StrategyContext`, `DayState`, `TargetProfile`
-- configs and results: `AgentServiceConfig`, `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `DailyDecisionResult`, `DailyRunResult`, `ExecutionReceiptEvent`, `ExecutionReceiptHistoryResult`, `ExecutionStatusResult`
+- configs and results: `AgentServiceConfig`, `BacktestConfig`, `ValidationConfig`, `ExportConfig`, `ComparisonConfig`, `DecideDailyConfig`, `RunDailyConfig`, `BacktestResult`, `ValidationResult`, `ComparisonResult`, `ComparisonRow`, `DailyDecisionResult`, `DailyRunResult`, `ExecutionReceiptEvent`, `ExecutionReceiptHistoryResult`, `ExecutionStatusResult`
 - metadata and schema types: `StrategyMetadata`, `StrategySpec`, `StrategySeriesMetadata`, `StrategyArtifactSet`, `ColumnSpec`
 - runners and loaders: `StrategyRunner`, `create_agent_service_app`, `load_strategy`, `load_data`, `open_merged_metrics`, `load_metric_catalog`, `precompute_features`
 - catalog helpers: `StrategyCatalogEntry`, `list_strategies`, `get_strategy_catalog_entry`
@@ -58,6 +58,18 @@ result = runner.backtest(
     BacktestConfig(start_date="2024-01-01", end_date="2024-12-31"),
 )
 print(result.summary())
+```
+
+Compare multiple strategies on the same validation/backtest window:
+
+```python
+from stacksats import ComparisonConfig, MVRVStrategy, StrategyRunner, UniformStrategy
+
+result = StrategyRunner().compare(
+    [UniformStrategy(), MVRVStrategy()],
+    ComparisonConfig(start_date="2018-01-01", end_date="2025-12-31"),
+)
+print(result.render_table())
 ```
 
 Load canonical data for the stable runtime path:
@@ -123,6 +135,7 @@ print(batch.to_dataframe().columns)
 The documented stable JSON payloads are:
 
 - `backtest_result.json`
+- `comparison_result.json`
 - `decision_result.json`
 - `metrics.json`
 - `animation_manifest.json`

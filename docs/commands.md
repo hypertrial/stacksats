@@ -19,6 +19,7 @@ stacksats data doctor
 stacksats strategy validate --strategy simple-zscore
 stacksats strategy backtest --strategy simple-zscore --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
 stacksats strategy export --strategy simple-zscore --start-date 2024-01-01 --end-date 2024-12-31 --output-dir output
+stacksats strategy compare --strategy simple-zscore --strategy mvrv --baseline uniform
 stacksats strategy decide-daily --strategy run-daily-paper --total-window-budget-usd 1000
 stacksats serve agent-api --registry-path .stacksats/agent_service_registry.json
 stacksats strategy run-daily --strategy run-daily-paper --total-window-budget-usd 1000 --mode paper
@@ -30,6 +31,7 @@ stacksats strategy animate --backtest-json output/<strategy_id>/<version>/<run_i
 - [Validate Command](run/validate.md)
 - [Backtest Command](run/backtest.md)
 - [Export Command](run/export.md)
+- [Compare Command](run/compare.md)
 - [Decide Daily Command](run/decide-daily.md)
 - [Agent API Service](run/agent-api.md)
 - [Demo Command](run/demo.md)
@@ -63,6 +65,10 @@ Canonical page: [Backtest Command](run/backtest.md)
 ## 4) Export Strategy Artifacts
 
 Canonical page: [Export Command](run/export.md)
+
+## 4b) Compare Strategies on a Shared Window
+
+Canonical page: [Compare Command](run/compare.md)
 
 ## 5) Run Idempotent Daily Execution
 

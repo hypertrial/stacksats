@@ -32,6 +32,114 @@ def _load_script_module(name: str):
 compare_strategies = _load_script_module("compare_strategies")
 
 
+def _patch_runner_compare_stub(
+    monkeypatch: pytest.MonkeyPatch,
+    compare_module,
+) -> None:
+    """Avoid real StrategyRunner.compare (needs BaseStrategy) when using _FakeStrategy."""
+
+    from stacksats.api import ComparisonResult, ComparisonRow
+
+    def stub_compare(_self, strategies, config, *, btc_df=None, selectors=None):
+        assert config.start_date is not None and config.end_date is not None
+        vc = ValidationConfig(
+            start_date=config.start_date,
+            end_date=config.end_date,
+            strict=config.strict,
+            min_win_rate=config.min_win_rate,
+        )
+        baseline_score: float | None = None
+        baseline_exp_decay: float | None = None
+        raw_rows: list[dict[str, object]] = []
+        for idx, strategy in enumerate(strategies):
+            md = strategy.metadata()
+            strategy_version = str(getattr(md, "version", None) or "1.0.0")
+            sel = selectors[idx] if selectors is not None else str(md.strategy_id)
+            catalog_entry = compare_module.find_strategy_catalog_entry(md.strategy_id)
+            val = strategy.validate(vc, btc_df=btc_df)
+            bt = strategy.backtest(
+                BacktestConfig(
+                    start_date=config.start_date,
+                    end_date=config.end_date,
+                    strategy_label=str(md.strategy_id),
+                ),
+                btc_df=btc_df,
+            )
+            if str(md.strategy_id) == config.baseline:
+                baseline_score = float(bt.score)
+                baseline_exp_decay = float(bt.exp_decay_percentile)
+            diag = dict(val.diagnostics or {})
+            judgment = diag.get("judgment")
+            if not isinstance(judgment, str) or not judgment:
+                judgment = "validation-passed" if val.passed else "validation-failed"
+            raw_rows.append(
+                {
+                    "selector": sel,
+                    "strategy_id": str(md.strategy_id),
+                    "strategy_version": strategy_version,
+                    "intent_mode": strategy.spec().intent_mode,
+                    "tier": catalog_entry.tier if catalog_entry is not None else None,
+                    "promotion_stage": (
+                        catalog_entry.promotion_stage if catalog_entry is not None else None
+                    ),
+                    "validation_passed": bool(val.passed),
+                    "judgment_label": judgment,
+                    "win_rate": float(bt.win_rate),
+                    "score": float(bt.score),
+                    "exp_decay_percentile": float(bt.exp_decay_percentile),
+                    "multiple_vs_uniform": bt.exp_decay_multiple_vs_uniform,
+                    "is_baseline": str(md.strategy_id) == config.baseline,
+                }
+            )
+        assert baseline_score is not None and baseline_exp_decay is not None
+        rows: list[ComparisonRow] = []
+        for r in raw_rows:
+            rows.append(
+                ComparisonRow(
+                    selector=str(r["selector"]),
+                    strategy_id=str(r["strategy_id"]),
+                    strategy_version=str(r["strategy_version"]),
+                    intent_mode=str(r["intent_mode"]),
+                    tier=r["tier"] if r["tier"] is not None else None,
+                    promotion_stage=(
+                        str(r["promotion_stage"])
+                        if r["promotion_stage"] is not None
+                        else None
+                    ),
+                    validation_passed=bool(r["validation_passed"]),
+                    judgment_label=str(r["judgment_label"]),
+                    win_rate=float(r["win_rate"]),
+                    score=float(r["score"]),
+                    exp_decay_percentile=float(r["exp_decay_percentile"]),
+                    multiple_vs_uniform=(
+                        float(r["multiple_vs_uniform"])
+                        if r["multiple_vs_uniform"] is not None
+                        else None
+                    ),
+                    score_delta_vs_baseline=float(r["score"]) - baseline_score,
+                    exp_decay_delta_vs_baseline=(
+                        float(r["exp_decay_percentile"]) - baseline_exp_decay
+                    ),
+                    is_baseline=bool(r["is_baseline"]),
+                )
+            )
+        return ComparisonResult(
+            baseline_selector=config.baseline,
+            comparison_window={
+                "start_date": config.start_date,
+                "end_date": config.end_date,
+                "strict": config.strict,
+                "min_win_rate": config.min_win_rate,
+            },
+            rows=rows,
+            run_id="stub-run",
+            config_hash="stub",
+            artifact_path=None,
+        )
+
+    monkeypatch.setattr("stacksats.runner.core.StrategyRunner.compare", stub_compare)
+
+
 class _FakeStrategy:
     def __init__(
         self,
@@ -177,6 +285,7 @@ def test_compare_strategies_derives_shared_defaults_for_builtins(
         "validation_config_for_strategy",
         lambda strategy_id: validations[strategy_id],
     )
+    _patch_runner_compare_stub(monkeypatch, compare_strategies)
 
     output_path = tmp_path / "compare.json"
     payload = compare_strategies.compare_strategies(
@@ -256,6 +365,7 @@ def test_compare_strategies_uses_explicit_dates_for_mixed_runs(
         "validation_config_for_strategy",
         lambda strategy_id: ValidationConfig(min_win_rate=50.0, strict=False),
     )
+    _patch_runner_compare_stub(monkeypatch, compare_strategies)
 
     payload = compare_strategies.compare_strategies(
         selectors=["custom.py:CustomStrategy"],
@@ -299,6 +409,13 @@ def test_compare_strategies_supports_selector_config_paths_and_btc_df(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    uniform_strategy = _FakeStrategy(
+        strategy_id="uniform",
+        intent_mode="propose",
+        win_rate=50.0,
+        score=50.0,
+        exp_decay_percentile=50.0,
+    )
     strategy = _FakeStrategy(
         strategy_id="custom-strategy",
         intent_mode="profile",
@@ -311,10 +428,11 @@ def test_compare_strategies_supports_selector_config_paths_and_btc_df(
 
     def _fake_load(selector: str, *, config_path: str | None = None):
         loaded.append((selector, config_path))
-        return strategy
+        return uniform_strategy if selector == "uniform" else strategy
 
     monkeypatch.setattr(compare_strategies, "load_strategy", _fake_load)
     monkeypatch.setattr(compare_strategies, "find_strategy_catalog_entry", lambda selector: None)
+    _patch_runner_compare_stub(monkeypatch, compare_strategies)
 
     payload = compare_strategies.compare_strategies(
         selectors=["custom.py:CustomStrategy"],
@@ -332,5 +450,7 @@ def test_compare_strategies_supports_selector_config_paths_and_btc_df(
         ("uniform", None),
         ("custom.py:CustomStrategy", str(tmp_path / "strategy.json")),
     ]
+    assert uniform_strategy.validation_kwargs[-1]["btc_df"] is btc_df
     assert strategy.validation_kwargs[-1]["btc_df"] is btc_df
+    assert uniform_strategy.backtest_kwargs[-1]["btc_df"] is btc_df
     assert strategy.backtest_kwargs[-1]["btc_df"] is btc_df

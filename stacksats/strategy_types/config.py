@@ -3,6 +3,7 @@
 from ._legacy import (
     AgentServiceConfig,
     BacktestConfig,
+    ComparisonConfig,
     DecideDailyConfig,
     ExportConfig,
     RunDailyConfig,
@@ -12,6 +13,7 @@ from ._legacy import (
 __all__ = [
     "AgentServiceConfig",
     "BacktestConfig",
+    "ComparisonConfig",
     "DecideDailyConfig",
     "ExportConfig",
     "RunDailyConfig",

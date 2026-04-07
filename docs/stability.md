@@ -27,7 +27,7 @@ The stable `1.x` contract is intentionally narrow:
 - documented CLI commands:
   - `stacksats demo validate|backtest|export`
   - `stacksats data fetch|prepare|doctor`
-  - `stacksats strategy validate|backtest|export|decide-daily|run-daily|animate`
+  - `stacksats strategy validate|backtest|export|compare|decide-daily|run-daily|animate`
   - `stacksats serve agent-api`
 - documented hosted HTTP service:
   - `/v1/decisions/*`
