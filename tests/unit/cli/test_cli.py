@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from stacksats import cli
-from stacksats.strategy_types import RunDailyConfig
+from stacksats.strategy_types import ComparisonConfig, RunDailyConfig
 
 
 def test_cli_help() -> None:
@@ -196,6 +196,75 @@ def test_cli_strategy_export_emits_json_summary(monkeypatch, capsys) -> None:
     out = capsys.readouterr().out
     assert '"rows": 2' in out
     assert '"windows": 1' in out
+
+
+def test_cli_strategy_compare_maps_config_and_selectors(
+    monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path
+) -> None:
+    load_order: list[str] = []
+
+    def fake_load(selector: str, *, config_path=None):
+        del config_path
+        load_order.append(selector)
+        return object()
+
+    class FakeCompareResult:
+        artifact_path = str(tmp_path / "comparison_result.json")
+
+        def render_table(self) -> str:
+            return "Selector  Intent\nuniform    propose"
+
+    capture: dict = {}
+
+    class FakeCompareRunner:
+        def compare(self, strategies, config, *, btc_df=None, selectors=None):
+            capture["strategies"] = strategies
+            capture["config"] = config
+            capture["selectors"] = selectors
+            capture["btc_df"] = btc_df
+            return FakeCompareResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeCompareRunner())
+    monkeypatch.setattr(cli, "load_strategy", fake_load)
+
+    argv = [
+        "strategy",
+        "compare",
+        "--strategy",
+        "simple-zscore",
+        "--strategy",
+        "mvrv",
+        "--baseline",
+        "uniform",
+        "--start-date",
+        "2024-01-01",
+        "--end-date",
+        "2024-12-31",
+        "--no-strict",
+        "--min-win-rate",
+        "0",
+        "--output-dir",
+        str(tmp_path),
+    ]
+    assert cli.main(argv) == 0
+
+    assert load_order == ["uniform", "simple-zscore", "mvrv"]
+    cfg = capture["config"]
+    assert isinstance(cfg, ComparisonConfig)
+    assert cfg.start_date == "2024-01-01"
+    assert cfg.end_date == "2024-12-31"
+    assert cfg.baseline == "uniform"
+    assert cfg.strict is False
+    assert cfg.min_win_rate == 0.0
+    assert cfg.output_dir == str(tmp_path)
+    assert capture["selectors"] == ["uniform", "simple-zscore", "mvrv"]
+    assert len(capture["strategies"]) == 3
+    assert capture["btc_df"] is None
+
+    out = capsys.readouterr().out
+    assert "Selector" in out
+    assert "Saved:" in out
+    assert "comparison_result.json" in out
 
 
 def test_cli_strategy_run_daily_maps_config(monkeypatch, capsys, tmp_path) -> None:

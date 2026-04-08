@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -41,6 +42,19 @@ def test_compare_baseline_not_in_set_raises() -> None:
                 end_date="2023-01-01",
                 baseline="uniform",
             ),
+        )
+
+
+def test_compare_selectors_length_mismatch_raises() -> None:
+    with pytest.raises(ValueError, match="selectors length must match"):
+        StrategyRunner().compare(
+            [UniformStrategy()],
+            ComparisonConfig(
+                start_date="2022-01-01",
+                end_date="2023-01-01",
+                baseline="uniform",
+            ),
+            selectors=["a", "b"],
         )
 
 
@@ -167,6 +181,29 @@ def test_runner_compare_uniform_and_simple_zscore(tmp_path) -> None:
     assert len(disk["rows"]) == 2
 
 
+@pytest.mark.slow
+def test_runner_compare_preserves_selectors_on_rows(tmp_path) -> None:
+    btc = _btc_df(days=450)
+    selectors = ["alias-uniform", "alias-zscore"]
+    result = StrategyRunner().compare(
+        [UniformStrategy(), SimpleZScoreStrategy()],
+        ComparisonConfig(
+            start_date="2022-01-01",
+            end_date="2023-03-01",
+            baseline="uniform",
+            strict=False,
+            min_win_rate=0.0,
+            output_dir=str(tmp_path),
+        ),
+        btc_df=btc,
+        selectors=selectors,
+    )
+    assert len(result.rows) == 2
+    by_id = {r.strategy_id: r for r in result.rows}
+    assert by_id["uniform"].selector == "alias-uniform"
+    assert by_id["simple-zscore"].selector == "alias-zscore"
+
+
 def test_compare_to_benchmarks_requires_catalog_entry() -> None:
     class _Custom(UniformStrategy):
         strategy_id = "custom-xyz-compare-test"
@@ -174,6 +211,19 @@ def test_compare_to_benchmarks_requires_catalog_entry() -> None:
 
     with pytest.raises(ValueError, match="catalog"):
         _Custom().compare_to_benchmarks(
+            ComparisonConfig(start_date="2022-01-01", end_date="2023-01-01")
+        )
+
+
+def test_compare_to_benchmarks_raises_when_no_benchmarks_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "stacksats.strategies.catalog.find_strategy_catalog_entry",
+        lambda _sid: SimpleNamespace(strategy_id="uniform", benchmark_strategy_ids=()),
+    )
+    with pytest.raises(ValueError, match="no benchmark_strategy_ids"):
+        UniformStrategy().compare_to_benchmarks(
             ComparisonConfig(start_date="2022-01-01", end_date="2023-01-01")
         )
 
