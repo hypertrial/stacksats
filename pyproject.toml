@@ -115,6 +115,11 @@ select = ["E4", "E7", "E9", "F"]
 source = ["stacksats"]
 branch = true
 
+[tool.coverage.paths]
+# Wheel-smoke tests execute an installed copy from a temp venv; map it back onto
+# the checkout path so combined coverage measures one logical source tree.
+source = ["stacksats", "*/site-packages/stacksats"]
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",

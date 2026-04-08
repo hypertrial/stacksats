@@ -267,6 +267,53 @@ def test_cli_strategy_compare_maps_config_and_selectors(
     assert "comparison_result.json" in out
 
 
+def test_cli_strategy_compare_dedupes_duplicate_selectors(
+    monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path
+) -> None:
+    load_order: list[str] = []
+
+    def fake_load(selector: str, *, config_path=None):
+        del config_path
+        load_order.append(selector)
+        return object()
+
+    class FakeCompareResult:
+        artifact_path = str(tmp_path / "comparison_result.json")
+
+        def render_table(self) -> str:
+            return "Selector  Intent\nuniform    propose"
+
+    class FakeCompareRunner:
+        def compare(self, strategies, config, *, btc_df=None, selectors=None):
+            del strategies, config, btc_df, selectors
+            return FakeCompareResult()
+
+    monkeypatch.setattr(cli, "StrategyRunner", lambda: FakeCompareRunner())
+    monkeypatch.setattr(cli, "load_strategy", fake_load)
+
+    argv = [
+        "strategy",
+        "compare",
+        "--baseline",
+        "uniform",
+        "--strategy",
+        "uniform",
+        "--strategy",
+        "simple-zscore",
+        "--start-date",
+        "2024-01-01",
+        "--end-date",
+        "2024-12-31",
+        "--no-strict",
+        "--min-win-rate",
+        "0",
+        "--output-dir",
+        str(tmp_path),
+    ]
+    assert cli.main(argv) == 0
+    assert load_order == ["uniform", "simple-zscore"]
+
+
 def test_cli_strategy_run_daily_maps_config(monkeypatch, capsys, tmp_path) -> None:
     class FakeRunResult:
         status = "executed"

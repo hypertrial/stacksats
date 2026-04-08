@@ -1748,7 +1748,7 @@ class StrategyRunner(StrategyRunnerValidationMixin):
             (r for r in row_metrics if r["strategy_id"] == config.baseline),
             None,
         )
-        if baseline_row is None:
+        if baseline_row is None:  # pragma: no cover
             raise ValueError("Internal error: baseline row missing after validation.")
         baseline_score = float(baseline_row["score"])
         baseline_exp_decay = float(baseline_row["exp_decay_percentile"])
