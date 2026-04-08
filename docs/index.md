@@ -30,7 +30,7 @@ Next steps:
 - [Quickstart](start/quickstart.md) for the offline packaged demo
 - [System Overview](start/system-overview.md) for data flow and production paths
 - [Full Data Setup](start/full-data-setup.md) for the canonical BRK dataset
-- [Task Hub](tasks.md) for task-first workflows
+- [Task Hub](tasks.md) for task-first workflows (including [compare strategies on one window](tasks.md#i-want-to-compare-strategies-against-benchmarks))
 - [Troubleshooting](troubleshooting.md) for symptom-based links
 - [First Strategy Run](start/first-strategy-run.md) for custom strategy authoring
 - [Public API](reference/public-api.md) for the stable `1.x` library surface

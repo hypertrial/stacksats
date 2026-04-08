@@ -245,7 +245,12 @@ class AgentServiceConfig:
 
 @dataclass(frozen=True)
 class ComparisonConfig:
-    """Shared window and validation settings for multi-strategy comparison."""
+    """Shared window and validation settings for multi-strategy comparison.
+
+    ``None`` dates or validation overrides are resolved when possible from the strategy
+    catalog (same rules as ``stacksats strategy compare``); non-catalog strategies in
+    the set require explicit ``start_date`` and ``end_date``.
+    """
 
     start_date: str | None = None
     end_date: str | None = None

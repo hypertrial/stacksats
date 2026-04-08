@@ -1641,9 +1641,21 @@ class StrategyRunner(StrategyRunnerValidationMixin):
     ) -> ComparisonResult:
         """Run validate+backtest for each strategy on a shared window.
 
+        ``config.baseline`` must match one loaded strategy's ``metadata().strategy_id``
+        (not a custom module path). Each row gets score/exp-decay deltas vs that baseline.
+
+        Writes ``comparison_result.json`` (with ``schema_version``) under
+        ``{output_dir}/{baseline}/comparison/{run_id}/`` and sets
+        ``ComparisonResult.artifact_path``.
+
         When ``selectors`` is provided, it must match ``strategies`` length and is
         stored as each row's ``selector`` (e.g. CLI ``module:Class`` strings). Otherwise
         each row uses ``metadata().strategy_id``.
+
+        Omitted ``start_date``/``end_date``/``strict``/``min_win_rate`` in
+        ``ComparisonConfig`` are resolved from catalog defaults when every strategy is
+        a catalog entry; mixed catalog/custom strategies require explicit dates (same
+        rules as ``stacksats strategy compare``).
         """
         if not strategies:
             raise ValueError("Provide at least one strategy to compare.")

@@ -111,10 +111,10 @@ Run the built-in strategy audit matrix (uses local workspace code and emits `out
 python scripts/run_all_strategies.py
 ```
 
-Compare a candidate against baselines on a shared window (uses `strategy_id` for built-ins and `module_or_path:ClassName` for customs):
+Compare candidates against baselines on a shared window (uses `strategy_id` for built-ins and `module_or_path:ClassName` for customs). Prefer the stable CLI; full flags and `comparison_result.json` are documented on [Compare Command](../run/compare.md).
 
 ```bash
-python scripts/compare_strategies.py \
+stacksats strategy compare \
   --strategy my_strategy.py:MyStrategy \
   --strategy simple-zscore \
   --strategy mvrv \
@@ -123,6 +123,8 @@ python scripts/compare_strategies.py \
   --end-date 2024-12-31 \
   --strict
 ```
+
+From a repository checkout you can also run `python scripts/compare_strategies.py` with the same flags; it delegates to `StrategyRunner.compare()`.
 
 Profile hot paths for strategy runtime:
 

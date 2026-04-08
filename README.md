@@ -44,6 +44,7 @@ StackSats is not a general crypto trading bot or brokerage wrapper. It is a rese
 - [`docs/start/system-overview.md`](docs/start/system-overview.md) — data flow and production paths
 - [`docs/tasks.md`](docs/tasks.md) — task-first workflows
 - [`docs/commands.md`](docs/commands.md) — CLI index
+- [`docs/run/compare.md`](docs/run/compare.md) — compare multiple strategies on one window (`stacksats strategy compare`, `comparison_result.json`)
 - [`docs/data-source.md`](docs/data-source.md) — Bitcoin Research Kit (BRK) dataset support, canonical source data, and manifests
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — symptom-based links
 - [`docs/migration.md`](docs/migration.md) — breaking-change mappings

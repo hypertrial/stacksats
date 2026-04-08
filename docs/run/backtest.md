@@ -42,6 +42,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Next step
 
+- Compare multiple strategies on the same window (shared validate/backtest and `comparison_result.json`): [Compare Command](compare.md).
 - Export fixed-window artifacts: [Export Command](export.md).
 
 ## Feedback

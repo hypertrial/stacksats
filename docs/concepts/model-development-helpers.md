@@ -53,10 +53,10 @@ Use these functions when you already know the intent surface you want to constru
 2. Parameterize durable knobs as public attrs so you can drive them with `--strategy-config` JSON.
 3. Use `python scripts/research_strategy.py` for the fast local loop, including dataframe-backed runs through `StrategyRunner.from_dataframe(...)`.
 4. Use `precompute_features(...)` or the signal helpers where they simplify your model.
-5. Compare against built-ins on a fixed window with explicit strictness, for example:
+5. Compare against built-ins on a fixed window with explicit strictness using `stacksats strategy compare` (see [Compare Command](../run/compare.md) for options and the `comparison_result.json` contract). From a repository checkout, `python scripts/compare_strategies.py` accepts the same flags and uses the same runner. For example:
 
 ```bash
-python scripts/compare_strategies.py \
+stacksats strategy compare \
   --strategy my_strategy.py:MyStrategy \
   --strategy simple-zscore \
   --strategy mvrv \
@@ -71,6 +71,7 @@ python scripts/compare_strategies.py \
 
 ## Related references
 
+- [Compare Command](../run/compare.md)
 - [First Strategy Run](../start/first-strategy-run.md)
 - [Minimal Strategy Examples](../start/minimal-strategy-examples.md)
 - [Create a Strategy](../recipes/create-strategy.md)

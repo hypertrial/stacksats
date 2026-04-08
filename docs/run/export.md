@@ -41,6 +41,7 @@ Built-in strategy catalog and expected behavior: [Strategies](../reference/strat
 
 ## Next step
 
+- Compare several strategies on the same window when choosing which to export: [Compare Command](compare.md).
 - Move to agent-facing daily decisions: [Decide Daily Command](decide-daily.md).
 
 ## Feedback

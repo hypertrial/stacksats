@@ -7,6 +7,12 @@ description: Release pointers for user-visible StackSats changes.
 
 Use this page as the current-release landing pointer.
 
+## Upcoming in the next release
+
+Changes on `main` are listed under **\[Unreleased\]** in [`CHANGELOG.md`](https://github.com/hypertrial/stacksats/tree/main/CHANGELOG.md). Highlights include:
+
+- First-class strategy comparison: stable types (`ComparisonConfig`, `ComparisonResult`, `ComparisonRow`), `StrategyRunner.compare(...)`, `BaseStrategy.compare_to_benchmarks()`, the `stacksats strategy compare` CLI, and `comparison_result.json` with `schema_version`. See [Compare Command](run/compare.md) and [Public API](reference/public-api.md).
+
 ## 1.2.2 highlights
 
 - Clarified that StackSats supports the Bitcoin Research Kit (BRK) project at the project and data-workflow level while keeping the stable StackSats Python support boundary explicit.

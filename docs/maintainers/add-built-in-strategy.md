@@ -77,10 +77,10 @@ Regenerate the built-in strategy reference after changing catalog entries:
 python scripts/generate_strategy_docs.py
 ```
 
-Compare a candidate against baselines on a shared fixed window:
+Compare your new built-in against baselines on a shared fixed window (use the new catalog `strategy_id` once it is registered). Prefer `stacksats strategy compare`; see [Compare Command](../run/compare.md).
 
 ```bash
-python scripts/compare_strategies.py \
+stacksats strategy compare \
   --strategy alpha-beta \
   --strategy mvrv \
   --baseline uniform \
@@ -88,6 +88,8 @@ python scripts/compare_strategies.py \
   --end-date 2024-12-31 \
   --strict
 ```
+
+From a checkout, `python scripts/compare_strategies.py` with the same flags delegates to the same library path.
 
 Recommended checks before merging:
 
