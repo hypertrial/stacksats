@@ -130,10 +130,17 @@ class BacktestResult:
         filename: str = "strategy_vs_uniform_hd.gif",
         window_mode: str = "rolling",
         source_backtest_json: str | Path | None = None,
+        video_format: str = "none",
     ) -> dict[str, str]:
-        """Render an animated strategy-vs-uniform GIF and write a manifest JSON."""
+        """Render an animated strategy-vs-uniform GIF and optional video."""
         from ..viz.animation_data import prepare_animation_frame_data
-        from ..viz.animation_render import render_strategy_vs_uniform_gif
+        from ..viz.animation_render import (
+            render_strategy_vs_uniform_gif,
+            render_strategy_vs_uniform_video,
+        )
+
+        if video_format not in {"none", "mp4", "webm"}:
+            raise ValueError("video_format must be 'none', 'mp4', or 'webm'.")
 
         output_root = Path(output_dir).expanduser().resolve()
         output_root.mkdir(parents=True, exist_ok=True)
@@ -144,13 +151,28 @@ class BacktestResult:
             max_frames=max_frames,
         )
         gif_path = output_root / filename
+        animation_title = f"{self.strategy_id} vs Uniform DCA"
         render_meta = render_strategy_vs_uniform_gif(
             frame_data,
             gif_path,
             fps=fps,
             width=width,
             height=height,
+            title=animation_title,
         )
+
+        video_path: Path | None = None
+        if video_format != "none":
+            video_path = gif_path.with_suffix(f".{video_format}")
+            render_strategy_vs_uniform_video(
+                frame_data,
+                video_path,
+                video_format=video_format,
+                fps=fps,
+                width=width,
+                height=height,
+                title=animation_title,
+            )
 
         source_json_path: str | None = None
         if source_backtest_json is not None:
@@ -174,10 +196,13 @@ class BacktestResult:
             json.dumps(manifest_payload, indent=2),
             encoding="utf-8",
         )
-        return {
+        result = {
             "gif": str(gif_path),
             "manifest_json": str(manifest_path),
         }
+        if video_path is not None:
+            result["video"] = str(video_path)
+        return result
 
 
 @dataclass(slots=True)

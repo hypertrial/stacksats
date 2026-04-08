@@ -25,6 +25,7 @@ def test_cli_strategy_animate_success_path(monkeypatch, capsys, tmp_path: Path) 
             filename: str,
             window_mode: str,
             source_backtest_json: str | Path | None,
+            video_format: str,
         ):
             assert Path(output_dir) == tmp_path
             assert fps == 8
@@ -34,6 +35,7 @@ def test_cli_strategy_animate_success_path(monkeypatch, capsys, tmp_path: Path) 
             assert filename == "demo.gif"
             assert window_mode == "rolling"
             assert source_backtest_json == str(backtest_json)
+            assert video_format == "none"
             gif_path = Path(output_dir) / filename
             gif_path.write_bytes(b"GIF89a")
             manifest_path = Path(output_dir) / "animation_manifest.json"
@@ -105,6 +107,52 @@ def test_cli_strategy_animate_does_not_load_strategy(monkeypatch, tmp_path: Path
         cli.main()
     finally:
         sys.argv = old_argv
+
+
+def test_cli_strategy_animate_passes_video_format(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    backtest_json = tmp_path / "backtest_result.json"
+    backtest_json.write_text("{}", encoding="utf-8")
+
+    class FakeBacktestResult:
+        def animate(self, output_dir: str, **kwargs):
+            assert Path(output_dir) == tmp_path
+            assert kwargs["video_format"] == "mp4"
+            gif_path = Path(output_dir) / "demo.gif"
+            video_path = Path(output_dir) / "demo.mp4"
+            manifest_path = Path(output_dir) / "animation_manifest.json"
+            gif_path.write_bytes(b"GIF89a")
+            video_path.write_bytes(b"video")
+            manifest_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+            return {
+                "gif": str(gif_path),
+                "video": str(video_path),
+                "manifest_json": str(manifest_path),
+            }
+
+    monkeypatch.setattr(cli, "_backtest_result_from_json", lambda path: FakeBacktestResult())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stacksats",
+            "strategy",
+            "animate",
+            "--backtest-json",
+            str(backtest_json),
+            "--output-dir",
+            str(tmp_path),
+            "--output-name",
+            "demo.gif",
+            "--video-format",
+            "mp4",
+        ],
+    )
+
+    cli.main()
+    out = capsys.readouterr().out
+    assert '"video"' in out
 
 
 def test_cli_strategy_animate_fails_for_malformed_json(capsys, tmp_path: Path) -> None:

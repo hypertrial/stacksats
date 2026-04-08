@@ -137,7 +137,7 @@ def test_backtest_result_animate_writes_manifest_and_returns_paths(
         del kwargs
         Path(output_path).write_bytes(b"GIF89a")
         return {
-            "gif_path": str(output_path),
+            "path": str(output_path),
             "frames": len(frame_data),
             "fps": fps,
             "width": width,
@@ -186,7 +186,7 @@ def test_backtest_result_animate_records_null_source_backtest_json(
         del frame_data, fps, width, height, kwargs
         Path(output_path).write_bytes(b"GIF89a")
         return {
-            "gif_path": str(output_path),
+            "path": str(output_path),
             "frames": 1,
             "fps": 6,
             "width": 900,
@@ -199,6 +199,55 @@ def test_backtest_result_animate_records_null_source_backtest_json(
     manifest = json.loads(Path(paths["manifest_json"]).read_text(encoding="utf-8"))
 
     assert manifest["source_backtest_json"] is None
+
+
+def test_backtest_result_animate_returns_optional_video_path(
+    tmp_path: Path, mocker
+) -> None:
+    result = BacktestResult(
+        spd_table=_sample_spd_df(),
+        exp_decay_percentile=44.2,
+        win_rate=66.6,
+        score=55.4,
+        uniform_exp_decay_percentile=35.0,
+        strategy_id="example",
+    )
+
+    def _fake_gif_render(frame_data, output_path, *, fps, width, height, **kwargs):
+        del frame_data, fps, width, height, kwargs
+        Path(output_path).write_bytes(b"GIF89a")
+        return {"path": str(output_path), "frames": 2, "fps": 5, "width": 640, "height": 360}
+
+    def _fake_video_render(
+        frame_data,
+        output_path,
+        *,
+        video_format,
+        fps,
+        width,
+        height,
+        **kwargs,
+    ):
+        del frame_data, fps, width, height, kwargs
+        assert video_format == "mp4"
+        Path(output_path).write_bytes(b"video")
+        return {"path": str(output_path), "frames": 2, "fps": 5, "width": 640, "height": 360}
+
+    mocker.patch("stacksats.viz.animation_render.render_strategy_vs_uniform_gif", _fake_gif_render)
+    mocker.patch(
+        "stacksats.viz.animation_render.render_strategy_vs_uniform_video",
+        _fake_video_render,
+    )
+
+    paths = result.animate(
+        output_dir=str(tmp_path),
+        filename="share.gif",
+        video_format="mp4",
+    )
+
+    assert Path(paths["gif"]).exists()
+    assert Path(paths["video"]).exists()
+    assert paths["video"].endswith("share.mp4")
 
 
 def test_backtest_result_exp_decay_multiple_none_when_uniform_zero() -> None:

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
 import pytest
 
-from stacksats.viz.animation_render import render_strategy_vs_uniform_gif
+from stacksats.viz.animation_render import (
+    _compact_layout,
+    _resolve_writer,
+    render_strategy_vs_uniform_gif,
+)
 
 
 def _frame_data(n: int = 6) -> pl.DataFrame:
@@ -37,7 +42,7 @@ def test_render_strategy_vs_uniform_gif_writes_output(tmp_path: Path) -> None:
     )
     assert output_path.exists()
     assert output_path.stat().st_size > 0
-    assert meta["frames"] == 5
+    assert meta["frames"] == 14
     assert meta["fps"] == 5
     assert meta["width"] == 640
     assert meta["height"] == 360
@@ -56,3 +61,62 @@ def test_render_strategy_vs_uniform_gif_rejects_bad_dimensions(tmp_path: Path) -
         render_strategy_vs_uniform_gif(_frame_data(3), tmp_path / "out.gif", fps=0)
     with pytest.raises(ValueError, match="width and height must be > 0"):
         render_strategy_vs_uniform_gif(_frame_data(3), tmp_path / "out.gif", width=0)
+
+
+def test_compact_layout_switches_at_small_dimensions() -> None:
+    assert _compact_layout(640, 360) is True
+    assert _compact_layout(1280, 720) is False
+
+
+def test_resolve_writer_uses_pillow_for_gif() -> None:
+    class FakePillowWriter:
+        def __init__(self, fps):
+            self.fps = fps
+
+    animation_mod = SimpleNamespace(PillowWriter=FakePillowWriter, FFMpegWriter=object)
+    writer = _resolve_writer(animation_mod, "gif", fps=8)
+    assert isinstance(writer, FakePillowWriter)
+    assert writer.fps == 8
+
+
+def test_resolve_writer_requires_ffmpeg_for_video(monkeypatch: pytest.MonkeyPatch) -> None:
+    animation_mod = SimpleNamespace(PillowWriter=object, FFMpegWriter=object)
+    monkeypatch.setattr(
+        "stacksats.viz.animation_render.shutil.which",
+        lambda name: None,
+    )
+    with pytest.raises(RuntimeError, match="ffmpeg"):
+        _resolve_writer(animation_mod, "mp4", fps=8)
+
+
+def test_resolve_writer_uses_ffmpeg_for_mp4(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeFFMpegWriter:
+        def __init__(self, *, fps, codec, extra_args):
+            self.fps = fps
+            self.codec = codec
+            self.extra_args = extra_args
+
+    animation_mod = SimpleNamespace(PillowWriter=object, FFMpegWriter=FakeFFMpegWriter)
+    monkeypatch.setattr(
+        "stacksats.viz.animation_render.shutil.which",
+        lambda name: "/usr/bin/ffmpeg",
+    )
+    writer = _resolve_writer(animation_mod, "mp4", fps=12)
+    assert writer.codec == "libx264"
+    assert "-pix_fmt" in writer.extra_args
+
+
+def test_resolve_writer_uses_ffmpeg_for_webm(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeFFMpegWriter:
+        def __init__(self, *, fps, codec, extra_args):
+            self.fps = fps
+            self.codec = codec
+            self.extra_args = extra_args
+
+    animation_mod = SimpleNamespace(PillowWriter=object, FFMpegWriter=FakeFFMpegWriter)
+    monkeypatch.setattr(
+        "stacksats.viz.animation_render.shutil.which",
+        lambda name: "/usr/bin/ffmpeg",
+    )
+    writer = _resolve_writer(animation_mod, "webm", fps=12)
+    assert writer.codec == "libvpx-vp9"

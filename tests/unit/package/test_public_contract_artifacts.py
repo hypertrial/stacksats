@@ -51,7 +51,8 @@ def test_public_artifact_contract_snapshots(tmp_path) -> None:
         == snapshots["metrics"]["window_level_row"]
     )
 
-    def _fake_render(frame_data, gif_path, fps, width, height):
+    def _fake_render(frame_data, gif_path, fps, width, height, **kwargs):
+        del kwargs
         Path(gif_path).write_text("gif", encoding="utf-8")
         return {"frames": frame_data.height, "fps": fps, "width": width, "height": height}
 

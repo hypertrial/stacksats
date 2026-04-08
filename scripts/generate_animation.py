@@ -6,7 +6,7 @@ Uses merged_metrics*.parquet in repo root (or STACKSATS_ANALYTICS_PARQUET).
 Run from repo root:
   python scripts/generate_animation.py
 
-Output: output/animation/strategy_vs_uniform_hd.gif
+Output: output/animation/strategy_vs_uniform_hd.gif and .mp4
 """
 
 from __future__ import annotations
@@ -126,10 +126,13 @@ def main() -> int:
         height=720,
         max_frames=60,
         filename="strategy_vs_uniform_hd.gif",
-        window_mode="rolling",
+        window_mode="non-overlapping",
+        video_format="mp4",
     )
     gif_path = paths["gif"]
     print(f"Animation saved: {gif_path}")
+    if "video" in paths:
+        print(f"Video saved: {paths['video']}")
     print(f"Manifest: {paths['manifest_json']}")
     return 0
 

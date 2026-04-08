@@ -378,6 +378,12 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("rolling", "non-overlapping"),
         default="rolling",
     )
+    animate_cmd.add_argument(
+        "--video-format",
+        choices=("none", "mp4", "webm"),
+        default="none",
+        help="Optional higher-quality video export in addition to the GIF.",
+    )
 
     serve_parser = root.add_parser(
         "serve",
@@ -664,6 +670,7 @@ def run(argv: list[str] | None = None) -> int:
                 filename=args.output_name,
                 window_mode=args.window_mode,
                 source_backtest_json=args.backtest_json,
+                video_format=args.video_format,
             )
             print(json.dumps(paths, indent=2))
             print(f"Saved: {output_dir}")

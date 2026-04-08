@@ -128,16 +128,18 @@ stacksats strategy animate \
   --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
   --output-dir output/<strategy_id>/<version>/<run_id> \
   --output-name strategy_vs_uniform_hd.gif \
+  --video-format mp4 \
   --fps 20 \
   --width 1920 \
   --height 1080 \
   --max-frames 240 \
-  --window-mode rolling
+  --window-mode non-overlapping
 ```
 
 ### Expected output
 
 - `strategy_vs_uniform_hd.gif`
+- `strategy_vs_uniform_hd.mp4` when `--video-format mp4` is set
 - `animation_manifest.json` with `schema_version`, render settings, and source/provenance fields.
 
 ### Troubleshooting
@@ -145,10 +147,11 @@ stacksats strategy animate \
 - Ensure `backtest_result.json` has `window_level_data` rows with percentile/SPD fields.
 - If render time is high, lower `--fps` or `--max-frames`, or reduce output dimensions.
 - Use `--window-mode non-overlapping` for a smaller, communication-safe timeline.
+- Video export requires a system `ffmpeg` binary.
 
 ### Next step
 
-- Share the GIF with fold/validation metrics for context (not as a standalone quality signal).
+- Share the MP4 or GIF with fold/validation metrics for context (not as a standalone quality signal).
 - Full flag reference: [Animate Command](run/animate.md).
 
 ## I want to export strategy weights

@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from stacksats.viz.animation_data import (
+    build_animation_storyboard,
     load_backtest_payload,
     load_spd_table_from_backtest_json,
     prepare_animation_frame_data,
@@ -93,6 +94,62 @@ def test_prepare_animation_frame_data_downsampling_is_deterministic() -> None:
     assert prepared_a.height == 4
     last_start = prepared_a["window_start"][-1]
     assert last_start.strftime("%Y-%m-%d") == "2024-01-10"
+
+
+def test_prepare_animation_frame_data_retains_sign_change_frames() -> None:
+    spd = pl.DataFrame({
+        "window": [
+            "2024-01-01 → 2024-01-08",
+            "2024-01-09 → 2024-01-16",
+            "2024-01-17 → 2024-01-24",
+            "2024-01-25 → 2024-02-01",
+        ],
+        "dynamic_percentile": [55.0, 45.0, 52.0, 60.0],
+        "uniform_percentile": [50.0, 50.0, 50.0, 50.0],
+        "excess_percentile": [5.0, -5.0, 2.0, 10.0],
+        "dynamic_sats_per_dollar": [4100.0, 3500.0, 4400.0, 4600.0],
+        "uniform_sats_per_dollar": [4000.0, 4000.0, 4000.0, 4000.0],
+    })
+
+    prepared = prepare_animation_frame_data(spd, max_frames=3)
+
+    starts = [value.strftime("%Y-%m-%d") for value in prepared["window_start"]]
+    assert "2024-01-09" in starts
+    assert "2024-01-25" in starts
+
+
+def test_prepare_animation_frame_data_retains_extrema_and_year_boundaries() -> None:
+    spd = pl.DataFrame({
+        "window": [
+            "2023-12-20 → 2023-12-27",
+            "2023-12-28 → 2024-01-04",
+            "2024-01-05 → 2024-01-12",
+            "2024-01-13 → 2024-01-20",
+            "2024-01-21 → 2024-01-28",
+        ],
+        "dynamic_percentile": [52.0, 60.0, 48.0, 58.0, 54.0],
+        "uniform_percentile": [50.0, 50.0, 50.0, 50.0, 50.0],
+        "excess_percentile": [2.0, 10.0, -2.0, 8.0, 4.0],
+        "dynamic_sats_per_dollar": [4020.0, 4500.0, 3800.0, 4700.0, 4300.0],
+        "uniform_sats_per_dollar": [4000.0, 4000.0, 4000.0, 4000.0, 4000.0],
+    })
+
+    prepared = prepare_animation_frame_data(spd, max_frames=4)
+
+    starts = [value.strftime("%Y-%m-%d") for value in prepared["window_start"]]
+    assert "2023-12-28" in starts
+    assert "2024-01-05" in starts
+
+
+def test_build_animation_storyboard_adds_intro_and_outro_holds() -> None:
+    frame_data = prepare_animation_frame_data(_sample_spd_table(), max_frames=3)
+    storyboard = build_animation_storyboard(frame_data, fps=10)
+
+    assert storyboard.intro_hold_frames == 6
+    assert storyboard.outro_hold_frames == 12
+    assert storyboard.sequence_indices[:6] == (0, 0, 0, 0, 0, 0)
+    assert storyboard.sequence_indices[-12:] == tuple([frame_data.height - 1] * 12)
+    assert storyboard.raw_window_count >= storyboard.selected_window_count
 
 
 def test_prepare_animation_frame_data_raises_for_missing_required_columns() -> None:

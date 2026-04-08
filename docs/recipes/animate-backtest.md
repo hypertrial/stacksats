@@ -16,11 +16,12 @@ stacksats strategy animate \
   --backtest-json output/<strategy_id>/<version>/<run_id>/backtest_result.json \
   --output-dir output/<strategy_id>/<version>/<run_id> \
   --output-name strategy_vs_uniform_hd.gif \
+  --video-format mp4 \
   --fps 20 \
   --width 1920 \
   --height 1080 \
   --max-frames 240 \
-  --window-mode rolling
+  --window-mode non-overlapping
 ```
 
 ## What the animation shows
@@ -36,7 +37,7 @@ stacksats strategy animate \
   - Best for internal model diagnostics and timeline detail.
 - `non-overlapping`:
   - Uses a non-overlapping subset of windows before downsampling.
-  - Better for external communication where overlap bias can be misleading.
+  - Recommended for external communication where overlap bias can be misleading.
 
 ## Render-time tradeoffs
 
@@ -49,7 +50,15 @@ stacksats strategy animate \
 ## Output artifacts
 
 - GIF: `strategy_vs_uniform_hd.gif` (or `--output-name`)
+- Video: `strategy_vs_uniform_hd.mp4` or `.webm` when `--video-format` is set
 - Manifest: `animation_manifest.json` with frame/render metadata
+
+## Shareable defaults
+
+- Use `--window-mode non-overlapping` for stakeholder-facing exports.
+- Use `--video-format mp4` when you want a sharper primary artifact than GIF.
+- Keep the GIF for compatibility and lightweight previews.
+- Video export requires a system `ffmpeg` binary.
 
 ## Related docs
 
