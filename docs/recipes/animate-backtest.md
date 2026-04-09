@@ -7,7 +7,7 @@ description: Generate a high-definition GIF showing strategy-vs-uniform performa
 
 ## Goal
 
-Create a single HD GIF that communicates dynamic strategy performance versus uniform DCA over rolling windows.
+Create a single HD animation that communicates cumulative strategy outcome versus uniform DCA while retaining per-window percentile context.
 
 ## Command
 
@@ -26,9 +26,9 @@ stacksats strategy animate \
 
 ## What the animation shows
 
-- Top panel: dynamic percentile versus uniform percentile over time.
-- Bottom panel: total BTC bought advantage versus uniform DCA (`%`) to date, with positive/negative area fill.
-- Overlay counters: current excess percentile, total BTC vs uniform (`%`), and win-rate-to-date.
+- Top panel: cumulative BTC advantage versus uniform DCA (`%`) to date, with positive/negative area fill.
+- Bottom panel: dynamic percentile versus uniform percentile for each selected window.
+- Overlay counters: current excess percentile and win-rate-to-date, shown as annotations on the cumulative panel.
 
 ## Window modes
 

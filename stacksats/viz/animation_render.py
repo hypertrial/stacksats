@@ -257,12 +257,12 @@ def _render_strategy_vs_uniform_media(
     ax_hero.set_xlim(x[0], x[-1])
 
     ax_hero.set_ylabel(
-        "BTC vs Uniform (%)",
+        "Cumulative BTC vs Uniform (%)",
         color=style.text_color,
         fontsize=11 if compact else 13,
     )
     ax_secondary.set_ylabel(
-        "Window Percentile",
+        "Per-Window Percentile",
         color=style.text_color,
         fontsize=10 if compact else 12,
     )
@@ -306,11 +306,20 @@ def _render_strategy_vs_uniform_media(
         ha="left",
         va="center",
     )
+    ax_header.text(
+        0.02,
+        0.10,
+        "Top: cumulative outcome  |  Bottom: per-window percentile",
+        color=style.muted_text,
+        fontsize=8 if compact else 10,
+        ha="left",
+        va="center",
+    )
     if compact:
         ax_header.text(
             0.98,
             0.52,
-            f"Final BTC vs uniform {final_advantage:+.2f}%",
+            f"Final cumulative BTC vs uniform {final_advantage:+.2f}%",
             color=style.cumulative_color,
             fontsize=10,
             fontweight="semibold",
@@ -319,7 +328,12 @@ def _render_strategy_vs_uniform_media(
         )
     else:
         for xpos, label, value, color in (
-            (0.63, "Final BTC vs uniform", f"{final_advantage:+.2f}%", style.cumulative_color),
+            (
+                0.63,
+                "Final cumulative BTC vs uniform",
+                f"{final_advantage:+.2f}%",
+                style.cumulative_color,
+            ),
             (0.79, "Final win rate", f"{final_win_rate:.1f}%", style.strategy_color),
             (0.93, "Latest excess", f"{final_excess:+.2f} pct", style.text_color),
         ):
@@ -378,7 +392,7 @@ def _render_strategy_vs_uniform_media(
     hero_direct_label = ax_hero.text(
         0.0,
         0.0,
-        "BTC vs uniform",
+        "Cumulative BTC vs uniform",
         color=style.cumulative_color,
         fontsize=9 if compact else 11,
         fontweight="semibold",
@@ -504,7 +518,7 @@ def _render_strategy_vs_uniform_media(
 
         footer_text.set_text(
             f"Window {windows[end - 1]}  |  Mode {window_mode}  |  "
-            f"Frames {selected_windows}/{raw_windows}"
+            f"Windows {selected_windows}/{raw_windows} shown"
         )
         return (
             hero_line,

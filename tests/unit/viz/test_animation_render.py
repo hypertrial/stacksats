@@ -10,6 +10,7 @@ import pytest
 
 from stacksats.viz.animation_render import (
     _compact_layout,
+    _ensure_storyboard_columns,
     _resolve_writer,
     render_strategy_vs_uniform_gif,
 )
@@ -120,3 +121,20 @@ def test_resolve_writer_uses_ffmpeg_for_webm(monkeypatch: pytest.MonkeyPatch) ->
     )
     writer = _resolve_writer(animation_mod, "webm", fps=12)
     assert writer.codec == "libvpx-vp9"
+
+
+def test_storyboard_columns_include_updated_copy_defaults() -> None:
+    enriched = _ensure_storyboard_columns(_frame_data(4))
+    assert "window_start_label" in enriched.columns
+    assert "window_end_label" in enriched.columns
+    assert "window" in enriched.columns
+
+
+def test_updated_animation_copy_is_present() -> None:
+    content = Path("stacksats/viz/animation_render.py").read_text(encoding="utf-8")
+    assert "Cumulative BTC vs Uniform (%)" in content
+    assert "Per-Window Percentile" in content
+    assert "Cumulative BTC vs uniform" in content
+    assert "Final cumulative BTC vs uniform" in content
+    assert "Top: cumulative outcome  |  Bottom: per-window percentile" in content
+    assert "Windows {selected_windows}/{raw_windows} shown" in content

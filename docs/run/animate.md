@@ -31,6 +31,7 @@ stacksats strategy animate \
 - GIF file (default `strategy_vs_uniform_hd.gif`).
 - Optional MP4/WebM video when `--video-format` is set.
 - `animation_manifest.json` with `schema_version`, render metadata, source path, and strategy provenance.
+- The rendered layout uses a cumulative BTC-vs-uniform hero panel on top and a per-window percentile comparison panel below.
 
 ## Key options
 
