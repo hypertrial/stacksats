@@ -7,7 +7,7 @@ description: Generate a high-definition GIF showing strategy-vs-uniform performa
 
 ## Goal
 
-Create a single HD animation that communicates cumulative strategy outcome versus uniform DCA while retaining per-window percentile context.
+Create a single HD animation that focuses only on cumulative strategy outcome versus uniform DCA.
 
 ## Command
 
@@ -26,15 +26,15 @@ stacksats strategy animate \
 
 ## What the animation shows
 
-- Top panel: cumulative BTC advantage versus uniform DCA (`%`) to date, with positive/negative area fill.
-- Bottom panel: dynamic percentile versus uniform percentile for each selected window.
-- Overlay counters: current excess percentile and win-rate-to-date, shown as annotations on the cumulative panel.
+- A single cumulative BTC advantage versus uniform DCA panel (`%`) over time, with positive/negative area fill.
+- Overlay counters for current excess percentile and win-rate-to-date.
+- Milestone callouts when the cumulative series reaches notable highs/lows or changes direction.
 
 ## Window modes
 
 - `rolling` (default):
   - Uses all eligible rolling windows, then deterministic downsampling (`--max-frames`).
-  - Best for internal model diagnostics and timeline detail.
+  - Best when you want the cumulative curve to reflect the fullest possible sequence of eligible windows.
 - `non-overlapping`:
   - Uses a non-overlapping subset of windows before downsampling.
   - Recommended for external communication where overlap bias can be misleading.

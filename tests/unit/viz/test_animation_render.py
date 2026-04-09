@@ -133,8 +133,7 @@ def test_storyboard_columns_include_updated_copy_defaults() -> None:
 def test_updated_animation_copy_is_present() -> None:
     content = Path("stacksats/viz/animation_render.py").read_text(encoding="utf-8")
     assert "Cumulative BTC vs Uniform (%)" in content
-    assert "Per-Window Percentile" in content
     assert "Cumulative BTC vs uniform" in content
     assert "Final cumulative BTC vs uniform" in content
-    assert "Top: cumulative outcome  |  Bottom: per-window percentile" in content
+    assert "Cumulative outcome vs uniform DCA across selected windows" in content
     assert "Windows {selected_windows}/{raw_windows} shown" in content

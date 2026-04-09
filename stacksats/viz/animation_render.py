@@ -195,8 +195,6 @@ def _render_strategy_vs_uniform_media(
 
     ordered = storyboard.frame_data
     x = ordered["window_start"].to_numpy()
-    dynamic = ordered["dynamic_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
-    uniform = ordered["uniform_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
     excess = ordered["excess_percentile"].cast(pl.Float64).fill_null(np.nan).to_numpy()
     cumulative = (
         ordered["cumulative_btc_vs_uniform_pct"]
@@ -228,17 +226,16 @@ def _render_strategy_vs_uniform_media(
         facecolor=style.figure_facecolor,
     )
     grid = fig.add_gridspec(
-        nrows=4,
+        nrows=3,
         ncols=1,
-        height_ratios=[0.70, 2.6, 1.3, 0.42],
+        height_ratios=[0.78, 3.2, 0.42],
         hspace=0.18 if compact else 0.14,
         top=0.96,
         bottom=0.06,
     )
     ax_header = fig.add_subplot(grid[0, 0])
     ax_hero = fig.add_subplot(grid[1, 0])
-    ax_secondary = fig.add_subplot(grid[2, 0], sharex=ax_hero)
-    ax_footer = fig.add_subplot(grid[3, 0])
+    ax_footer = fig.add_subplot(grid[2, 0])
 
     for axis in (ax_header, ax_footer):
         axis.set_facecolor(style.header_facecolor)
@@ -247,13 +244,10 @@ def _render_strategy_vs_uniform_media(
         for side in ("bottom", "top", "left", "right"):
             axis.spines[side].set_visible(False)
 
-    for axis in (ax_hero, ax_secondary):
-        _configure_axes(axis, style=style, compact=compact)
+    _configure_axes(ax_hero, style=style, compact=compact)
 
     hero_min, hero_max = _axis_limits(cumulative)
-    secondary_min, secondary_max = _axis_limits(dynamic, uniform)
     ax_hero.set_ylim(hero_min, hero_max)
-    ax_secondary.set_ylim(secondary_min, secondary_max)
     ax_hero.set_xlim(x[0], x[-1])
 
     ax_hero.set_ylabel(
@@ -261,22 +255,14 @@ def _render_strategy_vs_uniform_media(
         color=style.text_color,
         fontsize=11 if compact else 13,
     )
-    ax_secondary.set_ylabel(
-        "Per-Window Percentile",
-        color=style.text_color,
-        fontsize=10 if compact else 12,
-    )
-    ax_secondary.set_xlabel(
+    ax_hero.set_xlabel(
         "Window Start",
         color=style.muted_text,
         fontsize=9 if compact else 11,
     )
-    ax_secondary.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    ax_secondary.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=10))
+    ax_hero.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax_hero.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=10))
     ax_hero.axhline(0.0, color=style.grid_color, linestyle="--", linewidth=1.0, alpha=0.9)
-    ax_secondary.axhline(
-        50.0, color=style.grid_color, linestyle="--", linewidth=1.0, alpha=0.7
-    )
 
     final_advantage = float(cumulative[-1])
     final_win_rate = float(win_rate[-1])
@@ -309,7 +295,7 @@ def _render_strategy_vs_uniform_media(
     ax_header.text(
         0.02,
         0.10,
-        "Top: cumulative outcome  |  Bottom: per-window percentile",
+        "Cumulative outcome vs uniform DCA across selected windows",
         color=style.muted_text,
         fontsize=8 if compact else 10,
         ha="left",
@@ -364,31 +350,8 @@ def _render_strategy_vs_uniform_media(
         linewidth=style.hero_line_width,
         solid_capstyle="round",
     )
-    strategy_line, = ax_secondary.plot(
-        [],
-        [],
-        color=style.strategy_color,
-        linewidth=style.secondary_line_width,
-        solid_capstyle="round",
-    )
-    uniform_line, = ax_secondary.plot(
-        [],
-        [],
-        color=style.uniform_color,
-        linewidth=style.secondary_line_width,
-        solid_capstyle="round",
-    )
     hero_marker, = ax_hero.plot([], [], marker="o", color=style.marker_color, markersize=7)
-    strategy_marker, = ax_secondary.plot(
-        [], [], marker="o", color=style.strategy_color, markersize=6
-    )
-    uniform_marker, = ax_secondary.plot(
-        [], [], marker="o", color=style.uniform_color, markersize=6
-    )
     hero_vline = ax_hero.axvline(x=x[0], color=style.marker_color, linewidth=1.2, alpha=0.85)
-    secondary_vline = ax_secondary.axvline(
-        x=x[0], color=style.marker_color, linewidth=1.2, alpha=0.85
-    )
     hero_direct_label = ax_hero.text(
         0.0,
         0.0,
@@ -398,26 +361,6 @@ def _render_strategy_vs_uniform_media(
         fontweight="semibold",
         ha="left",
         va="bottom",
-    )
-    strategy_direct_label = ax_secondary.text(
-        0.0,
-        0.0,
-        "Strategy",
-        color=style.strategy_color,
-        fontsize=8 if compact else 10,
-        fontweight="semibold",
-        ha="left",
-        va="bottom",
-    )
-    uniform_direct_label = ax_secondary.text(
-        0.0,
-        0.0,
-        "Uniform",
-        color=style.uniform_color,
-        fontsize=8 if compact else 10,
-        fontweight="semibold",
-        ha="left",
-        va="top",
     )
     current_stats_text = ax_hero.text(
         0.02,
@@ -458,17 +401,10 @@ def _render_strategy_vs_uniform_media(
         end = data_idx + 1
         x_slice = x[:end]
         cumulative_slice = cumulative[:end]
-        dynamic_slice = dynamic[:end]
-        uniform_slice = uniform[:end]
 
         hero_line.set_data(x_slice, cumulative_slice)
-        strategy_line.set_data(x_slice, dynamic_slice)
-        uniform_line.set_data(x_slice, uniform_slice)
         hero_marker.set_data([x[end - 1]], [cumulative[end - 1]])
-        strategy_marker.set_data([x[end - 1]], [dynamic[end - 1]])
-        uniform_marker.set_data([x[end - 1]], [uniform[end - 1]])
         hero_vline.set_xdata([x[end - 1], x[end - 1]])
-        secondary_vline.set_xdata([x[end - 1], x[end - 1]])
 
         if fill_positive[0] is not None:
             fill_positive[0].remove()
@@ -494,8 +430,6 @@ def _render_strategy_vs_uniform_media(
         )
 
         hero_direct_label.set_position((x[end - 1], cumulative[end - 1]))
-        strategy_direct_label.set_position((x[end - 1], dynamic[end - 1]))
-        uniform_direct_label.set_position((x[end - 1], uniform[end - 1]))
 
         current_stats_text.set_text(
             f"Current excess {float(excess[end - 1]):+.2f} pct\n"
@@ -522,13 +456,8 @@ def _render_strategy_vs_uniform_media(
         )
         return (
             hero_line,
-            strategy_line,
-            uniform_line,
             hero_marker,
-            strategy_marker,
-            uniform_marker,
             hero_vline,
-            secondary_vline,
         )
 
     animation = FuncAnimation(

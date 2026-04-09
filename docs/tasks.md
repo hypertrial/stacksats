@@ -141,7 +141,7 @@ stacksats strategy animate \
 - `strategy_vs_uniform_hd.gif`
 - `strategy_vs_uniform_hd.mp4` when `--video-format mp4` is set
 - `animation_manifest.json` with `schema_version`, render settings, and source/provenance fields.
-- The animation emphasizes cumulative BTC-vs-uniform outcome on the top panel, with per-window percentile context on the lower panel.
+- The animation focuses on cumulative BTC-vs-uniform outcome, using overlays and milestone callouts rather than a second panel.
 
 ### Troubleshooting
 
