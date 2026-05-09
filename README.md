@@ -1,6 +1,6 @@
 # StackSats
 
-*Build dynamic Bitcoin DCA models that try to outperform uniform DCA under fixed-budget, fixed-horizon, no-forward-looking-data constraints.*
+*Build dynamic Bitcoin DCA models that robustly acquire more BTC than uniform DCA under fixed-budget, fixed-horizon constraints.*
 
 ![StackSats Logo](https://raw.githubusercontent.com/hypertrial/stacksats/main/docs/assets/stacking-sats-logo.svg)
 
@@ -9,7 +9,7 @@
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-The Stacking Sats problem is simple to state and hard to solve: given a fixed Bitcoin accumulation budget and an allocation horizon longer than six months, can a dynamic dollar-cost averaging (DCA) model acquire more BTC than uniform DCA without using future data?
+The Stacking Sats problem is simple to state and hard to solve: given a fixed Bitcoin accumulation budget and an allocation horizon longer than six months, can a dynamic dollar-cost averaging (DCA) model robustly acquire more BTC than uniform DCA?
 
 StackSats is a Python library for building, validating, and operationalizing models for that problem. It turns research signals and feature pipelines into constrained BTC weight schedules, backtests them against uniform DCA, and emits daily allocation decisions.
 
@@ -17,7 +17,7 @@ StackSats is a Python library for building, validating, and operationalizing mod
 
 Uniform DCA allocates the same amount every day across the same budget and horizon. A dynamic DCA model tries to reshape that schedule while keeping the budget fixed, the horizon fixed, and past allocations locked.
 
-StackSats defines success as acquiring more BTC for the same dollars, measured through sats per dollar (SPD), not short-term USD ROI or CAGR. The framework keeps each strategy inside the core constraints:
+StackSats defines success as robustly acquiring more BTC for the same dollars, measured through sats per dollar (SPD), not short-term USD ROI or CAGR. The framework keeps each strategy inside the core constraints:
 
 - fixed accumulation budget
 - fixed allocation horizon, defaulting to 365 days

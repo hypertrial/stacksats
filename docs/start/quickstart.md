@@ -7,7 +7,7 @@ description: Install StackSats and run the canonical demo—Python library for q
 
 StackSats is a Python library for quantitative Bitcoin dollar-cost averaging (DCA) accumulation. Use this page for the canonical first-run path as a package user.
 
-The core problem is whether a dynamic DCA model can acquire more BTC than uniform DCA for the same fixed budget and allocation horizon without using future data. For the full framing, start from [The Stacking Sats Problem](../index.md#the-stacking-sats-problem).
+The core problem is whether a dynamic DCA model can robustly acquire more BTC than uniform DCA for the same fixed budget and allocation horizon. For the full framing, start from [The Stacking Sats Problem](../index.md#the-stacking-sats-problem).
 
 ## 1) Choose your install mode
 

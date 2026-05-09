@@ -5,7 +5,7 @@ description: How StackSats runs backtests, computes metrics, and writes artifact
 
 # Bitcoin Dollar Cost Averaging (DCA) Backtest System
 
-This document explains how StackSats tests whether a dynamic Bitcoin DCA allocation beats uniform DCA for the same fixed budget and allocation horizon, and how to interpret the output metrics.
+This document explains how StackSats tests whether a dynamic Bitcoin DCA allocation robustly acquires more BTC than uniform DCA for the same fixed budget and allocation horizon, and how to interpret the output metrics.
 
 ## Overview
 
