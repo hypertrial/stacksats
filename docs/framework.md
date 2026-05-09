@@ -5,7 +5,7 @@ description: Canonical contract separating user strategy scope from framework-en
 
 # Framework vs User Control
 
-This document is the canonical strategy contract for StackSats.
+This document is the canonical strategy contract for the Stacking Sats problem: reshaping a fixed Bitcoin accumulation budget across a fixed horizon while trying to beat uniform DCA without future data.
 
 ## Framework (Non-Negotiable)
 

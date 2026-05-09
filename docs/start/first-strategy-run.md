@@ -7,6 +7,8 @@ description: Build, validate, and backtest your first custom StackSats strategy.
 
 This walkthrough gets a custom strategy running with minimal code.
 
+The strategy you write here targets the Stacking Sats problem: dynamically allocating a fixed Bitcoin accumulation budget across a fixed horizon, then comparing the result against uniform DCA without using future data. For the full framing, see [The Stacking Sats Problem](../index.md#the-stacking-sats-problem).
+
 This page is for custom strategies loaded with `my_strategy.py:MyStrategy`. If you want to add a maintained built-in to the StackSats library, use [Add a Built-in Strategy](../maintainers/add-built-in-strategy.md) and the cataloged `strategy_id` workflow instead.
 
 For copyable research starters inside the repo, see `stacksats/strategies/templates/minimal_propose.py` and `stacksats/strategies/templates/minimal_profile.py`, plus [Model Development Helpers](../concepts/model-development-helpers.md).

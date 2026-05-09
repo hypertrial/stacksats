@@ -1,8 +1,6 @@
 # StackSats
 
-*Python library for quantitative Bitcoin accumulation via DCA strategies.*
-
-Not a general crypto trading bot or brokerage wrapper—see [What StackSats is](#what-stacksats-is).
+*Build dynamic Bitcoin DCA models that try to outperform uniform DCA under fixed-budget, fixed-horizon, no-forward-looking-data constraints.*
 
 ![StackSats Logo](https://raw.githubusercontent.com/hypertrial/stacksats/main/docs/assets/stacking-sats-logo.svg)
 
@@ -11,13 +9,28 @@ Not a general crypto trading bot or brokerage wrapper—see [What StackSats is](
 [![Package Check](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml/badge.svg)](https://github.com/hypertrial/stacksats/actions/workflows/package-check.yml)
 [![License: MIT](https://img.shields.io/github/license/hypertrial/stacksats)](LICENSE)
 
-StackSats is a Python library for building, backtesting, and operationalizing quantitative dollar-cost averaging (DCA) strategies for Bitcoin accumulation. It helps you turn research signals and feature pipelines into validated BTC weight schedules and daily allocation decisions.
+The Stacking Sats problem is simple to state and hard to solve: given a fixed Bitcoin accumulation budget and an allocation horizon longer than six months, can a dynamic dollar-cost averaging (DCA) model acquire more BTC than uniform DCA without using future data?
+
+StackSats is a Python library for building, validating, and operationalizing models for that problem. It turns research signals and feature pipelines into constrained BTC weight schedules, backtests them against uniform DCA, and emits daily allocation decisions.
+
+## The Stacking Sats Problem
+
+Uniform DCA allocates the same amount every day across the same budget and horizon. A dynamic DCA model tries to reshape that schedule while keeping the budget fixed, the horizon fixed, and past allocations locked.
+
+StackSats defines success as acquiring more BTC for the same dollars, measured through sats per dollar (SPD), not short-term USD ROI or CAGR. The framework keeps each strategy inside the core constraints:
+
+- fixed accumulation budget
+- fixed allocation horizon, defaulting to 365 days
+- product framing for horizons longer than six months
+- no forward-looking data
+- immutable historical allocations
+- brokerage execution outside the library
 
 Use StackSats when you want to:
 
-- build custom Bitcoin accumulation strategies in Python
-- backtest DCA rules against BRK-derived canonical Bitcoin datasets
-- validate causal constraints before shipping a strategy
+- build dynamic Bitcoin DCA models in Python
+- compare strategy behavior against uniform DCA on the same budget and horizon
+- validate causal, budget, and allocation constraints before shipping a strategy
 - emit daily BTC allocation decisions for agents or external execution systems
 
 StackSats is library-first: the CLI, demo flows, and hosted agent API all sit on top of the same Python package surface.

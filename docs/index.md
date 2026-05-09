@@ -6,14 +6,22 @@ description: Python library for quantitative Bitcoin DCA accumulation—docs ent
 # StackSats Documentation
 
 <div class="hero-block">
-  <p class="hero-kicker">Python library for quantitative Bitcoin DCA accumulation</p>
-  <h2>Build, validate, and emit agent-consumable Bitcoin dollar cost averaging (DCA) decisions with a sealed allocation framework.</h2>
+  <p class="hero-kicker">Python library for dynamic Bitcoin DCA models</p>
+  <h2>Build dynamic Bitcoin DCA models that try to outperform uniform DCA under fixed-budget, fixed-horizon, no-forward-looking-data constraints.</h2>
   <p>
-    StackSats, developed by Hypertrial, is a Python library for quantitative Bitcoin accumulation: research, backtesting, and operational daily decisions.
+    StackSats, developed by Hypertrial, turns research signals and feature pipelines into validated BTC weight schedules, backtests them against uniform DCA, and emits operational daily decisions.
     It is not a brokerage or generic trading bot.
     Learn more at <a href="https://www.stackingsats.org">www.stackingsats.org</a>.
   </p>
 </div>
+
+## The Stacking Sats Problem
+
+Given a fixed Bitcoin accumulation budget and an allocation horizon longer than six months, can a dynamic dollar-cost averaging (DCA) model acquire more BTC than uniform DCA without using future data?
+
+Uniform DCA means equal daily allocation across the same budget and horizon. StackSats measures the dynamic model's edge as sats per dollar (SPD): more BTC acquired for the same dollars, not short-term USD ROI or CAGR. The framework keeps that comparison honest by enforcing fixed-budget allocation, a fixed horizon that defaults to 365 days, no forward-looking data, locked historical allocations, and a clean boundary where brokerage execution stays outside the library.
+
+See [Framework Boundary](framework.md) for the allocation contract and [Backtest Runtime](model_backtest.md) for how strategy-vs-uniform outcomes are scored.
 
 ## Start in 2 Clicks
 
